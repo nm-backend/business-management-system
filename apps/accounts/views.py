@@ -1,5 +1,6 @@
-from rest_framework import viewsets, status, generics
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,7 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from core.permissions import IsOwner, IsOwnerOrAdmin
 from .models import User
 from .serializers import (
-    UserSerializer, UserCreateSerializer, UserLimitedSerializer,
+    UserSerializer, UserSelfUpdateSerializer, UserCreateSerializer, UserLimitedSerializer,
     LoginSerializer, ChangePasswordSerializer, SetupOwnerSerializer,
     LanguageSerializer,
 )
@@ -68,10 +69,10 @@ class MeView(APIView):
         return Response(serializer.data)
 
     def patch(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer = UserSelfUpdateSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        return Response(UserSerializer(request.user).data)
 
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
@@ -120,13 +121,31 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if user.is_admin and not user.can_create_workers:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied('You do not have permission to create workers')
-        if user.is_admin:
-            serializer.save(role='worker')
-        else:
+        requested_role = serializer.validated_data.get('role', User.Role.WORKER)
+
+        if user.is_owner:
+            if requested_role == User.Role.OWNER:
+                raise ValidationError({'role': 'Owner account already exists'})
             serializer.save()
+            return
+
+        if user.is_admin:
+            if not user.can_create_workers:
+                raise PermissionDenied('You do not have permission to create workers')
+            if requested_role != User.Role.WORKER:
+                raise PermissionDenied('Administrators can create only worker accounts')
+            serializer.save(
+                role=User.Role.WORKER,
+                can_write_to_owner=False,
+                can_create_workers=False,
+                can_see_other_workers=False,
+            )
+            return
+
+        raise PermissionDenied('You do not have permission to create accounts')
+
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Account deletion is prohibited. Block the account instead.')
 
     @action(detail=True, methods=['post'], permission_classes=[IsOwner])
     def toggle_active(self, request, pk=None):

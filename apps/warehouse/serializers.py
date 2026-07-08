@@ -46,6 +46,13 @@ class StockMovementSerializer(serializers.ModelSerializer):
         model = StockMovement
         fields = '__all__'
 
+
+class StockMovementLimitedSerializer(StockMovementSerializer):
+    class Meta:
+        model = StockMovement
+        exclude = ['price_per_unit']
+
+
 class RecipeItemSerializer(serializers.ModelSerializer):
     material_name = serializers.CharField(source='material.name', read_only=True)
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)

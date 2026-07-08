@@ -30,7 +30,7 @@ def get_locale(lang_code='uz_cyrl'):
 
     return data
 
-def format_currency(amount, currency_symbol='сом', decimal_places=0):
+def format_currency(amount, currency_symbol='som', decimal_places=0):
     """Format a number as currency string."""
     if amount is None:
         return ''
