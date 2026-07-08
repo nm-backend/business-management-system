@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+    <div class="card" style="width: 100%; max-width: 400px;">
+        <h2 style="text-align: center; margin-bottom: 10px;" data-i18n="setup.title">Настройка системы</h2>
+        <p style="text-align: center; margin-bottom: 20px; color: var(--secondary-color);" data-i18n="setup.description">Создайте аккаунт владельца для начала работы</p>
+        
+        <div id="error-message" class="alert alert-danger" style="display: none;"></div>
+        <div id="success-message" class="alert alert-success" style="display: none;" data-i18n="setup.setup_complete"></div>
+
+        <form id="setup-form">
+            <div class="form-group">
+                <label for="full_name" data-i18n="setup.full_name">Полное имя</label>
+                <input type="text" id="full_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="phone" data-i18n="setup.phone">Телефон</label>
+                <input type="text" id="phone" class="form-control">
+            </div>
+            <div class="form-group">
+                <label for="username" data-i18n="auth.username">Имя пользователя</label>
+                <input type="text" id="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password" data-i18n="auth.password">Пароль</label>
+                <input type="password" id="password" class="form-control" required minlength="6">
+            </div>
+            <div class="form-group">
+                <label for="password_confirm" data-i18n="auth.password_confirm">Подтвердите пароль</label>
+                <input type="password" id="password_confirm" class="form-control" required minlength="6">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;" data-i18n="setup.create_owner">Создать аккаунт владельца</button>
+        </form>
+        
+        <div style="margin-top: 15px; text-align: center;">
+            <select id="lang-select" class="form-control" style="width: auto; display: inline-block;">
+                <option value="uz_cyrl">Ўзбекча</option>
+                <option value="ru">Русский</option>
+            </select>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const langSelect = document.getElementById('lang-select');
+    langSelect.value = window.i18n.currentLang;
+    langSelect.addEventListener('change', (e) => {
+        window.i18n.setLanguage(e.target.value);
+    });
+
+    const form = document.getElementById('setup-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const full_name = document.getElementById('full_name').value;
+        const phone = document.getElementById('phone').value;
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const password_confirm = document.getElementById('password_confirm').value;
+        
+        const errorMsg = document.getElementById('error-message');
+        const successMsg = document.getElementById('success-message');
+        
+        errorMsg.style.display = 'none';
+        successMsg.style.display = 'none';
+
+        if (password !== password_confirm) {
+            errorMsg.textContent = window.i18n.translate('auth.password_error') || "Passwords don't match";
+            errorMsg.style.display = 'block';
+            return;
+        }
+        
+        try {
+            await window.api.request('/accounts/setup/owner/', {
+                method: 'POST',
+                body: JSON.stringify({ full_name, phone, username, password, password_confirm }),
+                noAuth: true
+            });
+            // Auto login after setup
+            await window.api.login(username, password);
+            successMsg.style.display = 'block';
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
+        } catch (error) {
+            errorMsg.textContent = error.data && error.data.username ? error.data.username[0] : (window.i18n.translate('common.error') || "Error occurred");
+            errorMsg.style.display = 'block';
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="display: flex; height: 100vh;">
+    <!-- Sidebar -->
+    <aside style="width: 250px; background: var(--dark-color); color: #fff; padding: 20px; display: flex; flex-direction: column;">
+        <h2 style="margin-bottom: 30px; text-align: center;" data-i18n="app.name">SkladPro.Nod</h2>
+        
+        <nav style="flex: 1;">
+            <ul style="list-style: none;">
+                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
+                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
+                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
+                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
+                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
+                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
+            </ul>
+        </nav>
+        
+        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #444;">
+            <p id="user-info" style="margin-bottom: 10px;"></p>
+            <button id="logout-btn" class="btn btn-primary" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main style="flex: 1; padding: 20px; overflow-y: auto;">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1 data-i18n="dashboard.welcome">Хуш келибсиз</h1>
+            <select id="lang-select" class="form-control" style="width: auto;">
+                <option value="uz_cyrl">Ўзбекча</option>
+                <option value="ru">Русский</option>
+            </select>
+        </header>
+        
+        <div class="card">
+            <h3 data-i18n="dashboard.business_overview">Бизнесингизни тўлиқ кўринг</h3>
+            <p>Тест учун Dashboard. Кейинги босқичларда тўлиқ қилинади.</p>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    const langSelect = document.getElementById('lang-select');
+    langSelect.value = window.i18n.currentLang;
+    langSelect.addEventListener('change', (e) => {
+        window.i18n.setLanguage(e.target.value);
+    });
+
+    try {
+        const user = await window.api.getMe();
+        document.getElementById('user-info').textContent = user.full_name || user.username;
+        if(user.language && user.language !== window.i18n.currentLang) {
+            window.i18n.setLanguage(user.language);
+            langSelect.value = user.language;
+        }
+    } catch (e) {
+        // Handled by API client (redirects to login)
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        window.api.logout();
+    });
+});
+</script>
+{% endblock %}

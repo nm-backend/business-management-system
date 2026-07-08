@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
+    <div class="card" style="width: 100%; max-width: 400px;">
+        <h2 style="text-align: center; margin-bottom: 20px;" data-i18n="app.name">SkladPro.Nod</h2>
+        <h3 style="text-align: center; margin-bottom: 20px;" data-i18n="auth.login">Вход</h3>
+        
+        <div id="error-message" class="alert alert-danger" style="display: none;" data-i18n="auth.login_error"></div>
+
+        <form id="login-form">
+            <div class="form-group">
+                <label for="username" data-i18n="auth.username">Имя пользователя</label>
+                <input type="text" id="username" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="password" data-i18n="auth.password">Пароль</label>
+                <input type="password" id="password" class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;" data-i18n="auth.login_button">Войти в систему</button>
+        </form>
+        
+        <div style="margin-top: 15px; text-align: center;">
+            <select id="lang-select" class="form-control" style="width: auto; display: inline-block;">
+                <option value="uz_cyrl">Ўзбекча</option>
+                <option value="ru">Русский</option>
+            </select>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const langSelect = document.getElementById('lang-select');
+    langSelect.value = window.i18n.currentLang;
+    langSelect.addEventListener('change', (e) => {
+        window.i18n.setLanguage(e.target.value);
+    });
+
+    const form = document.getElementById('login-form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const errorMsg = document.getElementById('error-message');
+        
+        errorMsg.style.display = 'none';
+        
+        try {
+            await window.api.login(username, password);
+            window.location.href = '/';
+        } catch (error) {
+            errorMsg.style.display = 'block';
+        }
+    });
+});
+</script>
+{% endblock %}

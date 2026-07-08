@@ -1,0 +1,1 @@
+"""SkladPro main module."""
