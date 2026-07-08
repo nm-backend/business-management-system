@@ -5,9 +5,20 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/accounts/', include('apps.accounts.urls')),
+    path('api/v1/core/', include('apps.core.urls')),
+    path('api/v1/warehouse/', include('apps.warehouse.urls')),
     # Future API endpoints
-    # path('api/v1/accounts/', include('apps.accounts.urls')),
-    # path('api/v1/core/', include('apps.core.urls')),
+    # path('api/v1/orders/', include('apps.orders.urls')),
+    # path('api/v1/production/', include('apps.production.urls')),
+    # path('api/v1/clients/', include('apps.clients.urls')),
+    # path('api/v1/finance/', include('apps.finance.urls')),
+    # path('api/v1/messaging/', include('apps.messaging.urls')),
+    # path('api/v1/reports/', include('apps.reports.urls')),
+    # path('api/v1/audit/', include('apps.audit.urls')),
+    
+    # Frontend (Django Templates)
+    path('', include('apps.accounts.template_urls')),
 ]
 
 if settings.DEBUG:

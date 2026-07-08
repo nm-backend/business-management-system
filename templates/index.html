@@ -8,12 +8,13 @@
         
         <nav style="flex: 1;">
             <ul style="list-style: none;">
-                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
-                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
-                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
-                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
-                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="#" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
+                <li style="margin-bottom: 10px;"><a href="#/" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
+                <li style="margin-bottom: 10px;"><a href="#/warehouse" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
+                <li style="margin-bottom: 10px;"><a href="#/finished-products" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.finished_products">Тайёр маҳсулот</a></li>
+                <li style="margin-bottom: 10px;"><a href="#/orders" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
+                <li style="margin-bottom: 10px;"><a href="#/production" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
+                <li style="margin-bottom: 10px;"><a href="#/clients" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
+                <li style="margin-bottom: 10px;"><a href="#/settings" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
             </ul>
         </nav>
         
@@ -24,46 +25,16 @@
     </aside>
 
     <!-- Main Content -->
-    <main style="flex: 1; padding: 20px; overflow-y: auto;">
-        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h1 data-i18n="dashboard.welcome">Хуш келибсиз</h1>
-            <select id="lang-select" class="form-control" style="width: auto;">
-                <option value="uz_cyrl">Ўзбекча</option>
-                <option value="ru">Русский</option>
-            </select>
-        </header>
-        
-        <div class="card">
-            <h3 data-i18n="dashboard.business_overview">Бизнесингизни тўлиқ кўринг</h3>
-            <p>Тест учун Dashboard. Кейинги босқичларда тўлиқ қилинади.</p>
-        </div>
+    <main style="flex: 1; padding: 20px; overflow-y: auto;" id="app-content">
+        <!-- SPA content rendered here -->
     </main>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', async () => {
-    const langSelect = document.getElementById('lang-select');
-    langSelect.value = window.i18n.currentLang;
-    langSelect.addEventListener('change', (e) => {
-        window.i18n.setLanguage(e.target.value);
-    });
-
-    try {
-        const user = await window.api.getMe();
-        document.getElementById('user-info').textContent = user.full_name || user.username;
-        if(user.language && user.language !== window.i18n.currentLang) {
-            window.i18n.setLanguage(user.language);
-            langSelect.value = user.language;
-        }
-    } catch (e) {
-        // Handled by API client (redirects to login)
-    }
-
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        window.api.logout();
-    });
-});
-</script>
+<script src="{% static 'js/router.js' %}"></script>
+<script src="{% static 'js/components/dashboard.js' %}"></script>
+<script src="{% static 'js/components/warehouse.js' %}"></script>
+<script src="{% static 'js/components/finished_products.js' %}"></script>
+<script src="{% static 'js/app.js' %}"></script>
 {% endblock %}
