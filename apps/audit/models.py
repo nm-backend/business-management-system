@@ -1,3 +1,12 @@
+"""
+Audit models - система аудита и логирования действий.
+
+Этот модуль содержит модель для записи всех действий пользователей в системе.
+Аудит логи необходимы для безопасности и отслеживания истории изменений.
+
+ВАЖНО: Audit logs доступны только владельцу (owner) для чтения.
+Записи создаются автоматически системой и не могут быть изменены.
+"""
 from django.conf import settings
 from django.db import models
 from apps.core.models import TimestampedModel
@@ -5,15 +14,48 @@ from apps.core.models import TimestampedModel
 
 class AuditLog(TimestampedModel):
     """
-    Журнал действий нужен для требований безопасности из ТЗ.
+    Модель записи аудита действий пользователей.
 
-    Мы храним не только факт изменения, но и контекст: кто сделал действие,
-    над какой сущностью, с какого IP и какие важные поля изменились. Это
-    помогает владельцу бизнеса восстановить историю операций без доступа к
-    низкоуровневым логам сервера.
+    Хранит детальную информацию о всех действиях в системе для
+    обеспечения безопасности и возможности восстановления истории.
+    Записи создаются автоматически и доступны только владельцу.
+
+    Поля:
+        actor: ForeignKey - пользователь, выполнивший действие (SET_NULL при удалении)
+        actor_username: CharField - имя пользователя (сохраняется при удалении)
+        actor_role: CharField - роль пользователя в момент действия
+        action: CharField - тип действия (создание, обновление, удаление и т.д.)
+        object_type: CharField - тип измененного объекта (например: 'User', 'RawMaterial')
+        object_id: CharField - ID измененного объекта
+        object_repr: CharField - строковое представление объекта
+        changes: JSONField - изменения полей (старые и новые значения)
+        metadata: JSONField - дополнительная информация о действии
+        ip_address: GenericIPAddressField - IP адрес пользователя
+        user_agent: TextField - User Agent браузера
+
+    Особенности:
+        - Автоматические временные метки (TimestampedModel)
+        - SET_NULL для actor (сохраняется actor_username)
+        - Индексы для быстрого поиска по action, object_type, actor_role
+        - JSONField для хранения сложных данных (changes, metadata)
     """
 
     class Action(models.TextChoices):
+        """
+        Типы действий, которые записываются в audit log.
+
+        SETUP_OWNER: создание владельца системы
+        LOGIN: вход пользователя
+        LOGOUT: выход пользователя
+        CREATE: создание объекта
+        UPDATE: обновление объекта
+        ARCHIVE: архивация объекта
+        ACTIVATE: активация пользователя
+        DEACTIVATE: деактивация пользователя
+        RESET_PASSWORD: сброс пароля администратором
+        CHANGE_PASSWORD: смена пароля пользователем
+        CHANGE_LANGUAGE: смена языка интерфейса
+        """
         SETUP_OWNER = 'setup_owner', 'Setup owner'
         LOGIN = 'login', 'Login'
         LOGOUT = 'logout', 'Logout'
@@ -55,6 +97,11 @@ class AuditLog(TimestampedModel):
         ]
 
     def __str__(self):
+        """
+        Строковое представление записи аудита.
+
+        Возвращает описание действия в формате: "actor action target".
+        """
         actor = self.actor_username or 'system'
         target = self.object_repr or self.object_type
         return f'{actor} {self.action} {target}'

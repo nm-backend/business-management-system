@@ -1,3 +1,16 @@
+"""
+Audit services - функции для записи и обработки audit logs.
+
+Этот модуль содержит сервисные функции для:
+- Извлечения IP адреса из request
+- Определения типа объекта для аудита
+- Нормализации значений для JSON
+- Сбора изменений модели
+- Записи audit log entries
+
+ВАЖНО: Эти функции используются в views для явной записи действий.
+Не используются signals для сохранения контекста бизнес-сценариев.
+"""
 from decimal import Decimal
 from django.forms.models import model_to_dict
 from django.utils.encoding import force_str
@@ -6,11 +19,21 @@ from .models import AuditLog
 
 def get_client_ip(request):
     """
-    Возвращает IP пользователя из request.
+    Извлекает IP адрес клиента из HTTP request.
 
-    В production Django часто стоит за proxy/nginx. В таком случае реальный IP
-    может приходить в X-Forwarded-For, поэтому сначала проверяем этот заголовок,
-    а потом обычный REMOTE_ADDR.
+    Учитывает прокси-серверы (nginx, load balancers) проверяя заголовок
+    X-Forwarded-For перед REMOTE_ADDR. Это необходимо в production среде.
+
+    Аргументы:
+        request: HttpRequest - объект запроса Django
+
+    Возвращает:
+        str или None - IP адрес клиента или None если request=None
+
+    Логика:
+        1. Проверяет X-Forwarded-For (для прокси)
+        2. Если нет, использует REMOTE_ADDR
+        3. Если несколько IP в X-Forwarded-For, берет первый
     """
     if request is None:
         return None
@@ -24,11 +47,19 @@ def get_client_ip(request):
 
 def get_audit_object_type(instance):
     """
-    Даёт стабильное имя модели для журнала, например warehouse.RawMaterial.
+    Возвращает стабильное строковое представление типа модели для аудита.
 
-    Мы не используем ContentType/GFK на этом этапе, потому что для аудита важнее
-    неизменяемая строка-след: даже если объект потом архивируют или удалят в
-    будущем, запись останется читаемой.
+    Использует формат "app_label.model_name" (например: "warehouse.RawMaterial").
+    Не использует ContentType/GFK для сохранения читаемости при удалении моделей.
+
+    Аргументы:
+        instance: Model - экземпляр модели Django
+
+    Возвращает:
+        str - строка в формате "app_label.model_name"
+
+    Пример:
+        get_audit_object_type(raw_material) -> "warehouse.RawMaterial"
     """
     meta = instance._meta
     return f'{meta.app_label}.{meta.model_name}'
@@ -36,11 +67,23 @@ def get_audit_object_type(instance):
 
 def normalize_audit_value(value):
     """
-    Приводит значения моделей к JSON-безопасному виду.
+    Нормализует значение для безопасного хранения в JSONField.
 
-    JSONField не умеет сохранять Decimal, файлы и связанные модели напрямую,
-    поэтому сложные значения превращаются в строки. Это сохраняет аудит
-    читаемым и не ломает запись лога.
+    Преобразует сложные типы данных (Decimal, ForeignKey, FileField)
+    в JSON-совместимые типы. Это предотвращает ошибки при сохранении
+    и сохраняет читаемость audit logs.
+
+    Аргументы:
+        value: any - значение для нормализации
+
+    Возвращает:
+        any - нормализованное значение (str, int, None и т.д.)
+
+    Преобразования:
+        - Decimal -> str (сохраняет точность)
+        - Model instance -> pk (для ForeignKey)
+        - None/bool/int/float/str -> без изменений
+        - остальные -> str (через force_str)
     """
     if isinstance(value, Decimal):
         return str(value)
@@ -53,11 +96,20 @@ def normalize_audit_value(value):
 
 def collect_model_changes(instance, validated_data):
     """
-    Собирает изменения перед serializer.save().
+    Собирает изменения полей модели перед сохранением.
 
-    DRF Serializer уже провалидировал данные, но объект ещё не сохранён.
-    Поэтому можно сравнить старое значение модели с новым и записать в аудит
-    только реально изменённые поля, без лишнего шума.
+    Сравнивает текущие значения модели с новыми данными из serializer.
+    Записывает только реально изменившиеся поля для чистоты audit log.
+
+    Аргументы:
+        instance: Model - экземпляр модели до сохранения
+        validated_data: dict - валидированные данные из serializer
+
+    Возвращает:
+        dict - словарь изменений в формате {field: {old: value, new: value}}
+
+    Используется:
+        - В perform_update() ViewSets для отслеживания изменений
     """
     changes = {}
 
@@ -74,11 +126,23 @@ def collect_model_changes(instance, validated_data):
 
 def collect_safe_request_changes(instance, data, allowed_fields):
     """
-    Собирает изменения из обычного request.data для безопасных полей.
+    Собирает изменения из request.data для безопасных полей.
 
-    Используется там, где действие не проходит через ModelViewSet. Мы явно
-    передаём allowed_fields, чтобы случайно не записать пароль, токен или другие
-    чувствительные данные в audit_logs.
+    Используется для действий не проходящих через ModelViewSet.
+    Явно указывает allowed_fields для предотвращения записи чувствительных
+    данных (пароли, токены) в audit logs.
+
+    Аргументы:
+        instance: Model - экземпляр модели
+        data: dict - данные из request.data
+        allowed_fields: list - список безопасных для записи полей
+
+    Возвращает:
+        dict - словарь изменений в формате {field: {old: value, new: value}}
+
+    Используется:
+        - В обычных API views (не ViewSets)
+        - Когда нужно контролировать какие поля записывать
     """
     changes = {}
     current_values = model_to_dict(instance, fields=allowed_fields)
@@ -111,12 +175,31 @@ def write_audit_log(
     request=None,
 ):
     """
-    Единая точка записи audit_logs.
+    Создает запись в audit log.
 
-    Мы пишем аудит явно из views, а не через signal. Signal видит только факт
-    сохранения модели, но не знает, кто пришёл через API, какой был IP и какой
-    бизнес-сценарий выполнялся: создание аккаунта, блокировка, архивирование и
-    т.д. Явный сервис делает журнал понятнее для владельца и разработчика.
+    Единая точка записи всех действий в системе. Используется явно из views
+    вместо signals для сохранения контекста бизнес-сценариев (кто, с какого IP,
+    какой сценарий выполнялся).
+
+    Аргументы:
+        action: str - тип действия (из AuditLog.Action.choices)
+        actor: User - пользователь, выполнивший действие (опционально)
+        target: Model - объект, над которым выполнено действие (опционально)
+        object_type: str - тип объекта (автоматически из target)
+        object_id: str - ID объекта (автоматически из target)
+        object_repr: str - строковое представление (автоматически из target)
+        changes: dict - изменения полей (опционально)
+        metadata: dict - дополнительная информация (опционально)
+        request: HttpRequest - объект запроса для IP и User Agent (опционально)
+
+    Возвращает:
+        AuditLog - созданная запись аудита
+
+    Особенности:
+        - Автоматически извлекает object_type/object_id/object_repr из target
+        - Сохраняет actor_username и actor_role для истории при удалении
+        - Извлекает IP адрес и User Agent из request
+        - Использует keyword-only аргументы для безопасности
     """
     if target is not None:
         object_type = get_audit_object_type(target)

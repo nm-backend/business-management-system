@@ -1,8 +1,25 @@
+"""
+Warehouse models - управление складом сырья и готовой продукции.
+
+Этот модуль содержит модели для управления:
+- Сырьем (RawMaterial) - материалы для производства
+- Готовой продукцией (FinishedProduct) - готовые изделия
+- Движениями склада (StockMovement) - история изменений
+- Рецептами (Recipe, RecipeItem) - состав продукции
+
+ВАЖНО: Финансовые поля (цены) доступны только владельцу.
+"""
 from django.db import models
 from django.core.exceptions import ValidationError
 from apps.core.models import TimestampedModel, SoftDeleteModel
 
+
 class UnitChoices(models.TextChoices):
+    """
+    Единицы измерения для материалов и продукции.
+
+    Используется для унификации единиц измерения во всей системе.
+    """
     SHT = 'sht', 'Штук'
     M = 'm', 'Метр'
     M2 = 'm2', 'Квадратный метр'
@@ -10,6 +27,36 @@ class UnitChoices(models.TextChoices):
     DONA = 'dona', 'Дона'
 
 class RawMaterial(TimestampedModel, SoftDeleteModel):
+    """
+    Модель сырья на складе.
+
+    Хранит информацию о материалах, используемых в производстве.
+    Поддерживает мягкое удаление и отслеживание низких остатков.
+
+    Поля:
+        name: CharField - название материала
+        stone_type: CharField - тип камня (мрамор, гранит и т.д.)
+        color: CharField - цвет материала
+        size: CharField - размер
+        thickness: CharField - толщина
+        unit: CharField - единица измерения
+        quantity: DecimalField - текущее количество
+        storage_location: CharField - место хранения
+        photo: ImageField - фото материала
+        min_stock: DecimalField - минимальный остаток для предупреждений
+        supplier: CharField - поставщик
+        arrival_date: DateField - дата поступления
+        comment: TextField - комментарий
+        purchase_price: DecimalField - цена закупки (ФИНАНСОВОЕ ПОЛЕ - только owner)
+        avg_cost_price: DecimalField - средняя себестоимость (ФИНАНСОВОЕ ПОЛЕ - только owner)
+
+    Свойства:
+        is_low_stock: bool - True если quantity <= min_stock
+
+    Особенности:
+        - Поддерживает мягкое удаление (SoftDeleteModel)
+        - Автоматические временные метки (TimestampedModel)
+    """
     name = models.CharField(max_length=255)
     stone_type = models.CharField(max_length=100, blank=True)
     color = models.CharField(max_length=100, blank=True)
@@ -32,13 +79,51 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
         ordering = ['name']
 
     def __str__(self):
+        """
+        Строковое представление материала.
+
+        Возвращает название с количеством и единицей измерения.
+        """
         return f"{self.name} ({self.quantity} {self.get_unit_display()})"
 
     @property
     def is_low_stock(self):
+        """
+        Проверяет, находится ли материал на низком остатке.
+
+        Возвращает:
+            bool - True если quantity <= min_stock
+        """
         return self.quantity <= self.min_stock
 
 class FinishedProduct(TimestampedModel, SoftDeleteModel):
+    """
+    Модель готовой продукции на складе.
+
+    Хранит информацию о готовых изделиях, доступных для продажи.
+    Поддерживает резервирование под заказы.
+
+    Поля:
+        name: CharField - название продукции
+        category: CharField - категория продукции
+        unit: CharField - единица измерения
+        quantity: DecimalField - общее количество на складе
+        photo: ImageField - фото продукции
+        description: TextField - описание
+        min_stock: DecimalField - минимальный остаток для предупреждений
+        reserved_for_orders: DecimalField - зарезервировано под заказы
+        cost_price: DecimalField - себестоимость (ФИНАНСОВОЕ ПОЛЕ - только owner)
+        sale_price: DecimalField - цена продажи (ФИНАНСОВОЕ ПОЛЕ - только owner)
+
+    Свойства:
+        available_quantity: DecimalField - доступное количество (quantity - reserved)
+        is_low_stock: bool - True если available_quantity <= min_stock
+
+    Особенности:
+        - Поддерживает мягкое удаление (SoftDeleteModel)
+        - Автоматические временные метки (TimestampedModel)
+        - Резервирование под заказы для точного учета
+    """
     name = models.CharField(max_length=255)
     category = models.CharField(max_length=100, blank=True)
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.IZDELIE)
@@ -56,18 +141,75 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         ordering = ['name']
 
     def __str__(self):
+        """
+        Строковое представление продукции.
+
+        Возвращает название с количеством и единицей измерения.
+        """
         return f"{self.name} ({self.quantity} {self.get_unit_display()})"
 
     @property
     def available_quantity(self):
+        """
+        Вычисляет доступное количество для продажи.
+
+        Учитывает резервирование под заказы.
+
+        Возвращает:
+            DecimalField - quantity - reserved_for_orders
+        """
         return self.quantity - self.reserved_for_orders
 
     @property
     def is_low_stock(self):
+        """
+        Проверяет, находится ли продукция на низком остатке.
+
+        Учитывает доступное количество (с учетом резервов).
+
+        Возвращает:
+            bool - True если available_quantity <= min_stock
+        """
         return self.available_quantity <= self.min_stock
 
 class StockMovement(TimestampedModel):
+    """
+    Модель движения склада (аудит изменений).
+
+    Записывает все изменения количества на складе для полной истории.
+    Используется для отслеживания приходов, расходов, производства и корректировок.
+
+    Поля:
+        movement_type: CharField - тип движения (приход, расход, производство и т.д.)
+        material: ForeignKey - ссылка на сырье (null если движение продукции)
+        product: ForeignKey - ссылка на продукцию (null если движение сырья)
+        quantity: DecimalField - количество движения
+        price_per_unit: DecimalField - цена за единицу (ФИНАНСОВОЕ ПОЛЕ - только owner)
+        reason: CharField - причина движения
+        created_by: ForeignKey - пользователь, создавший запись
+        related_order_id: IntegerField - ID связанного заказа (опционально)
+        related_production_id: IntegerField - ID связанного производства (опционально)
+
+    Валидация:
+        - Движение должно быть связано либо с material, либо с product
+        - Нельзя связывать одновременно с material и product
+
+    Особенности:
+        - Автоматические временные метки (TimestampedModel)
+        - Не поддерживает мягкое удаление (история должна сохраняться)
+    """
+
     class MovementType(models.TextChoices):
+        """
+        Типы движений склада.
+
+        INCOMING: приход материалов
+        OUTGOING: расход материалов
+        PRODUCTION_IN: приход готовой продукции с производства
+        PRODUCTION_OUT: расход материалов на производство
+        ADJUSTMENT: корректировка остатков
+        LOSS: потеря или брак
+        """
         INCOMING = 'incoming', 'Приход'
         OUTGOING = 'outgoing', 'Расход'
         PRODUCTION_IN = 'production_in', 'Приход с производства'
@@ -91,12 +233,38 @@ class StockMovement(TimestampedModel):
         ordering = ['-created_at']
 
     def clean(self):
+        """
+        Валидирует движение склада.
+
+        Проверяет, что движение связано либо с material, либо с product,
+        но не с обоими одновременно.
+
+        Исключения:
+            ValidationError - если валидация не пройдена
+        """
         if self.material and self.product:
             raise ValidationError("Movement must be associated with either material or product, not both.")
         if not self.material and not self.product:
             raise ValidationError("Movement must be associated with a material or a product.")
 
 class Recipe(TimestampedModel):
+    """
+    Модель рецепта производства продукции.
+
+    Определяет состав готовой продукции - какие материалы и в каком количестве
+    необходимы для производства. Поддерживает несколько рецептов для одной продукции.
+
+    Поля:
+        product: ForeignKey - готовая продукция, для которой создан рецепт
+        name: CharField - название рецепта
+        description: TextField - описание рецепта
+        is_active: BooleanField - активен ли рецепт (можно деактивировать старые рецепты)
+
+    Особенности:
+        - Автоматические временные метки (TimestampedModel)
+        - Одна продукция может иметь несколько рецептов
+        - Можно деактивировать старые рецепты вместо удаления
+    """
     product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, related_name='recipes')
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -108,9 +276,31 @@ class Recipe(TimestampedModel):
         ordering = ['name']
 
     def __str__(self):
+        """
+        Строковое представление рецепта.
+
+        Возвращает название рецепта с указанием продукции.
+        """
         return f"Recipe for {self.product.name}: {self.name}"
 
+
 class RecipeItem(models.Model):
+    """
+    Модель элемента рецепта (ингредиент).
+
+    Определяет какой материал и в каком количестве требуется
+    для производства по рецепту.
+
+    Поля:
+        recipe: ForeignKey - рецепт, к которому относится ингредиент
+        material: ForeignKey - материал (сырье)
+        quantity_required: DecimalField - требуемое количество
+        unit: CharField - единица измерения
+
+    Особенности:
+        - RESTRICT при удалении материала (нельзя удалить материал, используемый в рецептах)
+        - Не имеет временных меток (ингредиент является частью рецепта)
+    """
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='items')
     material = models.ForeignKey(RawMaterial, on_delete=models.RESTRICT)
     quantity_required = models.DecimalField(max_digits=15, decimal_places=3)

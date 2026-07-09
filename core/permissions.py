@@ -1,7 +1,31 @@
+"""
+Custom permission classes for role-based access control (RBAC).
+
+Этот модуль содержит классы разрешений для Django REST Framework,
+реализующие систему контроля доступа на основе ролей.
+
+Роли в системе:
+- owner: владелец бизнеса (полный доступ ко всем данным)
+- admin: администратор (управление складом, работниками)
+- worker: работник (ограниченный доступ к складу)
+
+ВАЖНО: Финансовые данные (цены, себестоимость) доступны только owner.
+"""
 from rest_framework.permissions import BasePermission
 
+
 class IsOwner(BasePermission):
-    """Allow access only to users with 'owner' role."""
+    """
+    Разрешает доступ только пользователям с ролью 'owner'.
+
+    Владелец имеет полный доступ ко всем данным системы,
+    включая финансовую информацию и управление пользователями.
+
+    Используется для:
+    - Управления аккаунтами пользователей
+    - Доступа к финансовым отчетам
+    - Изменения критических настроек системы
+    """
     def has_permission(self, request, view):
         return (
             request.user
@@ -9,8 +33,19 @@ class IsOwner(BasePermission):
             and request.user.role == 'owner'
         )
 
+
 class IsAdmin(BasePermission):
-    """Allow access only to users with 'admin' role."""
+    """
+    Разрешает доступ только пользователям с ролью 'admin'.
+
+    Администратор может управлять складом и создавать работников,
+    но не имеет доступа к финансовым данным.
+
+    Используется для:
+    - Управления складом (сырье и готовая продукция)
+    - Создания аккаунтов работников
+    - Управления производственными заданиями
+    """
     def has_permission(self, request, view):
         return (
             request.user
@@ -18,8 +53,19 @@ class IsAdmin(BasePermission):
             and request.user.role == 'admin'
         )
 
+
 class IsWorker(BasePermission):
-    """Allow access only to users with 'worker' role."""
+    """
+    Разрешает доступ только пользователям с ролью 'worker'.
+
+    Работник имеет ограниченный доступ только к необходимым данным
+    для выполнения своих обязанностей.
+
+    Используется для:
+    - Просмотра своих задач
+    - Обновления статуса работ
+    - Просмотра склада (без финансовых данных)
+    """
     def has_permission(self, request, view):
         return (
             request.user
@@ -27,8 +73,19 @@ class IsWorker(BasePermission):
             and request.user.role == 'worker'
         )
 
+
 class IsOwnerOrAdmin(BasePermission):
-    """Allow access to users with 'owner' or 'admin' role."""
+    """
+    Разрешает доступ пользователям с ролями 'owner' или 'admin'.
+
+    Комбинированное разрешение для операций, которые могут выполнять
+    как владелец, так и администратор.
+
+    Используется для:
+    - Создания и редактирования материалов на складе
+    - Управления рецептами производства
+    - Просмотра истории движений склада
+    """
     def has_permission(self, request, view):
         return (
             request.user
@@ -36,8 +93,19 @@ class IsOwnerOrAdmin(BasePermission):
             and request.user.role in ('owner', 'admin')
         )
 
+
 class IsOwnerOrAdminOrWorker(BasePermission):
-    """Allow access to all authenticated users with a valid role."""
+    """
+    Разрешает доступ всем аутентифицированным пользователям с валидной ролью.
+
+    Это базовое разрешение для большинства API endpoints.
+    Гарантирует, что пользователь авторизован и имеет одну из ролей.
+
+    Используется для:
+    - Чтения общих данных склада
+    - Просмотра информации о системе
+    - Базового доступа к API
+    """
     def has_permission(self, request, view):
         return (
             request.user
@@ -45,8 +113,24 @@ class IsOwnerOrAdminOrWorker(BasePermission):
             and request.user.role in ('owner', 'admin', 'worker')
         )
 
+
 class FinancialDataPermission(BasePermission):
-    """Only owner can access financial data."""
+    """
+    Разрешает доступ к финансовым данным только владельцу.
+
+    КРИТИЧЕСКИ ВАЖНО ДЛЯ БЕЗОПАСНОСТИ:
+    Финансовые данные (цены закупки, себестоимость, прибыль)
+    должны быть доступны только владельцу бизнеса.
+
+    Используется для:
+    - API endpoints, возвращающих финансовые поля
+    - Отчетов о прибыли и убытках
+    - Информации о зарплатах и выплатах
+
+    ПРИМЕЧАНИЕ: В serializers.py финансовые поля исключаются
+    для non-owner пользователей, но этот permission предоставляет
+    дополнительный уровень защиты на уровне API.
+    """
     def has_permission(self, request, view):
         return (
             request.user
