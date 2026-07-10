@@ -6,6 +6,7 @@ Production models - управление производством и зада�
 """
 from django.db import models
 from apps.core.models import TimestampedModel
+from apps.orders.models import OrderStatus
 from apps.warehouse.models import UnitChoices
 
 
@@ -132,13 +133,13 @@ class Task(TimestampedModel):
         - Связанный заказ переводит в ACCEPTED_BY_WORKER
         """
         from django.utils import timezone
-        self.status = self.TaskStatus.ACCEPTED
+        self.status = TaskStatus.ACCEPTED
         self.accepted_at = timezone.now()
         self.save(update_fields=['status', 'accepted_at'])
         
         # Обновляем статус заказа если есть
         if self.order:
-            self.order.status = self.order.OrderStatus.ACCEPTED_BY_WORKER
+            self.order.status = OrderStatus.ACCEPTED_BY_WORKER
             self.order.save(update_fields=['status'])
 
     def refuse(self, reason):
@@ -151,13 +152,13 @@ class Task(TimestampedModel):
         - Связанный заказ переводит в WORKER_REFUSED
         """
         from django.utils import timezone
-        self.status = self.TaskStatus.REFUSED
+        self.status = TaskStatus.REFUSED
         self.refusal_comment = reason
         self.save(update_fields=['status', 'refusal_comment'])
         
         # Обновляем статус заказа если есть
         if self.order:
-            self.order.status = self.order.OrderStatus.WORKER_REFUSED
+            self.order.status = OrderStatus.WORKER_REFUSED
             self.order.save(update_fields=['status'])
 
     def complete(self):
@@ -169,7 +170,7 @@ class Task(TimestampedModel):
         - Устанавливает completed_at = текущее время
         """
         from django.utils import timezone
-        self.status = self.TaskStatus.COMPLETED
+        self.status = TaskStatus.COMPLETED
         self.completed_at = timezone.now()
         self.save(update_fields=['status', 'completed_at'])
 
@@ -183,14 +184,14 @@ class Task(TimestampedModel):
         - Связанный заказ переводит в IN_PROGRESS (если есть)
         """
         from django.utils import timezone
-        self.status = self.TaskStatus.CONFIRMED
+        self.status = TaskStatus.CONFIRMED
         self.confirmed_at = timezone.now()
         self.confirmed_by = confirmed_by
         self.save(update_fields=['status', 'confirmed_at', 'confirmed_by'])
         
         # Обновляем статус заказа если есть
         if self.order:
-            self.order.status = self.order.OrderStatus.IN_PROGRESS
+            self.order.status = OrderStatus.IN_PROGRESS
             self.order.save(update_fields=['status'])
 
 

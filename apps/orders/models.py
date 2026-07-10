@@ -6,6 +6,8 @@ Orders models - управление заказами.
 
 ВАЖНО: Финансовые поля доступны только владельцу (owner).
 """
+from decimal import Decimal
+
 from django.db import models
 from apps.core.models import TimestampedModel
 from apps.warehouse.models import UnitChoices
@@ -160,11 +162,11 @@ class Order(TimestampedModel):
         - Если paid_amount >= total_amount: PAID
         """
         if self.paid_amount == 0:
-            self.payment_status = self.PaymentStatus.UNPAID
+            self.payment_status = PaymentStatus.UNPAID
         elif self.paid_amount < self.total_amount:
-            self.payment_status = self.PaymentStatus.PARTIAL
+            self.payment_status = PaymentStatus.PARTIAL
         else:
-            self.payment_status = self.PaymentStatus.PAID
+            self.payment_status = PaymentStatus.PAID
         self.save(update_fields=['payment_status'])
 
     def check_overdue(self):
@@ -177,7 +179,7 @@ class Order(TimestampedModel):
         """
         from django.utils import timezone
         today = timezone.now().date()
-        completed_statuses = [self.OrderStatus.READY, self.OrderStatus.DELIVERED, self.OrderStatus.CANCELLED]
+        completed_statuses = [OrderStatus.READY, OrderStatus.DELIVERED, OrderStatus.CANCELLED]
         
         if self.deadline < today and self.status not in completed_statuses:
             self.is_overdue = True
@@ -211,6 +213,6 @@ class Order(TimestampedModel):
         client.debt = total_orders - total_paid
         
         # Прибыль (упрощенная логика - можно расширить)
-        client.profit = total_paid * 0.1  # 10% от оплаченного
+        client.profit = total_paid * Decimal('0.1')  # 10% от оплаченного
         
         client.save()

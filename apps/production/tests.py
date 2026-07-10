@@ -11,28 +11,67 @@ from django.test import TestCase
 from apps.accounts.models import User
 from apps.clients.models import Client
 from apps.finance.models import LaborRate
-from apps.orders.models import Order
-from apps.production.models import Task, WorkRecord
+from apps.orders.models import Order, OrderStatus
+from apps.production.models import Task, TaskStatus, WorkRecord
 from apps.warehouse.models import FinishedProduct
 
 
-class TaskTests(TestCase):
+class TaskLifecycleTests(TestCase):
     def setUp(self):
         self.worker = User.objects.create_user(username='worker', role=User.Role.WORKER)
+        self.owner = User.objects.create_user(username='owner', role=User.Role.OWNER)
         client = Client.objects.create(name='C')
         self.order = Order.objects.create(
             client=client, quantity=Decimal('1'), unit='sht', deadline=datetime.date(2024, 1, 1)
         )
 
+    def _task(self):
+        return Task.objects.create(worker=self.worker, order=self.order)
+
+    def test_accept_updates_task_and_order(self):
+        task = self._task()
+        task.accept()
+        task.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.ACCEPTED)
+        self.assertIsNotNone(task.accepted_at)
+        self.assertEqual(self.order.status, OrderStatus.ACCEPTED_BY_WORKER)
+
+    def test_refuse_updates_task_and_order(self):
+        task = self._task()
+        task.refuse('no time')
+        task.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.REFUSED)
+        self.assertEqual(task.refusal_comment, 'no time')
+        self.assertEqual(self.order.status, OrderStatus.WORKER_REFUSED)
+
+    def test_complete_sets_status_and_timestamp(self):
+        task = self._task()
+        task.complete()
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.COMPLETED)
+        self.assertIsNotNone(task.completed_at)
+
+    def test_confirm_updates_task_and_order(self):
+        task = self._task()
+        task.confirm(self.owner)
+        task.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.CONFIRMED)
+        self.assertEqual(task.confirmed_by, self.owner)
+        self.assertEqual(self.order.status, OrderStatus.IN_PROGRESS)
+
+    def test_accept_without_order_does_not_fail(self):
+        task = Task.objects.create(worker=self.worker)
+        task.accept()
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.ACCEPTED)
+
     def test_str(self):
-        task = Task.objects.create(worker=self.worker, order=self.order)
+        task = self._task()
         self.assertIn(f'Task #{task.id}', str(task))
         self.assertIn('worker', str(task))
-
-# NOTE: Task.accept()/refuse()/complete()/confirm() в текущем коде обращаются к
-# self.TaskStatus и self.order.OrderStatus, тогда как эти перечисления объявлены
-# на уровне модуля (TaskStatus / OrderStatus), а не вложены в модель. Методы падают
-# с AttributeError, поэтому по ним тесты не добавлены (см. описание PR).
 
 
 class WorkRecordTests(TestCase):
@@ -60,6 +99,17 @@ class WorkRecordTests(TestCase):
         self.assertEqual(work.confirmed_by, self.owner)
         self.assertEqual(work.labor_cost, Decimal('150.00'))
         self.assertIsNotNone(work.confirmed_at)
+
+    def test_confirm_also_confirms_related_task(self):
+        client = Client.objects.create(name='C')
+        order = Order.objects.create(
+            client=client, quantity=Decimal('1'), unit='sht', deadline=datetime.date(2024, 1, 1)
+        )
+        task = Task.objects.create(worker=self.worker, order=order)
+        work = self._work(task=task)
+        work.confirm(self.owner)
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.CONFIRMED)
 
     def test_reject_sets_status_and_reason(self):
         work = self._work()

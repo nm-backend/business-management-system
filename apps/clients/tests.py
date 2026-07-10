@@ -70,3 +70,30 @@ class ClientRecalculateFinancialsTests(TestCase):
         self.assertEqual(client.total_orders_amount, 0)
         self.assertEqual(client.total_paid, 0)
         self.assertEqual(client.debt, 0)
+
+    def test_recalculate_aggregates_orders(self):
+        client = Client.objects.create(name='WithOrders')
+        Order.objects.create(
+            client=client,
+            quantity=Decimal('1'),
+            unit='sht',
+            deadline=datetime.date(2024, 1, 1),
+            total_amount=Decimal('200'),
+            paid_amount=Decimal('120'),
+        )
+        Order.objects.create(
+            client=client,
+            quantity=Decimal('1'),
+            unit='sht',
+            deadline=datetime.date(2024, 1, 1),
+            total_amount=Decimal('100'),
+            paid_amount=Decimal('0'),
+        )
+
+        client.recalculate_financials()
+        client.refresh_from_db()
+
+        self.assertEqual(client.total_orders_amount, Decimal('300'))
+        self.assertEqual(client.total_paid, Decimal('120'))
+        self.assertEqual(client.debt, Decimal('180'))
+        self.assertEqual(client.profit, Decimal('12.0'))

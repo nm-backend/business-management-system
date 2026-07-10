@@ -6,6 +6,8 @@ Clients models - управление клиентами.
 
 ВАЖНО: Финансовые поля доступны только владельцу (owner).
 """
+from decimal import Decimal
+
 from django.db import models
 from apps.core.models import TimestampedModel, SoftDeleteModel
 
@@ -128,6 +130,6 @@ class Client(TimestampedModel, SoftDeleteModel):
         self.debt = total_orders - total_paid
         
         # Прибыль (10% от оплаченного)
-        self.profit = total_paid * 0.1
+        self.profit = total_paid * Decimal('0.1')
         
         self.save()
