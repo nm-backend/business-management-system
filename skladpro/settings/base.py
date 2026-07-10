@@ -137,7 +137,8 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',  # JSON ответ
-        'rest_framework.renderers.BrowsableAPIRenderer',  # HTML интерфейс для отладки
+        # BrowsableAPIRenderer включается только в development (см. development.py),
+        # чтобы не выставлять интерактивный интерфейс API в production.
     )
 }
 

@@ -575,15 +575,15 @@ class UserViewSet(viewsets.ModelViewSet):
             IsOwner - только владелец
 
         Тело запроса:
-            {"new_password": "string"} (минимум 6 символов)
+            {"new_password": "string"} (минимум 8 символов)
 
         Возвращает:
             {'message': 'Password reset successfully'}
         """
         user = self.get_object()
         new_password = request.data.get('new_password')
-        if not new_password or len(new_password) < 6:
-            return Response({'error': 'Password must be at least 6 characters'}, status=status.HTTP_400_BAD_REQUEST)
+        if not new_password or len(new_password) < 8:
+            return Response({'error': 'Password must be at least 8 characters'}, status=status.HTTP_400_BAD_REQUEST)
         user.set_password(new_password)
         user.save()
         write_audit_log(
