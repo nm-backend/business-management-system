@@ -16,12 +16,43 @@ class Router {
 
     async handleRoute() {
         const path = window.location.hash.slice(1) || '/';
-        let component = this.routes[path];
+        let component;
+        switch (path) {
+            case '':
+            case '/':
+                component = window.DashboardComponent;
+                break;
+            case '/warehouse':
+                component = window.WarehouseComponent;
+                break;
+            case '/finished-products':
+                component = window.FinishedProductsComponent;
+                break;
+            case '/orders':
+                component = window.OrdersComponent;
+                break;
+            case '/clients':
+                component = window.ClientsComponent;
+                break;
+            default:
+                component = window.DashboardComponent;
+        }
 
         if (!component) {
             this.renderNotFound(path);
             return;
         }
+
+        // Highlight active nav item
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        let navId = 'nav-dashboard';
+        if (path.startsWith('/orders')) navId = 'nav-orders';
+        if (path.startsWith('/warehouse')) navId = 'nav-warehouse';
+        if (path.startsWith('/clients')) navId = 'nav-clients';
+        if (path.startsWith('/settings')) navId = 'nav-settings';
+        
+        const activeNav = document.getElementById(navId);
+        if (activeNav) activeNav.classList.add('active');
 
         this.appElement.innerHTML = '<div class="loading" data-i18n="common.loading">Loading...</div>';
         window.i18n.applyTranslations();

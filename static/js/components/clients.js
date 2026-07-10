@@ -1,194 +1,72 @@
 /**
- * Компонент для управления клиентами.
- *
- * Отображает список клиентов, позволяет создавать, редактировать и архивировать клиентов.
- * Поддерживает фильтрацию по активным и архивным клиентам.
+ * ClientsComponent - Мижозлар
  */
 class ClientsComponent {
-    /**
-     * Рендерит страницу клиентов.
-     *
-     * @param {HTMLElement} container - Контейнер для рендеринга
-     */
     async render(container) {
+        document.getElementById('page-title').textContent = 'Мижозлар архиви';
+        
         container.innerHTML = `
-            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h1 data-i18n="clients.title">Мижозлар</h1>
-                <div style="display: flex; gap: 10px;">
-                    <select id="client-filter" class="form-control" style="width: auto;">
-                        <option value="active" data-i18n="clients.active">Актив</option>
-                        <option value="archived" data-i18n="clients.archived">Архив</option>
-                        <option value="all" data-i18n="clients.all">Барча</option>
-                    </select>
-                    <button id="add-client-btn" class="btn btn-primary" data-i18n="clients.add_client">Қўшиш</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div style="position: relative; width: 80%;">
+                    <input type="text" class="form-control" placeholder="Қидириш..." style="padding-left: 35px; border-radius: 20px;">
+                    <span style="position: absolute; left: 12px; top: 12px; font-size: 14px;">🔍</span>
                 </div>
-            </header>
+                <span class="nav-icon" style="font-size: 20px; color: var(--text-muted);">⚡</span>
+            </div>
             
-            <div class="card" style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid #eee;">
-                            <th style="padding: 10px;" data-i18n="clients.name">Исм</th>
-                            <th style="padding: 10px;" data-i18n="clients.phone">Телефон</th>
-                            <th style="padding: 10px;" data-i18n="clients.address">Манзил</th>
-                            <th style="padding: 10px;" data-i18n="clients.status">Ҳолат</th>
-                            <th style="padding: 10px;" data-i18n="clients.has_debt">Қарз</th>
-                            <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
-                        </tr>
-                    </thead>
-                    <tbody id="clients-list">
-                        <tr><td colspan="6" style="padding: 10px; text-align: center;" data-i18n="common.loading">Юкланмоқда...</td></tr>
-                    </tbody>
-                </table>
+            <div id="clients-list">
+                <div style="text-align: center; padding: 20px; color: var(--text-muted);">Загрузка...</div>
             </div>
         `;
 
-        await this.loadClients(container);
-        this.setupEventListeners(container);
+        await this.loadClients();
     }
 
-    /**
-     * Загружает список клиентов с сервера.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    async loadClients(container) {
-        const listEl = container.querySelector('#clients-list');
-        const filter = container.querySelector('#client-filter').value;
-        window.listStates.tableLoading(listEl, 6);
-        
+    async loadClients() {
+        const listContainer = document.getElementById('clients-list');
         try {
-            let url = '/clients/';
-            if (filter === 'active') {
-                url += 'active/';
-            } else if (filter === 'archived') {
-                url += 'archived/';
-            }
+            const data = await window.api.request('/api/v1/clients/clients/');
+            const clients = data.results || data;
             
-            const data = await window.api.request(url);
-            
-            if (data && data.length > 0) {
-                listEl.innerHTML = data.map(c => `
-                    <tr style="border-bottom: 1px solid #eee;">
-                        <td style="padding: 10px;">${c.name}</td>
-                        <td style="padding: 10px;">${c.phone || '-'}</td>
-                        <td style="padding: 10px;">${c.address || '-'}</td>
-                        <td style="padding: 10px;">
-                            <span class="badge ${c.is_active ? 'badge-success' : 'badge-secondary'}">
-                                ${c.is_active ? (c.is_archived ? 'Архив' : 'Актив') : 'Неактив'}
-                            </span>
-                        </td>
-                        <td style="padding: 10px;">
-                            ${c.has_debt ? '<span style="color: red;">Қарз бор</span>' : '-'}
-                        </td>
-                        <td style="padding: 10px;">
-                            <button class="btn btn-sm btn-info" onclick="window.router.navigate('#clients/${c.id}')">
-                                <span data-i18n="common.view">Кўриш</span>
-                            </button>
-                            ${!c.is_archived ? `<button class="btn btn-sm btn-danger archive-client" data-id="${c.id}">Archive</button>` : ''}
-                        </td>
-                    </tr>
-                `).join('');
-            } else {
-                window.listStates.tableEmpty(listEl, 6, 'No clients found');
+            if (clients.length === 0) {
+                listContainer.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted);">Мижозлар йўқ</div>`;
+                return;
             }
-            window.i18n.applyTranslations();
-        } catch (e) {
-            console.error('Failed to load clients', e);
-            window.listStates.tableError(listEl, 6, 'Unable to load clients', () => this.loadClients(container));
-            window.i18n.applyTranslations();
+
+            listContainer.innerHTML = clients.map(client => this.renderClientCard(client)).join('');
+        } catch (error) {
+            listContainer.innerHTML = `<div class="alert-box">Ошибка загрузки клиентов</div>`;
         }
     }
 
-    /**
-     * Настраивает обработчики событий.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    setupEventListeners(container) {
-        const filter = container.querySelector('#client-filter');
-        filter.addEventListener('change', () => this.loadClients(container));
+    renderClientCard(client) {
+        // According to mockup: if unpaid, badge is red "Тўлови мавжуд (архив)" or active
+        // If paid, green "Тўлови ёпилган"
+        let badgeColor = client.has_debt ? 'var(--danger-color)' : 'var(--success-color)';
+        let badgeText = client.has_debt ? 'Тўлови мавжуд' : 'Тўлови ёпилган';
+        let bgLight = client.has_debt ? '#ffebeb' : '#e5f7ed';
 
-        const addBtn = container.querySelector('#add-client-btn');
-        addBtn.addEventListener('click', () => this.showAddClientModal(container));
-    }
+        // Debt value only visible to Owner
+        let debtDisplay = client.total_debt !== undefined 
+            ? `<div style="font-size: 16px; font-weight: 700; margin-top: 4px;">${client.total_debt} сўм</div>` 
+            : '';
 
-    /**
-     * Показывает модальное окно для добавления клиента.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    showAddClientModal(container) {
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.style.display = 'block';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 data-i18n="clients.add_client">Янги мижоз</h3>
-                    <button class="close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <form id="add-client-form">
-                        <div class="form-group">
-                            <label data-i18n="clients.name">Исм</label>
-                            <input type="text" name="name" class="form-control" required>
+        return `
+            <div class="card" style="border-left: 4px solid ${badgeColor};">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div style="font-size: 15px; font-weight: 600;">${client.name}</div>
+                        ${debtDisplay}
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+                            Охирги фаолият: ${new Date(client.updated_at).toLocaleDateString()}
                         </div>
-                        <div class="form-group">
-                            <label data-i18n="clients.phone">Телефон</label>
-                            <input type="text" name="phone" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="clients.address">Манзил</label>
-                            <textarea name="address" class="form-control" rows="3"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="clients.notes">Изоҳлар</label>
-                            <textarea name="notes" class="form-control" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сақлаш</button>
-                    </form>
+                    </div>
+                    <div style="background-color: ${bgLight}; color: ${badgeColor}; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">
+                        ${badgeText}
+                    </div>
                 </div>
             </div>
         `;
-
-        document.body.appendChild(modal);
-        window.i18n.applyTranslations();
-
-        modal.querySelector('.close').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
-        });
-
-        modal.querySelector('#add-client-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            
-            try {
-                await window.api.request('/clients/', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-                modal.remove();
-                window.toast.success('Client created successfully');
-                await this.loadClients(container);
-            } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to add client');
-            }
-        });
-        container.addEventListener('click', async (event) => {
-            const button = event.target.closest('.archive-client');
-            if (!button) return;
-            if (!await window.confirmation.confirm('Archive this client?')) return;
-            try {
-                await window.api.request(`/clients/${button.dataset.id}/archive/`, { method: 'POST' });
-                window.toast.success('Client archived');
-                await this.loadClients(container);
-            } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to archive client');
-            }
-        });
     }
 }
 

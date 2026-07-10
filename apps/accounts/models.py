@@ -88,6 +88,13 @@ class User(AbstractUser):
         verbose_name = 'User'
         verbose_name_plural = 'Users'
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['role'],
+                condition=models.Q(role='owner'),
+                name='accounts_single_owner',
+            ),
+        ]
 
     def __str__(self):
         """

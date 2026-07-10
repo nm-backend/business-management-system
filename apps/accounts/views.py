@@ -9,6 +9,7 @@ API views for authentication and user management.
 
 Все действия записываются в audit log для безопасности и отслеживания.
 """
+from django.db import IntegrityError, transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
@@ -96,11 +97,21 @@ class SetupOwnerView(APIView):
             Response с данными пользователя и токенами (201 Created)
             или ошибку 403 если владелец уже существует
         """
-        if User.objects.filter(role='owner').exists():
-            return Response({'error': 'Owner already exists. Setup is complete.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = SetupOwnerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        try:
+            with transaction.atomic():
+                if User.objects.filter(role=User.Role.OWNER).exists():
+                    return Response(
+                        {'error': 'Owner already exists. Setup is complete.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+                user = serializer.save()
+        except IntegrityError:
+            return Response(
+                {'error': 'Owner already exists. Setup is complete.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         write_audit_log(
             action=AuditLog.Action.SETUP_OWNER,
             actor=user,

@@ -1,11 +1,8 @@
-"""
-URL configuration для HTML шаблонов клиентов.
-
-Этот модуль содержит URL routing для HTML шаблонов управления клиентами.
-"""
 from django.urls import path
-from . import template_views
+from django.views.generic import TemplateView
 
 urlpatterns = [
-    path('clients/', template_views.clients_view, name='clients-page'),
+    # Clients are now a JS component in the SPA, so we don't need a separate HTML page 
+    # if it's all handled by index.html #/clients hash route. 
+    # But just in case, we can provide a dummy or empty list.
 ]

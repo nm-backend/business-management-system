@@ -24,11 +24,11 @@
             </div>
             <div class="form-group">
                 <label for="password" data-i18n="auth.password">Пароль</label>
-                <input type="password" id="password" class="form-control" required minlength="6">
+                <input type="password" id="password" class="form-control" required minlength="8">
             </div>
             <div class="form-group">
                 <label for="password_confirm" data-i18n="auth.password_confirm">Подтвердите пароль</label>
-                <input type="password" id="password_confirm" class="form-control" required minlength="6">
+                <input type="password" id="password_confirm" class="form-control" required minlength="8">
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;" data-i18n="setup.create_owner">Создать аккаунт владельца</button>
         </form>
@@ -88,11 +88,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ full_name, phone, username, password, password_confirm }),
                 noAuth: true
             });
-            // Auto login after setup
-            await window.api.login(username, password);
             successMsg.style.display = 'block';
             setTimeout(() => {
-                window.location.href = '/';
+                window.location.href = '/accounts/login/?setup=complete';
             }, 1000);
         } catch (error) {
             errorMsg.textContent = getErrorMessage(error);

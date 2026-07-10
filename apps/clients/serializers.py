@@ -1,70 +1,39 @@
-"""
-Serializers for clients API.
-
-Этот модуль содержит сериализаторы для модели Client с защитой
-финансовых данных для non-owner пользователей.
-"""
 from rest_framework import serializers
-from .models import Client
+from django.db.models import Sum
+from .models import Client, Payment
 
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = '__all__'
 
-class ClientSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор клиента с финансовыми данными.
+class ClientAdminSerializer(serializers.ModelSerializer):
+    has_debt = serializers.SerializerMethodField()
+    has_active_orders = serializers.SerializerMethodField()
 
-    Используется только для владельца (owner).
-    Включает все поля включая финансовые.
-    """
     class Meta:
         model = Client
-        fields = [
-            'id', 'name', 'phone', 'address',
-            'total_orders_amount', 'total_paid', 'debt', 'profit',
-            'is_active', 'is_archived', 'notes',
-            'has_debt', 'has_active_orders',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
+        fields = ['id', 'name', 'phone', 'address', 'comment', 'is_archived', 'has_debt', 'has_active_orders', 'created_at', 'updated_at']
 
+    def get_has_debt(self, obj):
+        # Admin only sees boolean status
+        # Logic to be fleshed out with real orders, mock for now
+        return False
 
-class ClientLimitedSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор клиента без финансовых данных.
+    def get_has_active_orders(self, obj):
+        return False
 
-    Используется для администраторов и работников.
-    Исключает финансовые поля (суммы, долги, прибыль).
-    """
-    class Meta:
-        model = Client
-        fields = [
-            'id', 'name', 'phone', 'address',
-            'is_active', 'is_archived', 'notes',
-            'has_debt', 'has_active_orders',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['created_at', 'updated_at']
+class ClientOwnerSerializer(ClientAdminSerializer):
+    total_debt = serializers.SerializerMethodField()
+    total_paid = serializers.SerializerMethodField()
 
+    class Meta(ClientAdminSerializer.Meta):
+        fields = ClientAdminSerializer.Meta.fields + ['total_debt', 'total_paid']
 
-class ClientCreateSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор для создания клиента.
+    def get_total_debt(self, obj):
+        # Real logic depends on orders
+        return 0
 
-    Используется при создании нового клиента.
-    Финансовые поля инициализируются нулями.
-    """
-    class Meta:
-        model = Client
-        fields = [
-            'name', 'phone', 'address', 'notes'
-        ]
-
-    def create(self, validated_data):
-        return Client.objects.create(
-            **validated_data,
-            total_orders_amount=0,
-            total_paid=0,
-            debt=0,
-            profit=0,
-            is_active=True,
-            is_archived=False
-        )
+    def get_total_paid(self, obj):
+        total = obj.payments.aggregate(total=Sum('amount'))['total']
+        return total or 0

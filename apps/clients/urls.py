@@ -1,14 +1,10 @@
-"""
-URL configuration for clients API.
-
-Этот модуль содержит URL routing для API управления клиентами.
-"""
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ClientViewSet
+from . import views
 
 router = DefaultRouter()
-router.register(r'', ClientViewSet, basename='client')
+router.register(r'clients', views.ClientViewSet, basename='client')
+router.register(r'payments', views.PaymentViewSet, basename='payment')
 
 urlpatterns = [
     path('', include(router.urls)),

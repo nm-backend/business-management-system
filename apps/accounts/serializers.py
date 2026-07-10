@@ -9,6 +9,8 @@ Serializers for User model and authentication.
 """
 from rest_framework import serializers
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import User
 
 
@@ -36,7 +38,9 @@ class UserSerializer(serializers.ModelSerializer):
             'is_active', 'can_write_to_owner', 'can_create_workers',
             'can_see_other_workers', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'display_role']
+        read_only_fields = [
+            'id', 'role', 'created_at', 'updated_at', 'display_role',
+        ]
 
 
 class UserSelfUpdateSerializer(serializers.ModelSerializer):
@@ -84,6 +88,17 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'role', 'language', 'can_write_to_owner',
             'can_create_workers', 'can_see_other_workers',
         ]
+
+    def validate(self, attrs):
+        candidate = User(
+            username=attrs.get('username', ''),
+            full_name=attrs.get('full_name', ''),
+        )
+        try:
+            validate_password(attrs['password'], candidate)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({'password': error.messages}) from error
+        return attrs
 
     def create(self, validated_data):
         """
@@ -213,6 +228,14 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError('Current password is incorrect')
         return value
 
+    def validate(self, attrs):
+        user = self.context['request'].user
+        try:
+            validate_password(attrs['new_password'], user)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({'new_password': error.messages}) from error
+        return attrs
+
 
 class SetupOwnerSerializer(serializers.Serializer):
     """
@@ -271,6 +294,14 @@ class SetupOwnerSerializer(serializers.Serializer):
             raise serializers.ValidationError({'password_confirm': 'Passwords do not match'})
         if User.objects.filter(username=data['username']).exists():
             raise serializers.ValidationError({'username': 'Username already exists'})
+        candidate = User(
+            username=data['username'],
+            full_name=data['full_name'],
+        )
+        try:
+            validate_password(data['password'], candidate)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({'password': error.messages}) from error
         return data
 
     def create(self, validated_data):

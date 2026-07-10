@@ -1,59 +1,64 @@
 /**
- * WarehouseComponent - страница склада сырья.
- * Отображает список материалов с подсветкой низких остатков.
+ * WarehouseComponent - Хом ашё омбори
  */
 class WarehouseComponent {
     async render(container) {
+        document.getElementById('page-title').textContent = 'Хом ашё омбори';
+        
         container.innerHTML = `
-            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h1 data-i18n="warehouse.title">Склад сырья</h1>
-                <button id="add-material-btn" class="btn btn-primary" data-i18n="warehouse.add_material">Добавить материал</button>
-            </header>
-
-            <div class="card" style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid #eee;">
-                            <th style="padding: 10px;" data-i18n="warehouse.name">Название</th>
-                            <th style="padding: 10px;" data-i18n="warehouse.stone_type">Тип камня</th>
-                            <th style="padding: 10px;" data-i18n="warehouse.quantity">Количество</th>
-                            <th style="padding: 10px;" data-i18n="warehouse.unit">Единица</th>
-                        </tr>
-                    </thead>
-                    <tbody id="materials-list">
-                        <tr><td colspan="4" style="padding: 10px; text-align: center;" data-i18n="common.loading">Загрузка...</td></tr>
-                    </tbody>
-                </table>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="tabs" style="display: flex; overflow-x: auto; gap: 10px; padding-bottom: 5px;">
+                    <button class="btn btn-primary" style="padding: 6px 12px; font-size: 13px; width: auto; border-radius: 20px;">Барча</button>
+                    <button class="btn" style="background: transparent; color: var(--text-muted); padding: 6px 12px; font-size: 13px; width: auto; border-radius: 20px; border: 1px solid #e5e5ea;">Мрамор</button>
+                    <button class="btn" style="background: transparent; color: var(--text-muted); padding: 6px 12px; font-size: 13px; width: auto; border-radius: 20px; border: 1px solid #e5e5ea;">Тош</button>
+                    <button class="btn" style="background: transparent; color: var(--text-muted); padding: 6px 12px; font-size: 13px; width: auto; border-radius: 20px; border: 1px solid #e5e5ea;">Бошқалар</button>
+                </div>
+                <span class="nav-icon" style="font-size: 20px; color: var(--text-muted); margin-left: 10px;">🔍</span>
+            </div>
+            
+            <h4 style="font-size: 14px; font-weight: 600; margin: 15px 0 10px;">Мрамор (слэблар)</h4>
+            <div id="materials-list">
+                <div style="text-align: center; padding: 20px; color: var(--text-muted);">Загрузка...</div>
             </div>
         `;
 
-        await this.loadMaterials(container);
+        await this.loadMaterials();
     }
 
-    async loadMaterials(container) {
-        const listEl = container.querySelector('#materials-list');
-        window.listStates.tableLoading(listEl, 4);
+    async loadMaterials() {
+        const listContainer = document.getElementById('materials-list');
         try {
-            const data = await window.api.request('/warehouse/raw-materials/');
-
-            if (data.results && data.results.length > 0) {
-                listEl.innerHTML = data.results.map(m => `
-                    <tr style="border-bottom: 1px solid #eee; ${m.is_low_stock ? 'background-color: #ffebee;' : ''}">
-                        <td style="padding: 10px;">${m.name}</td>
-                        <td style="padding: 10px;">${m.stone_type}</td>
-                        <td style="padding: 10px; font-weight: bold; color: ${m.is_low_stock ? 'red' : 'inherit'}">${m.quantity}</td>
-                        <td style="padding: 10px;">${m.unit_display}</td>
-                    </tr>
-                `).join('');
-            } else {
-                window.listStates.tableEmpty(listEl, 4, 'No materials found');
-                window.i18n.applyTranslations();
+            const data = await window.api.request('/api/v1/warehouse/raw-materials/');
+            const materials = data.results || data;
+            
+            if (materials.length === 0) {
+                listContainer.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted);">Материаллар йўқ</div>`;
+                return;
             }
-        } catch (e) {
-            console.error('Failed to load materials', e);
-            window.listStates.tableError(listEl, 4, 'Unable to load materials', () => this.loadMaterials(container));
-            window.i18n.applyTranslations();
+
+            listContainer.innerHTML = materials.map(m => this.renderMaterialItem(m)).join('');
+        } catch (error) {
+            listContainer.innerHTML = `<div class="alert-box">Ошибка загрузки склада</div>`;
         }
+    }
+
+    renderMaterialItem(material) {
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e5ea;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 40px; height: 40px; background-color: #e5e5ea; border-radius: 8px; flex-shrink: 0;">
+                        ${material.photo ? `<img src="${material.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">` : ''}
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600;">${material.name}</div>
+                        <div style="font-size: 12px; color: var(--text-muted);">${material.size || 'Размер не указан'}</div>
+                    </div>
+                </div>
+                <div style="font-size: 15px; font-weight: 600; color: ${material.is_low_stock ? 'var(--danger-color)' : 'inherit'}">
+                    ${material.quantity} ${material.unit_display || material.unit}
+                </div>
+            </div>
+        `;
     }
 }
 

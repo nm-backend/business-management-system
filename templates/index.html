@@ -1,51 +1,6 @@
-{# Главный шаблон приложения с боковой панелью навигации #}
 {% extends 'base.html' %}
 {% load static %}
 
 {% block content %}
-<div style="display: flex; height: 100vh;">
-    {# Боковая панель навигации #}
-    <aside style="width: 250px; background: var(--dark-color); color: #fff; padding: 20px; display: flex; flex-direction: column;">
-        <h2 style="margin-bottom: 30px; text-align: center;" data-i18n="app.name">SkladPro.Nod</h2>
-
-        <nav style="flex: 1;">
-            <ul style="list-style: none;">
-                <li style="margin-bottom: 10px;"><a href="#/" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/warehouse" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/finished-products" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.finished_products">Тайёр маҳсулот</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/clients" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/orders" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/production" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/finance" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.finance">Молия</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/messages" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.messages">Хабарлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/settings" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
-            </ul>
-        </nav>
-
-        {# Информация о пользователе и кнопка выхода #}
-        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #444;">
-            <p id="user-info" style="margin-bottom: 10px;"></p>
-            <button id="logout-btn" class="btn btn-primary" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
-        </div>
-    </aside>
-
-    {# Основной контент для SPA #}
-    <main style="flex: 1; padding: 20px; overflow-y: auto;" id="app-content">
-        <!-- SPA content rendered here -->
-    </main>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-{# JavaScript файлы для SPA навигации и компонентов #}
-<script src="{% static 'js/router.js' %}"></script>
-<script src="{% static 'js/components/dashboard.js' %}"></script>
-<script src="{% static 'js/components/warehouse.js' %}"></script>
-<script src="{% static 'js/components/finished_products.js' %}"></script>
-<script src="{% static 'js/components/clients.js' %}"></script>
-<script src="{% static 'js/components/orders.js' %}"></script>
-<script src="{% static 'js/components/production.js' %}"></script>
-<script src="{% static 'js/components/finance.js' %}"></script>
-<script src="{% static 'js/components/messages.js' %}"></script>
-<script src="{% static 'js/app.js' %}"></script>
+<!-- SPA routes will be rendered here by router.js -->
 {% endblock %}
