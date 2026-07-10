@@ -4,7 +4,10 @@ Production models - управление производством и зада�
 Этот модуль содержит модели для управления производственными задачами,
 работами работников и подтверждением выполненной работы.
 """
+from decimal import Decimal
+
 from django.db import models
+from django.core.validators import MinValueValidator
 from apps.core.models import TimestampedModel
 from apps.warehouse.models import UnitChoices
 
@@ -238,7 +241,11 @@ class WorkRecord(TimestampedModel):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='work_records', null=True, blank=True)
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='work_records')
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records')
-    quantity = models.DecimalField(max_digits=15, decimal_places=3)
+    quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))],
+    )
     unit = models.CharField(max_length=20, choices=UnitChoices.choices)
     photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True)
     comment = models.TextField(blank=True, default='')
@@ -246,7 +253,12 @@ class WorkRecord(TimestampedModel):
     confirmed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_works')
     confirmed_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(blank=True, default='')
-    labor_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    labor_cost = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         """
@@ -264,6 +276,16 @@ class WorkRecord(TimestampedModel):
         indexes = [
             models.Index(fields=['worker', 'status']),
             models.Index(fields=['status', 'created_at']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='work_record_quantity_positive',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(labor_cost__gte=0),
+                name='work_record_labor_cost_non_negative',
+            ),
         ]
 
     def __str__(self):

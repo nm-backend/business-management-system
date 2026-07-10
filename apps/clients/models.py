@@ -6,7 +6,10 @@ Clients models - управление клиентами.
 
 ВАЖНО: Финансовые поля доступны только владельцу (owner).
 """
+from decimal import Decimal
+
 from django.db import models
+from django.core.validators import MinValueValidator
 from apps.core.models import TimestampedModel, SoftDeleteModel
 
 
@@ -41,10 +44,30 @@ class Client(TimestampedModel, SoftDeleteModel):
     name = models.CharField(max_length=255)
     phone = models.CharField(max_length=20, blank=True, default='')
     address = models.TextField(blank=True, default='')
-    total_orders_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    total_paid = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    debt = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    profit = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    total_orders_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
+    total_paid = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
+    debt = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
+    profit = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False)
     notes = models.TextField(blank=True, default='')
@@ -61,6 +84,24 @@ class Client(TimestampedModel, SoftDeleteModel):
         verbose_name = 'Client'
         verbose_name_plural = 'Clients'
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(total_orders_amount__gte=0),
+                name='client_total_orders_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(total_paid__gte=0),
+                name='client_total_paid_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(debt__gte=0),
+                name='client_debt_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(profit__gte=0),
+                name='client_profit_non_negative',
+            ),
+        ]
 
     def __str__(self):
         """

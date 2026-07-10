@@ -6,7 +6,10 @@ Orders models - управление заказами.
 
 ВАЖНО: Финансовые поля доступны только владельцу (owner).
 """
+from decimal import Decimal
+
 from django.db import models
+from django.core.validators import MinValueValidator
 from apps.core.models import TimestampedModel
 from apps.warehouse.models import UnitChoices
 
@@ -89,7 +92,11 @@ class Order(TimestampedModel):
     client = models.ForeignKey('clients.Client', on_delete=models.PROTECT, related_name='orders')
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     product_name = models.CharField(max_length=255, blank=True, default='')
-    quantity = models.DecimalField(max_digits=15, decimal_places=3)
+    quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))],
+    )
     unit = models.CharField(max_length=20, choices=UnitChoices.choices)
     deadline = models.DateField()
     material = models.CharField(max_length=100, blank=True, default='')
@@ -98,8 +105,18 @@ class Order(TimestampedModel):
     drawing = models.ImageField(upload_to='orders/drawings/', blank=True, null=True)
     status = models.CharField(max_length=30, choices=OrderStatus.choices, default=OrderStatus.NEW, db_index=True)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID, db_index=True)
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    total_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
+    paid_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
     material_shortage = models.BooleanField(default=False)
     is_overdue = models.BooleanField(default=False)
 
@@ -120,6 +137,20 @@ class Order(TimestampedModel):
             models.Index(fields=['status', 'deadline']),
             models.Index(fields=['client', 'status']),
             models.Index(fields=['worker', 'status']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='order_quantity_positive',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(total_amount__gte=0),
+                name='order_total_amount_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(paid_amount__gte=0),
+                name='order_paid_amount_non_negative',
+            ),
         ]
 
     def __str__(self):
@@ -160,11 +191,11 @@ class Order(TimestampedModel):
         - Если paid_amount >= total_amount: PAID
         """
         if self.paid_amount == 0:
-            self.payment_status = self.PaymentStatus.UNPAID
+            self.payment_status = PaymentStatus.UNPAID
         elif self.paid_amount < self.total_amount:
-            self.payment_status = self.PaymentStatus.PARTIAL
+            self.payment_status = PaymentStatus.PARTIAL
         else:
-            self.payment_status = self.PaymentStatus.PAID
+            self.payment_status = PaymentStatus.PAID
         self.save(update_fields=['payment_status'])
 
     def check_overdue(self):

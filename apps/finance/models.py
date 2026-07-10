@@ -6,7 +6,10 @@ Finance models - управление финансами.
 
 ВАЖНО: Все финансовые данные доступны только владельцу (owner).
 """
+from decimal import Decimal
+
 from django.db import models
+from django.core.validators import MinValueValidator
 from apps.core.models import TimestampedModel
 from apps.warehouse.models import UnitChoices
 
@@ -91,7 +94,11 @@ class Expense(TimestampedModel):
         - Категоризация расходов
     """
     category = models.CharField(max_length=30, choices=ExpenseCategory.choices, db_index=True)
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     date = models.DateField(db_index=True)
     comment = models.TextField(blank=True, default='')
     receipt_photo = models.ImageField(upload_to='finance/receipts/', blank=True, null=True)
@@ -114,6 +121,12 @@ class Expense(TimestampedModel):
         indexes = [
             models.Index(fields=['category', 'date']),
             models.Index(fields=['date']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=0),
+                name='expense_amount_non_negative',
+            ),
         ]
 
     def __str__(self):
@@ -160,7 +173,11 @@ class LaborRate(TimestampedModel):
 
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.CASCADE, related_name='labor_rates')
     operation = models.CharField(max_length=20, choices=OperationType.choices)
-    rate_per_unit = models.DecimalField(max_digits=15, decimal_places=2)
+    rate_per_unit = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     unit = models.CharField(max_length=20, choices=UnitChoices.choices)
 
     class Meta:
@@ -177,6 +194,12 @@ class LaborRate(TimestampedModel):
         verbose_name_plural = 'Labor Rates'
         ordering = ['product', 'operation']
         unique_together = ['product', 'operation']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(rate_per_unit__gte=0),
+                name='labor_rate_non_negative',
+            ),
+        ]
 
     def __str__(self):
         """
@@ -221,7 +244,11 @@ class WorkerPayment(TimestampedModel):
         OTHER = 'other', 'Бошқа'
 
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='payments')
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     payment_date = models.DateField(db_index=True)
     payment_type = models.CharField(max_length=20, choices=PaymentType.choices, default=PaymentType.SALARY)
     comment = models.TextField(blank=True, default='')
@@ -243,6 +270,12 @@ class WorkerPayment(TimestampedModel):
         indexes = [
             models.Index(fields=['worker', 'payment_date']),
             models.Index(fields=['payment_date']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gte=0),
+                name='worker_payment_amount_non_negative',
+            ),
         ]
 
     def __str__(self):

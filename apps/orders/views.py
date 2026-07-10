@@ -9,9 +9,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from apps.core.permissions import IsOwner, IsOwnerOrAdmin
-from .models import Order, OrderStatus, PaymentStatus
+from .models import Order, OrderStatus
 from .serializers import (
-    OrderSerializer, OrderLimitedSerializer, OrderCreateSerializer
+    OrderSerializer, OrderLimitedSerializer, OrderCreateSerializer,
+    PaymentUpdateSerializer,
 )
 
 
@@ -112,19 +113,17 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        payment_status = request.data.get('payment_status')
-        amount = request.data.get('amount', 0)
+        serializer = PaymentUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        amount = serializer.validated_data['amount']
+        if amount > order.total_amount:
+            return Response(
+                {'amount': 'Payment cannot exceed the order total.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        if payment_status:
-            order.payment_status = payment_status
-
-        if amount:
-            order.paid_amount = amount
-            if order.paid_amount >= order.total_amount:
-                order.payment_status = PaymentStatus.PAID
-            elif order.paid_amount > 0:
-                order.payment_status = PaymentStatus.PARTIAL
-
-        order.save()
+        order.paid_amount = amount
+        order.save(update_fields=['paid_amount'])
+        order.update_payment_status()
         serializer = self.get_serializer(order)
         return Response(serializer.data)

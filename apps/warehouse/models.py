@@ -9,8 +9,11 @@ Warehouse models - управление складом сырья и готов�
 
 ВАЖНО: Финансовые поля (цены) доступны только владельцу.
 """
+from decimal import Decimal
+
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from apps.core.models import TimestampedModel, SoftDeleteModel
 
 
@@ -70,15 +73,35 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     size = models.CharField(max_length=100, blank=True)
     thickness = models.CharField(max_length=50, blank=True)
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT)
-    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     storage_location = models.CharField(max_length=255, blank=True)
     photo = models.ImageField(upload_to='materials/', blank=True, null=True)
-    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    min_stock = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     supplier = models.CharField(max_length=255, blank=True)
     arrival_date = models.DateField(null=True, blank=True)
     comment = models.TextField(blank=True)
-    purchase_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    avg_cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    purchase_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
+    avg_cost_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         """
@@ -92,6 +115,24 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
         verbose_name = 'Raw Material'
         verbose_name_plural = 'Raw Materials'
         ordering = ['name']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=0),
+                name='raw_material_quantity_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(min_stock__gte=0),
+                name='raw_material_min_stock_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(purchase_price__gte=0),
+                name='raw_material_purchase_price_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(avg_cost_price__gte=0),
+                name='raw_material_avg_cost_non_negative',
+            ),
+        ]
 
     def __str__(self):
         """
@@ -142,13 +183,38 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     name = models.CharField(max_length=255)
     category = models.CharField(max_length=100, blank=True)
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.IZDELIE)
-    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     photo = models.ImageField(upload_to='products/', blank=True, null=True)
     description = models.TextField(blank=True)
-    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    min_stock = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
+    reserved_for_orders = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
+    cost_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
+    sale_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         """
@@ -162,6 +228,28 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         verbose_name = 'Finished Product'
         verbose_name_plural = 'Finished Products'
         ordering = ['name']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=0),
+                name='finished_product_quantity_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(min_stock__gte=0),
+                name='finished_product_min_stock_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved_for_orders__gte=0),
+                name='finished_product_reserved_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(cost_price__gte=0),
+                name='finished_product_cost_price_non_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(sale_price__gte=0),
+                name='finished_product_sale_price_non_negative',
+            ),
+        ]
 
     def __str__(self):
         """
@@ -241,10 +329,19 @@ class StockMovement(TimestampedModel):
         LOSS = 'loss', 'Потеря/Брак'
 
     movement_type = models.CharField(max_length=20, choices=MovementType.choices, db_index=True)
-    material = models.ForeignKey(RawMaterial, on_delete=models.CASCADE, null=True, blank=True, related_name='movements')
-    product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, null=True, blank=True, related_name='movements')
-    quantity = models.DecimalField(max_digits=15, decimal_places=3)
-    price_per_unit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    material = models.ForeignKey(RawMaterial, on_delete=models.PROTECT, null=True, blank=True, related_name='movements')
+    product = models.ForeignKey(FinishedProduct, on_delete=models.PROTECT, null=True, blank=True, related_name='movements')
+    quantity = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))],
+    )
+    price_per_unit = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))],
+    )
     reason = models.CharField(max_length=255, blank=True)
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='stock_movements')
     related_order_id = models.IntegerField(null=True, blank=True)
@@ -262,6 +359,16 @@ class StockMovement(TimestampedModel):
         verbose_name = 'Stock Movement'
         verbose_name_plural = 'Stock Movements'
         ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='stock_movement_quantity_positive',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(price_per_unit__gte=0),
+                name='stock_movement_price_non_negative',
+            ),
+        ]
 
     def clean(self):
         """
@@ -342,7 +449,11 @@ class RecipeItem(models.Model):
     """
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='items')
     material = models.ForeignKey(RawMaterial, on_delete=models.RESTRICT)
-    quantity_required = models.DecimalField(max_digits=15, decimal_places=3)
+    quantity_required = models.DecimalField(
+        max_digits=15,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))],
+    )
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT)
 
     class Meta:
@@ -355,6 +466,12 @@ class RecipeItem(models.Model):
         """
         verbose_name = 'Recipe Item'
         verbose_name_plural = 'Recipe Items'
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity_required__gt=0),
+                name='recipe_item_quantity_positive',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.quantity_required} {self.get_unit_display()} of {self.material.name}"

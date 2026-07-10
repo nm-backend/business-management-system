@@ -4,8 +4,18 @@ Serializers for orders API.
 Этот модуль содержит сериализаторы для модели Order с защитой
 финансовых данных для non-owner пользователей.
 """
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import Order, OrderStatus, PaymentStatus
+
+
+class PaymentUpdateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+    )
 
 
 class OrderSerializer(serializers.ModelSerializer):
