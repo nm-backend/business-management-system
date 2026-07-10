@@ -169,6 +169,41 @@ MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директо
 # Тип авто-поля по умолчанию
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Логирование - обеспечивает, что перехваченные ошибки и предупреждения
+# приложения реально записываются, а не молча теряются.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{asctime} [{levelname}] {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': config('DJANGO_LOG_LEVEL', default='INFO'),
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': config('APP_LOG_LEVEL', default='INFO'),
+            'propagate': False,
+        },
+    },
+}
+
 # URL для аутентификации
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'

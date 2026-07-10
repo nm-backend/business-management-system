@@ -333,15 +333,12 @@ class WorkRecord(TimestampedModel):
             return 0
         
         # Ищем ставку для продукта (по умолчанию - резка)
-        try:
-            rate = LaborRate.objects.filter(
-                product=self.product,
-                operation=LaborRate.OperationType.CUTTING
-            ).first()
-            
-            if rate:
-                return rate.rate_per_unit * self.quantity
-        except:
-            pass
-        
+        rate = LaborRate.objects.filter(
+            product=self.product,
+            operation=LaborRate.OperationType.CUTTING
+        ).first()
+
+        if rate:
+            return rate.rate_per_unit * self.quantity
+
         return 0

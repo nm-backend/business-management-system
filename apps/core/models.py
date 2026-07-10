@@ -166,11 +166,8 @@ class ExchangeRate(TimestampedModel):
         from django.utils import timezone
         if date is None:
             date = timezone.now().date()
-        try:
-            return cls.objects.filter(
-                from_currency__code=from_code,
-                to_currency__code=to_code,
-                effective_date__lte=date
-            ).order_by('-effective_date').first()
-        except cls.DoesNotExist:
-            return None
+        return cls.objects.filter(
+            from_currency__code=from_code,
+            to_currency__code=to_code,
+            effective_date__lte=date
+        ).order_by('-effective_date').first()

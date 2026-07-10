@@ -9,6 +9,8 @@ API views for authentication and user management.
 
 Все действия записываются в audit log для безопасности и отслеживания.
 """
+import logging
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
@@ -16,6 +18,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from core.permissions import IsOwner, IsOwnerOrAdmin
@@ -25,6 +28,8 @@ from .serializers import (
     LoginSerializer, ChangePasswordSerializer, SetupOwnerSerializer,
     LanguageSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SetupCheckView(APIView):
@@ -195,13 +200,18 @@ class LogoutView(APIView):
         Возвращает:
             205 Reset Content
         """
-        try:
-            refresh_token = request.data.get('refresh')
-            if refresh_token:
+        refresh_token = request.data.get('refresh')
+        if refresh_token:
+            try:
                 token = RefreshToken(refresh_token)
                 token.blacklist()
-        except Exception:
-            pass
+            except TokenError:
+                # Токен уже недействителен (истёк/в blacklist) - выход всё равно
+                # должен завершиться успешно, но фиксируем факт для диагностики.
+                logger.warning(
+                    'Failed to blacklist refresh token during logout for user %s',
+                    getattr(request.user, 'pk', None),
+                )
         write_audit_log(
             action=AuditLog.Action.LOGOUT,
             actor=request.user,
