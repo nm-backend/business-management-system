@@ -1,0 +1,289 @@
+{# Шаблон страницы склада сырья #}
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="main-layout">
+    {# Боковая панель навигации #}
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2 data-i18n="app.name">SkladPro.Nod</h2>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="/" class="sidebar-nav-item" data-i18n="nav.dashboard">Бош панел</a>
+            <a href="/warehouse/" class="sidebar-nav-item active" data-i18n="nav.raw_materials">Хом ашё омбори</a>
+            <a href="/finished-products/" class="sidebar-nav-item" data-i18n="nav.finished_products">Тайёр маҳсулот</a>
+            <a href="/clients/" class="sidebar-nav-item" data-i18n="nav.clients">Мижозлар</a>
+            <a href="/orders/" class="sidebar-nav-item" data-i18n="nav.orders">Буюртмалар</a>
+            <a href="/production/" class="sidebar-nav-item" data-i18n="nav.production">Ишлаб чиқариш</a>
+            <a href="/finance/" class="sidebar-nav-item" data-i18n="nav.finance">Молия</a>
+            <a href="/messages/" class="sidebar-nav-item" data-i18n="nav.messages">Хабарлар</a>
+            <a href="/settings/" class="sidebar-nav-item" data-i18n="nav.settings">Созламалар</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <p id="user-info" class="text-sm text-secondary"></p>
+            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        </div>
+    </aside>
+
+    {# Основной контент #}
+    <div class="main-content">
+        <div class="page-header">
+            <div class="navbar-left">
+                <h1 data-i18n="warehouse.title">Хом ашё омбори</h1>
+            </div>
+            <div class="navbar-right">
+                <input type="text" id="search-input" class="input" placeholder="Қидириш..." style="width: 200px;" data-i18n-placeholder="common.search">
+                <button id="add-material-btn" class="btn btn-primary" data-i18n="warehouse.add_material">Қўшиш</button>
+            </div>
+        </div>
+
+        {# Карточки статистики #}
+        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: var(--space-6);">
+            <div class="stat-card">
+                <div class="stat-label" data-i18n="warehouse.total_materials">Жами материаллар</div>
+                <div class="stat-value" id="total-materials">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label" data-i18n="warehouse.low_stock_count">Кам қолган</div>
+                <div class="stat-value text-error" id="low-stock-count">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label" data-i18n="warehouse.archived_count">Архив</div>
+                <div class="stat-value text-secondary" id="archived-count">—</div>
+            </div>
+        </div>
+
+        <div class="page-content">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="warehouse.name">Номи</th>
+                            <th data-i18n="warehouse.stone_type">Тош тури</th>
+                            <th data-i18n="warehouse.color">Ранги</th>
+                            <th data-i18n="warehouse.size">Ўлчами</th>
+                            <th data-i18n="warehouse.quantity">Миқдор</th>
+                            <th data-i18n="warehouse.unit">Бирлик</th>
+                            <th data-i18n="warehouse.storage_location">Жой</th>
+                            <th data-i18n="common.actions">Амаллар</th>
+                        </tr>
+                    </thead>
+                    <tbody id="materials-list">
+                        <tr><td colspan="8" style="padding: 10px; text-align: center;" data-i18n="common.loading">Юкланмоқда...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    window.api = new APIClient();
+    window.i18n = new I18nManager();
+    await window.i18n.init();
+
+    let currentUser = null;
+
+    try {
+        currentUser = await window.api.getMe();
+        document.getElementById('user-info').textContent = currentUser.full_name || currentUser.username;
+    } catch (e) {
+        window.location.href = '/accounts/login/';
+        return;
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => window.api.logout());
+
+    let allMaterials = [];
+
+    async function loadMaterials() {
+        const listEl = document.getElementById('materials-list');
+        listEl.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:20px;" data-i18n="common.loading">Юкланмоқда...</td></tr>`;
+
+        try {
+            const data = await window.api.request('/warehouse/raw-materials/?page_size=100');
+            allMaterials = data.results || [];
+
+            document.getElementById('total-materials').textContent = allMaterials.filter(m => !m.is_archived).length;
+            document.getElementById('low-stock-count').textContent = allMaterials.filter(m => m.is_low_stock && !m.is_archived).length;
+            document.getElementById('archived-count').textContent = allMaterials.filter(m => m.is_archived).length;
+
+            renderMaterials(allMaterials.filter(m => !m.is_archived));
+        } catch (e) {
+            console.error('Failed to load materials', e);
+            listEl.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:20px;color:red;" data-i18n="common.error">Хатолик юз берди</td></tr>`;
+        }
+        window.i18n.applyTranslations();
+    }
+
+    function renderMaterials(materials) {
+        const listEl = document.getElementById('materials-list');
+        if (!materials.length) {
+            listEl.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:20px;" data-i18n="common.no_data">Маълумот йўқ</td></tr>`;
+            window.i18n.applyTranslations();
+            return;
+        }
+        listEl.innerHTML = materials.map(m => `
+            <tr class="${m.is_low_stock ? 'row-warning' : ''}">
+                <td><strong>${m.name}</strong></td>
+                <td>${m.stone_type || '-'}</td>
+                <td>${m.color || '-'}</td>
+                <td>${m.size || '-'}</td>
+                <td>
+                    <span class="${m.is_low_stock ? 'text-error font-bold' : ''}">
+                        ${parseFloat(m.quantity).toLocaleString()}
+                    </span>
+                    ${m.is_low_stock ? '<span class="badge badge-danger" style="margin-left:4px;">Кам</span>' : ''}
+                </td>
+                <td>${m.unit_display || m.unit}</td>
+                <td>${m.storage_location || '-'}</td>
+                <td>
+                    <button class="btn btn-secondary btn-sm" onclick="editMaterial(${m.id})" data-i18n="common.edit">Таҳрир</button>
+                </td>
+            </tr>
+        `).join('');
+        window.i18n.applyTranslations();
+    }
+
+    // Поиск
+    let searchTimeout;
+    document.getElementById('search-input').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            const query = e.target.value.toLowerCase();
+            const filtered = allMaterials.filter(m =>
+                !m.is_archived && (
+                    m.name.toLowerCase().includes(query) ||
+                    (m.stone_type || '').toLowerCase().includes(query) ||
+                    (m.color || '').toLowerCase().includes(query) ||
+                    (m.supplier || '').toLowerCase().includes(query)
+                )
+            );
+            renderMaterials(filtered);
+        }, 300);
+    });
+
+    // Добавление материала
+    document.getElementById('add-material-btn').addEventListener('click', () => {
+        showMaterialModal(null);
+    });
+
+    function showMaterialModal(material) {
+        const isEdit = !!material;
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-header">
+                <h3>${isEdit ? (window.i18n.translate('common.edit') || 'Таҳрир') : (window.i18n.translate('warehouse.add_material') || 'Янги материал')}</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="material-form">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.name">Номи *</label>
+                            <input type="text" name="name" class="input" required value="${material ? material.name : ''}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.stone_type">Тош тури</label>
+                            <input type="text" name="stone_type" class="input" value="${material ? (material.stone_type || '') : ''}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.color">Ранги</label>
+                            <input type="text" name="color" class="input" value="${material ? (material.color || '') : ''}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.size">Ўлчами</label>
+                            <input type="text" name="size" class="input" value="${material ? (material.size || '') : ''}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.quantity">Миқдор *</label>
+                            <input type="number" name="quantity" class="input" required step="0.001" value="${material ? material.quantity : '0'}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.unit">Бирлик *</label>
+                            <select name="unit" class="select" required>
+                                <option value="sht" ${material && material.unit === 'sht' ? 'selected' : ''}>Дона</option>
+                                <option value="m2" ${material && material.unit === 'm2' ? 'selected' : ''}>м²</option>
+                                <option value="m" ${material && material.unit === 'm' ? 'selected' : ''}>м</option>
+                                <option value="dona" ${material && material.unit === 'dona' ? 'selected' : ''}>Дона (уз)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.min_stock">Мин. қолдиқ</label>
+                            <input type="number" name="min_stock" class="input" step="0.001" value="${material ? material.min_stock : '0'}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.storage_location">Сақлаш жойи</label>
+                            <input type="text" name="storage_location" class="input" value="${material ? (material.storage_location || '') : ''}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.supplier">Таминотчи</label>
+                            <input type="text" name="supplier" class="input" value="${material ? (material.supplier || '') : ''}">
+                        </div>
+                    </div>
+                    <div style="margin-top:var(--space-4);">
+                        <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="warehouse.comment">Изоҳ</label>
+                        <textarea name="comment" class="input" rows="2">${material ? (material.comment || '') : ''}</textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary modal-cancel" data-i18n="common.cancel">Бекор қилиш</button>
+                <button type="submit" form="material-form" class="btn btn-primary" data-i18n="common.save">Сақлаш</button>
+            </div>
+        `;
+
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+        window.i18n.applyTranslations();
+
+        modal.querySelector('.modal-close').addEventListener('click', () => backdrop.remove());
+        modal.querySelector('.modal-cancel').addEventListener('click', () => backdrop.remove());
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+
+        modal.querySelector('#material-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+
+            try {
+                if (isEdit) {
+                    await window.api.request(`/warehouse/raw-materials/${material.id}/`, {
+                        method: 'PATCH',
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    await window.api.request('/warehouse/raw-materials/', {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                }
+                backdrop.remove();
+                await loadMaterials();
+                window.toast && window.toast.success(isEdit ? 'Материал янгиланди' : 'Материал қўшилди');
+            } catch (error) {
+                const msg = error.data ? JSON.stringify(error.data) : 'Хатолик юз берди';
+                window.toast ? window.toast.error(msg) : alert(msg);
+            }
+        });
+    }
+
+    // Глобальная функция редактирования
+    window.editMaterial = (id) => {
+        const material = allMaterials.find(m => m.id === id);
+        if (material) showMaterialModal(material);
+    };
+
+    await loadMaterials();
+});
+</script>
+{% endblock %}

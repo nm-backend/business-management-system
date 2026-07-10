@@ -1412,6 +1412,30 @@ p {
 }
 
 /* ============================================
+   STATS GRID
+   ============================================ */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--space-4);
+}
+
+/* ============================================
+   ROW STATES
+   ============================================ */
+.row-warning {
+    background-color: var(--color-warning-50) !important;
+}
+
+.row-error {
+    background-color: var(--color-error-50) !important;
+}
+
+.row-success {
+    background-color: var(--color-success-50) !important;
+}
+
+/* ============================================
    MAIN LAYOUT
    ============================================ */
 .main-layout {

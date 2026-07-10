@@ -1,0 +1,259 @@
+{# Шаблон страницы готовой продукции #}
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="main-layout">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2 data-i18n="app.name">SkladPro.Nod</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/" class="sidebar-nav-item" data-i18n="nav.dashboard">Бош панел</a>
+            <a href="/warehouse/" class="sidebar-nav-item" data-i18n="nav.raw_materials">Хом ашё омбори</a>
+            <a href="/finished-products/" class="sidebar-nav-item active" data-i18n="nav.finished_products">Тайёр маҳсулот</a>
+            <a href="/clients/" class="sidebar-nav-item" data-i18n="nav.clients">Мижозлар</a>
+            <a href="/orders/" class="sidebar-nav-item" data-i18n="nav.orders">Буюртмалар</a>
+            <a href="/production/" class="sidebar-nav-item" data-i18n="nav.production">Ишлаб чиқариш</a>
+            <a href="/finance/" class="sidebar-nav-item" data-i18n="nav.finance">Молия</a>
+            <a href="/messages/" class="sidebar-nav-item" data-i18n="nav.messages">Хабарлар</a>
+            <a href="/settings/" class="sidebar-nav-item" data-i18n="nav.settings">Созламалар</a>
+        </nav>
+        <div class="sidebar-footer">
+            <p id="user-info" class="text-sm text-secondary"></p>
+            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <div class="page-header">
+            <div class="navbar-left">
+                <h1 data-i18n="finished_products.title">Тайёр маҳсулот</h1>
+            </div>
+            <div class="navbar-right">
+                <input type="text" id="search-input" class="input" placeholder="Қидириш..." style="width: 200px;">
+                <button id="add-product-btn" class="btn btn-primary" data-i18n="finished_products.add_product">Қўшиш</button>
+            </div>
+        </div>
+
+        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: var(--space-6);">
+            <div class="stat-card">
+                <div class="stat-label" data-i18n="finished_products.total">Жами маҳсулотлар</div>
+                <div class="stat-value" id="total-products">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label" data-i18n="finished_products.low_stock">Кам қолган</div>
+                <div class="stat-value text-error" id="low-stock-count">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label" data-i18n="finished_products.available">Мавжуд</div>
+                <div class="stat-value text-success" id="available-count">—</div>
+            </div>
+        </div>
+
+        <div class="page-content">
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="finished_products.name">Номи</th>
+                            <th data-i18n="finished_products.category">Категория</th>
+                            <th data-i18n="finished_products.quantity">Миқдор</th>
+                            <th data-i18n="finished_products.unit">Бирлик</th>
+                            <th data-i18n="finished_products.reserved">Банд</th>
+                            <th data-i18n="finished_products.available_qty">Мавжуд</th>
+                            <th data-i18n="common.actions">Амаллар</th>
+                        </tr>
+                    </thead>
+                    <tbody id="products-list">
+                        <tr><td colspan="7" style="padding: 10px; text-align: center;" data-i18n="common.loading">Юкланмоқда...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    window.api = new APIClient();
+    window.i18n = new I18nManager();
+    await window.i18n.init();
+
+    let currentUser = null;
+
+    try {
+        currentUser = await window.api.getMe();
+        document.getElementById('user-info').textContent = currentUser.full_name || currentUser.username;
+    } catch (e) {
+        window.location.href = '/accounts/login/';
+        return;
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => window.api.logout());
+
+    let allProducts = [];
+
+    async function loadProducts() {
+        const listEl = document.getElementById('products-list');
+        listEl.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;">Юкланмоқда...</td></tr>`;
+
+        try {
+            const data = await window.api.request('/warehouse/finished-products/?page_size=100');
+            allProducts = data.results || [];
+
+            const active = allProducts.filter(p => !p.is_archived);
+            document.getElementById('total-products').textContent = active.length;
+            document.getElementById('low-stock-count').textContent = active.filter(p => p.is_low_stock).length;
+            document.getElementById('available-count').textContent = active.filter(p => parseFloat(p.available_quantity) > 0).length;
+
+            renderProducts(active);
+        } catch (e) {
+            console.error('Failed to load products', e);
+            listEl.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:red;">Хатолик юз берди</td></tr>`;
+        }
+        window.i18n.applyTranslations();
+    }
+
+    function renderProducts(products) {
+        const listEl = document.getElementById('products-list');
+        if (!products.length) {
+            listEl.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;" data-i18n="common.no_data">Маълумот йўқ</td></tr>`;
+            window.i18n.applyTranslations();
+            return;
+        }
+        listEl.innerHTML = products.map(p => `
+            <tr class="${p.is_low_stock ? 'row-warning' : ''}">
+                <td><strong>${p.name}</strong></td>
+                <td>${p.category || '-'}</td>
+                <td>${parseFloat(p.quantity).toLocaleString()}</td>
+                <td>${p.unit_display || p.unit}</td>
+                <td>${parseFloat(p.reserved_for_orders || 0).toLocaleString()}</td>
+                <td>
+                    <span class="${parseFloat(p.available_quantity) > 0 ? 'text-success' : 'text-error'}">
+                        ${parseFloat(p.available_quantity || 0).toLocaleString()}
+                    </span>
+                </td>
+                <td>
+                    <button class="btn btn-secondary btn-sm" onclick="editProduct(${p.id})" data-i18n="common.edit">Таҳрир</button>
+                </td>
+            </tr>
+        `).join('');
+        window.i18n.applyTranslations();
+    }
+
+    let searchTimeout;
+    document.getElementById('search-input').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            const query = e.target.value.toLowerCase();
+            const filtered = allProducts.filter(p =>
+                !p.is_archived && (
+                    p.name.toLowerCase().includes(query) ||
+                    (p.category || '').toLowerCase().includes(query)
+                )
+            );
+            renderProducts(filtered);
+        }, 300);
+    });
+
+    document.getElementById('add-product-btn').addEventListener('click', () => showProductModal(null));
+
+    function showProductModal(product) {
+        const isEdit = !!product;
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-header">
+                <h3>${isEdit ? 'Таҳрир' : 'Янги маҳсулот'}</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="product-form">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Номи *</label>
+                            <input type="text" name="name" class="input" required value="${product ? product.name : ''}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Категория</label>
+                            <input type="text" name="category" class="input" value="${product ? (product.category || '') : ''}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Миқдор *</label>
+                            <input type="number" name="quantity" class="input" required step="0.001" value="${product ? product.quantity : '0'}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Бирлик *</label>
+                            <select name="unit" class="select" required>
+                                <option value="sht" ${product && product.unit === 'sht' ? 'selected' : ''}>Дона</option>
+                                <option value="m2" ${product && product.unit === 'm2' ? 'selected' : ''}>м²</option>
+                                <option value="m" ${product && product.unit === 'm' ? 'selected' : ''}>м</option>
+                                <option value="dona" ${product && product.unit === 'dona' ? 'selected' : ''}>Дона (уз)</option>
+                                <option value="izdelie" ${product && product.unit === 'izdelie' ? 'selected' : ''}>Изделие</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Мин. қолдиқ</label>
+                            <input type="number" name="min_stock" class="input" step="0.001" value="${product ? product.min_stock : '0'}">
+                        </div>
+                    </div>
+                    <div style="margin-top:var(--space-4);">
+                        <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Тавсиф</label>
+                        <textarea name="description" class="input" rows="2">${product ? (product.description || '') : ''}</textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary modal-cancel">Бекор қилиш</button>
+                <button type="submit" form="product-form" class="btn btn-primary">Сақлаш</button>
+            </div>
+        `;
+
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+
+        modal.querySelector('.modal-close').addEventListener('click', () => backdrop.remove());
+        modal.querySelector('.modal-cancel').addEventListener('click', () => backdrop.remove());
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+
+        modal.querySelector('#product-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+
+            try {
+                if (isEdit) {
+                    await window.api.request(`/warehouse/finished-products/${product.id}/`, {
+                        method: 'PATCH',
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    await window.api.request('/warehouse/finished-products/', {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                }
+                backdrop.remove();
+                await loadProducts();
+                window.toast && window.toast.success(isEdit ? 'Маҳсулот янгиланди' : 'Маҳсулот қўшилди');
+            } catch (error) {
+                const msg = error.data ? JSON.stringify(error.data) : 'Хатолик юз берди';
+                window.toast ? window.toast.error(msg) : alert(msg);
+            }
+        });
+    }
+
+    window.editProduct = (id) => {
+        const product = allProducts.find(p => p.id === id);
+        if (product) showProductModal(product);
+    };
+
+    await loadProducts();
+});
+</script>
+{% endblock %}

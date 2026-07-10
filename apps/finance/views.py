@@ -29,9 +29,15 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         """
         Возвращает сериализатор в зависимости от действия.
         """
-        if self.action == 'create':
-            return ExpenseCreateSerializer
         return ExpenseSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Создает расход и возвращает полные данные с id."""
+        input_serializer = ExpenseCreateSerializer(data=request.data, context={'request': request})
+        input_serializer.is_valid(raise_exception=True)
+        expense = input_serializer.save()
+        output_serializer = ExpenseSerializer(expense)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         """
@@ -66,9 +72,15 @@ class LaborRateViewSet(viewsets.ModelViewSet):
         """
         Возвращает сериализатор в зависимости от действия.
         """
-        if self.action == 'create':
-            return LaborRateCreateSerializer
         return LaborRateSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Создает ставку и возвращает полные данные с id."""
+        input_serializer = LaborRateCreateSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        labor_rate = input_serializer.save()
+        output_serializer = LaborRateSerializer(labor_rate)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         """
@@ -89,9 +101,15 @@ class WorkerPaymentViewSet(viewsets.ModelViewSet):
         """
         Возвращает сериализатор в зависимости от действия.
         """
-        if self.action == 'create':
-            return WorkerPaymentCreateSerializer
         return WorkerPaymentSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Создает выплату и возвращает полные данные с id."""
+        input_serializer = WorkerPaymentCreateSerializer(data=request.data, context={'request': request})
+        input_serializer.is_valid(raise_exception=True)
+        payment = input_serializer.save()
+        output_serializer = WorkerPaymentSerializer(payment)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         """

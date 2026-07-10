@@ -32,9 +32,15 @@ class TaskViewSet(viewsets.ModelViewSet):
         """
         Возвращает сериализатор в зависимости от действия.
         """
-        if self.action == 'create':
-            return TaskCreateSerializer
         return TaskSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Создает задачу и возвращает полные данные с id."""
+        input_serializer = TaskCreateSerializer(data=request.data, context={'request': request})
+        input_serializer.is_valid(raise_exception=True)
+        task = input_serializer.save()
+        output_serializer = TaskSerializer(task)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         """
@@ -124,13 +130,18 @@ class WorkRecordViewSet(viewsets.ModelViewSet):
 
         Owner получает полные данные, остальные - ограниченные.
         """
-        if self.action == 'create':
-            return WorkRecordCreateSerializer
-
         request = self.request
         if request.user and request.user.is_owner:
             return WorkRecordSerializer
         return WorkRecordLimitedSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Создает запись о работе и возвращает полные данные с id."""
+        input_serializer = WorkRecordCreateSerializer(data=request.data, context={'request': request})
+        input_serializer.is_valid(raise_exception=True)
+        work_record = input_serializer.save()
+        output_serializer = self.get_serializer(work_record)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         """

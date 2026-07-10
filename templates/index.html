@@ -1,51 +1,239 @@
-{# Главный шаблон приложения с боковой панелью навигации #}
+{# Главный шаблон приложения - дашборд с навигацией #}
 {% extends 'base.html' %}
 {% load static %}
 
-{% block content %}
-<div style="display: flex; height: 100vh;">
-    {# Боковая панель навигации #}
-    <aside style="width: 250px; background: var(--dark-color); color: #fff; padding: 20px; display: flex; flex-direction: column;">
-        <h2 style="margin-bottom: 30px; text-align: center;" data-i18n="app.name">SkladPro.Nod</h2>
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/style.css' %}">
+{% endblock %}
 
-        <nav style="flex: 1;">
-            <ul style="list-style: none;">
-                <li style="margin-bottom: 10px;"><a href="#/" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/warehouse" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/finished-products" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.finished_products">Тайёр маҳсулот</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/clients" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/orders" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/production" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/finance" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.finance">Молия</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/messages" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.messages">Хабарлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="#/settings" class="nav-link" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
-            </ul>
+{% block content %}
+<div class="main-layout">
+    {# Боковая панель навигации #}
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2 data-i18n="app.name">SkladPro.Nod</h2>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="/" class="sidebar-nav-item active" data-i18n="nav.dashboard">Бош панел</a>
+            <a href="/warehouse/" class="sidebar-nav-item" data-i18n="nav.raw_materials">Хом ашё омбори</a>
+            <a href="/finished-products/" class="sidebar-nav-item" data-i18n="nav.finished_products">Тайёр маҳсулот</a>
+            <a href="/clients/" class="sidebar-nav-item" data-i18n="nav.clients">Мижозлар</a>
+            <a href="/orders/" class="sidebar-nav-item" data-i18n="nav.orders">Буюртмалар</a>
+            <a href="/production/" class="sidebar-nav-item" data-i18n="nav.production">Ишлаб чиқариш</a>
+            <a href="/finance/" class="sidebar-nav-item" data-i18n="nav.finance">Молия</a>
+            <a href="/messages/" class="sidebar-nav-item" data-i18n="nav.messages">Хабарлар</a>
+            <a href="/settings/" class="sidebar-nav-item" data-i18n="nav.settings">Созламалар</a>
         </nav>
 
-        {# Информация о пользователе и кнопка выхода #}
-        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #444;">
-            <p id="user-info" style="margin-bottom: 10px;"></p>
-            <button id="logout-btn" class="btn btn-primary" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        <div class="sidebar-footer">
+            <p id="user-info" class="text-sm text-secondary"></p>
+            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
         </div>
     </aside>
 
-    {# Основной контент для SPA #}
-    <main style="flex: 1; padding: 20px; overflow-y: auto;" id="app-content">
-        <!-- SPA content rendered here -->
-    </main>
+    {# Основной контент — дашборд #}
+    <div class="main-content">
+        <div class="page-header">
+            <div class="navbar-left">
+                <h1 id="welcome-title" data-i18n="dashboard.welcome">Хуш келибсиз!</h1>
+            </div>
+            <div class="navbar-right">
+                <select id="lang-select" class="select" style="width: auto;">
+                    <option value="uz_cyrl">Ўзбекча</option>
+                    <option value="ru">Русский</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="page-content">
+            {# Основные метрики #}
+            <div class="stats-grid" id="stats-grid" style="margin-bottom: var(--space-8);">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: var(--color-primary-100); color: var(--color-primary-600);">📦</div>
+                    <div>
+                        <div class="stat-label" data-i18n="dashboard.new_orders">Янги буюртмалар</div>
+                        <div class="stat-value" id="new-orders-count">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: var(--color-warning-100); color: var(--color-warning-600);">⚙️</div>
+                    <div>
+                        <div class="stat-label" data-i18n="dashboard.in_progress">Иш жараёнида</div>
+                        <div class="stat-value" id="in-progress-count">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: var(--color-success-100); color: var(--color-success-600);">✅</div>
+                    <div>
+                        <div class="stat-label" data-i18n="dashboard.ready_orders">Тайёр</div>
+                        <div class="stat-value" id="ready-orders-count">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: var(--color-error-100); color: var(--color-error-600);">⚠️</div>
+                    <div>
+                        <div class="stat-label" data-i18n="dashboard.overdue">Муддати ўтган</div>
+                        <div class="stat-value text-error" id="overdue-count">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: var(--color-info-100); color: var(--color-info-600);">👥</div>
+                    <div>
+                        <div class="stat-label" data-i18n="dashboard.clients">Мижозлар</div>
+                        <div class="stat-value" id="clients-count">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: var(--color-warning-100); color: var(--color-warning-600);">🔔</div>
+                    <div>
+                        <div class="stat-label" data-i18n="dashboard.notifications">Билдиришномалар</div>
+                        <div class="stat-value" id="notifications-count">—</div>
+                    </div>
+                </div>
+            </div>
+
+            {# Финансовые метрики - только для владельца #}
+            <div id="finance-stats" style="display: none; margin-bottom: var(--space-8);">
+                <h3 style="margin-bottom: var(--space-4);" data-i18n="dashboard.finance">Молия</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: var(--color-success-100); color: var(--color-success-600);">💰</div>
+                        <div>
+                            <div class="stat-label" data-i18n="dashboard.monthly_income">Ойлик даромад</div>
+                            <div class="stat-value" id="monthly-income">—</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: var(--color-error-100); color: var(--color-error-600);">💸</div>
+                        <div>
+                            <div class="stat-label" data-i18n="dashboard.monthly_expenses">Ойлик харажатлар</div>
+                            <div class="stat-value text-error" id="monthly-expenses">—</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: var(--color-warning-100); color: var(--color-warning-600);">📊</div>
+                        <div>
+                            <div class="stat-label" data-i18n="dashboard.client_debt">Мижоз қарзи</div>
+                            <div class="stat-value text-warning" id="client-debt">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Быстрые ссылки #}
+            <div>
+                <h3 style="margin-bottom: var(--space-4);" data-i18n="dashboard.quick_links">Тез ҳаволалар</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3);">
+                    <a href="/orders/" class="card" style="text-decoration: none; text-align: center; padding: var(--space-4);">
+                        <div style="font-size: 24px; margin-bottom: var(--space-2);">📋</div>
+                        <div class="font-medium" data-i18n="nav.orders">Буюртмалар</div>
+                    </a>
+                    <a href="/warehouse/" class="card" style="text-decoration: none; text-align: center; padding: var(--space-4);">
+                        <div style="font-size: 24px; margin-bottom: var(--space-2);">🏪</div>
+                        <div class="font-medium" data-i18n="nav.raw_materials">Омбор</div>
+                    </a>
+                    <a href="/clients/" class="card" style="text-decoration: none; text-align: center; padding: var(--space-4);">
+                        <div style="font-size: 24px; margin-bottom: var(--space-2);">👥</div>
+                        <div class="font-medium" data-i18n="nav.clients">Мижозлар</div>
+                    </a>
+                    <a href="/production/" class="card" style="text-decoration: none; text-align: center; padding: var(--space-4);">
+                        <div style="font-size: 24px; margin-bottom: var(--space-2);">⚙️</div>
+                        <div class="font-medium" data-i18n="nav.production">Ишлаб чиқариш</div>
+                    </a>
+                    <a href="/finance/" class="card finance-link" style="text-decoration: none; text-align: center; padding: var(--space-4); display: none;">
+                        <div style="font-size: 24px; margin-bottom: var(--space-2);">💰</div>
+                        <div class="font-medium" data-i18n="nav.finance">Молия</div>
+                    </a>
+                    <a href="/messages/" class="card" style="text-decoration: none; text-align: center; padding: var(--space-4);">
+                        <div style="font-size: 24px; margin-bottom: var(--space-2);">💬</div>
+                        <div class="font-medium" data-i18n="nav.messages">Хабарлар</div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-{# JavaScript файлы для SPA навигации и компонентов #}
-<script src="{% static 'js/router.js' %}"></script>
-<script src="{% static 'js/components/dashboard.js' %}"></script>
-<script src="{% static 'js/components/warehouse.js' %}"></script>
-<script src="{% static 'js/components/finished_products.js' %}"></script>
-<script src="{% static 'js/components/clients.js' %}"></script>
-<script src="{% static 'js/components/orders.js' %}"></script>
-<script src="{% static 'js/components/production.js' %}"></script>
-<script src="{% static 'js/components/finance.js' %}"></script>
-<script src="{% static 'js/components/messages.js' %}"></script>
-<script src="{% static 'js/app.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    window.api = new APIClient();
+    window.i18n = new I18nManager();
+    await window.i18n.init();
+
+    let currentUser = null;
+
+    try {
+        currentUser = await window.api.getMe();
+        document.getElementById('user-info').textContent = currentUser.full_name || currentUser.username;
+        document.getElementById('welcome-title').textContent =
+            (window.i18n.translate('dashboard.welcome') || 'Хуш келибсиз') + ', ' +
+            (currentUser.full_name || currentUser.username) + '!';
+    } catch (e) {
+        window.location.href = '/accounts/login/';
+        return;
+    }
+
+    // Выход
+    document.getElementById('logout-btn').addEventListener('click', () => window.api.logout());
+
+    // Язык
+    const langSelect = document.getElementById('lang-select');
+    langSelect.value = currentUser.language || 'uz_cyrl';
+    langSelect.addEventListener('change', (e) => window.i18n.setLanguage(e.target.value));
+
+    // Показать финансовые данные только для owner
+    if (currentUser.role === 'owner') {
+        document.getElementById('finance-stats').style.display = 'block';
+        document.querySelectorAll('.finance-link').forEach(el => el.style.display = 'block');
+    }
+
+    // Загрузить статистику
+    try {
+        const stats = await window.api.request('/core/dashboard/');
+
+        if (stats.new_orders_count !== undefined) {
+            document.getElementById('new-orders-count').textContent = stats.new_orders_count || '0';
+        }
+        if (stats.in_progress_orders_count !== undefined) {
+            document.getElementById('in-progress-count').textContent = stats.in_progress_orders_count || '0';
+        }
+        if (stats.ready_orders_count !== undefined) {
+            document.getElementById('ready-orders-count').textContent = stats.ready_orders_count || '0';
+        }
+        if (stats.overdue_orders_count !== undefined) {
+            document.getElementById('overdue-count').textContent = stats.overdue_orders_count || '0';
+        }
+        if (stats.total_clients !== undefined) {
+            document.getElementById('clients-count').textContent = stats.total_clients || '0';
+        }
+        if (stats.unread_notifications !== undefined) {
+            document.getElementById('notifications-count').textContent = stats.unread_notifications || '0';
+        }
+
+        // Финансовые данные для owner
+        if (currentUser.role === 'owner') {
+            if (stats.monthly_income !== undefined) {
+                const income = parseFloat(stats.monthly_income || 0);
+                document.getElementById('monthly-income').textContent = income.toLocaleString('ru') + ' сўм';
+            }
+            if (stats.monthly_expenses !== undefined) {
+                const expenses = parseFloat(stats.monthly_expenses || 0);
+                document.getElementById('monthly-expenses').textContent = expenses.toLocaleString('ru') + ' сўм';
+            }
+            if (stats.total_client_debt !== undefined) {
+                const debt = parseFloat(stats.total_client_debt || 0);
+                document.getElementById('client-debt').textContent = debt.toLocaleString('ru') + ' сўм';
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load dashboard stats', e);
+    }
+
+    window.i18n.applyTranslations();
+});
+</script>
 {% endblock %}
+

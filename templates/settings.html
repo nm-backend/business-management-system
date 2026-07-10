@@ -1,0 +1,299 @@
+{# Шаблон страницы настроек #}
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="main-layout">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2 data-i18n="app.name">SkladPro.Nod</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/" class="sidebar-nav-item" data-i18n="nav.dashboard">Бош панел</a>
+            <a href="/warehouse/" class="sidebar-nav-item" data-i18n="nav.raw_materials">Хом ашё омбори</a>
+            <a href="/finished-products/" class="sidebar-nav-item" data-i18n="nav.finished_products">Тайёр маҳсулот</a>
+            <a href="/clients/" class="sidebar-nav-item" data-i18n="nav.clients">Мижозлар</a>
+            <a href="/orders/" class="sidebar-nav-item" data-i18n="nav.orders">Буюртмалар</a>
+            <a href="/production/" class="sidebar-nav-item" data-i18n="nav.production">Ишлаб чиқариш</a>
+            <a href="/finance/" class="sidebar-nav-item" data-i18n="nav.finance">Молия</a>
+            <a href="/messages/" class="sidebar-nav-item" data-i18n="nav.messages">Хабарлар</a>
+            <a href="/settings/" class="sidebar-nav-item active" data-i18n="nav.settings">Созламалар</a>
+        </nav>
+        <div class="sidebar-footer">
+            <p id="user-info" class="text-sm text-secondary"></p>
+            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <div class="page-header">
+            <div class="navbar-left">
+                <h1 data-i18n="nav.settings">Созламалар</h1>
+            </div>
+        </div>
+
+        <div class="page-content">
+            {# Профиль #}
+            <div class="card" style="margin-bottom: var(--space-6);">
+                <h3 style="margin-bottom: var(--space-4);" data-i18n="settings.profile">Профил</h3>
+                <form id="profile-form" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+                    <div>
+                        <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="settings.full_name">Тўлиқ исм</label>
+                        <input type="text" id="full-name" name="full_name" class="input">
+                    </div>
+                    <div>
+                        <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="settings.phone">Телефон</label>
+                        <input type="text" id="phone" name="phone" class="input">
+                    </div>
+                    <div>
+                        <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="settings.email">Email</label>
+                        <input type="email" id="email" name="email" class="input">
+                    </div>
+                    <div>
+                        <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="settings.language">Тил</label>
+                        <select id="language" name="language" class="select">
+                            <option value="uz_cyrl">Ўзбекча</option>
+                            <option value="ru">Русский</option>
+                        </select>
+                    </div>
+                    <div style="grid-column: span 2;">
+                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сақлаш</button>
+                    </div>
+                </form>
+            </div>
+
+            {# Смена пароля #}
+            <div class="card" style="margin-bottom: var(--space-6);">
+                <h3 style="margin-bottom: var(--space-4);" data-i18n="settings.change_password">Паролни ўзгартириш</h3>
+                <form id="password-form" style="max-width:400px;">
+                    <div style="margin-bottom: var(--space-4);">
+                        <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="settings.old_password">Эски парол</label>
+                        <input type="password" name="old_password" class="input" required>
+                    </div>
+                    <div style="margin-bottom: var(--space-4);">
+                        <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);" data-i18n="settings.new_password">Янги парол</label>
+                        <input type="password" name="new_password" class="input" required minlength="8">
+                    </div>
+                    <button type="submit" class="btn btn-primary" data-i18n="settings.change_password">Паролни ўзгартириш</button>
+                </form>
+            </div>
+
+            {# Управление пользователями (только для owner/admin) #}
+            <div id="users-section" class="card" style="display:none;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-4);">
+                    <h3 data-i18n="settings.users">Фойдаланувчилар</h3>
+                    <button id="add-user-btn" class="btn btn-primary" data-i18n="settings.add_user">Фойдаланувчи қўшиш</button>
+                </div>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th data-i18n="settings.username">Логин</th>
+                                <th data-i18n="settings.full_name">Тўлиқ исм</th>
+                                <th data-i18n="settings.role">Роль</th>
+                                <th data-i18n="settings.status">Ҳолат</th>
+                                <th data-i18n="common.actions">Амаллар</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-list">
+                            <tr><td colspan="5" style="text-align:center;padding:20px;">Юкланмоқда...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    window.api = new APIClient();
+    window.i18n = new I18nManager();
+    await window.i18n.init();
+
+    let currentUser = null;
+
+    try {
+        currentUser = await window.api.getMe();
+        document.getElementById('user-info').textContent = currentUser.full_name || currentUser.username;
+    } catch (e) {
+        window.location.href = '/accounts/login/';
+        return;
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => window.api.logout());
+
+    // Заполнить поля профиля
+    document.getElementById('full-name').value = currentUser.full_name || '';
+    document.getElementById('phone').value = currentUser.phone || '';
+    document.getElementById('email').value = currentUser.email || '';
+    document.getElementById('language').value = currentUser.language || 'uz_cyrl';
+
+    // Сохранение профиля
+    document.getElementById('profile-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData);
+
+        try {
+            await window.api.request('/accounts/me/', {
+                method: 'PATCH',
+                body: JSON.stringify(data)
+            });
+            // Применить язык
+            if (data.language) {
+                await window.i18n.setLanguage(data.language);
+            }
+            window.toast && window.toast.success('Профил янгиланди');
+        } catch (error) {
+            const msg = error.data ? JSON.stringify(error.data) : 'Хатолик';
+            window.toast ? window.toast.error(msg) : alert(msg);
+        }
+    });
+
+    // Смена пароля
+    document.getElementById('password-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData);
+
+        try {
+            await window.api.request('/accounts/me/password/', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            e.target.reset();
+            window.toast && window.toast.success('Парол ўзгартирилди');
+        } catch (error) {
+            const msg = error.data ? JSON.stringify(error.data) : 'Хатолик';
+            window.toast ? window.toast.error(msg) : alert(msg);
+        }
+    });
+
+    // Управление пользователями только для owner/admin
+    if (currentUser.role === 'owner' || currentUser.role === 'admin') {
+        document.getElementById('users-section').style.display = 'block';
+        await loadUsers();
+
+        document.getElementById('add-user-btn').addEventListener('click', () => showUserModal(null));
+    }
+
+    async function loadUsers() {
+        const listEl = document.getElementById('users-list');
+        try {
+            const data = await window.api.request('/accounts/users/');
+            const users = data.results || data;
+            if (users.length > 0) {
+                listEl.innerHTML = users.map(u => `
+                    <tr>
+                        <td>${u.username}</td>
+                        <td>${u.full_name || '-'}</td>
+                        <td><span class="badge badge-${u.role === 'owner' ? 'primary' : u.role === 'admin' ? 'warning' : 'neutral'}">${u.role}</span></td>
+                        <td><span class="badge ${u.is_active ? 'badge-success' : 'badge-neutral'}">${u.is_active ? 'Актив' : 'Блок'}</span></td>
+                        <td>
+                            ${currentUser.role === 'owner' ? `<button class="btn btn-secondary btn-sm" onclick="editUser(${u.id})">Таҳрир</button>` : '-'}
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                listEl.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;">Фойдаланувчилар йўқ</td></tr>`;
+            }
+            window.i18n.applyTranslations();
+        } catch (e) {
+            listEl.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:red;">Хатолик</td></tr>`;
+        }
+    }
+
+    function showUserModal(user) {
+        const isEdit = !!user;
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <div class="modal-header">
+                <h3>${isEdit ? 'Фойдаланувчини таҳрир' : 'Янги фойдаланувчи'}</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="user-form">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Логин *</label>
+                            <input type="text" name="username" class="input" required value="${user ? user.username : ''}">
+                        </div>
+                        ${!isEdit ? `<div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Парол *</label>
+                            <input type="password" name="password" class="input" required minlength="8">
+                        </div>` : '<div></div>'}
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Тўлиқ исм</label>
+                            <input type="text" name="full_name" class="input" value="${user ? (user.full_name || '') : ''}">
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Роль *</label>
+                            <select name="role" class="select" required>
+                                <option value="worker" ${user && user.role === 'worker' ? 'selected' : ''}>Ишчи</option>
+                                <option value="admin" ${user && user.role === 'admin' ? 'selected' : ''}>Администратор</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="display:block;margin-bottom:var(--space-2);font-weight:var(--font-medium);">Телефон</label>
+                            <input type="text" name="phone" class="input" value="${user ? (user.phone || '') : ''}">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary modal-cancel">Бекор қилиш</button>
+                <button type="submit" form="user-form" class="btn btn-primary">Сақлаш</button>
+            </div>
+        `;
+
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+
+        modal.querySelector('.modal-close').addEventListener('click', () => backdrop.remove());
+        modal.querySelector('.modal-cancel').addEventListener('click', () => backdrop.remove());
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+
+        modal.querySelector('#user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+
+            try {
+                if (isEdit) {
+                    await window.api.request(`/accounts/users/${user.id}/`, {
+                        method: 'PATCH',
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    await window.api.request('/accounts/users/', {
+                        method: 'POST',
+                        body: JSON.stringify(data)
+                    });
+                }
+                backdrop.remove();
+                await loadUsers();
+                window.toast && window.toast.success(isEdit ? 'Янгиланди' : 'Қўшилди');
+            } catch (error) {
+                const msg = error.data ? JSON.stringify(error.data) : 'Хатолик';
+                window.toast ? window.toast.error(msg) : alert(msg);
+            }
+        });
+    }
+
+    window.editUser = async (id) => {
+        try {
+            const user = await window.api.request(`/accounts/users/${id}/`);
+            showUserModal(user);
+        } catch (e) {
+            window.toast && window.toast.error('Хатолик');
+        }
+    };
+});
+</script>
+{% endblock %}

@@ -19,6 +19,7 @@ urlpatterns = [
 
     # Frontend (Django Templates)
     path('', include('apps.accounts.template_urls')),
+    path('', include('apps.warehouse.template_urls')),
     path('', include('apps.clients.template_urls')),
     path('', include('apps.orders.template_urls')),
     path('', include('apps.production.template_urls')),

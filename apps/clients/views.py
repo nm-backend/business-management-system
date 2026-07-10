@@ -30,14 +30,26 @@ class ClientViewSet(viewsets.ModelViewSet):
         Возвращает сериализатор в зависимости от роли пользователя.
 
         Owner получает полные данные, остальные - ограниченные.
+        Для create используется отдельный входной сериализатор,
+        но ответ всегда возвращается через полный сериализатор.
         """
-        if self.action == 'create':
-            return ClientCreateSerializer
-
         request = self.request
         if request.user and request.user.is_owner:
             return ClientSerializer
         return ClientLimitedSerializer
+
+    def create(self, request, *args, **kwargs):
+        """
+        Создает клиента и возвращает полные данные включая id.
+
+        Использует ClientCreateSerializer для валидации входных данных,
+        затем возвращает результат через полный сериализатор.
+        """
+        input_serializer = ClientCreateSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        client = input_serializer.save()
+        output_serializer = self.get_serializer(client)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         """

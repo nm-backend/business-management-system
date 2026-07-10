@@ -104,8 +104,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             const data = await window.api.request(url);
             
-            if (data && data.length > 0) {
-                listEl.innerHTML = data.map(c => `
+            // Обработка как paginated ({results:[...]}) так и plain list ([...])
+            const clients = Array.isArray(data) ? data : (data.results || []);
+            
+            if (clients.length > 0) {
+                listEl.innerHTML = clients.map(c => `
                     <tr>
                         <td>${c.name}</td>
                         <td>${c.phone || '-'}</td>

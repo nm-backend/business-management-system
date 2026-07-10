@@ -195,8 +195,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         let products = [];
         
         try {
+            // active/ returns plain list, finished-products/ returns paginated
             clients = await window.api.request('/api/v1/clients/active/');
-            products = await window.api.request('/api/v1/warehouse/finished-products/');
+            const productsData = await window.api.request('/api/v1/warehouse/finished-products/?page_size=200');
+            products = productsData.results || productsData;
         } catch (e) {
             console.error('Failed to load data', e);
         }

@@ -31,13 +31,23 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         Owner получает полные данные, остальные - ограниченные.
         """
-        if self.action == 'create':
-            return OrderCreateSerializer
-
         request = self.request
         if request.user and request.user.is_owner:
             return OrderSerializer
         return OrderLimitedSerializer
+
+    def create(self, request, *args, **kwargs):
+        """
+        Создает заказ и возвращает полные данные включая id.
+
+        Использует OrderCreateSerializer для валидации входных данных,
+        затем возвращает результат через полный сериализатор.
+        """
+        input_serializer = OrderCreateSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        order = input_serializer.save()
+        output_serializer = self.get_serializer(order)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
         """
