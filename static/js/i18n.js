@@ -1,3 +1,8 @@
+/**
+ * I18nManager - менеджер переводов интерфейса.
+ *
+ * Загружает переводы с бэкенда и применяет к элементам с data-i18n.
+ */
 class I18nManager {
     constructor() {
         this.translations = {};
@@ -53,7 +58,7 @@ class I18nManager {
     async setLanguage(lang) {
         await this.loadTranslations(lang);
         this.applyTranslations();
-        // Also inform the backend if user is logged in
+        // Обновляем язык на бэкенде если пользователь авторизован
         if (window.api && window.api.getTokens().access) {
             try {
                 await window.api.request('/accounts/me/language/', {

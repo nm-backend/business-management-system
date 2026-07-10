@@ -70,8 +70,8 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     supplier = models.CharField(max_length=255, blank=True)
     arrival_date = models.DateField(null=True, blank=True)
     comment = models.TextField(blank=True)
-    purchase_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    avg_cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    purchase_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    avg_cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         verbose_name = 'Raw Material'
@@ -132,8 +132,8 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     description = models.TextField(blank=True)
     min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0)
     reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         verbose_name = 'Finished Product'

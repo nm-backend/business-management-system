@@ -1,3 +1,8 @@
+/**
+ * APIClient - клиент для взаимодействия с Django REST API.
+ *
+ * Управляет JWT токенами и автоматическим обновлением при истечении срока.
+ */
 class APIClient {
     constructor() {
         this.baseUrl = '/api/v1';
@@ -39,6 +44,7 @@ class APIClient {
 
         let response = await fetch(url, config);
 
+        // Автоматическое обновление токена при 401
         if (response.status === 401 && tokens.refresh && !options.isRetry) {
             const newAccess = await this.refreshToken(tokens.refresh);
             if (newAccess) {

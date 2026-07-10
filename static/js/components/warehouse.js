@@ -1,3 +1,7 @@
+/**
+ * WarehouseComponent - страница склада сырья.
+ * Отображает список материалов с подсветкой низких остатков.
+ */
 class WarehouseComponent {
     async render(container) {
         container.innerHTML = `
@@ -5,7 +9,7 @@ class WarehouseComponent {
                 <h1 data-i18n="warehouse.title">Склад сырья</h1>
                 <button id="add-material-btn" class="btn btn-primary" data-i18n="warehouse.add_material">Добавить материал</button>
             </header>
-            
+
             <div class="card" style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; text-align: left;">
                     <thead>
@@ -30,7 +34,7 @@ class WarehouseComponent {
         const listEl = container.querySelector('#materials-list');
         try {
             const data = await window.api.request('/warehouse/raw-materials/');
-            
+
             if (data.results && data.results.length > 0) {
                 listEl.innerHTML = data.results.map(m => `
                     <tr style="border-bottom: 1px solid #eee; ${m.is_low_stock ? 'background-color: #ffebee;' : ''}">

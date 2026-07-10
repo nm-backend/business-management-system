@@ -1,3 +1,4 @@
+{# Базовый шаблон для всех страниц приложения #}
 {% load static %}
 <!DOCTYPE html>
 <html lang="uz">
@@ -10,8 +11,10 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {# Основной контент страницы #}
     {% block content %}{% endblock %}
 
+    {# Основные JavaScript файлы #}
     <script src="{% static 'js/api.js' %}"></script>
     <script src="{% static 'js/i18n.js' %}"></script>
     {% block extra_js %}{% endblock %}

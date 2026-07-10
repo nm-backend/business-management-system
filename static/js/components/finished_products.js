@@ -1,3 +1,7 @@
+/**
+ * FinishedProductsComponent - страница готовой продукции.
+ * Отображает список товаров с учетом резервов под заказы.
+ */
 class FinishedProductsComponent {
     async render(container) {
         container.innerHTML = `
@@ -5,7 +9,7 @@ class FinishedProductsComponent {
                 <h1 data-i18n="warehouse.finished_title">Тайёр маҳсулот</h1>
                 <button id="add-product-btn" class="btn btn-primary" data-i18n="warehouse.add_product">Добавить товар</button>
             </header>
-            
+
             <div class="card" style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; text-align: left;">
                     <thead>
@@ -31,7 +35,7 @@ class FinishedProductsComponent {
         const listEl = container.querySelector('#products-list');
         try {
             const data = await window.api.request('/warehouse/finished-products/');
-            
+
             if (data.results && data.results.length > 0) {
                 listEl.innerHTML = data.results.map(p => `
                     <tr style="border-bottom: 1px solid #eee; ${p.is_low_stock ? 'background-color: #ffebee;' : ''}">

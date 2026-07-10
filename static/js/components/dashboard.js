@@ -1,3 +1,7 @@
+/**
+ * DashboardComponent - главная страница.
+ * Показывает приветствие и селектор языка.
+ */
 class DashboardComponent {
     async render(container) {
         container.innerHTML = `

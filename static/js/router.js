@@ -1,8 +1,12 @@
+/**
+ * Router - hash-based роутер для навигации между страницами.
+ * Отображает компоненты в #app-content по URL hash.
+ */
 class Router {
     constructor() {
         this.routes = {};
         this.appElement = document.getElementById('app-content');
-        
+
         window.addEventListener('hashchange', () => this.handleRoute());
     }
 
@@ -13,9 +17,9 @@ class Router {
     async handleRoute() {
         const path = window.location.hash.slice(1) || '/';
         let component = this.routes[path];
-        
+
         if (!component) {
-            // Find dynamic route or default to dashboard
+            // Если маршрут не найден, показываем главную страницу
             component = this.routes['/'];
         }
 
