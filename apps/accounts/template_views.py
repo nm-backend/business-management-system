@@ -5,8 +5,6 @@ def index_view(request):
     """Main entry point."""
     if not User.objects.filter(role='owner').exists():
         return redirect('setup-page')
-    if not request.user.is_authenticated:
-        return redirect('login-page')
     return render(request, 'index.html')
 
 def login_view(request):

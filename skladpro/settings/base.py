@@ -144,9 +144,9 @@ REST_FRAMEWORK = {
 
 # Настройки JWT токенов (Simple JWT)
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),  # Access токен живет 1 день
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=45),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),  # Refresh токен живет 7 дней
-    'ROTATE_REFRESH_TOKENS': False,  # Не вращать refresh токены
+    'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,  # Добавлять в blacklist после вращения
 }
 

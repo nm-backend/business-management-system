@@ -26,6 +26,10 @@ urlpatterns = [
     path('', include('apps.messaging.template_urls')),
 ]
 
+handler403 = 'skladpro.error_views.error_403'
+handler404 = 'skladpro.error_views.error_404'
+handler500 = 'skladpro.error_views.error_500'
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0] if settings.STATICFILES_DIRS else settings.STATIC_ROOT)

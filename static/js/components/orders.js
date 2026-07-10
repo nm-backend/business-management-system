@@ -59,9 +59,10 @@ class OrdersComponent {
     async loadOrders(container) {
         const listEl = container.querySelector('#orders-list');
         const statusFilter = container.querySelector('#order-status-filter').value;
+        window.listStates.tableLoading(listEl, 8);
         
         try {
-            let url = '/api/v1/orders/';
+            let url = '/orders/';
             const params = new URLSearchParams();
             if (statusFilter) params.append('status', statusFilter);
             if (params.toString()) url += '?' + params.toString();
@@ -94,12 +95,12 @@ class OrdersComponent {
                     </tr>
                 `).join('');
             } else {
-                listEl.innerHTML = `<tr><td colspan="8" style="padding: 10px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</td></tr>`;
+                window.listStates.tableEmpty(listEl, 8, 'No orders found');
             }
             window.i18n.applyTranslations();
         } catch (e) {
             console.error('Failed to load orders', e);
-            listEl.innerHTML = `<tr><td colspan="8" style="padding: 10px; text-align: center; color: red;" data-i18n="common.error">Хатолик</td></tr>`;
+            window.listStates.tableError(listEl, 8, 'Unable to load orders', () => this.loadOrders(container));
             window.i18n.applyTranslations();
         }
     }
@@ -202,8 +203,8 @@ class OrdersComponent {
         let products = [];
         
         try {
-            clients = await window.api.request('/api/v1/clients/active/');
-            products = await window.api.request('/api/v1/warehouse/finished-products/');
+            clients = await window.api.request('/clients/active/');
+            products = await window.api.request('/warehouse/finished-products/');
         } catch (e) {
             console.error('Failed to load data', e);
         }
@@ -282,15 +283,18 @@ class OrdersComponent {
             const data = Object.fromEntries(formData);
             
             try {
-                await window.api.request('/api/v1/orders/', {
+                await window.api.request('/orders/', {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
                 modal.remove();
+                window.toast.success('Order created successfully');
                 await this.loadOrders(container);
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add order'));
+                window.toast.error(error.data?.detail || 'Failed to add order');
             }
         });
     }
 }
+
+window.OrdersComponent = new OrdersComponent();

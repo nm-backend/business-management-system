@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modal.remove();
                 await loadOrders();
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add order'));
+                window.toast.error(error.data?.detail || 'Failed to add order');
             }
         });
     });

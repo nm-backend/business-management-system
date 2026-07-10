@@ -245,7 +245,12 @@ class SetupOwnerSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
     full_name = serializers.CharField(max_length=255)
-    phone = serializers.CharField(max_length=20, required=False, default='')
+    phone = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+        default='',
+    )
 
     def validate(self, data):
         """

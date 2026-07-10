@@ -19,8 +19,8 @@ class Router {
         let component = this.routes[path];
 
         if (!component) {
-            // Если маршрут не найден, показываем главную страницу
-            component = this.routes['/'];
+            this.renderNotFound(path);
+            return;
         }
 
         this.appElement.innerHTML = '<div class="loading" data-i18n="common.loading">Loading...</div>';
@@ -31,9 +31,13 @@ class Router {
             window.i18n.applyTranslations();
         } catch (e) {
             console.error('Error rendering route:', e);
-            this.appElement.innerHTML = '<div class="alert alert-danger" data-i18n="common.error">Error</div>';
+            this.appElement.innerHTML = '<div class="card route-error"><h1>Something went wrong</h1><p>We could not load this page.</p></div>';
             window.i18n.applyTranslations();
         }
+    }
+
+    renderNotFound(path) {
+        this.appElement.innerHTML = `<div class="card route-error"><p class="eyebrow">404</p><h1>Page not found</h1><p>The route <strong>${path}</strong> does not exist.</p><a class="btn btn-primary" href="#/">Return to dashboard</a></div>`;
     }
 
     navigate(path) {

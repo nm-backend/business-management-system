@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modal.remove();
                 await loadClients();
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add client'));
+                window.toast.error(error.data?.detail || 'Failed to add client');
             }
         });
     });

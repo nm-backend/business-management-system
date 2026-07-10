@@ -25,6 +25,12 @@ class APIClient {
         localStorage.removeItem('refresh_token');
     }
 
+    expireSession() {
+        this.clearTokens();
+        sessionStorage.setItem('session_expired', '1');
+        window.location.href = '/accounts/login/';
+    }
+
     async request(endpoint, options = {}) {
         const url = `${this.baseUrl}${endpoint}`;
         const headers = {
@@ -52,14 +58,16 @@ class APIClient {
                 config.isRetry = true;
                 response = await fetch(url, config);
             } else {
-                this.clearTokens();
-                window.location.href = '/accounts/login/';
+                this.expireSession();
                 throw new Error('Authentication required');
             }
         }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
+            if (window.toast && response.status !== 401) {
+                window.toast.error(errorData.detail || 'Request failed');
+            }
             throw { status: response.status, data: errorData };
         }
 
@@ -79,7 +87,7 @@ class APIClient {
             });
             if (response.ok) {
                 const data = await response.json();
-                this.setTokens(data.access, null);
+                this.setTokens(data.access, data.refresh || refresh);
                 return data.access;
             }
         } catch (error) {

@@ -3,6 +3,7 @@ Unit-тесты для приложения accounts: кастомный UserMan
 (create_user / create_superuser / фильтры по ролям) и свойства модели User.
 """
 from django.test import TestCase
+from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 
@@ -77,3 +78,24 @@ class UserModelPropertyTests(TestCase):
 
     def test_str_falls_back_to_username(self):
         self.assertEqual(str(User(username='u', full_name='')), 'u')
+
+
+class SetupOwnerAPITests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+
+    def test_setup_accepts_empty_phone(self):
+        response = self.api.post(
+            '/api/v1/accounts/setup/owner/',
+            {
+                'username': 'owner',
+                'password': 'secret123',
+                'password_confirm': 'secret123',
+                'full_name': 'Owner',
+                'phone': '',
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertIn('tokens', response.data)
+        self.assertEqual(User.objects.get(username='owner').phone, '')

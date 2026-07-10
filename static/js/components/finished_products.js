@@ -33,6 +33,7 @@ class FinishedProductsComponent {
 
     async loadProducts(container) {
         const listEl = container.querySelector('#products-list');
+        window.listStates.tableLoading(listEl, 5);
         try {
             const data = await window.api.request('/warehouse/finished-products/');
 
@@ -47,12 +48,12 @@ class FinishedProductsComponent {
                     </tr>
                 `).join('');
             } else {
-                listEl.innerHTML = `<tr><td colspan="5" style="padding: 10px; text-align: center;" data-i18n="common.no_data">Нет данных</td></tr>`;
+                window.listStates.tableEmpty(listEl, 5, 'No finished products found');
                 window.i18n.applyTranslations();
             }
         } catch (e) {
             console.error('Failed to load products', e);
-            listEl.innerHTML = `<tr><td colspan="5" style="padding: 10px; text-align: center; color: red;" data-i18n="common.error">Ошибка загрузки</td></tr>`;
+            window.listStates.tableError(listEl, 5, 'Unable to load products', () => this.loadProducts(container));
             window.i18n.applyTranslations();
         }
     }
