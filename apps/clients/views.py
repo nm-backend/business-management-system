@@ -6,9 +6,9 @@ Views for clients API.
 """
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, IsOwnerOrAdmin, FinancialDataPermission
+from apps.core.permissions import IsOwner, IsOwnerOrAdmin
 from .models import Client
 from .serializers import (
     ClientSerializer, ClientLimitedSerializer, ClientCreateSerializer
@@ -23,7 +23,10 @@ class ClientViewSet(viewsets.ModelViewSet):
     - Owner: полный доступ с финансовыми данными
     - Admin/Worker: ограниченный доступ без финансовых данных
     """
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.action in ('archive', 'unarchive'):
+            return [IsOwner()]
+        return [IsOwnerOrAdmin()]
 
     def get_serializer_class(self):
         """
@@ -58,6 +61,9 @@ class ClientViewSet(viewsets.ModelViewSet):
         Создает клиента с текущим пользователем.
         """
         serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Client deletion is prohibited. Archive the client instead.')
 
     @action(detail=False, methods=['get'])
     def active(self, request):

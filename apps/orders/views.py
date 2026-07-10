@@ -6,6 +6,7 @@ Views for orders API.
 """
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from apps.core.permissions import IsOwner, IsOwnerOrAdmin
@@ -23,7 +24,14 @@ class OrderViewSet(viewsets.ModelViewSet):
     - Owner: полный доступ с финансовыми данными
     - Admin/Worker: ограниченный доступ без финансовых данных
     """
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.action == 'update_payment':
+            return [IsOwner()]
+        if self.action == 'assign_worker':
+            return [IsOwnerOrAdmin()]
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsOwnerOrAdmin()]
+        return [IsAuthenticated()]
 
     def get_serializer_class(self):
         """
@@ -56,8 +64,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(client_id=client_id)
         if worker_id:
             queryset = queryset.filter(worker_id=worker_id)
+        if self.request.user and self.request.user.is_worker:
+            queryset = queryset.filter(worker=self.request.user)
 
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Order deletion is prohibited.')
 
     @action(detail=True, methods=['post'])
     def assign_worker(self, request, pk=None):

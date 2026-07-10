@@ -7,9 +7,10 @@ Views for production API.
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAssignedWorker
+from apps.core.permissions import IsOwnerOrAdmin
 from .models import Task, WorkRecord, TaskStatus
 from .serializers import (
     TaskSerializer, TaskCreateSerializer,
@@ -26,7 +27,10 @@ class TaskViewSet(viewsets.ModelViewSet):
     - Admin: может создавать и назначать задачи
     - Worker: видит только свои задачи
     """
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsOwnerOrAdmin()]
+        return [IsAuthenticated()]
 
     def get_serializer_class(self):
         """
@@ -53,6 +57,9 @@ class TaskViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_filter)
 
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Task deletion is prohibited.')
 
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
@@ -116,7 +123,12 @@ class WorkRecordViewSet(viewsets.ModelViewSet):
     - Owner: полный доступ с финансовыми данными
     - Admin/Worker: ограниченный доступ без финансовых данных
     """
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.action == 'create':
+            return [IsAuthenticated()]
+        if self.action in ('update', 'partial_update', 'destroy'):
+            return [IsOwnerOrAdmin()]
+        return [IsAuthenticated()]
 
     def get_serializer_class(self):
         """
@@ -149,6 +161,9 @@ class WorkRecordViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(status=status_filter)
 
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Work-record deletion is prohibited.')
 
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):

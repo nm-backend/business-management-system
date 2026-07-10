@@ -49,12 +49,14 @@ class OrderLimitedSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'client', 'client_name', 'product', 'product_name',
             'quantity', 'unit', 'deadline', 'material', 'worker', 'worker_name',
-            'comment', 'drawing', 'status', 'payment_status',
+            'comment', 'drawing', 'status',
             'material_shortage', 'is_overdue',
-            'is_paid', 'has_debt',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = [
+            'created_at', 'updated_at', 'client_name', 'product_name',
+            'worker', 'worker_name', 'material_shortage', 'is_overdue',
+        ]
 
 
 class OrderCreateSerializer(serializers.ModelSerializer):

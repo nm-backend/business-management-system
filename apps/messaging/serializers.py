@@ -23,7 +23,10 @@ class MessageSerializer(serializers.ModelSerializer):
             'subject', 'content', 'is_read', 'is_group',
             'read_at', 'is_unread', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'read_at', 'sender']
+        read_only_fields = [
+            'created_at', 'updated_at', 'read_at', 'sender', 'recipient',
+            'is_read', 'is_unread',
+        ]
 
 
 class MessageCreateSerializer(serializers.ModelSerializer):

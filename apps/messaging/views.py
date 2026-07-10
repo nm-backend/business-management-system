@@ -6,6 +6,7 @@ Views for messaging API.
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Message, Notification
@@ -45,6 +46,14 @@ class MessageViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(is_read=is_read.lower() == 'true')
 
         return queryset
+
+    def perform_update(self, serializer):
+        if serializer.instance.sender != self.request.user:
+            raise PermissionDenied('Only the sender can update a message.')
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Message deletion is prohibited.')
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

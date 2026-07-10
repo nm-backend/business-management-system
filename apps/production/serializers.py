@@ -30,7 +30,10 @@ class TaskSerializer(serializers.ModelSerializer):
             'confirmed_at', 'confirmed_by', 'confirmed_by_name',
             'rejection_comment', 'is_self_assigned'
         ]
-        read_only_fields = ['assigned_at', 'accepted_at', 'completed_at', 'confirmed_at']
+        read_only_fields = [
+            'assigned_by', 'assigned_at', 'accepted_at', 'completed_at',
+            'confirmed_at', 'confirmed_by',
+        ]
 
 
 class TaskCreateSerializer(serializers.ModelSerializer):
@@ -42,12 +45,14 @@ class TaskCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = [
-            'order', 'worker', 'assigned_by', 'is_self_assigned'
+            'order', 'worker', 'is_self_assigned'
         ]
 
     def create(self, validated_data):
+        request = self.context.get('request')
         return Task.objects.create(
             **validated_data,
+            assigned_by=request.user if request else None,
             status=TaskStatus.PENDING
         )
 
@@ -73,7 +78,10 @@ class WorkRecordSerializer(serializers.ModelSerializer):
             'rejection_reason', 'labor_cost',
             'is_confirmed', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'confirmed_at']
+        read_only_fields = [
+            'worker', 'confirmed_by', 'confirmed_at',
+            'created_at', 'updated_at',
+        ]
 
 
 class WorkRecordLimitedSerializer(serializers.ModelSerializer):
@@ -97,7 +105,10 @@ class WorkRecordLimitedSerializer(serializers.ModelSerializer):
             'rejection_reason',
             'is_confirmed', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'confirmed_at']
+        read_only_fields = [
+            'worker', 'confirmed_by', 'confirmed_at',
+            'created_at', 'updated_at',
+        ]
 
 
 class WorkRecordCreateSerializer(serializers.ModelSerializer):
@@ -109,12 +120,14 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkRecord
         fields = [
-            'task', 'worker', 'product', 'quantity', 'unit',
+            'task', 'product', 'quantity', 'unit',
             'photo', 'comment'
         ]
 
     def create(self, validated_data):
+        request = self.context.get('request')
         return WorkRecord.objects.create(
             **validated_data,
+            worker=request.user if request else None,
             status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION
         )

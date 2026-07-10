@@ -39,7 +39,7 @@ class ClientLimitedSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'phone', 'address',
             'is_active', 'is_archived', 'notes',
-            'has_debt', 'has_active_orders',
+            'has_active_orders',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
