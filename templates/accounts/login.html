@@ -45,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
         errorMsg.textContent = 'Your session expired. Please sign in again.';
         errorMsg.style.display = 'block';
         sessionStorage.removeItem('session_expired');
-        if (window.toast) window.toast.info(errorMsg.textContent);
     }
 
     form.addEventListener('submit', async (e) => {
@@ -60,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             errorMsg.textContent = error.data?.detail || 'Unable to sign in. Check your credentials.';
             errorMsg.style.display = 'block';
-            if (window.toast) window.toast.error(errorMsg.textContent);
         }
     });
 });

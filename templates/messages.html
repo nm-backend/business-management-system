@@ -296,7 +296,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modal.remove();
                 await loadInbox();
             } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to send message');
+                alert('Error: ' + (error.data?.detail || 'Failed to send message'));
             }
         });
     }
@@ -331,7 +331,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (e.target === modal) modal.remove();
             });
         } catch (error) {
-            window.toast.error(error.data?.detail || 'Failed to load message');
+            alert('Error: ' + (error.data?.detail || 'Failed to load message'));
         }
     }
 
@@ -342,7 +342,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             await loadInbox();
         } catch (error) {
-            window.toast.error(error.data?.detail || 'Failed to mark message as read');
+            alert('Error: ' + (error.data?.detail || 'Failed to mark message as read'));
         }
     }
 
@@ -353,7 +353,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             await loadNotifications();
         } catch (error) {
-            window.toast.error(error.data?.detail || 'Failed to mark notification as read');
+            alert('Error: ' + (error.data?.detail || 'Failed to mark notification as read'));
         }
     }
 
@@ -364,7 +364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             await loadNotifications();
         } catch (error) {
-            window.toast.error(error.data?.detail || 'Failed to mark all notifications as read');
+            alert('Error: ' + (error.data?.detail || 'Failed to mark all notifications as read'));
         }
     }
 

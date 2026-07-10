@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modal.remove();
                 await loadExpenses();
             } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to add expense');
+                alert('Error: ' + (error.data?.detail || 'Failed to add expense'));
             }
         });
     }
