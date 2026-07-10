@@ -53,6 +53,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const form = document.getElementById('setup-form');
+    const errorMsg = document.getElementById('error-message');
+    const successMsg = document.getElementById('success-message');
+    const getErrorMessage = (error) => {
+        const payload = error?.data || {};
+        if (payload.detail) return payload.detail;
+        for (const value of Object.values(payload)) {
+            if (Array.isArray(value) && value.length) return value[0];
+            if (typeof value === 'string' && value) return value;
+        }
+        return window.i18n.translate('common.error') || 'Error occurred';
+    };
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const full_name = document.getElementById('full_name').value;
@@ -60,9 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         const password_confirm = document.getElementById('password_confirm').value;
-        
-        const errorMsg = document.getElementById('error-message');
-        const successMsg = document.getElementById('success-message');
         
         errorMsg.style.display = 'none';
         successMsg.style.display = 'none';
@@ -87,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.location.href = '/';
             }, 1000);
         } catch (error) {
-            errorMsg.textContent = error.data && error.data.username ? error.data.username[0] : (window.i18n.translate('common.error') || "Error occurred");
+            errorMsg.textContent = getErrorMessage(error);
             errorMsg.style.display = 'block';
             if (window.toast) window.toast.error(errorMsg.textContent);
         }
