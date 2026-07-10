@@ -58,7 +58,7 @@ class ClientsComponent {
         window.listStates.tableLoading(listEl, 6);
         
         try {
-            let url = '/api/v1/clients/';
+            let url = '/clients/';
             if (filter === 'active') {
                 url += 'active/';
             } else if (filter === 'archived') {
@@ -166,7 +166,7 @@ class ClientsComponent {
             const data = Object.fromEntries(formData);
             
             try {
-                await window.api.request('/api/v1/clients/', {
+                await window.api.request('/clients/', {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
@@ -182,7 +182,7 @@ class ClientsComponent {
             if (!button) return;
             if (!await window.confirmation.confirm('Archive this client?')) return;
             try {
-                await window.api.request(`/api/v1/clients/${button.dataset.id}/archive/`, { method: 'POST' });
+                await window.api.request(`/clients/${button.dataset.id}/archive/`, { method: 'POST' });
                 window.toast.success('Client archived');
                 await this.loadClients(container);
             } catch (error) {

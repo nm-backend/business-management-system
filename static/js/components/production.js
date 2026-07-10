@@ -40,7 +40,7 @@ class ProductionComponent {
         const contentEl = container.querySelector('#production-content');
         
         try {
-            const data = await window.api.request('/api/v1/production/tasks/');
+            const data = await window.api.request('/production/tasks/');
             
             if (data && data.length > 0) {
                 contentEl.innerHTML = `
@@ -102,7 +102,7 @@ class ProductionComponent {
         const contentEl = container.querySelector('#production-content');
         
         try {
-            const data = await window.api.request('/api/v1/production/works/');
+            const data = await window.api.request('/production/works/');
             
             if (data && data.length > 0) {
                 contentEl.innerHTML = `
@@ -254,7 +254,7 @@ class ProductionComponent {
      */
     async acceptTask(taskId) {
         try {
-            await window.api.request(`/api/v1/production/tasks/${taskId}/accept/`, {
+            await window.api.request(`/production/tasks/${taskId}/accept/`, {
                 method: 'POST'
             });
             window.toast.success('Task accepted');
@@ -274,7 +274,7 @@ class ProductionComponent {
         if (!reason) return;
 
         try {
-            await window.api.request(`/api/v1/production/tasks/${taskId}/refuse/`, {
+            await window.api.request(`/production/tasks/${taskId}/refuse/`, {
                 method: 'POST',
                 body: JSON.stringify({ reason })
             });
@@ -297,7 +297,7 @@ class ProductionComponent {
             const body = {};
             if (laborCost) body.labor_cost = parseFloat(laborCost);
             
-            await window.api.request(`/api/v1/production/works/${workId}/confirm/`, {
+            await window.api.request(`/production/works/${workId}/confirm/`, {
                 method: 'POST',
                 body: JSON.stringify(body)
             });
@@ -318,7 +318,7 @@ class ProductionComponent {
         if (!reason) return;
 
         try {
-            await window.api.request(`/api/v1/production/works/${workId}/reject/`, {
+            await window.api.request(`/production/works/${workId}/reject/`, {
                 method: 'POST',
                 body: JSON.stringify({ reason })
             });

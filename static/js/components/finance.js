@@ -54,7 +54,7 @@ class FinanceComponent {
         const contentEl = container.querySelector('#finance-content');
         
         try {
-            const data = await window.api.request('/api/v1/finance/expenses/');
+            const data = await window.api.request('/finance/expenses/');
             
             if (data && data.length > 0) {
                 contentEl.innerHTML = `
@@ -121,7 +121,7 @@ class FinanceComponent {
         const contentEl = container.querySelector('#finance-content');
         
         try {
-            const data = await window.api.request('/api/v1/finance/worker-payments/');
+            const data = await window.api.request('/finance/worker-payments/');
             
             if (data && data.length > 0) {
                 contentEl.innerHTML = `
@@ -187,7 +187,7 @@ class FinanceComponent {
         const contentEl = container.querySelector('#finance-content');
         
         try {
-            const data = await window.api.request('/api/v1/finance/labor-rates/');
+            const data = await window.api.request('/finance/labor-rates/');
             
             if (data && data.length > 0) {
                 contentEl.innerHTML = `
@@ -406,7 +406,7 @@ class FinanceComponent {
             const data = Object.fromEntries(formData);
             
             try {
-                await window.api.request('/api/v1/finance/expenses/', {
+                await window.api.request('/finance/expenses/', {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
@@ -428,7 +428,7 @@ class FinanceComponent {
         // Загрузка работников
         let workers = [];
         try {
-            workers = await window.api.request('/api/v1/accounts/users/');
+            workers = await window.api.request('/accounts/users/');
             workers = workers.filter(w => w.role === 'worker');
         } catch (e) {
             console.error('Failed to load workers', e);
@@ -493,7 +493,7 @@ class FinanceComponent {
             const data = Object.fromEntries(formData);
             
             try {
-                await window.api.request('/api/v1/finance/worker-payments/', {
+                await window.api.request('/finance/worker-payments/', {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
@@ -515,7 +515,7 @@ class FinanceComponent {
         // Загрузка продуктов
         let products = [];
         try {
-            products = await window.api.request('/api/v1/warehouse/finished-products/');
+            products = await window.api.request('/warehouse/finished-products/');
         } catch (e) {
             console.error('Failed to load products', e);
         }
@@ -581,7 +581,7 @@ class FinanceComponent {
             const data = Object.fromEntries(formData);
             
             try {
-                await window.api.request('/api/v1/finance/labor-rates/', {
+                await window.api.request('/finance/labor-rates/', {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });

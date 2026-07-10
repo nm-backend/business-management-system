@@ -41,7 +41,7 @@ class MessagesComponent {
         const contentEl = container.querySelector('#messages-content');
         
         try {
-            const data = await window.api.request('/api/v1/messaging/messages/?is_read=false');
+            const data = await window.api.request('/messaging/messages/?is_read=false');
             
             if (data && data.length > 0) {
                 contentEl.innerHTML = `
@@ -110,7 +110,7 @@ class MessagesComponent {
         const contentEl = container.querySelector('#messages-content');
         
         try {
-            const data = await window.api.request('/api/v1/messaging/messages/');
+            const data = await window.api.request('/messaging/messages/');
             // Фильтруем только отправленные сообщения
             const sentMessages = data.filter(m => m.sender_name === window.api.getMe().username);
             
@@ -163,7 +163,7 @@ class MessagesComponent {
         const contentEl = container.querySelector('#messages-content');
         
         try {
-            const data = await window.api.request('/api/v1/messaging/notifications/');
+            const data = await window.api.request('/messaging/notifications/');
             
             if (data && data.length > 0) {
                 const unreadCount = data.filter(n => n.is_unread).length;
@@ -240,7 +240,7 @@ class MessagesComponent {
         // Загрузка пользователей
         let users = [];
         try {
-            users = await window.api.request('/api/v1/accounts/users/');
+            users = await window.api.request('/accounts/users/');
         } catch (e) {
             console.error('Failed to load users', e);
         }
@@ -297,7 +297,7 @@ class MessagesComponent {
             }
             
             try {
-                await window.api.request('/api/v1/messaging/messages/', {
+                await window.api.request('/messaging/messages/', {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
@@ -316,7 +316,7 @@ class MessagesComponent {
      */
     async viewMessage(messageId) {
         try {
-            const message = await window.api.request(`/api/v1/messaging/messages/${messageId}/`);
+            const message = await window.api.request(`/messaging/messages/${messageId}/`);
             
             const modal = document.createElement('div');
             modal.className = 'modal';
@@ -355,7 +355,7 @@ class MessagesComponent {
      */
     async markRead(messageId) {
         try {
-            await window.api.request(`/api/v1/messaging/messages/${messageId}/mark_read/`, {
+            await window.api.request(`/messaging/messages/${messageId}/mark_read/`, {
                 method: 'POST'
             });
             await this.loadInbox(this.container);
@@ -371,7 +371,7 @@ class MessagesComponent {
      */
     async markNotificationRead(notificationId) {
         try {
-            await window.api.request(`/api/v1/messaging/notifications/${notificationId}/mark_read/`, {
+            await window.api.request(`/messaging/notifications/${notificationId}/mark_read/`, {
                 method: 'POST'
             });
             await this.loadNotifications(this.container);
@@ -387,7 +387,7 @@ class MessagesComponent {
      */
     async markAllNotificationsRead(container) {
         try {
-            await window.api.request('/api/v1/messaging/notifications/mark_all_read/', {
+            await window.api.request('/messaging/notifications/mark_all_read/', {
                 method: 'POST'
             });
             await this.loadNotifications(container);

@@ -62,7 +62,7 @@ class OrdersComponent {
         window.listStates.tableLoading(listEl, 8);
         
         try {
-            let url = '/api/v1/orders/';
+            let url = '/orders/';
             const params = new URLSearchParams();
             if (statusFilter) params.append('status', statusFilter);
             if (params.toString()) url += '?' + params.toString();
@@ -203,8 +203,8 @@ class OrdersComponent {
         let products = [];
         
         try {
-            clients = await window.api.request('/api/v1/clients/active/');
-            products = await window.api.request('/api/v1/warehouse/finished-products/');
+            clients = await window.api.request('/clients/active/');
+            products = await window.api.request('/warehouse/finished-products/');
         } catch (e) {
             console.error('Failed to load data', e);
         }
@@ -283,7 +283,7 @@ class OrdersComponent {
             const data = Object.fromEntries(formData);
             
             try {
-                await window.api.request('/api/v1/orders/', {
+                await window.api.request('/orders/', {
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
