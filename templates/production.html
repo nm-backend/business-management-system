@@ -1,14 +1,13 @@
-{# Шаблон страницы производства #}
+{# Шаблон страницы производства - задачи и записи о работе #}
 {% extends 'base.html' %}
 
 {% block content %}
 <div class="main-layout">
     {# Боковая панель навигации #}
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h2 data-i18n="app.name">SkladPro.Nod</h2>
         </div>
-
         <nav class="sidebar-nav">
             <a href="/" class="sidebar-nav-item" data-i18n="nav.dashboard">Бош панел</a>
             <a href="/warehouse/" class="sidebar-nav-item" data-i18n="nav.raw_materials">Хом ашё омбори</a>
@@ -20,33 +19,142 @@
             <a href="/messages/" class="sidebar-nav-item" data-i18n="nav.messages">Хабарлар</a>
             <a href="/settings/" class="sidebar-nav-item" data-i18n="nav.settings">Созламалар</a>
         </nav>
-
-        {# Информация о пользователе и кнопка выхода #}
         <div class="sidebar-footer">
             <p id="user-info" class="text-sm text-secondary"></p>
-            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width:100%;" data-i18n="auth.logout">Чиқиш</button>
         </div>
     </aside>
 
-    {# Основной контент #}
     <div class="main-content">
-        <div class="page-header">
-            <div class="navbar-left">
+        <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <button id="menu-toggle" class="btn btn-ghost btn-sm" style="display:none;" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
                 <h1 data-i18n="production.title">Ишлаб чиқариш</h1>
             </div>
-            <div class="navbar-right">
-                <select id="production-tab" class="select" style="width: auto;">
-                    <option value="tasks" data-i18n="production.tasks">Вазифалар</option>
-                    <option value="works" data-i18n="production.works">Ишлар</option>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="tab-group" id="production-tabs">
+                    <button class="tab-btn active" data-tab="tasks" data-i18n="production.tasks">Вазифалар</button>
+                    <button class="tab-btn" data-tab="works" data-i18n="production.works">Иш ёзувлари</button>
+                </div>
+                <button id="add-btn" class="btn btn-primary btn-sm" style="display:none;" data-i18n="common.add">Қўшиш</button>
+            </div>
+        </div>
+
+        <div class="page-content">
+            {# Карточки статистики #}
+            <div class="stats-grid" id="stats-grid" style="margin-bottom:24px;">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#e3f2fd;color:#1976d2;">📋</div>
+                    <div class="stat-content">
+                        <div class="stat-label" data-i18n="production.total_tasks">Жами вазифалар</div>
+                        <div class="stat-value" id="stat-total">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fff3e0;color:#f57c00;">⏳</div>
+                    <div class="stat-content">
+                        <div class="stat-label" data-i18n="production.pending">Кутилмоқда</div>
+                        <div class="stat-value" id="stat-pending">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#e8f5e9;color:#388e3c;">✅</div>
+                    <div class="stat-content">
+                        <div class="stat-label" data-i18n="production.completed">Бажарилди</div>
+                        <div class="stat-value" id="stat-completed">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fce4ec;color:#c62828;">❌</div>
+                    <div class="stat-content">
+                        <div class="stat-label" data-i18n="production.refused">Рад этилди</div>
+                        <div class="stat-value" id="stat-refused">—</div>
+                    </div>
+                </div>
+            </div>
+
+            {# Основной контент #}
+            <div id="production-content">
+                <div class="loading-state" style="text-align:center;padding:48px;color:var(--text-secondary);">
+                    <div style="font-size:32px;margin-bottom:8px;">⏳</div>
+                    <p data-i18n="common.loading">Юкланмоқда...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Модальное окно добавления задачи #}
+<div id="task-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 class="modal-title" data-i18n="production.add_task">Вазифа қўшиш</h3>
+            <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="label" data-i18n="production.worker">Ишчи</label>
+                <select id="task-worker" class="select" required></select>
+            </div>
+            <div class="form-group">
+                <label class="label" data-i18n="production.order">Буюртма</label>
+                <select id="task-order" class="select">
+                    <option value="" data-i18n="common.select_optional">— Танланг (ихтиёрий) —</option>
                 </select>
             </div>
         </div>
-        
-        <div class="page-content">
-            <div id="production-content">
-                <!-- Содержимое загружается динамически -->
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal()" data-i18n="common.cancel">Бекор</button>
+            <button class="btn btn-primary" id="task-save-btn" data-i18n="common.save">Сақлаш</button>
+        </div>
+    </div>
+</div>
+
+{# Модальное окно добавления записи о работе #}
+<div id="work-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeWorkModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3 class="modal-title" data-i18n="production.add_work">Иш ёзуви қўшиш</h3>
+            <button class="modal-close" onclick="closeWorkModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="label" data-i18n="production.product">Маҳсулот</label>
+                <select id="work-product" class="select">
+                    <option value="" data-i18n="common.select_optional">— Танланг (ихтиёрий) —</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="label" data-i18n="production.quantity">Миқдор</label>
+                <input type="number" id="work-quantity" class="input" step="0.001" min="0.001" required>
+            </div>
+            <div class="form-group">
+                <label class="label" data-i18n="production.unit">Ўлчов бирлиги</label>
+                <select id="work-unit" class="select">
+                    <option value="sht">Дона</option>
+                    <option value="m2">м²</option>
+                    <option value="m3">м³</option>
+                    <option value="kg">кг</option>
+                    <option value="m">метр</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="label" data-i18n="production.comment">Изоҳ</label>
+                <textarea id="work-comment" class="input" rows="2"></textarea>
             </div>
         </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeWorkModal()" data-i18n="common.cancel">Бекор</button>
+            <button class="btn btn-primary" id="work-save-btn" data-i18n="common.save">Сақлаш</button>
+        </div>
+    </div>
+</div>
+
+{# Toast-уведомление #}
+<div id="toast" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:none;">
+    <div id="toast-inner" class="card" style="padding:12px 20px;min-width:200px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:8px;">
+        <span id="toast-icon"></span>
+        <span id="toast-msg"></span>
     </div>
 </div>
 {% endblock %}
@@ -58,241 +166,424 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.i18n = new I18nManager();
     await window.i18n.init();
 
+    // --- Auth check ---
+    let currentUser = null;
     try {
-        const user = await window.api.getMe();
-        document.getElementById('user-info').textContent = user.full_name || user.username;
+        currentUser = await window.api.getMe();
+        document.getElementById('user-info').textContent = currentUser.full_name || currentUser.username;
     } catch (e) {
         window.location.href = '/accounts/login/';
         return;
     }
 
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        window.api.logout();
+    document.getElementById('logout-btn').addEventListener('click', () => window.api.logout());
+
+    // --- Responsive sidebar ---
+    const mq = window.matchMedia('(max-width:1024px)');
+    const menuToggle = document.getElementById('menu-toggle');
+    mq.addEventListener('change', e => { menuToggle.style.display = e.matches ? 'block' : 'none'; });
+    if (mq.matches) menuToggle.style.display = 'block';
+
+    // --- Tab state ---
+    let currentTab = 'tasks';
+    const canManage = currentUser.role === 'owner' || currentUser.role === 'admin';
+    const isWorker = currentUser.role === 'worker';
+    const addBtn = document.getElementById('add-btn');
+
+    // --- Tab click ---
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentTab = btn.dataset.tab;
+            if (currentTab === 'tasks') loadTasks();
+            else loadWorks();
+        });
     });
 
+    // --- Add button ---
+    addBtn.style.display = 'inline-flex';
+    addBtn.addEventListener('click', () => {
+        if (currentTab === 'tasks' && canManage) openTaskModal();
+        else if (currentTab === 'works' && (canManage || isWorker)) openWorkModal();
+    });
+
+    // === TASKS ===
     async function loadTasks() {
-        const contentEl = document.getElementById('production-content');
-        
+        showLoading();
         try {
-            const data = await window.api.request('/api/v1/production/tasks/');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th data-i18n="production.id">ID</th>
-                                    <th data-i18n="production.worker">Ишчи</th>
-                                    <th data-i18n="production.status">Ҳолат</th>
-                                    <th data-i18n="production.assigned_at">Белгиланган</th>
-                                    <th data-i18n="common.actions">Амаллар</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(t => `
-                                    <tr>
-                                        <td>#${t.id}</td>
-                                        <td>${t.worker_name}</td>
-                                        <td>
-                                            <span class="status-indicator status-${getTaskStatusClass(t.status)}">
-                                                ${getTaskStatusDisplay(t.status)}
-                                            </span>
-                                        </td>
-                                        <td>${new Date(t.assigned_at).toLocaleDateString()}</td>
-                                        <td>
-                                            ${t.status === 'pending' ? `
-                                                <button class="btn btn-success btn-sm" onclick="acceptTask(${t.id})">
-                                                    <span data-i18n="production.accept">Қабул қилиш</span>
-                                                </button>
-                                                <button class="btn btn-danger btn-sm" onclick="refuseTask(${t.id})">
-                                                    <span data-i18n="production.refuse">Рад этиш</span>
-                                                </button>
-                                            ` : '-'}
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</div>`;
+            const [data, stats] = await Promise.all([
+                window.api.request('/api/v1/production/tasks/'),
+                window.api.request('/api/v1/production/tasks/?page_size=1000').catch(() => null)
+            ]);
+            const items = data.results || [];
+            const allItems = stats ? (stats.results || items) : items;
+
+            // Stats cards
+            updateStats(
+                data.count,
+                allItems.filter(t => t.status === 'pending').length,
+                allItems.filter(t => ['completed','confirmed'].includes(t.status)).length,
+                allItems.filter(t => ['refused','rejected','cancelled'].includes(t.status)).length
+            );
+
+            if (items.length === 0) {
+                showEmpty(canManage ? 'Ҳали вазифалар йўқ. Биринчи вазифани қўшинг.' : 'Сизга ҳозирча вазифа берилмаган.');
+                return;
             }
+
+            document.getElementById('production-content').innerHTML = `
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th data-i18n="production.worker">Ишчи</th>
+                                <th data-i18n="production.order">Буюртма</th>
+                                <th data-i18n="production.status">Ҳолат</th>
+                                <th data-i18n="production.assigned_at">Белгиланган</th>
+                                <th data-i18n="common.actions">Амаллар</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map(t => `
+                                <tr>
+                                    <td class="text-secondary">#${t.id}</td>
+                                    <td><strong>${t.worker_name || '—'}</strong></td>
+                                    <td>${t.order ? '#'+t.order : '—'}</td>
+                                    <td>${taskStatusBadge(t.status)}</td>
+                                    <td>${formatDate(t.assigned_at)}</td>
+                                    <td>${taskActions(t)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${paginationInfo(data.count, items.length)}
+            `;
             window.i18n.applyTranslations();
-        } catch (e) {
-            console.error('Failed to load tasks', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
+        } catch (err) {
+            showError(err);
         }
     }
 
+    // === WORKS ===
     async function loadWorks() {
-        const contentEl = document.getElementById('production-content');
-        
+        showLoading();
         try {
             const data = await window.api.request('/api/v1/production/works/');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th data-i18n="production.id">ID</th>
-                                    <th data-i18n="production.worker">Ишчи</th>
-                                    <th data-i18n="production.product">Маҳсулот</th>
-                                    <th data-i18n="production.quantity">Миқдор</th>
-                                    <th data-i18n="production.status">Ҳолат</th>
-                                    <th data-i18n="common.actions">Амаллар</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(w => `
-                                    <tr>
-                                        <td>#${w.id}</td>
-                                        <td>${w.worker_name}</td>
-                                        <td>${w.product_name || '-'}</td>
-                                        <td>${w.quantity} ${w.unit}</td>
-                                        <td>
-                                            <span class="status-indicator status-${getWorkStatusClass(w.status)}">
-                                                ${getWorkStatusDisplay(w.status)}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            ${w.status === 'awaiting_confirmation' ? `
-                                                <button class="btn btn-success btn-sm" onclick="confirmWork(${w.id})">
-                                                    <span data-i18n="production.confirm">Тасдиқлаш</span>
-                                                </button>
-                                                <button class="btn btn-danger btn-sm" onclick="rejectWork(${w.id})">
-                                                    <span data-i18n="production.reject">Рад этиш</span>
-                                                </button>
-                                            ` : '-'}
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</div>`;
+            const items = data.results || [];
+
+            document.getElementById('stat-total').textContent = data.count;
+            document.getElementById('stat-pending').textContent = items.filter(w => w.status === 'awaiting_confirmation').length;
+            document.getElementById('stat-completed').textContent = items.filter(w => w.status === 'confirmed').length;
+            document.getElementById('stat-refused').textContent = items.filter(w => w.status === 'rejected').length;
+
+            if (items.length === 0) {
+                showEmpty('Ҳали иш ёзувлари йўқ.');
+                return;
             }
+
+            document.getElementById('production-content').innerHTML = `
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th data-i18n="production.worker">Ишчи</th>
+                                <th data-i18n="production.product">Маҳсулот</th>
+                                <th data-i18n="production.quantity">Миқдор</th>
+                                <th data-i18n="production.status">Ҳолат</th>
+                                <th data-i18n="common.actions">Амаллар</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map(w => `
+                                <tr>
+                                    <td class="text-secondary">#${w.id}</td>
+                                    <td><strong>${w.worker_name || '—'}</strong></td>
+                                    <td>${w.product_name || '—'}</td>
+                                    <td>${w.quantity} ${w.unit}</td>
+                                    <td>${workStatusBadge(w.status)}</td>
+                                    <td>${workActions(w)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${paginationInfo(data.count, items.length)}
+            `;
             window.i18n.applyTranslations();
+        } catch (err) {
+            showError(err);
+        }
+    }
+
+    // === TASK MODAL ===
+    async function openTaskModal() {
+        const modal = document.getElementById('task-modal');
+        modal.style.display = 'flex';
+
+        // Load workers
+        const wSelect = document.getElementById('task-worker');
+        wSelect.innerHTML = '<option value="">Юкланмоқда...</option>';
+        try {
+            const users = await window.api.request('/api/v1/accounts/users/?role=worker');
+            const workers = (users.results || users).filter(u => u.role === 'worker');
+            wSelect.innerHTML = workers.map(u =>
+                `<option value="${u.id}">${u.full_name || u.username}</option>`
+            ).join('');
         } catch (e) {
-            console.error('Failed to load works', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
+            wSelect.innerHTML = '<option value="">Хатолик</option>';
         }
-    }
 
-    function getTaskStatusClass(status) {
-        const classes = {
-            'pending': 'in-progress',
-            'accepted': 'in-progress',
-            'refused': 'cancelled',
-            'in_progress': 'in-progress',
-            'completed': 'ready',
-            'confirmed': 'ready',
-            'rejected': 'cancelled',
-            'cancelled': 'cancelled'
-        };
-        return classes[status] || 'new';
-    }
-
-    function getTaskStatusDisplay(status) {
-        const displays = {
-            'pending': 'Кутилмоқда',
-            'accepted': 'Қабул қилинди',
-            'refused': 'Рад этилди',
-            'in_progress': 'Жараёнда',
-            'completed': 'Бажарилди',
-            'confirmed': 'Тасдиқланди',
-            'rejected': 'Рад этилди',
-            'cancelled': 'Бекор қилинди'
-        };
-        return displays[status] || status;
-    }
-
-    function getWorkStatusBadgeClass(status) {
-        const classes = {
-            'awaiting_confirmation': 'warning',
-            'confirmed': 'success',
-            'rejected': 'danger'
-        };
-        return classes[status] || 'secondary';
-    }
-
-    function getWorkStatusDisplay(status) {
-        const displays = {
-            'awaiting_confirmation': 'Тасдиқлаш кутилмоқда',
-            'confirmed': 'Тасдиқланди',
-            'rejected': 'Рад этилди'
-        };
-        return displays[status] || status;
-    }
-
-    document.getElementById('production-tab').addEventListener('change', (e) => {
-        if (e.target.value === 'tasks') {
-            loadTasks();
-        } else {
-            loadWorks();
-        }
-    });
-
-    window.acceptTask = async (taskId) => {
+        // Load orders
+        const oSelect = document.getElementById('task-order');
+        oSelect.innerHTML = '<option value="">— Ихтиёрий —</option>';
         try {
-            await window.api.request(`/api/v1/production/tasks/${taskId}/accept/`, {
-                method: 'POST'
+            const orders = await window.api.request('/api/v1/orders/');
+            (orders.results || []).forEach(o => {
+                oSelect.innerHTML += `<option value="${o.id}">#${o.id} — ${o.client_name}</option>`;
             });
+        } catch (e) {}
+
+        document.getElementById('task-save-btn').onclick = async () => {
+            const workerId = wSelect.value;
+            if (!workerId) { showToast('Ишчини танланг', 'error'); return; }
+            try {
+                await window.api.request('/api/v1/production/tasks/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        worker: parseInt(workerId),
+                        order: document.getElementById('task-order').value || null,
+                        is_self_assigned: false
+                    })
+                });
+                closeModal();
+                showToast('Вазифа қўшилди', 'success');
+                await loadTasks();
+            } catch (err) {
+                showToast('Хатолик: ' + getErrorMessage(err), 'error');
+            }
+        };
+    }
+
+    function closeModal() {
+        document.getElementById('task-modal').style.display = 'none';
+    }
+
+    // === WORK MODAL ===
+    async function openWorkModal() {
+        const modal = document.getElementById('work-modal');
+        modal.style.display = 'flex';
+
+        // Load products
+        const pSelect = document.getElementById('work-product');
+        pSelect.innerHTML = '<option value="">— Ихтиёрий —</option>';
+        try {
+            const products = await window.api.request('/api/v1/warehouse/finished-products/');
+            (products.results || []).forEach(p => {
+                pSelect.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+            });
+        } catch (e) {}
+
+        document.getElementById('work-save-btn').onclick = async () => {
+            const quantity = document.getElementById('work-quantity').value;
+            const unit = document.getElementById('work-unit').value;
+            if (!quantity) { showToast('Миқдорни киритинг', 'error'); return; }
+            try {
+                const payload = {
+                    quantity: parseFloat(quantity),
+                    unit,
+                    comment: document.getElementById('work-comment').value
+                };
+                const productId = document.getElementById('work-product').value;
+                if (productId) payload.product = parseInt(productId);
+
+                await window.api.request('/api/v1/production/works/', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                closeWorkModal();
+                showToast('Иш ёзуви қўшилди', 'success');
+                await loadWorks();
+            } catch (err) {
+                showToast('Хатолик: ' + getErrorMessage(err), 'error');
+            }
+        };
+    }
+
+    function closeWorkModal() {
+        document.getElementById('work-modal').style.display = 'none';
+    }
+
+    // === ACTION HANDLERS ===
+    window.acceptTask = async (id) => {
+        if (!confirm('Вазифани қабул қилишни тасдиқлайсизми?')) return;
+        try {
+            await window.api.request(`/api/v1/production/tasks/${id}/accept/`, { method: 'POST' });
+            showToast('Вазифа қабул қилинди', 'success');
             await loadTasks();
-        } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to accept task'));
-        }
+        } catch (e) { showToast('Хатолик: ' + getErrorMessage(e), 'error'); }
     };
 
-    window.refuseTask = async (taskId) => {
-        const reason = prompt('Сабабни киритинг:');
+    window.refuseTask = async (id) => {
+        const reason = prompt('Рад этиш сабабини киритинг:');
         if (!reason) return;
-
         try {
-            await window.api.request(`/api/v1/production/tasks/${taskId}/refuse/`, {
-                method: 'POST',
-                body: JSON.stringify({ reason })
+            await window.api.request(`/api/v1/production/tasks/${id}/refuse/`, {
+                method: 'POST', body: JSON.stringify({ reason })
             });
+            showToast('Вазифа рад этилди', 'success');
             await loadTasks();
-        } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to refuse task'));
-        }
+        } catch (e) { showToast('Хатолик: ' + getErrorMessage(e), 'error'); }
     };
 
-    window.confirmWork = async (workId) => {
+    window.confirmWork = async (id) => {
+        if (!confirm('Ишни тасдиқлайсизми?')) return;
         try {
-            await window.api.request(`/api/v1/production/works/${workId}/confirm/`, {
-                method: 'POST'
-            });
+            await window.api.request(`/api/v1/production/works/${id}/confirm/`, { method: 'POST' });
+            showToast('Иш тасдиқланди', 'success');
             await loadWorks();
-        } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to confirm work'));
-        }
+        } catch (e) { showToast('Хатолик: ' + getErrorMessage(e), 'error'); }
     };
 
-    window.rejectWork = async (workId) => {
-        const reason = prompt('Сабабни киритинг:');
+    window.rejectWork = async (id) => {
+        const reason = prompt('Рад этиш сабабини киритинг:');
         if (!reason) return;
-
         try {
-            await window.api.request(`/api/v1/production/works/${workId}/reject/`, {
-                method: 'POST',
-                body: JSON.stringify({ reason })
+            await window.api.request(`/api/v1/production/works/${id}/reject/`, {
+                method: 'POST', body: JSON.stringify({ reason })
             });
+            showToast('Иш рад этилди', 'success');
             await loadWorks();
-        } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to reject work'));
-        }
+        } catch (e) { showToast('Хатолик: ' + getErrorMessage(e), 'error'); }
     };
 
+    // === HELPERS ===
+    function taskStatusBadge(status) {
+        const map = {
+            pending: ['warning', 'Кутилмоқда'],
+            accepted: ['primary', 'Қабул қилинди'],
+            refused: ['danger', 'Рад этилди'],
+            in_progress: ['primary', 'Жараёнда'],
+            completed: ['success', 'Бажарилди'],
+            confirmed: ['success', 'Тасдиқланди'],
+            rejected: ['danger', 'Рад этилди'],
+            cancelled: ['secondary', 'Бекор']
+        };
+        const [cls, label] = map[status] || ['secondary', status];
+        return `<span class="badge badge-${cls}">${label}</span>`;
+    }
+
+    function workStatusBadge(status) {
+        const map = {
+            awaiting_confirmation: ['warning', 'Тасдиқ кутилмоқда'],
+            confirmed: ['success', 'Тасдиқланди'],
+            rejected: ['danger', 'Рад этилди']
+        };
+        const [cls, label] = map[status] || ['secondary', status];
+        return `<span class="badge badge-${cls}">${label}</span>`;
+    }
+
+    function taskActions(t) {
+        const btns = [];
+        if (isWorker) {
+            if (t.status === 'pending') {
+                btns.push(`<button class="btn btn-success btn-sm" onclick="acceptTask(${t.id})">Қабул</button>`);
+                btns.push(`<button class="btn btn-danger btn-sm" onclick="refuseTask(${t.id})">Рад</button>`);
+            }
+        } else if (canManage) {
+            if (t.status === 'completed') {
+                btns.push(`<button class="btn btn-success btn-sm" onclick="confirmWork(${t.id})">Тасдиқ</button>`);
+            }
+        }
+        return btns.join(' ') || '<span class="text-secondary">—</span>';
+    }
+
+    function workActions(w) {
+        const btns = [];
+        if (canManage && w.status === 'awaiting_confirmation') {
+            btns.push(`<button class="btn btn-success btn-sm" onclick="confirmWork(${w.id})">Тасдиқ</button>`);
+            btns.push(`<button class="btn btn-danger btn-sm" onclick="rejectWork(${w.id})">Рад</button>`);
+        }
+        return btns.join(' ') || '<span class="text-secondary">—</span>';
+    }
+
+    function updateStats(total, pending, completed, refused) {
+        document.getElementById('stat-total').textContent = total || 0;
+        document.getElementById('stat-pending').textContent = pending || 0;
+        document.getElementById('stat-completed').textContent = completed || 0;
+        document.getElementById('stat-refused').textContent = refused || 0;
+    }
+
+    function paginationInfo(total, shown) {
+        if (total <= shown) return '';
+        return `<p class="text-sm text-secondary" style="text-align:center;margin-top:8px;">${shown} / ${total} та кўрсатилмоқда</p>`;
+    }
+
+    function showLoading() {
+        document.getElementById('production-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--text-secondary);">
+                <div style="font-size:32px;margin-bottom:8px;">⏳</div>
+                <p>Юкланмоқда...</p>
+            </div>`;
+    }
+
+    function showEmpty(msg) {
+        document.getElementById('production-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--text-secondary);">
+                <div style="font-size:48px;margin-bottom:12px;">📭</div>
+                <p>${msg}</p>
+            </div>`;
+    }
+
+    function showError(err) {
+        document.getElementById('production-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--color-error-600);">
+                <div style="font-size:32px;margin-bottom:8px;">⚠️</div>
+                <p>Маълумотни юклашда хатолик</p>
+            </div>`;
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '—';
+        return new Date(dateStr).toLocaleDateString('uz-UZ');
+    }
+
+    function getErrorMessage(err) {
+        if (err && err.data) {
+            const d = err.data;
+            if (typeof d === 'string') return d;
+            if (d.detail) return d.detail;
+            const vals = Object.values(d).flat();
+            return vals.join(', ');
+        }
+        return String(err);
+    }
+
+    let toastTimer = null;
+    function showToast(msg, type = 'success') {
+        const toast = document.getElementById('toast');
+        const inner = document.getElementById('toast-inner');
+        document.getElementById('toast-msg').textContent = msg;
+        document.getElementById('toast-icon').textContent = type === 'success' ? '✅' : '❌';
+        inner.style.borderLeft = `4px solid ${type === 'success' ? 'var(--color-success-600)' : 'var(--color-error-600)'}`;
+        toast.style.display = 'block';
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
+    // --- Initial load ---
     await loadTasks();
+    window.i18n.applyTranslations();
 });
 </script>
+
+<style>
+.tab-group { display: flex; background: var(--bg-secondary); border-radius: var(--radius-lg); padding: 2px; }
+.tab-btn { background: none; border: none; padding: 6px 14px; border-radius: var(--radius-md); cursor: pointer; font-size: var(--text-sm); color: var(--text-secondary); transition: all var(--transition-fast); }
+.tab-btn.active { background: white; color: var(--text-primary); font-weight: var(--font-semibold); box-shadow: var(--shadow-sm); }
+.tab-btn:hover:not(.active) { color: var(--text-primary); }
+</style>
 {% endblock %}

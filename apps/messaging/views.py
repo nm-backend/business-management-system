@@ -28,6 +28,19 @@ class MessageViewSet(viewsets.ModelViewSet):
             return MessageCreateSerializer
         return MessageSerializer
 
+    def create(self, request, *args, **kwargs):
+        """
+        Создает сообщение и возвращает полные данные включая id.
+
+        Использует MessageCreateSerializer для валидации входных данных,
+        затем возвращает результат через полный MessageSerializer.
+        """
+        input_serializer = MessageCreateSerializer(data=request.data, context={'request': request})
+        input_serializer.is_valid(raise_exception=True)
+        message = input_serializer.save()
+        output_serializer = MessageSerializer(message)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
     def get_queryset(self):
         """
         Возвращает queryset сообщений.

@@ -1,385 +1,430 @@
-{# Шаблон страницы сообщений #}
+{# Шаблон страницы сообщений и уведомлений #}
 {% extends 'base.html' %}
 {% load static %}
 
 {% block content %}
-<div style="display: flex; height: 100vh;">
-    {# Боковая панель навигации #}
-    <aside style="width: 250px; background: var(--dark-color); color: #fff; padding: 20px; display: flex; flex-direction: column;">
-        <h2 style="margin-bottom: 30px; text-align: center;" data-i18n="app.name">SkladPro.Nod</h2>
-
-        <nav style="flex: 1;">
-            <ul style="list-style: none;">
-                <li style="margin-bottom: 10px;"><a href="/" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
-                <li style="margin-bottom: 10px;"><a href="/warehouse/" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
-                <li style="margin-bottom: 10px;"><a href="/finished-products/" style="color: #fff; text-decoration: none;" data-i18n="nav.finished_products">Тайёр маҳсулот</a></li>
-                <li style="margin-bottom: 10px;"><a href="/clients/" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/orders/" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/production/" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
-                <li style="margin-bottom: 10px;"><a href="/finance/" style="color: #fff; text-decoration: none;" data-i18n="nav.finance">Молия</a></li>
-                <li style="margin-bottom: 10px;"><a href="/messages/" style="color: #fff; text-decoration: none; font-weight: bold;" data-i18n="nav.messages">Хабарлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/settings/" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
-            </ul>
+<div class="main-layout">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2 data-i18n="app.name">SkladPro.Nod</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/" class="sidebar-nav-item" data-i18n="nav.dashboard">Бош панел</a>
+            <a href="/warehouse/" class="sidebar-nav-item" data-i18n="nav.raw_materials">Хом ашё омбори</a>
+            <a href="/finished-products/" class="sidebar-nav-item" data-i18n="nav.finished_products">Тайёр маҳсулот</a>
+            <a href="/clients/" class="sidebar-nav-item" data-i18n="nav.clients">Мижозлар</a>
+            <a href="/orders/" class="sidebar-nav-item" data-i18n="nav.orders">Буюртмалар</a>
+            <a href="/production/" class="sidebar-nav-item" data-i18n="nav.production">Ишлаб чиқариш</a>
+            <a href="/finance/" class="sidebar-nav-item" data-i18n="nav.finance">Молия</a>
+            <a href="/messages/" class="sidebar-nav-item active" data-i18n="nav.messages">Хабарлар</a>
+            <a href="/settings/" class="sidebar-nav-item" data-i18n="nav.settings">Созламалар</a>
         </nav>
-
-        {# Информация о пользователе и кнопка выхода #}
-        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #444;">
-            <p id="user-info" style="margin-bottom: 10px;"></p>
-            <button id="logout-btn" class="btn btn-primary" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        <div class="sidebar-footer">
+            <p id="user-info" class="text-sm text-secondary"></p>
+            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width:100%;" data-i18n="auth.logout">Чиқиш</button>
         </div>
     </aside>
 
-    {# Основной контент #}
-    <main style="flex: 1; padding: 20px; overflow-y: auto;">
-        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h1 data-i18n="messages.title">Хабарлар</h1>
-            <div style="display: flex; gap: 10px;">
-                <select id="messages-tab" class="form-control" style="width: auto;">
-                    <option value="inbox" data-i18n="messages.inbox">Келган хабарлар</option>
-                    <option value="sent" data-i18n="messages.sent">Юборилган</option>
-                    <option value="notifications" data-i18n="messages.notifications">Уведомления</option>
-                </select>
+    <div class="main-content">
+        <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <button id="menu-toggle" class="btn btn-ghost btn-sm" style="display:none;" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+                <h1 data-i18n="messages.title">Хабарлар</h1>
+                <span id="unread-badge" class="badge badge-danger" style="display:none;"></span>
             </div>
-        </header>
-        
-        <div id="messages-content">
-            <!-- Содержимое загружается динамически -->
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="tab-group">
+                    <button class="tab-btn active" data-tab="inbox">📥 Кирувчи</button>
+                    <button class="tab-btn" data-tab="sent">📤 Юборилган</button>
+                    <button class="tab-btn" data-tab="notifications">🔔 Билдиришномалар</button>
+                </div>
+                <button id="compose-btn" class="btn btn-primary btn-sm">✏️ Юбориш</button>
+            </div>
         </div>
-    </main>
+
+        <div class="page-content">
+            <div id="messages-content">
+                <div style="text-align:center;padding:48px;color:var(--text-secondary);">
+                    <div style="font-size:32px;margin-bottom:8px;">⏳</div>
+                    <p>Юкланмоқда...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Модал: Написать сообщение #}
+<div id="compose-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeCompose()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:520px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Хабар юбориш</h3>
+            <button class="modal-close" onclick="closeCompose()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="label">Кимга</label>
+                <select id="msg-recipient" class="select" required></select>
+            </div>
+            <div class="form-group">
+                <label class="label">Мавзу</label>
+                <input type="text" id="msg-subject" class="input" placeholder="Хабар мавзуси...">
+            </div>
+            <div class="form-group">
+                <label class="label">Матн</label>
+                <textarea id="msg-content" class="input" rows="5" placeholder="Хабарни ёзинг..." required></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeCompose()">Бекор</button>
+            <button class="btn btn-primary" id="send-btn">📤 Юбориш</button>
+        </div>
+    </div>
+</div>
+
+{# Модал: Просмотр сообщения #}
+<div id="view-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeView()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:560px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="view-subject">Хабар</h3>
+            <button class="modal-close" onclick="closeView()">×</button>
+        </div>
+        <div class="modal-body">
+            <div style="display:flex;gap:16px;margin-bottom:16px;color:var(--text-secondary);font-size:var(--text-sm);">
+                <span>👤 <strong id="view-from"></strong></span>
+                <span>📅 <span id="view-date"></span></span>
+            </div>
+            <div id="view-body" style="line-height:1.7;white-space:pre-wrap;padding:16px;background:var(--bg-secondary);border-radius:var(--radius-lg);"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeView()">Ёпиш</button>
+            <button class="btn btn-primary" id="reply-btn" style="display:none;">↩️ Жавоб бериш</button>
+        </div>
+    </div>
+</div>
+
+{# Toast #}
+<div id="toast" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:none;">
+    <div id="toast-inner" class="card" style="padding:12px 20px;min-width:200px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:8px;">
+        <span id="toast-icon"></span><span id="toast-msg"></span>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/api.js' %}"></script>
-<script src="{% static 'js/i18n.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
     window.api = new APIClient();
     window.i18n = new I18nManager();
     await window.i18n.init();
 
+    // --- Auth ---
+    let currentUser = null;
     try {
-        const user = await window.api.getMe();
-        document.getElementById('user-info').textContent = user.full_name || user.username;
+        currentUser = await window.api.getMe();
+        document.getElementById('user-info').textContent = currentUser.full_name || currentUser.username;
     } catch (e) {
         window.location.href = '/accounts/login/';
         return;
     }
 
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        window.api.logout();
+    document.getElementById('logout-btn').addEventListener('click', () => window.api.logout());
+
+    // Responsive sidebar
+    const mq = window.matchMedia('(max-width:1024px)');
+    const menuToggle = document.getElementById('menu-toggle');
+    const updateMenu = e => { menuToggle.style.display = e.matches ? 'block' : 'none'; };
+    mq.addEventListener('change', updateMenu);
+    updateMenu(mq);
+
+    // --- Tabs ---
+    let currentTab = 'inbox';
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentTab = btn.dataset.tab;
+            loadCurrentTab();
+        });
     });
 
-    async function loadInbox() {
-        const contentEl = document.getElementById('messages-content');
-        
-        try {
-            const data = await window.api.request('/api/v1/messaging/messages/?is_read=false');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="compose-btn" class="btn btn-primary" data-i18n="messages.compose">Хабар юбориш</button>
-                    </div>
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="messages.from">Кимдан</th>
-                                    <th style="padding: 10px;" data-i18n="messages.subject">Мавзу</th>
-                                    <th style="padding: 10px;" data-i18n="messages.date">Сана</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(m => `
-                                    <tr style="border-bottom: 1px solid #eee; ${m.is_unread ? 'font-weight: bold;' : ''}">
-                                        <td style="padding: 10px;">${m.sender_name}</td>
-                                        <td style="padding: 10px;">${m.subject || '(без темы)'}</td>
-                                        <td style="padding: 10px;">${new Date(m.created_at).toLocaleString()}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="viewMessage(${m.id})">
-                                                <span data-i18n="common.view">Кўриш</span>
-                                            </button>
-                                            ${m.is_unread ? `
-                                                <button class="btn btn-sm btn-success" onclick="markRead(${m.id})">
-                                                    <span data-i18n="messages.mark_read">Ўқиш</span>
-                                                </button>
-                                            ` : ''}
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="compose-btn" class="btn btn-primary" data-i18n="messages.compose">Хабар юбориш</button>
-                    </div>
-                    <div class="card" style="padding: 20px; text-align: center;" data-i18n="messages.no_messages">Хабарлар йўқ</div>
-                `;
-            }
-            window.i18n.applyTranslations();
-            
-            const composeBtn = contentEl.querySelector('#compose-btn');
-            if (composeBtn) {
-                composeBtn.addEventListener('click', () => showComposeModal());
-            }
-        } catch (e) {
-            console.error('Failed to load messages', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
-    }
+    document.getElementById('compose-btn').addEventListener('click', openCompose);
 
-    async function loadSent() {
-        const contentEl = document.getElementById('messages-content');
-        
+    // === INBOX ===
+    async function loadInbox() {
+        showLoading();
         try {
             const data = await window.api.request('/api/v1/messaging/messages/');
-            const sentMessages = data.filter(m => m.sender_name === window.api.getMe().username);
-            
-            if (sentMessages.length > 0) {
-                contentEl.innerHTML = `
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="messages.to">Кимга</th>
-                                    <th style="padding: 10px;" data-i18n="messages.subject">Мавзу</th>
-                                    <th style="padding: 10px;" data-i18n="messages.date">Сана</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${sentMessages.map(m => `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <td style="padding: 10px;">${m.recipient_name || 'Группа'}</td>
-                                        <td style="padding: 10px;">${m.subject || '(без темы)'}</td>
-                                        <td style="padding: 10px;">${new Date(m.created_at).toLocaleString()}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="viewMessage(${m.id})">
-                                                <span data-i18n="common.view">Кўриш</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center;" data-i18n="messages.no_messages">Хабарлар йўқ</div>`;
-            }
-            window.i18n.applyTranslations();
-        } catch (e) {
-            console.error('Failed to load sent messages', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
+            const items = (data.results || []).filter(m => m.recipient === currentUser.id);
+            renderMessages(items, data.count, 'inbox');
+        } catch (err) { showError(); }
     }
 
+    // === SENT ===
+    async function loadSent() {
+        showLoading();
+        try {
+            const data = await window.api.request('/api/v1/messaging/messages/');
+            const items = (data.results || []).filter(m => m.sender === currentUser.id);
+            renderMessages(items, items.length, 'sent');
+        } catch (err) { showError(); }
+    }
+
+    // === NOTIFICATIONS ===
     async function loadNotifications() {
-        const contentEl = document.getElementById('messages-content');
-        
+        showLoading();
         try {
             const data = await window.api.request('/api/v1/messaging/notifications/');
-            
-            if (data && data.length > 0) {
-                const unreadCount = data.filter(n => n.is_unread).length;
-                
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <span data-i18n="messages.unread_count">Ўқилмаган: ${unreadCount}</span>
-                        ${unreadCount > 0 ? `
-                            <button id="mark-all-read-btn" class="btn btn-sm btn-success" data-i18n="messages.mark_all_read">Ҳаммасини ўқиш</button>
-                        ` : ''}
-                    </div>
-                    <div class="card">
-                        ${data.map(n => `
-                            <div style="padding: 15px; border-bottom: 1px solid #eee; ${n.is_unread ? 'background-color: #f0f8ff;' : ''}">
-                                <div style="display: flex; justify-content: space-between;">
-                                    <strong>${n.type_display}</strong>
-                                    <small>${new Date(n.created_at).toLocaleString()}</small>
-                                </div>
-                                <div style="margin-top: 5px;">${n.title}</div>
-                                <div style="margin-top: 5px; color: #666;">${n.message}</div>
-                                ${n.is_unread ? `
-                                    <button class="btn btn-sm btn-success" style="margin-top: 10px;" onclick="markNotificationRead(${n.id})">
-                                        <span data-i18n="messages.mark_read">Ўқиш</span>
-                                    </button>
-                                ` : ''}
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center;" data-i18n="messages.no_notifications">Уведомления йўқ</div>`;
+            const items = data.results || [];
+
+            if (items.length === 0) {
+                showEmpty('Билдиришномалар йўқ');
+                return;
             }
+
+            document.getElementById('messages-content').innerHTML = `
+                <div class="table-container">
+                    <table class="table">
+                        <thead><tr>
+                            <th>Хабар</th>
+                            <th>Турт</th>
+                            <th>Сана</th>
+                            <th>Ҳолат</th>
+                        </tr></thead>
+                        <tbody>
+                            ${items.map(n => `
+                                <tr style="${n.is_unread ? 'font-weight:600;background:var(--color-primary-50);' : ''}">
+                                    <td>${n.message_text || n.title || '—'}</td>
+                                    <td><span class="badge badge-secondary">${n.notification_type || '—'}</span></td>
+                                    <td class="text-secondary">${formatDate(n.created_at)}</td>
+                                    <td>
+                                        ${n.is_unread
+                                            ? `<span class="badge badge-warning">Ўқилмаган</span>`
+                                            : `<span class="badge badge-success">Ўқилган</span>`}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${paginationInfo(data.count, items.length)}
+            `;
             window.i18n.applyTranslations();
-            
-            const markAllBtn = contentEl.querySelector('#mark-all-read-btn');
-            if (markAllBtn) {
-                markAllBtn.addEventListener('click', () => markAllNotificationsRead());
+
+            // Mark all as read
+            const unread = items.filter(n => n.is_unread);
+            for (const n of unread) {
+                window.api.request(`/api/v1/messaging/notifications/${n.id}/mark_read/`, { method: 'POST' }).catch(() => {});
             }
-        } catch (e) {
-            console.error('Failed to load notifications', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
+            updateUnreadBadge();
+        } catch (err) { showError(); }
     }
 
-    async function showComposeModal() {
-        let users = [];
-        try {
-            users = await window.api.request('/api/v1/accounts/users/');
-        } catch (e) {
-            console.error('Failed to load users', e);
+    function renderMessages(items, total, type) {
+        if (items.length === 0) {
+            showEmpty(type === 'inbox' ? 'Кирувчи хабарлар йўқ' : 'Юборилган хабарлар йўқ');
+            return;
         }
 
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.style.display = 'block';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 data-i18n="messages.compose">Хабар юбориш</h3>
-                    <button class="close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <form id="compose-form">
-                        <div class="form-group">
-                            <label data-i18n="messages.to">Кимга</label>
-                            <select name="recipient" class="form-control">
-                                <option value="">Группа (барча)</option>
-                                ${users.map(u => `<option value="${u.id}">${u.username} (${u.full_name || ''}) - ${u.role}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="messages.subject">Мавзу</label>
-                            <input type="text" name="subject" class="form-control">
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="messages.content">Мазмун</label>
-                            <textarea name="content" class="form-control" rows="5" required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary" data-i18n="messages.send">Юбориш</button>
-                    </form>
-                </div>
+        document.getElementById('messages-content').innerHTML = `
+            <div class="table-container">
+                <table class="table">
+                    <thead><tr>
+                        <th>${type === 'inbox' ? 'Кимдан' : 'Кимга'}</th>
+                        <th>Мавзу</th>
+                        <th>Сана</th>
+                        <th>Ҳолат</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody>
+                        ${items.map(m => `
+                            <tr style="${!m.is_read && type === 'inbox' ? 'font-weight:600;' : ''}">
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:6px;">
+                                        ${!m.is_read && type === 'inbox' ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--color-primary-600);display:inline-block;flex-shrink:0;"></span>' : ''}
+                                        ${type === 'inbox' ? (m.sender_name || '—') : (m.recipient_name || '—')}
+                                    </div>
+                                </td>
+                                <td>${m.subject || '(мавзусиз)'}</td>
+                                <td class="text-secondary">${formatDate(m.created_at)}</td>
+                                <td>
+                                    ${type === 'inbox' && !m.is_read
+                                        ? '<span class="badge badge-primary">Янги</span>'
+                                        : '<span class="badge badge-secondary">Ўқилган</span>'}
+                                </td>
+                                <td>
+                                    <button class="btn btn-ghost btn-sm" onclick="viewMessage(${m.id}, '${type}')">Кўриш</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
             </div>
+            ${paginationInfo(total, items.length)}
         `;
-
-        document.body.appendChild(modal);
         window.i18n.applyTranslations();
+    }
 
-        modal.querySelector('.close').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
-        });
+    // === COMPOSE ===
+    async function openCompose(replyTo = null) {
+        const modal = document.getElementById('compose-modal');
+        modal.style.display = 'flex';
 
-        modal.querySelector('#compose-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            
-            if (!data.recipient) {
-                data.is_group = true;
-                delete data.recipient;
+        const rSelect = document.getElementById('msg-recipient');
+        rSelect.innerHTML = '<option value="">Юкланмоқда...</option>';
+        document.getElementById('msg-subject').value = replyTo ? ('Re: ' + (replyTo.subject || '')) : '';
+        document.getElementById('msg-content').value = '';
+
+        try {
+            const users = await window.api.request('/api/v1/accounts/users/');
+            const others = (users.results || []).filter(u => u.id !== currentUser.id);
+            rSelect.innerHTML = others.map(u =>
+                `<option value="${u.id}">${u.full_name || u.username} (${u.role})</option>`
+            ).join('') || '<option value="">Фойдаланувчи йўқ</option>';
+            if (replyTo) {
+                rSelect.value = String(replyTo.sender);
             }
-            
+        } catch (e) { rSelect.innerHTML = '<option value="">Хатолик</option>'; }
+
+        document.getElementById('send-btn').onclick = async () => {
+            const recipient = rSelect.value;
+            const content = document.getElementById('msg-content').value.trim();
+            if (!recipient) { showToast('Қабул қилувчини танланг', 'error'); return; }
+            if (!content) { showToast('Хабар матнини ёзинг', 'error'); return; }
             try {
                 await window.api.request('/api/v1/messaging/messages/', {
                     method: 'POST',
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({
+                        recipient: parseInt(recipient),
+                        subject: document.getElementById('msg-subject').value,
+                        content,
+                        is_group: false
+                    })
                 });
-                modal.remove();
-                await loadInbox();
-            } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to send message'));
+                closeCompose();
+                showToast('Хабар юборилди ✉️', 'success');
+                if (currentTab === 'sent') loadSent();
+            } catch (err) { showToast('Хатолик: ' + getErrorMessage(err), 'error'); }
+        };
+    }
+
+    function closeCompose() { document.getElementById('compose-modal').style.display = 'none'; }
+
+    // === VIEW MESSAGE ===
+    let allMessages = [];
+    window.viewMessage = async (id, type) => {
+        try {
+            // Fetch all messages to find this one
+            const data = await window.api.request('/api/v1/messaging/messages/');
+            const msg = (data.results || []).find(m => m.id === id);
+            if (!msg) return;
+
+            document.getElementById('view-subject').textContent = msg.subject || '(мавзусиз)';
+            document.getElementById('view-from').textContent = type === 'inbox' ? (msg.sender_name || '—') : ('→ ' + (msg.recipient_name || '—'));
+            document.getElementById('view-date').textContent = formatDate(msg.created_at);
+            document.getElementById('view-body').textContent = msg.content;
+
+            const replyBtn = document.getElementById('reply-btn');
+            if (type === 'inbox') {
+                replyBtn.style.display = 'inline-flex';
+                replyBtn.onclick = () => { closeView(); openCompose(msg); };
+            } else {
+                replyBtn.style.display = 'none';
             }
-        });
-    }
 
-    async function viewMessage(messageId) {
+            document.getElementById('view-modal').style.display = 'flex';
+
+            // Mark as read
+            if (!msg.is_read && type === 'inbox') {
+                window.api.request(`/api/v1/messaging/messages/${id}/mark_read/`, { method: 'POST' })
+                    .catch(() => {});
+            }
+        } catch (err) {}
+    };
+
+    function closeView() { document.getElementById('view-modal').style.display = 'none'; }
+
+    // === UNREAD BADGE ===
+    async function updateUnreadBadge() {
         try {
-            const message = await window.api.request(`/api/v1/messaging/messages/${messageId}/`);
-            
-            const modal = document.createElement('div');
-            modal.className = 'modal';
-            modal.style.display = 'block';
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3>${message.subject || '(без темы)'}</h3>
-                        <button class="close">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <p><strong data-i18n="messages.from">Кимдан:</strong> ${message.sender_name}</p>
-                        <p><strong data-i18n="messages.to">Кимга:</strong> ${message.recipient_name || 'Группа'}</p>
-                        <p><strong data-i18n="messages.date">Сана:</strong> ${new Date(message.created_at).toLocaleString()}</p>
-                        <hr style="margin: 15px 0;">
-                        <div style="white-space: pre-wrap;">${message.content}</div>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
-
-            modal.querySelector('.close').addEventListener('click', () => modal.remove());
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.remove();
-            });
-        } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to load message'));
-        }
+            const data = await window.api.request('/api/v1/messaging/messages/');
+            const unread = (data.results || []).filter(m => !m.is_read && m.recipient === currentUser.id).length;
+            const badge = document.getElementById('unread-badge');
+            if (unread > 0) { badge.textContent = unread; badge.style.display = 'inline-flex'; }
+            else { badge.style.display = 'none'; }
+        } catch (e) {}
     }
 
-    async function markRead(messageId) {
-        try {
-            await window.api.request(`/api/v1/messaging/messages/${messageId}/mark_read/`, {
-                method: 'POST'
-            });
-            await loadInbox();
-        } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to mark message as read'));
-        }
+    // === HELPERS ===
+    function loadCurrentTab() {
+        if (currentTab === 'inbox') loadInbox();
+        else if (currentTab === 'sent') loadSent();
+        else loadNotifications();
     }
 
-    async function markNotificationRead(notificationId) {
-        try {
-            await window.api.request(`/api/v1/messaging/notifications/${notificationId}/mark_read/`, {
-                method: 'POST'
-            });
-            await loadNotifications();
-        } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to mark notification as read'));
-        }
+    function formatDate(d) {
+        if (!d) return '—';
+        const dt = new Date(d);
+        const now = new Date();
+        const diff = now - dt;
+        if (diff < 60000) return 'Ҳозир';
+        if (diff < 3600000) return Math.floor(diff / 60000) + ' дақиқа олдин';
+        if (diff < 86400000) return Math.floor(diff / 3600000) + ' соат олдин';
+        return dt.toLocaleDateString('uz-UZ') + ' ' + dt.toLocaleTimeString('uz-UZ', { hour:'2-digit', minute:'2-digit' });
     }
 
-    async function markAllNotificationsRead() {
-        try {
-            await window.api.request('/api/v1/messaging/notifications/mark_all_read/', {
-                method: 'POST'
-            });
-            await loadNotifications();
-        } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to mark all notifications as read'));
+    function paginationInfo(total, shown) {
+        if (total <= shown) return '';
+        return `<p class="text-sm text-secondary" style="text-align:center;margin-top:8px;">${shown} / ${total} та кўрсатилмоқда</p>`;
+    }
+    function showLoading() {
+        document.getElementById('messages-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--text-secondary);">
+                <div style="font-size:32px;margin-bottom:8px;">⏳</div><p>Юкланмоқда...</p>
+            </div>`;
+    }
+    function showEmpty(msg) {
+        document.getElementById('messages-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--text-secondary);">
+                <div style="font-size:48px;margin-bottom:12px;">📭</div><p>${msg}</p>
+            </div>`;
+    }
+    function showError() {
+        document.getElementById('messages-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--color-error-600);">
+                <div style="font-size:32px;margin-bottom:8px;">⚠️</div>
+                <p>Маълумотни юклашда хатолик</p>
+            </div>`;
+    }
+    function getErrorMessage(err) {
+        if (err && err.data) {
+            const d = err.data;
+            if (typeof d === 'string') return d;
+            if (d.detail) return d.detail;
+            return Object.values(d).flat().join(', ');
         }
+        return String(err);
+    }
+    let toastTimer = null;
+    function showToast(msg, type = 'success') {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').textContent = msg;
+        document.getElementById('toast-icon').textContent = type === 'success' ? '✅' : '❌';
+        document.getElementById('toast-inner').style.borderLeft = `4px solid ${type === 'success' ? 'var(--color-success-600)' : 'var(--color-error-600)'}`;
+        toast.style.display = 'block';
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
     }
 
-    document.getElementById('messages-tab').addEventListener('change', (e) => {
-        if (e.target.value === 'inbox') {
-            loadInbox();
-        } else if (e.target.value === 'sent') {
-            loadSent();
-        } else {
-            loadNotifications();
-        }
-    });
-
-    await loadInbox();
+    // --- Init ---
+    await Promise.all([loadInbox(), updateUnreadBadge()]);
+    window.i18n.applyTranslations();
 });
 </script>
+
+<style>
+.tab-group { display:flex;background:var(--bg-secondary);border-radius:var(--radius-lg);padding:2px; }
+.tab-btn { background:none;border:none;padding:6px 14px;border-radius:var(--radius-md);cursor:pointer;font-size:var(--text-sm);color:var(--text-secondary);transition:all var(--transition-fast); }
+.tab-btn.active { background:white;color:var(--text-primary);font-weight:var(--font-semibold);box-shadow:var(--shadow-sm); }
+.tab-btn:hover:not(.active) { color:var(--text-primary); }
+</style>
 {% endblock %}

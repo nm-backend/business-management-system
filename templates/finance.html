@@ -1,416 +1,638 @@
-{# Шаблон страницы финансов #}
+{# Шаблон страницы финансов — доходы, расходы, выплаты, ставки #}
 {% extends 'base.html' %}
 {% load static %}
 
 {% block content %}
-<div style="display: flex; height: 100vh;">
-    {# Боковая панель навигации #}
-    <aside style="width: 250px; background: var(--dark-color); color: #fff; padding: 20px; display: flex; flex-direction: column;">
-        <h2 style="margin-bottom: 30px; text-align: center;" data-i18n="app.name">SkladPro.Nod</h2>
-
-        <nav style="flex: 1;">
-            <ul style="list-style: none;">
-                <li style="margin-bottom: 10px;"><a href="/" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
-                <li style="margin-bottom: 10px;"><a href="/warehouse/" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
-                <li style="margin-bottom: 10px;"><a href="/finished-products/" style="color: #fff; text-decoration: none;" data-i18n="nav.finished_products">Тайёр маҳсулот</a></li>
-                <li style="margin-bottom: 10px;"><a href="/clients/" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/orders/" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/production/" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
-                <li style="margin-bottom: 10px;"><a href="/finance/" style="color: #fff; text-decoration: none; font-weight: bold;" data-i18n="nav.finance">Молия</a></li>
-                <li style="margin-bottom: 10px;"><a href="/messages/" style="color: #fff; text-decoration: none;" data-i18n="nav.messages">Хабарлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/settings/" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
-            </ul>
+<div class="main-layout">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2 data-i18n="app.name">SkladPro.Nod</h2>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/" class="sidebar-nav-item" data-i18n="nav.dashboard">Бош панел</a>
+            <a href="/warehouse/" class="sidebar-nav-item" data-i18n="nav.raw_materials">Хом ашё омбори</a>
+            <a href="/finished-products/" class="sidebar-nav-item" data-i18n="nav.finished_products">Тайёр маҳсулот</a>
+            <a href="/clients/" class="sidebar-nav-item" data-i18n="nav.clients">Мижозлар</a>
+            <a href="/orders/" class="sidebar-nav-item" data-i18n="nav.orders">Буюртмалар</a>
+            <a href="/production/" class="sidebar-nav-item" data-i18n="nav.production">Ишлаб чиқариш</a>
+            <a href="/finance/" class="sidebar-nav-item active" data-i18n="nav.finance">Молия</a>
+            <a href="/messages/" class="sidebar-nav-item" data-i18n="nav.messages">Хабарлар</a>
+            <a href="/settings/" class="sidebar-nav-item" data-i18n="nav.settings">Созламалар</a>
         </nav>
-
-        {# Информация о пользователе и кнопка выхода #}
-        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #444;">
-            <p id="user-info" style="margin-bottom: 10px;"></p>
-            <button id="logout-btn" class="btn btn-primary" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        <div class="sidebar-footer">
+            <p id="user-info" class="text-sm text-secondary"></p>
+            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width:100%;" data-i18n="auth.logout">Чиқиш</button>
         </div>
     </aside>
 
-    {# Основной контент #}
-    <main style="flex: 1; padding: 20px; overflow-y: auto;">
-        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h1 data-i18n="finance.title">Молия</h1>
-            <div style="display: flex; gap: 10px;">
-                <select id="finance-tab" class="form-control" style="width: auto;">
-                    <option value="expenses" data-i18n="finance.expenses">Харажатлар</option>
-                    <option value="payments" data-i18n="finance.worker_payments">Ишчи тўловлари</option>
-                    <option value="rates" data-i18n="finance.labor_rates">Иш ҳақи ставкалари</option>
+    <div class="main-content">
+        <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <button id="menu-toggle" class="btn btn-ghost btn-sm" style="display:none;" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+                <h1 data-i18n="finance.title">Молия</h1>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="tab-group" id="finance-tabs">
+                    <button class="tab-btn active" data-tab="expenses" data-i18n="finance.expenses">Харажатлар</button>
+                    <button class="tab-btn" data-tab="payments" data-i18n="finance.worker_payments">Тўловлар</button>
+                    <button class="tab-btn" data-tab="rates" data-i18n="finance.labor_rates">Ставкалар</button>
+                </div>
+                <button id="add-btn" class="btn btn-primary btn-sm" style="display:none;">+ Қўшиш</button>
+            </div>
+        </div>
+
+        <div class="page-content">
+            <div class="stats-grid" style="margin-bottom:24px;">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#e8f5e9;color:#388e3c;">💰</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Жами харажатлар</div>
+                        <div class="stat-value" id="stat-total-expenses">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#e3f2fd;color:#1976d2;">👷</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Ишчи тўловлари</div>
+                        <div class="stat-value" id="stat-total-payments">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fff3e0;color:#f57c00;">📊</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Ставкалар сони</div>
+                        <div class="stat-value" id="stat-rates-count">—</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fce4ec;color:#c62828;">📉</div>
+                    <div class="stat-content">
+                        <div class="stat-label">Жами чиқим</div>
+                        <div class="stat-value" id="stat-total-out">—</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="finance-content">
+                <div style="text-align:center;padding:48px;color:var(--text-secondary);">
+                    <div style="font-size:32px;margin-bottom:8px;">⏳</div>
+                    <p>Юкланмоқда...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Модал: Добавить расход #}
+<div id="expense-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeExpenseModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="expense-modal-title">Янги харажат</h3>
+            <button class="modal-close" onclick="closeExpenseModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="label">Категория</label>
+                <select id="exp-category" class="select" required>
+                    <option value="rent">Ижара</option>
+                    <option value="electricity">Электр энергия</option>
+                    <option value="water">Сув</option>
+                    <option value="transport">Транспорт</option>
+                    <option value="delivery">Етказиб бериш</option>
+                    <option value="taxes">Солиқлар</option>
+                    <option value="salary">Ишчилар иш ҳақи</option>
+                    <option value="advance">Ишчиларга аванс</option>
+                    <option value="equipment_repair">Ускуна таъмири</option>
+                    <option value="tools">Асбоб сотиб олиш</option>
+                    <option value="consumables">Сарфлаш материаллари</option>
+                    <option value="material_loss">Материал йўқотиш</option>
+                    <option value="defect">Брак</option>
+                    <option value="unforeseen">Кутилмаган харажатлар</option>
+                    <option value="owner_withdrawal">Эгасининг шахсий чиқими</option>
+                    <option value="other">Бошқа</option>
                 </select>
             </div>
-        </header>
-        
-        <div id="finance-content">
-            <!-- Содержимое загружается динамически -->
+            <div class="form-group">
+                <label class="label">Сумма (сўм)</label>
+                <input type="number" id="exp-amount" class="input" step="0.01" min="0.01" required>
+            </div>
+            <div class="form-group">
+                <label class="label">Сана</label>
+                <input type="date" id="exp-date" class="input" required>
+            </div>
+            <div class="form-group">
+                <label class="label">Тўлов усули</label>
+                <select id="exp-payment-method" class="select">
+                    <option value="cash">Нақд</option>
+                    <option value="bank">Банк</option>
+                    <option value="card">Карта</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="label">Изоҳ</label>
+                <textarea id="exp-comment" class="input" rows="2"></textarea>
+            </div>
         </div>
-    </main>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeExpenseModal()">Бекор</button>
+            <button class="btn btn-primary" id="exp-save-btn">Сақлаш</button>
+        </div>
+    </div>
+</div>
+
+{# Модал: Добавить выплату #}
+<div id="payment-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closePaymentModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Ишчига тўлов</h3>
+            <button class="modal-close" onclick="closePaymentModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="label">Ишчи</label>
+                <select id="pay-worker" class="select" required></select>
+            </div>
+            <div class="form-group">
+                <label class="label">Сумма (сўм)</label>
+                <input type="number" id="pay-amount" class="input" step="0.01" min="0.01" required>
+            </div>
+            <div class="form-group">
+                <label class="label">Тўлов санаси</label>
+                <input type="date" id="pay-date" class="input" required>
+            </div>
+            <div class="form-group">
+                <label class="label">Тўлов тури</label>
+                <select id="pay-type" class="select">
+                    <option value="salary">Иш ҳақи</option>
+                    <option value="advance">Аванс</option>
+                    <option value="bonus">Мукофот</option>
+                    <option value="other">Бошқа</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="label">Изоҳ</label>
+                <textarea id="pay-comment" class="input" rows="2"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closePaymentModal()">Бекор</button>
+            <button class="btn btn-primary" id="pay-save-btn">Сақлаш</button>
+        </div>
+    </div>
+</div>
+
+{# Модал: Добавить ставку #}
+<div id="rate-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeRateModal()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;">
+        <div class="modal-header">
+            <h3 class="modal-title">Ставка қўшиш</h3>
+            <button class="modal-close" onclick="closeRateModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="label">Маҳсулот</label>
+                <select id="rate-product" class="select" required></select>
+            </div>
+            <div class="form-group">
+                <label class="label">Амалиёт</label>
+                <select id="rate-operation" class="select">
+                    <option value="cutting">Кесиш</option>
+                    <option value="polishing">Сийлаш</option>
+                    <option value="mounting">Монтаж</option>
+                    <option value="packing">Қутлаш</option>
+                    <option value="other">Бошқа</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="label">Ставка (сўм/бирлик)</label>
+                <input type="number" id="rate-amount" class="input" step="0.01" min="0.01" required>
+            </div>
+            <div class="form-group">
+                <label class="label">Ўлчов бирлиги</label>
+                <select id="rate-unit" class="select">
+                    <option value="sht">Дона</option>
+                    <option value="m2">м²</option>
+                    <option value="m3">м³</option>
+                    <option value="kg">кг</option>
+                    <option value="m">метр</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeRateModal()">Бекор</button>
+            <button class="btn btn-primary" id="rate-save-btn">Сақлаш</button>
+        </div>
+    </div>
+</div>
+
+{# Toast #}
+<div id="toast" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:none;">
+    <div id="toast-inner" class="card" style="padding:12px 20px;min-width:200px;box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:8px;">
+        <span id="toast-icon"></span><span id="toast-msg"></span>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/api.js' %}"></script>
-<script src="{% static 'js/i18n.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
     window.api = new APIClient();
     window.i18n = new I18nManager();
     await window.i18n.init();
 
+    // --- Auth & role check ---
+    let currentUser = null;
     try {
-        const user = await window.api.getMe();
-        document.getElementById('user-info').textContent = user.full_name || user.username;
-        
-        if (!user.is_owner) {
-            document.getElementById('finance-content').innerHTML = `
-                <div class="card" style="padding: 40px; text-align: center;">
-                    <h2 data-i18n="finance.access_denied">Кириш таъқиланди</h2>
-                    <p data-i18n="finance.owner_only">Бу саҳифа фақат эгаси учун</p>
-                </div>
-            `;
-            window.i18n.applyTranslations();
-            return;
-        }
+        currentUser = await window.api.getMe();
+        document.getElementById('user-info').textContent = currentUser.full_name || currentUser.username;
     } catch (e) {
         window.location.href = '/accounts/login/';
         return;
     }
 
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        window.api.logout();
+    document.getElementById('logout-btn').addEventListener('click', () => window.api.logout());
+
+    // Responsive sidebar
+    const mq = window.matchMedia('(max-width:1024px)');
+    const menuToggle = document.getElementById('menu-toggle');
+    const updateMenu = e => { menuToggle.style.display = e.matches ? 'block' : 'none'; };
+    mq.addEventListener('change', updateMenu);
+    updateMenu(mq);
+
+    // Only owner can see finance
+    if (!currentUser.is_owner) {
+        document.getElementById('finance-content').innerHTML = `
+            <div style="text-align:center;padding:64px;">
+                <div style="font-size:48px;margin-bottom:16px;">🔒</div>
+                <h3 style="color:var(--text-primary);margin-bottom:8px;">Кириш таъқиқланди</h3>
+                <p style="color:var(--text-secondary);">Молия маълумотлари фақат эгаси учун</p>
+            </div>`;
+        document.getElementById('add-btn').style.display = 'none';
+        document.getElementById('finance-tabs').style.display = 'none';
+        window.i18n.applyTranslations();
+        return;
+    }
+
+    // --- Tabs ---
+    let currentTab = 'expenses';
+    const addBtn = document.getElementById('add-btn');
+    addBtn.style.display = 'inline-flex';
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentTab = btn.dataset.tab;
+            loadCurrentTab();
+        });
     });
 
+    addBtn.addEventListener('click', () => {
+        if (currentTab === 'expenses') openExpenseModal();
+        else if (currentTab === 'payments') openPaymentModal();
+        else openRateModal();
+    });
+
+    function loadCurrentTab() {
+        if (currentTab === 'expenses') loadExpenses();
+        else if (currentTab === 'payments') loadPayments();
+        else loadRates();
+    }
+
+    // --- Load stats on init ---
+    async function loadStats() {
+        try {
+            const [exp, pay, rates] = await Promise.all([
+                window.api.request('/api/v1/finance/expenses/'),
+                window.api.request('/api/v1/finance/worker-payments/'),
+                window.api.request('/api/v1/finance/labor-rates/')
+            ]);
+            const expTotal = (exp.results || []).reduce((s, e) => s + parseFloat(e.amount), 0);
+            const payTotal = (pay.results || []).reduce((s, p) => s + parseFloat(p.amount), 0);
+            document.getElementById('stat-total-expenses').textContent = fmtAmount(expTotal);
+            document.getElementById('stat-total-payments').textContent = fmtAmount(payTotal);
+            document.getElementById('stat-rates-count').textContent = rates.count || 0;
+            document.getElementById('stat-total-out').textContent = fmtAmount(expTotal + payTotal);
+        } catch (e) {}
+    }
+
+    // === EXPENSES ===
     async function loadExpenses() {
-        const contentEl = document.getElementById('finance-content');
-        
+        showLoading();
         try {
             const data = await window.api.request('/api/v1/finance/expenses/');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-expense-btn" class="btn btn-primary" data-i18n="finance.add_expense">Харажат қўшиш</button>
-                    </div>
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="finance.category">Категория</th>
-                                    <th style="padding: 10px;" data-i18n="finance.amount">Сумма</th>
-                                    <th style="padding: 10px;" data-i18n="finance.date">Сана</th>
-                                    <th style="padding: 10px;" data-i18n="finance.comment">Изоҳ</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
+            const items = data.results || [];
+
+            if (items.length === 0) {
+                showEmpty('Харажатлар йўқ. Биринчи харажатни қўшинг.');
+                return;
+            }
+
+            document.getElementById('finance-content').innerHTML = `
+                <div class="table-container">
+                    <table class="table">
+                        <thead><tr>
+                            <th>#</th>
+                            <th>Категория</th>
+                            <th>Сумма</th>
+                            <th>Сана</th>
+                            <th>Тўлов усули</th>
+                            <th>Изоҳ</th>
+                            <th>Кім қўшди</th>
+                        </tr></thead>
+                        <tbody>
+                            ${items.map(e => `
+                                <tr>
+                                    <td class="text-secondary">#${e.id}</td>
+                                    <td><span class="badge badge-secondary">${getCategoryDisplay(e.category)}</span></td>
+                                    <td><strong style="color:var(--color-error-600);">${fmtAmount(e.amount)}</strong></td>
+                                    <td>${e.date}</td>
+                                    <td>${getPaymentMethodDisplay(e.payment_method)}</td>
+                                    <td>${e.comment || '—'}</td>
+                                    <td class="text-secondary">${e.created_by_name || '—'}</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(e => `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <td style="padding: 10px;">${getCategoryDisplay(e.category)}</td>
-                                        <td style="padding: 10px; font-weight: bold;">${e.amount}</td>
-                                        <td style="padding: 10px;">${e.date}</td>
-                                        <td style="padding: 10px;">${e.comment || '-'}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="viewExpense(${e.id})">
-                                                <span data-i18n="common.view">Кўриш</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-expense-btn" class="btn btn-primary" data-i18n="finance.add_expense">Харажат қўшиш</button>
-                    </div>
-                    <div class="card" style="padding: 20px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</div>
-                `;
-            }
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${paginationInfo(data.count, items.length)}
+            `;
             window.i18n.applyTranslations();
-            
-            const addBtn = contentEl.querySelector('#add-expense-btn');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => showAddExpenseModal());
-            }
-        } catch (e) {
-            console.error('Failed to load expenses', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
+        } catch (err) { showError(); }
     }
 
+    // === PAYMENTS ===
     async function loadPayments() {
-        const contentEl = document.getElementById('finance-content');
-        
+        showLoading();
         try {
             const data = await window.api.request('/api/v1/finance/worker-payments/');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-payment-btn" class="btn btn-primary" data-i18n="finance.add_payment">Тўлов қўшиш</button>
-                    </div>
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="finance.worker">Ишчи</th>
-                                    <th style="padding: 10px;" data-i18n="finance.amount">Сумма</th>
-                                    <th style="padding: 10px;" data-i18n="finance.payment_date">Тўлов санаси</th>
-                                    <th style="padding: 10px;" data-i18n="finance.payment_type">Тўлов тури</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
+            const items = data.results || [];
+
+            if (items.length === 0) {
+                showEmpty('Ишчи тўловлари йўқ.');
+                return;
+            }
+
+            document.getElementById('finance-content').innerHTML = `
+                <div class="table-container">
+                    <table class="table">
+                        <thead><tr>
+                            <th>#</th>
+                            <th>Ишчи</th>
+                            <th>Сумма</th>
+                            <th>Тўлов санаси</th>
+                            <th>Тўлов тури</th>
+                            <th>Изоҳ</th>
+                        </tr></thead>
+                        <tbody>
+                            ${items.map(p => `
+                                <tr>
+                                    <td class="text-secondary">#${p.id}</td>
+                                    <td><strong>${p.worker_name || '—'}</strong></td>
+                                    <td><strong style="color:var(--color-primary-600);">${fmtAmount(p.amount)}</strong></td>
+                                    <td>${p.payment_date}</td>
+                                    <td>${getPaymentTypeDisplay(p.payment_type)}</td>
+                                    <td>${p.comment || '—'}</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(p => `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <td style="padding: 10px;">${p.worker_name}</td>
-                                        <td style="padding: 10px; font-weight: bold;">${p.amount}</td>
-                                        <td style="padding: 10px;">${p.payment_date}</td>
-                                        <td style="padding: 10px;">${getPaymentTypeDisplay(p.payment_type)}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="viewPayment(${p.id})">
-                                                <span data-i18n="common.view">Кўриш</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-payment-btn" class="btn btn-primary" data-i18n="finance.add_payment">Тўлов қўшиш</button>
-                    </div>
-                    <div class="card" style="padding: 20px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</div>
-                `;
-            }
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                ${paginationInfo(data.count, items.length)}
+            `;
             window.i18n.applyTranslations();
-            
-            const addBtn = contentEl.querySelector('#add-payment-btn');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => showAddPaymentModal());
-            }
-        } catch (e) {
-            console.error('Failed to load payments', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
+        } catch (err) { showError(); }
     }
 
+    // === RATES ===
     async function loadRates() {
-        const contentEl = document.getElementById('finance-content');
-        
+        showLoading();
         try {
             const data = await window.api.request('/api/v1/finance/labor-rates/');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-rate-btn" class="btn btn-primary" data-i18n="finance.add_rate">Ставка қўшиш</button>
-                    </div>
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="finance.product">Маҳсулот</th>
-                                    <th style="padding: 10px;" data-i18n="finance.operation">Амалиёт</th>
-                                    <th style="padding: 10px;" data-i18n="finance.rate">Ставка</th>
-                                    <th style="padding: 10px;" data-i18n="finance.unit">Бирлик</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
+            const items = data.results || [];
+
+            if (items.length === 0) {
+                showEmpty('Ставкалар йўқ. Биринчи ставкани қўшинг.');
+                return;
+            }
+
+            document.getElementById('finance-content').innerHTML = `
+                <div class="table-container">
+                    <table class="table">
+                        <thead><tr>
+                            <th>#</th>
+                            <th>Маҳсулот</th>
+                            <th>Амалиёт</th>
+                            <th>Ставка</th>
+                            <th>Бирлик</th>
+                        </tr></thead>
+                        <tbody>
+                            ${items.map(r => `
+                                <tr>
+                                    <td class="text-secondary">#${r.id}</td>
+                                    <td><strong>${r.product_name || '—'}</strong></td>
+                                    <td>${getOperationDisplay(r.operation)}</td>
+                                    <td><strong>${fmtAmount(r.rate_per_unit)}</strong></td>
+                                    <td>${r.unit}</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(r => `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <td style="padding: 10px;">${r.product_name}</td>
-                                        <td style="padding: 10px;">${getOperationDisplay(r.operation)}</td>
-                                        <td style="padding: 10px; font-weight: bold;">${r.rate_per_unit}</td>
-                                        <td style="padding: 10px;">${r.unit}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="viewRate(${r.id})">
-                                                <span data-i18n="common.view">Кўриш</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-rate-btn" class="btn btn-primary" data-i18n="finance.add_rate">Ставка қўшиш</button>
-                    </div>
-                    <div class="card" style="padding: 20px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</div>
-                `;
-            }
-            window.i18n.applyTranslations();
-            
-            const addBtn = contentEl.querySelector('#add-rate-btn');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => showAddRateModal());
-            }
-        } catch (e) {
-            console.error('Failed to load rates', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
-    }
-
-    function getCategoryDisplay(category) {
-        const displays = {
-            'rent': 'Ижара',
-            'electricity': 'Электр энергия',
-            'water': 'Сув',
-            'transport': 'Транспорт',
-            'delivery': 'Етказиб бериш',
-            'taxes': 'Солиқлар',
-            'salary': 'Ишчилар иш ҳақи',
-            'advance': 'Ишчиларга аванс',
-            'equipment_repair': 'Ускуна таъмири',
-            'tools': 'Асбоб сотиб олиш',
-            'consumables': 'Сарфлаш материаллари',
-            'material_loss': 'Материал йўқотиш',
-            'defect': 'Брак',
-            'unforeseen': 'Кутилмаган харажатлар',
-            'owner_withdrawal': 'Эгасининг шахсий чиқими',
-            'worker_debt': 'Ишчилар қарзлари',
-            'client_refund': 'Мижозларга қайтариш',
-            'other': 'Бошқа'
-        };
-        return displays[category] || category;
-    }
-
-    function getPaymentTypeDisplay(paymentType) {
-        const displays = {
-            'salary': 'Иш ҳақи',
-            'advance': 'Аванс',
-            'bonus': 'Мукофот',
-            'other': 'Бошқа'
-        };
-        return displays[paymentType] || paymentType;
-    }
-
-    function getOperationDisplay(operation) {
-        const displays = {
-            'cutting': 'Кесиш',
-            'polishing': 'Сийлаш',
-            'mounting': 'Монтаж',
-            'packing': 'Қутлаш',
-            'other': 'Бошқа'
-        };
-        return displays[operation] || operation;
-    }
-
-    async function showAddExpenseModal() {
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.style.display = 'block';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 data-i18n="finance.add_expense">Янги харажат</h3>
-                    <button class="close">&times;</button>
+                            `).join('')}
+                        </tbody>
+                    </table>
                 </div>
-                <div class="modal-body">
-                    <form id="add-expense-form">
-                        <div class="form-group">
-                            <label data-i18n="finance.category">Категория</label>
-                            <select name="category" class="form-control" required>
-                                <option value="rent">Ижара</option>
-                                <option value="electricity">Электр энергия</option>
-                                <option value="water">Сув</option>
-                                <option value="transport">Транспорт</option>
-                                <option value="delivery">Етказиб бериш</option>
-                                <option value="taxes">Солиқлар</option>
-                                <option value="salary">Ишчилар иш ҳақи</option>
-                                <option value="advance">Ишчиларга аванс</option>
-                                <option value="equipment_repair">Ускуна таъмири</option>
-                                <option value="tools">Асбоб сотиб олиш</option>
-                                <option value="consumables">Сарфлаш материаллари</option>
-                                <option value="material_loss">Материал йўқотиш</option>
-                                <option value="defect">Брак</option>
-                                <option value="unforeseen">Кутилмаган харажатлар</option>
-                                <option value="owner_withdrawal">Эгасининг шахсий чиқими</option>
-                                <option value="worker_debt">Ишчилар қарзлари</option>
-                                <option value="client_refund">Мижозларга қайтариш</option>
-                                <option value="other">Бошқа</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.amount">Сумма</label>
-                            <input type="number" name="amount" class="form-control" required step="0.01">
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.date">Сана</label>
-                            <input type="date" name="date" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.comment">Изоҳ</label>
-                            <textarea name="comment" class="form-control" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сақлаш</button>
-                    </form>
-                </div>
-            </div>
-        `;
+                ${paginationInfo(data.count, items.length)}
+            `;
+            window.i18n.applyTranslations();
+        } catch (err) { showError(); }
+    }
 
-        document.body.appendChild(modal);
-        window.i18n.applyTranslations();
+    // === MODALS ===
+    function openExpenseModal() {
+        document.getElementById('exp-date').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('exp-amount').value = '';
+        document.getElementById('exp-comment').value = '';
+        document.getElementById('expense-modal').style.display = 'flex';
 
-        modal.querySelector('.close').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
-        });
-
-        modal.querySelector('#add-expense-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            
+        document.getElementById('exp-save-btn').onclick = async () => {
+            const amount = document.getElementById('exp-amount').value;
+            const date = document.getElementById('exp-date').value;
+            if (!amount || !date) { showToast('Сумма ва санани тўлдиринг', 'error'); return; }
             try {
                 await window.api.request('/api/v1/finance/expenses/', {
                     method: 'POST',
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({
+                        category: document.getElementById('exp-category').value,
+                        amount: parseFloat(amount),
+                        date,
+                        payment_method: document.getElementById('exp-payment-method').value,
+                        comment: document.getElementById('exp-comment').value
+                    })
                 });
-                modal.remove();
-                await loadExpenses();
-            } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add expense'));
-            }
-        });
+                closeExpenseModal();
+                showToast('Харажат қўшилди', 'success');
+                await Promise.all([loadExpenses(), loadStats()]);
+            } catch (err) { showToast('Хатолик: ' + getErrorMessage(err), 'error'); }
+        };
     }
 
-    document.getElementById('finance-tab').addEventListener('change', (e) => {
-        if (e.target.value === 'expenses') {
-            loadExpenses();
-        } else if (e.target.value === 'payments') {
-            loadPayments();
-        } else {
-            loadRates();
+    function closeExpenseModal() { document.getElementById('expense-modal').style.display = 'none'; }
+
+    async function openPaymentModal() {
+        const modal = document.getElementById('payment-modal');
+        modal.style.display = 'flex';
+        document.getElementById('pay-date').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('pay-amount').value = '';
+        document.getElementById('pay-comment').value = '';
+
+        // Load workers
+        const wSelect = document.getElementById('pay-worker');
+        wSelect.innerHTML = '<option value="">Юкланмоқда...</option>';
+        try {
+            const users = await window.api.request('/api/v1/accounts/users/');
+            const workers = (users.results || []).filter(u => u.role === 'worker');
+            wSelect.innerHTML = workers.map(u =>
+                `<option value="${u.id}">${u.full_name || u.username}</option>`
+            ).join('') || '<option value="">Ишчи йўқ</option>';
+        } catch (e) { wSelect.innerHTML = '<option value="">Хатолик</option>'; }
+
+        document.getElementById('pay-save-btn').onclick = async () => {
+            const worker = document.getElementById('pay-worker').value;
+            const amount = document.getElementById('pay-amount').value;
+            const date = document.getElementById('pay-date').value;
+            if (!worker || !amount || !date) { showToast('Барча майдонларни тўлдиринг', 'error'); return; }
+            try {
+                await window.api.request('/api/v1/finance/worker-payments/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        worker: parseInt(worker),
+                        amount: parseFloat(amount),
+                        payment_date: date,
+                        payment_type: document.getElementById('pay-type').value,
+                        comment: document.getElementById('pay-comment').value
+                    })
+                });
+                closePaymentModal();
+                showToast('Тўлов қўшилди', 'success');
+                await Promise.all([loadPayments(), loadStats()]);
+            } catch (err) { showToast('Хатолик: ' + getErrorMessage(err), 'error'); }
+        };
+    }
+
+    function closePaymentModal() { document.getElementById('payment-modal').style.display = 'none'; }
+
+    async function openRateModal() {
+        const modal = document.getElementById('rate-modal');
+        modal.style.display = 'flex';
+        document.getElementById('rate-amount').value = '';
+
+        // Load products
+        const pSelect = document.getElementById('rate-product');
+        pSelect.innerHTML = '<option value="">Юкланмоқда...</option>';
+        try {
+            const products = await window.api.request('/api/v1/warehouse/finished-products/');
+            const items = products.results || [];
+            pSelect.innerHTML = items.map(p =>
+                `<option value="${p.id}">${p.name}</option>`
+            ).join('') || '<option value="">Маҳсулот йўқ</option>';
+        } catch (e) { pSelect.innerHTML = '<option value="">Хатолик</option>'; }
+
+        document.getElementById('rate-save-btn').onclick = async () => {
+            const product = document.getElementById('rate-product').value;
+            const amount = document.getElementById('rate-amount').value;
+            if (!product || !amount) { showToast('Барча майдонларни тўлдиринг', 'error'); return; }
+            try {
+                await window.api.request('/api/v1/finance/labor-rates/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        product: parseInt(product),
+                        operation: document.getElementById('rate-operation').value,
+                        rate_per_unit: parseFloat(amount),
+                        unit: document.getElementById('rate-unit').value
+                    })
+                });
+                closeRateModal();
+                showToast('Ставка қўшилди', 'success');
+                await Promise.all([loadRates(), loadStats()]);
+            } catch (err) { showToast('Хатолик: ' + getErrorMessage(err), 'error'); }
+        };
+    }
+
+    function closeRateModal() { document.getElementById('rate-modal').style.display = 'none'; }
+
+    // === HELPERS ===
+    function getCategoryDisplay(c) {
+        const m = { rent:'Ижара', electricity:'Электр', water:'Сув', transport:'Транспорт',
+            delivery:'Этказиб бериш', taxes:'Солиқлар', salary:'Иш ҳақи', advance:'Аванс',
+            equipment_repair:'Ускуна таъмири', tools:'Асбоблар', consumables:'Сарфлаш мат.',
+            material_loss:'Материал йўқотиш', defect:'Брак', unforeseen:'Кутилмаган',
+            owner_withdrawal:'Эгаси чиқими', worker_debt:'Ишчи қарзи', client_refund:'Мижоз қайтариш', other:'Бошқа' };
+        return m[c] || c;
+    }
+    function getPaymentTypeDisplay(t) {
+        return { salary:'Иш ҳақи', advance:'Аванс', bonus:'Мукофот', other:'Бошқа' }[t] || t;
+    }
+    function getOperationDisplay(o) {
+        return { cutting:'Кесиш', polishing:'Сийлаш', mounting:'Монтаж', packing:'Қутлаш', other:'Бошқа' }[o] || o;
+    }
+    function getPaymentMethodDisplay(m) {
+        return { cash:'Нақд', bank:'Банк', card:'Карта' }[m] || m || '—';
+    }
+    function fmtAmount(n) {
+        if (!n && n !== 0) return '—';
+        return Number(n).toLocaleString('ru-RU') + ' сўм';
+    }
+    function paginationInfo(total, shown) {
+        if (total <= shown) return '';
+        return `<p class="text-sm text-secondary" style="text-align:center;margin-top:8px;">${shown} / ${total} та кўрсатилмоқда</p>`;
+    }
+    function showLoading() {
+        document.getElementById('finance-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--text-secondary);">
+                <div style="font-size:32px;margin-bottom:8px;">⏳</div><p>Юкланмоқда...</p>
+            </div>`;
+    }
+    function showEmpty(msg) {
+        document.getElementById('finance-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--text-secondary);">
+                <div style="font-size:48px;margin-bottom:12px;">📭</div><p>${msg}</p>
+            </div>`;
+    }
+    function showError() {
+        document.getElementById('finance-content').innerHTML = `
+            <div style="text-align:center;padding:48px;color:var(--color-error-600);">
+                <div style="font-size:32px;margin-bottom:8px;">⚠️</div>
+                <p>Маълумотни юклашда хатолик</p>
+            </div>`;
+    }
+    function getErrorMessage(err) {
+        if (err && err.data) {
+            const d = err.data;
+            if (typeof d === 'string') return d;
+            if (d.detail) return d.detail;
+            return Object.values(d).flat().join(', ');
         }
-    });
+        return String(err);
+    }
+    let toastTimer = null;
+    function showToast(msg, type = 'success') {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').textContent = msg;
+        document.getElementById('toast-icon').textContent = type === 'success' ? '✅' : '❌';
+        document.getElementById('toast-inner').style.borderLeft = `4px solid ${type === 'success' ? 'var(--color-success-600)' : 'var(--color-error-600)'}`;
+        toast.style.display = 'block';
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
 
-    await loadExpenses();
+    // --- Init ---
+    await Promise.all([loadStats(), loadExpenses()]);
+    window.i18n.applyTranslations();
 });
-
-function viewExpense(id) {
-    window.location.href = `/finance/expenses/${id}/`;
-}
-
-function viewPayment(id) {
-    window.location.href = `/finance/payments/${id}/`;
-}
-
-function viewRate(id) {
-    window.location.href = `/finance/rates/${id}/`;
-}
 </script>
+
+<style>
+.tab-group { display:flex;background:var(--bg-secondary);border-radius:var(--radius-lg);padding:2px; }
+.tab-btn { background:none;border:none;padding:6px 14px;border-radius:var(--radius-md);cursor:pointer;font-size:var(--text-sm);color:var(--text-secondary);transition:all var(--transition-fast); }
+.tab-btn.active { background:white;color:var(--text-primary);font-weight:var(--font-semibold);box-shadow:var(--shadow-sm); }
+.tab-btn:hover:not(.active) { color:var(--text-primary); }
+</style>
 {% endblock %}

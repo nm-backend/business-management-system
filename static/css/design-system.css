@@ -656,7 +656,8 @@ p {
 /* ============================================
    MODAL
    ============================================ */
-.modal-backdrop {
+.modal-backdrop,
+.modal-overlay {
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.5);
@@ -802,6 +803,11 @@ p {
     background-color: var(--color-gray-100);
     color: var(--color-gray-700);
 }
+
+/* Alias badges for common usage */
+.badge-danger  { background-color: var(--color-error-100);   color: var(--color-error-700);   }
+.badge-primary { background-color: var(--color-primary-100); color: var(--color-primary-700); }
+.badge-secondary { background-color: var(--color-gray-100);  color: var(--color-gray-600);    }
 
 /* ============================================
    DROPDOWN
