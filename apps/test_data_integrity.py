@@ -140,6 +140,54 @@ class OwnerSetupTests(TestCase):
         self.assertEqual(User.objects.filter(role=User.Role.OWNER).count(), 1)
 
 
+class UserCreationAuthorizationTests(TestCase):
+    def test_admin_owner_request_is_forbidden_before_role_uniqueness_validation(self):
+        User.objects.create_user('owner', password='secret123', role=User.Role.OWNER)
+        admin = User.objects.create_user(
+            'admin',
+            password='secret123',
+            role=User.Role.ADMIN,
+            can_create_workers=True,
+        )
+        api = APIClient()
+        api.force_authenticate(admin)
+
+        response = api.post(
+            '/api/v1/accounts/users/',
+            {
+                'username': 'attempted-owner',
+                'password': 'secret123',
+                'full_name': 'Attempted Owner',
+                'role': User.Role.OWNER,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(User.objects.filter(username='attempted-owner').exists())
+
+    def test_owner_second_owner_request_is_a_clean_validation_error(self):
+        owner = User.objects.create_user(
+            'owner',
+            password='secret123',
+            role=User.Role.OWNER,
+        )
+        api = APIClient()
+        api.force_authenticate(owner)
+
+        response = api.post(
+            '/api/v1/accounts/users/',
+            {
+                'username': 'second-owner',
+                'password': 'secret123',
+                'full_name': 'Second Owner',
+                'role': User.Role.OWNER,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(User.objects.filter(username='second-owner').exists())
+
+
 class StockHistoryProtectionTests(TestCase):
     def test_material_and_product_with_movements_cannot_be_deleted(self):
         material = RawMaterial.objects.create(name='Material')

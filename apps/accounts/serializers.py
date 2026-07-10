@@ -76,6 +76,13 @@ class UserCreateSerializer(serializers.ModelSerializer):
         - Поле password помечено как write_only (не возвращается в API)
     """
     password = serializers.CharField(write_only=True, min_length=6)
+    # Authorization in perform_create must decide who may request the owner role;
+    # do not let the conditional database constraint turn that into a 400.
+    role = serializers.ChoiceField(
+        choices=User.Role.choices,
+        required=False,
+        default=User.Role.WORKER,
+    )
 
     class Meta:
         model = User
