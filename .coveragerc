@@ -1,0 +1,16 @@
+[run]
+branch = True
+source =
+    apps
+    core
+omit =
+    */migrations/*
+    */tests.py
+    */apps.py
+    */admin.py
+    manage.py
+    skladpro/*
+
+[report]
+show_missing = True
+skip_covered = False
