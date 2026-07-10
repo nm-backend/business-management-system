@@ -296,3 +296,5 @@ class OrdersComponent {
         });
     }
 }
+
+window.OrdersComponent = new OrdersComponent();

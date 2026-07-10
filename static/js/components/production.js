@@ -329,3 +329,5 @@ class ProductionComponent {
         }
     }
 }
+
+window.ProductionComponent = new ProductionComponent();

@@ -594,3 +594,5 @@ class FinanceComponent {
         });
     }
 }
+
+window.FinanceComponent = new FinanceComponent();

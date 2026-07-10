@@ -396,3 +396,5 @@ class MessagesComponent {
         }
     }
 }
+
+window.MessagesComponent = new MessagesComponent();

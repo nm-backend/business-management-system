@@ -191,3 +191,5 @@ class ClientsComponent {
         });
     }
 }
+
+window.ClientsComponent = new ClientsComponent();
