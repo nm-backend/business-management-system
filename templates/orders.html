@@ -1,0 +1,291 @@
+{# Шаблон страницы заказов #}
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="display: flex; height: 100vh;">
+    {# Боковая панель навигации #}
+    <aside style="width: 250px; background: var(--dark-color); color: #fff; padding: 20px; display: flex; flex-direction: column;">
+        <h2 style="margin-bottom: 30px; text-align: center;" data-i18n="app.name">SkladPro.Nod</h2>
+
+        <nav style="flex: 1;">
+            <ul style="list-style: none;">
+                <li style="margin-bottom: 10px;"><a href="/" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
+                <li style="margin-bottom: 10px;"><a href="/warehouse/" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
+                <li style="margin-bottom: 10px;"><a href="/finished-products/" style="color: #fff; text-decoration: none;" data-i18n="nav.finished_products">Тайёр маҳсулот</a></li>
+                <li style="margin-bottom: 10px;"><a href="/clients/" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
+                <li style="margin-bottom: 10px;"><a href="/orders/" style="color: #fff; text-decoration: none; font-weight: bold;" data-i18n="nav.orders">Буюртмалар</a></li>
+                <li style="margin-bottom: 10px;"><a href="/production/" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
+                <li style="margin-bottom: 10px;"><a href="/finance/" style="color: #fff; text-decoration: none;" data-i18n="nav.finance">Молия</a></li>
+                <li style="margin-bottom: 10px;"><a href="/messages/" style="color: #fff; text-decoration: none;" data-i18n="nav.messages">Хабарлар</a></li>
+                <li style="margin-bottom: 10px;"><a href="/settings/" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
+            </ul>
+        </nav>
+
+        {# Информация о пользователе и кнопка выхода #}
+        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #444;">
+            <p id="user-info" style="margin-bottom: 10px;"></p>
+            <button id="logout-btn" class="btn btn-primary" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        </div>
+    </aside>
+
+    {# Основной контент #}
+    <main style="flex: 1; padding: 20px; overflow-y: auto;">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1 data-i18n="orders.title">Буюртмалар</h1>
+            <div style="display: flex; gap: 10px;">
+                <select id="order-status-filter" class="form-control" style="width: auto;">
+                    <option value="" data-i18n="orders.all_statuses">Барча ҳолатлар</option>
+                    <option value="new" data-i18n="statuses.new">Янги</option>
+                    <option value="in_progress" data-i18n="statuses.in_progress">Иш жараёнида</option>
+                    <option value="ready" data-i18n="statuses.ready">Тайёр</option>
+                    <option value="delivered" data-i18n="statuses.delivered">Берилди</option>
+                </select>
+                <button id="add-order-btn" class="btn btn-primary" data-i18n="orders.add_order">Қўшиш</button>
+            </div>
+        </header>
+        
+        <div class="card" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead>
+                    <tr style="border-bottom: 2px solid #eee;">
+                        <th style="padding: 10px;" data-i18n="orders.id">ID</th>
+                        <th style="padding: 10px;" data-i18n="orders.client">Мижоз</th>
+                        <th style="padding: 10px;" data-i18n="orders.product">Маҳсулот</th>
+                        <th style="padding: 10px;" data-i18n="orders.quantity">Миқдор</th>
+                        <th style="padding: 10px;" data-i18n="orders.deadline">Муддат</th>
+                        <th style="padding: 10px;" data-i18n="orders.status">Ҳолат</th>
+                        <th style="padding: 10px;" data-i18n="orders.payment_status">Тўлов</th>
+                        <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
+                    </tr>
+                </thead>
+                <tbody id="orders-list">
+                    <tr><td colspan="8" style="padding: 10px; text-align: center;" data-i18n="common.loading">Юкланмоқда...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/api.js' %}"></script>
+<script src="{% static 'js/i18n.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    window.api = new APIClient();
+    window.i18n = new I18nManager();
+    await window.i18n.init();
+
+    try {
+        const user = await window.api.getMe();
+        document.getElementById('user-info').textContent = user.full_name || user.username;
+    } catch (e) {
+        window.location.href = '/accounts/login/';
+        return;
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        window.api.logout();
+    });
+
+    async function loadOrders() {
+        const listEl = document.getElementById('orders-list');
+        const statusFilter = document.getElementById('order-status-filter').value;
+        
+        try {
+            let url = '/api/v1/orders/';
+            const params = new URLSearchParams();
+            if (statusFilter) params.append('status', statusFilter);
+            if (params.toString()) url += '?' + params.toString();
+            
+            const data = await window.api.request(url);
+            
+            if (data.results && data.results.length > 0) {
+                listEl.innerHTML = data.results.map(o => `
+                    <tr style="border-bottom: 1px solid #eee; ${o.is_overdue ? 'background-color: #fff3cd;' : ''}">
+                        <td style="padding: 10px;">#${o.id}</td>
+                        <td style="padding: 10px;">${o.client_name}</td>
+                        <td style="padding: 10px;">${o.product_name || '-'}</td>
+                        <td style="padding: 10px;">${o.quantity} ${o.unit}</td>
+                        <td style="padding: 10px;">${o.deadline}</td>
+                        <td style="padding: 10px;">
+                            <span class="badge badge-${getStatusBadgeClass(o.status)}">
+                                ${getStatusDisplay(o.status)}
+                            </span>
+                        </td>
+                        <td style="padding: 10px;">
+                            <span class="badge badge-${getPaymentBadgeClass(o.payment_status)}">
+                                ${getPaymentDisplay(o.payment_status)}
+                            </span>
+                        </td>
+                        <td style="padding: 10px;">
+                            <button class="btn btn-sm btn-info" onclick="viewOrder(${o.id})">
+                                <span data-i18n="common.view">Кўриш</span>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } else {
+                listEl.innerHTML = `<tr><td colspan="8" style="padding: 10px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</td></tr>`;
+            }
+            window.i18n.applyTranslations();
+        } catch (e) {
+            console.error('Failed to load orders', e);
+            listEl.innerHTML = `<tr><td colspan="8" style="padding: 10px; text-align: center; color: red;" data-i18n="common.error">Хатолик</td></tr>`;
+            window.i18n.applyTranslations();
+        }
+    }
+
+    function getStatusBadgeClass(status) {
+        const classes = {
+            'new': 'primary',
+            'awaiting_material': 'warning',
+            'sent_to_worker': 'info',
+            'accepted_by_worker': 'success',
+            'worker_refused': 'danger',
+            'in_progress': 'info',
+            'awaiting_confirmation': 'warning',
+            'ready': 'success',
+            'delivered': 'success',
+            'cancelled': 'secondary'
+        };
+        return classes[status] || 'secondary';
+    }
+
+    function getStatusDisplay(status) {
+        const displays = {
+            'new': 'Янги',
+            'awaiting_material': 'Материал кутилмоқда',
+            'sent_to_worker': 'Ишчига юборилган',
+            'accepted_by_worker': 'Қабул қилинди',
+            'worker_refused': 'Рад этилди',
+            'in_progress': 'Иш жараёнида',
+            'awaiting_confirmation': 'Тасдиқлаш кутилмоқда',
+            'ready': 'Тайёр',
+            'delivered': 'Берилди',
+            'cancelled': 'Бекор қилинди'
+        };
+        return displays[status] || status;
+    }
+
+    function getPaymentBadgeClass(paymentStatus) {
+        const classes = {
+            'unpaid': 'danger',
+            'partial': 'warning',
+            'paid': 'success'
+        };
+        return classes[paymentStatus] || 'secondary';
+    }
+
+    function getPaymentDisplay(paymentStatus) {
+        const displays = {
+            'unpaid': 'Тўланмаган',
+            'partial': 'Қисман',
+            'paid': 'Тўланган'
+        };
+        return displays[paymentStatus] || paymentStatus;
+    }
+
+    document.getElementById('order-status-filter').addEventListener('change', loadOrders);
+
+    document.getElementById('add-order-btn').addEventListener('click', async () => {
+        let clients = [];
+        let products = [];
+        
+        try {
+            clients = await window.api.request('/api/v1/clients/active/');
+            products = await window.api.request('/api/v1/warehouse/finished-products/');
+        } catch (e) {
+            console.error('Failed to load data', e);
+        }
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'block';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 data-i18n="orders.add_order">Янги буюртма</h3>
+                    <button class="close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-order-form">
+                        <div class="form-group">
+                            <label data-i18n="orders.client">Мижоз</label>
+                            <select name="client" class="form-control" required>
+                                <option value="">Танланг...</option>
+                                ${clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="orders.product">Маҳсулот</label>
+                            <select name="product" class="form-control">
+                                <option value="">Танланг...</option>
+                                ${products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="orders.product_name">Маҳсулот номи</label>
+                            <input type="text" name="product_name" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="orders.quantity">Миқдор</label>
+                            <input type="number" name="quantity" class="form-control" required step="0.001">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="orders.unit">Бирлик</label>
+                            <select name="unit" class="form-control" required>
+                                <option value="sht">Дона</option>
+                                <option value="m2">м²</option>
+                                <option value="m">м</option>
+                                <option value="kg">кг</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="orders.deadline">Муддат</label>
+                            <input type="date" name="deadline" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="orders.comment">Изоҳ</label>
+                            <textarea name="comment" class="form-control" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сақлаш</button>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        window.i18n.applyTranslations();
+
+        modal.querySelector('.close').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+
+        modal.querySelector('#add-order-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                await window.api.request('/api/v1/orders/', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                modal.remove();
+                await loadOrders();
+            } catch (error) {
+                alert('Error: ' + (error.data?.detail || 'Failed to add order'));
+            }
+        });
+    });
+
+    await loadOrders();
+});
+
+function viewOrder(id) {
+    window.location.href = `/orders/${id}/`;
+}
+</script>
+{% endblock %}

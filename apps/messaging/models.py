@@ -41,6 +41,15 @@ class Message(TimestampedModel):
     read_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        """
+        Метаданные модели Message.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по убыванию даты создания
+            indexes: индексы для оптимизации запросов
+        """
         verbose_name = 'Message'
         verbose_name_plural = 'Messages'
         ordering = ['-created_at']
@@ -140,6 +149,15 @@ class Notification(TimestampedModel):
     related_task = models.ForeignKey('production.Task', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
 
     class Meta:
+        """
+        Метаданные модели Notification.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по убыванию даты создания
+            indexes: индексы для оптимизации запросов
+        """
         verbose_name = 'Notification'
         verbose_name_plural = 'Notifications'
         ordering = ['-created_at']

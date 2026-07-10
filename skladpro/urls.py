@@ -9,16 +9,21 @@ urlpatterns = [
     path('api/v1/core/', include('apps.core.urls')),
     path('api/v1/warehouse/', include('apps.warehouse.urls')),
     path('api/v1/audit/', include('apps.audit.urls')),
-    # Future API endpoints
-    # path('api/v1/orders/', include('apps.orders.urls')),
-    # path('api/v1/production/', include('apps.production.urls')),
-    # path('api/v1/clients/', include('apps.clients.urls')),
-    # path('api/v1/finance/', include('apps.finance.urls')),
-    # path('api/v1/messaging/', include('apps.messaging.urls')),
+    # New API endpoints
+    path('api/v1/orders/', include('apps.orders.urls')),
+    path('api/v1/production/', include('apps.production.urls')),
+    path('api/v1/clients/', include('apps.clients.urls')),
+    path('api/v1/finance/', include('apps.finance.urls')),
+    path('api/v1/messaging/', include('apps.messaging.urls')),
     # path('api/v1/reports/', include('apps.reports.urls')),
-    
+
     # Frontend (Django Templates)
     path('', include('apps.accounts.template_urls')),
+    path('', include('apps.clients.template_urls')),
+    path('', include('apps.orders.template_urls')),
+    path('', include('apps.production.template_urls')),
+    path('', include('apps.finance.template_urls')),
+    path('', include('apps.messaging.template_urls')),
 ]
 
 if settings.DEBUG:

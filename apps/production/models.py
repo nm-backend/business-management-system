@@ -6,6 +6,7 @@ Production models - управление производством и зада�
 """
 from django.db import models
 from apps.core.models import TimestampedModel
+from apps.warehouse.models import UnitChoices
 
 
 class TaskStatus(models.TextChoices):
@@ -96,6 +97,15 @@ class Task(TimestampedModel):
     is_self_assigned = models.BooleanField(default=False)
 
     class Meta:
+        """
+        Метаданные модели Task.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по убыванию даты назначения
+            indexes: индексы для оптимизации запросов
+        """
         verbose_name = 'Task'
         verbose_name_plural = 'Tasks'
         ordering = ['-assigned_at']
@@ -111,6 +121,77 @@ class Task(TimestampedModel):
         Возвращает информацию о задаче с работником и статусом.
         """
         return f"Task #{self.id} - {self.worker.username} ({self.get_status_display()})"
+
+    def accept(self):
+        """
+        Принимает задачу работником.
+
+        Логическая цепочка:
+        - Устанавливает status = ACCEPTED
+        - Устанавливает accepted_at = текущее время
+        - Связанный заказ переводит в ACCEPTED_BY_WORKER
+        """
+        from django.utils import timezone
+        self.status = self.TaskStatus.ACCEPTED
+        self.accepted_at = timezone.now()
+        self.save(update_fields=['status', 'accepted_at'])
+        
+        # Обновляем статус заказа если есть
+        if self.order:
+            self.order.status = self.order.OrderStatus.ACCEPTED_BY_WORKER
+            self.order.save(update_fields=['status'])
+
+    def refuse(self, reason):
+        """
+        Отклоняет задачу работником.
+
+        Логическая цепочка:
+        - Устанавливает status = REFUSED
+        - Устанавливает refusal_reason и refusal_comment
+        - Связанный заказ переводит в WORKER_REFUSED
+        """
+        from django.utils import timezone
+        self.status = self.TaskStatus.REFUSED
+        self.refusal_comment = reason
+        self.save(update_fields=['status', 'refusal_comment'])
+        
+        # Обновляем статус заказа если есть
+        if self.order:
+            self.order.status = self.order.OrderStatus.WORKER_REFUSED
+            self.order.save(update_fields=['status'])
+
+    def complete(self):
+        """
+        Отмечает задачу как выполненную.
+
+        Логическая цепочка:
+        - Устанавливает status = COMPLETED
+        - Устанавливает completed_at = текущее время
+        """
+        from django.utils import timezone
+        self.status = self.TaskStatus.COMPLETED
+        self.completed_at = timezone.now()
+        self.save(update_fields=['status', 'completed_at'])
+
+    def confirm(self, confirmed_by):
+        """
+        Подтверждает выполненную задачу администратором/владельцем.
+
+        Логическая цепочка:
+        - Устанавливает status = CONFIRMED
+        - Устанавливает confirmed_at и confirmed_by
+        - Связанный заказ переводит в IN_PROGRESS (если есть)
+        """
+        from django.utils import timezone
+        self.status = self.TaskStatus.CONFIRMED
+        self.confirmed_at = timezone.now()
+        self.confirmed_by = confirmed_by
+        self.save(update_fields=['status', 'confirmed_at', 'confirmed_by'])
+        
+        # Обновляем статус заказа если есть
+        if self.order:
+            self.order.status = self.order.OrderStatus.IN_PROGRESS
+            self.order.save(update_fields=['status'])
 
 
 class WorkRecord(TimestampedModel):
@@ -158,7 +239,7 @@ class WorkRecord(TimestampedModel):
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='work_records')
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records')
     quantity = models.DecimalField(max_digits=15, decimal_places=3)
-    unit = models.CharField(max_length=20, choices='warehouse.models.UnitChoices.choices')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices)
     photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True)
     comment = models.TextField(blank=True, default='')
     status = models.CharField(max_length=30, choices=WorkStatus.choices, default=WorkStatus.AWAITING_CONFIRMATION, db_index=True)
@@ -168,6 +249,15 @@ class WorkRecord(TimestampedModel):
     labor_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
+        """
+        Метаданные модели WorkRecord.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по убыванию даты создания
+            indexes: индексы для оптимизации запросов
+        """
         verbose_name = 'Work Record'
         verbose_name_plural = 'Work Records'
         ordering = ['-created_at']
@@ -193,3 +283,65 @@ class WorkRecord(TimestampedModel):
             bool - True если status == 'confirmed'
         """
         return self.status == self.WorkStatus.CONFIRMED
+
+    def confirm(self, confirmed_by, labor_cost=None):
+        """
+        Подтверждает выполненную работу администратором/владельцем.
+
+        Логическая цепочка:
+        - Устанавливает status = CONFIRMED
+        - Устанавливает confirmed_at и confirmed_by
+        - Устанавливает labor_cost если передан
+        - Обновляет связанную задачу если есть
+        """
+        from django.utils import timezone
+        self.status = self.WorkStatus.CONFIRMED
+        self.confirmed_at = timezone.now()
+        self.confirmed_by = confirmed_by
+        if labor_cost is not None:
+            self.labor_cost = labor_cost
+        self.save(update_fields=['status', 'confirmed_at', 'confirmed_by', 'labor_cost'])
+        
+        # Обновляем связанную задачу если есть
+        if self.task:
+            self.task.confirm(confirmed_by)
+
+    def reject(self, reason):
+        """
+        Отклоняет выполненную работу.
+
+        Логическая цепочка:
+        - Устанавливает status = REJECTED
+        - Устанавливает rejection_reason
+        """
+        self.status = self.WorkStatus.REJECTED
+        self.rejection_reason = reason
+        self.save(update_fields=['status', 'rejection_reason'])
+
+    def calculate_labor_cost(self):
+        """
+        Автоматически рассчитывает стоимость труда на основе ставок.
+
+        Логическая цепочка:
+        - Ищет соответствующую ставку для продукта и операции
+        - Умножает ставку на количество
+        - Возвращает рассчитанную стоимость
+        """
+        from apps.finance.models import LaborRate
+        
+        if not self.product:
+            return 0
+        
+        # Ищем ставку для продукта (по умолчанию - резка)
+        try:
+            rate = LaborRate.objects.filter(
+                product=self.product,
+                operation=LaborRate.OperationType.CUTTING
+            ).first()
+            
+            if rate:
+                return rate.rate_per_unit * self.quantity
+        except:
+            pass
+        
+        return 0

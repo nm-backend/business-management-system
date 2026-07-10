@@ -8,6 +8,7 @@ Finance models - управление финансами.
 """
 from django.db import models
 from apps.core.models import TimestampedModel
+from apps.warehouse.models import UnitChoices
 
 
 class ExpenseCategory(models.TextChoices):
@@ -98,6 +99,15 @@ class Expense(TimestampedModel):
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
 
     class Meta:
+        """
+        Метаданные модели Expense.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по дате и созданию
+            indexes: индексы для оптимизации запросов
+        """
         verbose_name = 'Expense'
         verbose_name_plural = 'Expenses'
         ordering = ['-date', '-created_at']
@@ -151,9 +161,18 @@ class LaborRate(TimestampedModel):
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.CASCADE, related_name='labor_rates')
     operation = models.CharField(max_length=20, choices=OperationType.choices)
     rate_per_unit = models.DecimalField(max_digits=15, decimal_places=2)
-    unit = models.CharField(max_length=20, choices='warehouse.models.UnitChoices.choices')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices)
 
     class Meta:
+        """
+        Метаданные модели LaborRate.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по продукту и операции
+            unique_together: уникальная комбинация продукта и операции
+        """
         verbose_name = 'Labor Rate'
         verbose_name_plural = 'Labor Rates'
         ordering = ['product', 'operation']
@@ -209,6 +228,15 @@ class WorkerPayment(TimestampedModel):
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='created_payments')
 
     class Meta:
+        """
+        Метаданные модели WorkerPayment.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по дате выплаты и созданию
+            indexes: индексы для оптимизации запросов
+        """
         verbose_name = 'Worker Payment'
         verbose_name_plural = 'Worker Payments'
         ordering = ['-payment_date', '-created_at']

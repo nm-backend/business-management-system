@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.router.addRoute('/', window.DashboardComponent);
     window.router.addRoute('/warehouse', window.WarehouseComponent);
     window.router.addRoute('/finished-products', window.FinishedProductsComponent);
+    window.router.addRoute('/clients', window.ClientsComponent);
+    window.router.addRoute('/orders', window.OrdersComponent);
+    window.router.addRoute('/production', window.ProductionComponent);
+    window.router.addRoute('/finance', window.FinanceComponent);
+    window.router.addRoute('/messages', window.MessagesComponent);
     
     // Initial route
     window.router.handleRoute();

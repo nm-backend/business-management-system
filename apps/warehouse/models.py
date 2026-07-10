@@ -19,6 +19,13 @@ class UnitChoices(models.TextChoices):
     Единицы измерения для материалов и продукции.
 
     Используется для унификации единиц измерения во всей системе.
+
+    Выборы:
+        SHT: штук (шт)
+        M: метр (м)
+        M2: квадратный метр (м²)
+        IZDELIE: изделие (изд)
+        DONA: штука на узбекском (дона)
     """
     SHT = 'sht', 'Штук'
     M = 'm', 'Метр'
@@ -74,6 +81,14 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     avg_cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
+        """
+        Метаданные модели RawMaterial.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по умолчанию
+        """
         verbose_name = 'Raw Material'
         verbose_name_plural = 'Raw Materials'
         ordering = ['name']
@@ -136,6 +151,14 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
+        """
+        Метаданные модели FinishedProduct.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по умолчанию
+        """
         verbose_name = 'Finished Product'
         verbose_name_plural = 'Finished Products'
         ordering = ['name']
@@ -228,6 +251,14 @@ class StockMovement(TimestampedModel):
     related_production_id = models.IntegerField(null=True, blank=True)
 
     class Meta:
+        """
+        Метаданные модели StockMovement.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по убыванию даты создания
+        """
         verbose_name = 'Stock Movement'
         verbose_name_plural = 'Stock Movements'
         ordering = ['-created_at']
@@ -271,6 +302,14 @@ class Recipe(TimestampedModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        """
+        Метаданные модели Recipe.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по названию
+        """
         verbose_name = 'Recipe'
         verbose_name_plural = 'Recipes'
         ordering = ['name']
@@ -307,6 +346,13 @@ class RecipeItem(models.Model):
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT)
 
     class Meta:
+        """
+        Метаданные модели RecipeItem.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+        """
         verbose_name = 'Recipe Item'
         verbose_name_plural = 'Recipe Items'
 

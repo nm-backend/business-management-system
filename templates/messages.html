@@ -1,0 +1,384 @@
+{# Шаблон страницы сообщений #}
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="display: flex; height: 100vh;">
+    {# Боковая панель навигации #}
+    <aside style="width: 250px; background: var(--dark-color); color: #fff; padding: 20px; display: flex; flex-direction: column;">
+        <h2 style="margin-bottom: 30px; text-align: center;" data-i18n="app.name">SkladPro.Nod</h2>
+
+        <nav style="flex: 1;">
+            <ul style="list-style: none;">
+                <li style="margin-bottom: 10px;"><a href="/" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
+                <li style="margin-bottom: 10px;"><a href="/warehouse/" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
+                <li style="margin-bottom: 10px;"><a href="/finished-products/" style="color: #fff; text-decoration: none;" data-i18n="nav.finished_products">Тайёр маҳсулот</a></li>
+                <li style="margin-bottom: 10px;"><a href="/clients/" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
+                <li style="margin-bottom: 10px;"><a href="/orders/" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
+                <li style="margin-bottom: 10px;"><a href="/production/" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
+                <li style="margin-bottom: 10px;"><a href="/finance/" style="color: #fff; text-decoration: none;" data-i18n="nav.finance">Молия</a></li>
+                <li style="margin-bottom: 10px;"><a href="/messages/" style="color: #fff; text-decoration: none; font-weight: bold;" data-i18n="nav.messages">Хабарлар</a></li>
+                <li style="margin-bottom: 10px;"><a href="/settings/" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
+            </ul>
+        </nav>
+
+        {# Информация о пользователе и кнопка выхода #}
+        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #444;">
+            <p id="user-info" style="margin-bottom: 10px;"></p>
+            <button id="logout-btn" class="btn btn-primary" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        </div>
+    </aside>
+
+    {# Основной контент #}
+    <main style="flex: 1; padding: 20px; overflow-y: auto;">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1 data-i18n="messages.title">Хабарлар</h1>
+            <div style="display: flex; gap: 10px;">
+                <select id="messages-tab" class="form-control" style="width: auto;">
+                    <option value="inbox" data-i18n="messages.inbox">Келган хабарлар</option>
+                    <option value="sent" data-i18n="messages.sent">Юборилган</option>
+                    <option value="notifications" data-i18n="messages.notifications">Уведомления</option>
+                </select>
+            </div>
+        </header>
+        
+        <div id="messages-content">
+            <!-- Содержимое загружается динамически -->
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/api.js' %}"></script>
+<script src="{% static 'js/i18n.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+    window.api = new APIClient();
+    window.i18n = new I18nManager();
+    await window.i18n.init();
+
+    try {
+        const user = await window.api.getMe();
+        document.getElementById('user-info').textContent = user.full_name || user.username;
+    } catch (e) {
+        window.location.href = '/accounts/login/';
+        return;
+    }
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+        window.api.logout();
+    });
+
+    async function loadInbox() {
+        const contentEl = document.getElementById('messages-content');
+        
+        try {
+            const data = await window.api.request('/api/v1/messaging/messages/?is_read=false');
+            
+            if (data && data.length > 0) {
+                contentEl.innerHTML = `
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                        <button id="compose-btn" class="btn btn-primary" data-i18n="messages.compose">Хабар юбориш</button>
+                    </div>
+                    <div class="card" style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #eee;">
+                                    <th style="padding: 10px;" data-i18n="messages.from">Кимдан</th>
+                                    <th style="padding: 10px;" data-i18n="messages.subject">Мавзу</th>
+                                    <th style="padding: 10px;" data-i18n="messages.date">Сана</th>
+                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(m => `
+                                    <tr style="border-bottom: 1px solid #eee; ${m.is_unread ? 'font-weight: bold;' : ''}">
+                                        <td style="padding: 10px;">${m.sender_name}</td>
+                                        <td style="padding: 10px;">${m.subject || '(без темы)'}</td>
+                                        <td style="padding: 10px;">${new Date(m.created_at).toLocaleString()}</td>
+                                        <td style="padding: 10px;">
+                                            <button class="btn btn-sm btn-info" onclick="viewMessage(${m.id})">
+                                                <span data-i18n="common.view">Кўриш</span>
+                                            </button>
+                                            ${m.is_unread ? `
+                                                <button class="btn btn-sm btn-success" onclick="markRead(${m.id})">
+                                                    <span data-i18n="messages.mark_read">Ўқиш</span>
+                                                </button>
+                                            ` : ''}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                contentEl.innerHTML = `
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                        <button id="compose-btn" class="btn btn-primary" data-i18n="messages.compose">Хабар юбориш</button>
+                    </div>
+                    <div class="card" style="padding: 20px; text-align: center;" data-i18n="messages.no_messages">Хабарлар йўқ</div>
+                `;
+            }
+            window.i18n.applyTranslations();
+            
+            const composeBtn = contentEl.querySelector('#compose-btn');
+            if (composeBtn) {
+                composeBtn.addEventListener('click', () => showComposeModal());
+            }
+        } catch (e) {
+            console.error('Failed to load messages', e);
+            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
+            window.i18n.applyTranslations();
+        }
+    }
+
+    async function loadSent() {
+        const contentEl = document.getElementById('messages-content');
+        
+        try {
+            const data = await window.api.request('/api/v1/messaging/messages/');
+            const sentMessages = data.filter(m => m.sender_name === window.api.getMe().username);
+            
+            if (sentMessages.length > 0) {
+                contentEl.innerHTML = `
+                    <div class="card" style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #eee;">
+                                    <th style="padding: 10px;" data-i18n="messages.to">Кимга</th>
+                                    <th style="padding: 10px;" data-i18n="messages.subject">Мавзу</th>
+                                    <th style="padding: 10px;" data-i18n="messages.date">Сана</th>
+                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sentMessages.map(m => `
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td style="padding: 10px;">${m.recipient_name || 'Группа'}</td>
+                                        <td style="padding: 10px;">${m.subject || '(без темы)'}</td>
+                                        <td style="padding: 10px;">${new Date(m.created_at).toLocaleString()}</td>
+                                        <td style="padding: 10px;">
+                                            <button class="btn btn-sm btn-info" onclick="viewMessage(${m.id})">
+                                                <span data-i18n="common.view">Кўриш</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center;" data-i18n="messages.no_messages">Хабарлар йўқ</div>`;
+            }
+            window.i18n.applyTranslations();
+        } catch (e) {
+            console.error('Failed to load sent messages', e);
+            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
+            window.i18n.applyTranslations();
+        }
+    }
+
+    async function loadNotifications() {
+        const contentEl = document.getElementById('messages-content');
+        
+        try {
+            const data = await window.api.request('/api/v1/messaging/notifications/');
+            
+            if (data && data.length > 0) {
+                const unreadCount = data.filter(n => n.is_unread).length;
+                
+                contentEl.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <span data-i18n="messages.unread_count">Ўқилмаган: ${unreadCount}</span>
+                        ${unreadCount > 0 ? `
+                            <button id="mark-all-read-btn" class="btn btn-sm btn-success" data-i18n="messages.mark_all_read">Ҳаммасини ўқиш</button>
+                        ` : ''}
+                    </div>
+                    <div class="card">
+                        ${data.map(n => `
+                            <div style="padding: 15px; border-bottom: 1px solid #eee; ${n.is_unread ? 'background-color: #f0f8ff;' : ''}">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <strong>${n.type_display}</strong>
+                                    <small>${new Date(n.created_at).toLocaleString()}</small>
+                                </div>
+                                <div style="margin-top: 5px;">${n.title}</div>
+                                <div style="margin-top: 5px; color: #666;">${n.message}</div>
+                                ${n.is_unread ? `
+                                    <button class="btn btn-sm btn-success" style="margin-top: 10px;" onclick="markNotificationRead(${n.id})">
+                                        <span data-i18n="messages.mark_read">Ўқиш</span>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center;" data-i18n="messages.no_notifications">Уведомления йўқ</div>`;
+            }
+            window.i18n.applyTranslations();
+            
+            const markAllBtn = contentEl.querySelector('#mark-all-read-btn');
+            if (markAllBtn) {
+                markAllBtn.addEventListener('click', () => markAllNotificationsRead());
+            }
+        } catch (e) {
+            console.error('Failed to load notifications', e);
+            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
+            window.i18n.applyTranslations();
+        }
+    }
+
+    async function showComposeModal() {
+        let users = [];
+        try {
+            users = await window.api.request('/api/v1/accounts/users/');
+        } catch (e) {
+            console.error('Failed to load users', e);
+        }
+
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.display = 'block';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 data-i18n="messages.compose">Хабар юбориш</h3>
+                    <button class="close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="compose-form">
+                        <div class="form-group">
+                            <label data-i18n="messages.to">Кимга</label>
+                            <select name="recipient" class="form-control">
+                                <option value="">Группа (барча)</option>
+                                ${users.map(u => `<option value="${u.id}">${u.username} (${u.full_name || ''}) - ${u.role}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="messages.subject">Мавзу</label>
+                            <input type="text" name="subject" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label data-i18n="messages.content">Мазмун</label>
+                            <textarea name="content" class="form-control" rows="5" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary" data-i18n="messages.send">Юбориш</button>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        window.i18n.applyTranslations();
+
+        modal.querySelector('.close').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+
+        modal.querySelector('#compose-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            if (!data.recipient) {
+                data.is_group = true;
+                delete data.recipient;
+            }
+            
+            try {
+                await window.api.request('/api/v1/messaging/messages/', {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                modal.remove();
+                await loadInbox();
+            } catch (error) {
+                alert('Error: ' + (error.data?.detail || 'Failed to send message'));
+            }
+        });
+    }
+
+    async function viewMessage(messageId) {
+        try {
+            const message = await window.api.request(`/api/v1/messaging/messages/${messageId}/`);
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.display = 'block';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>${message.subject || '(без темы)'}</h3>
+                        <button class="close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p><strong data-i18n="messages.from">Кимдан:</strong> ${message.sender_name}</p>
+                        <p><strong data-i18n="messages.to">Кимга:</strong> ${message.recipient_name || 'Группа'}</p>
+                        <p><strong data-i18n="messages.date">Сана:</strong> ${new Date(message.created_at).toLocaleString()}</p>
+                        <hr style="margin: 15px 0;">
+                        <div style="white-space: pre-wrap;">${message.content}</div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            modal.querySelector('.close').addEventListener('click', () => modal.remove());
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        } catch (error) {
+            alert('Error: ' + (error.data?.detail || 'Failed to load message'));
+        }
+    }
+
+    async function markRead(messageId) {
+        try {
+            await window.api.request(`/api/v1/messaging/messages/${messageId}/mark_read/`, {
+                method: 'POST'
+            });
+            await loadInbox();
+        } catch (error) {
+            alert('Error: ' + (error.data?.detail || 'Failed to mark message as read'));
+        }
+    }
+
+    async function markNotificationRead(notificationId) {
+        try {
+            await window.api.request(`/api/v1/messaging/notifications/${notificationId}/mark_read/`, {
+                method: 'POST'
+            });
+            await loadNotifications();
+        } catch (error) {
+            alert('Error: ' + (error.data?.detail || 'Failed to mark notification as read'));
+        }
+    }
+
+    async function markAllNotificationsRead() {
+        try {
+            await window.api.request('/api/v1/messaging/notifications/mark_all_read/', {
+                method: 'POST'
+            });
+            await loadNotifications();
+        } catch (error) {
+            alert('Error: ' + (error.data?.detail || 'Failed to mark all notifications as read'));
+        }
+    }
+
+    document.getElementById('messages-tab').addEventListener('change', (e) => {
+        if (e.target.value === 'inbox') {
+            loadInbox();
+        } else if (e.target.value === 'sent') {
+            loadSent();
+        } else {
+            loadNotifications();
+        }
+    });
+
+    await loadInbox();
+});
+</script>
+{% endblock %}

@@ -8,6 +8,7 @@ Orders models - управление заказами.
 """
 from django.db import models
 from apps.core.models import TimestampedModel
+from apps.warehouse.models import UnitChoices
 
 
 class OrderStatus(models.TextChoices):
@@ -89,7 +90,7 @@ class Order(TimestampedModel):
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     product_name = models.CharField(max_length=255, blank=True, default='')
     quantity = models.DecimalField(max_digits=15, decimal_places=3)
-    unit = models.CharField(max_length=20, choices='warehouse.models.UnitChoices.choices')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices)
     deadline = models.DateField()
     material = models.CharField(max_length=100, blank=True, default='')
     worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
@@ -103,6 +104,15 @@ class Order(TimestampedModel):
     is_overdue = models.BooleanField(default=False)
 
     class Meta:
+        """
+        Метаданные модели Order.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по убыванию даты создания
+            indexes: индексы для оптимизации запросов
+        """
         verbose_name = 'Order'
         verbose_name_plural = 'Orders'
         ordering = ['-created_at']
@@ -139,3 +149,68 @@ class Order(TimestampedModel):
             bool - True если total_amount > paid_amount
         """
         return self.total_amount > self.paid_amount
+
+    def update_payment_status(self):
+        """
+        Обновляет статус оплаты на основе оплаченной суммы.
+
+        Логическая цепочка:
+        - Если paid_amount == 0: UNPAID
+        - Если 0 < paid_amount < total_amount: PARTIAL
+        - Если paid_amount >= total_amount: PAID
+        """
+        if self.paid_amount == 0:
+            self.payment_status = self.PaymentStatus.UNPAID
+        elif self.paid_amount < self.total_amount:
+            self.payment_status = self.PaymentStatus.PARTIAL
+        else:
+            self.payment_status = self.PaymentStatus.PAID
+        self.save(update_fields=['payment_status'])
+
+    def check_overdue(self):
+        """
+        Проверяет, просрочен ли заказ по дедлайну.
+
+        Логическая цепочка:
+        - Если deadline < сегодня и статус не завершен: is_overdue = True
+        - Иначе: is_overdue = False
+        """
+        from django.utils import timezone
+        today = timezone.now().date()
+        completed_statuses = [self.OrderStatus.READY, self.OrderStatus.DELIVERED, self.OrderStatus.CANCELLED]
+        
+        if self.deadline < today and self.status not in completed_statuses:
+            self.is_overdue = True
+        else:
+            self.is_overdue = False
+        self.save(update_fields=['is_overdue'])
+
+    def update_client_financials(self):
+        """
+        Обновляет финансовые данные клиента при изменении заказа.
+
+        Логическая цепочка:
+        - Пересчитывает total_orders_amount клиента
+        - Пересчитывает total_paid клиента
+        - Пересчитывает debt клиента
+        """
+        from django.db.models import Sum, F
+        
+        client = self.client
+        orders = client.orders.all()
+        
+        # Сумма всех заказов
+        total_orders = orders.aggregate(total=Sum('total_amount'))['total'] or 0
+        client.total_orders_amount = total_orders
+        
+        # Сумма всех оплат
+        total_paid = orders.aggregate(paid=Sum('paid_amount'))['paid'] or 0
+        client.total_paid = total_paid
+        
+        # Долг
+        client.debt = total_orders - total_paid
+        
+        # Прибыль (упрощенная логика - можно расширить)
+        client.profit = total_paid * 0.1  # 10% от оплаченного
+        
+        client.save()

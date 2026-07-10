@@ -50,6 +50,14 @@ class Client(TimestampedModel, SoftDeleteModel):
     notes = models.TextField(blank=True, default='')
 
     class Meta:
+        """
+        Метаданные модели Client.
+
+        Атрибуты:
+            verbose_name: человекочитаемое имя модели
+            verbose_name_plural: множественное число
+            ordering: сортировка по убыванию даты создания
+        """
         verbose_name = 'Client'
         verbose_name_plural = 'Clients'
         ordering = ['-created_at']
@@ -81,3 +89,45 @@ class Client(TimestampedModel, SoftDeleteModel):
             bool - True если есть не завершенные заказы
         """
         return self.orders.filter(status__in=['new', 'in_progress', 'awaiting_confirmation']).exists()
+
+    def auto_archive(self):
+        """
+        Автоматически архивирует клиента если все заказы завершены и оплачены.
+
+        Логическая цепочка:
+        - Если нет активных заказов и debt == 0: is_archived = True
+        - Иначе: is_archived остается False
+        """
+        if not self.has_active_orders and self.debt == 0:
+            self.is_archived = True
+            self.is_active = False
+            self.save(update_fields=['is_archived', 'is_active'])
+
+    def recalculate_financials(self):
+        """
+        Пересчитывает все финансовые данные клиента.
+
+        Логическая цепочка:
+        - Суммирует total_amount всех заказов
+        - Суммирует paid_amount всех заказов
+        - Вычисляет debt = total_orders_amount - total_paid
+        """
+        from django.db.models import Sum
+        
+        orders = self.orders.all()
+        
+        # Сумма всех заказов
+        total_orders = orders.aggregate(total=Sum('total_amount'))['total'] or 0
+        self.total_orders_amount = total_orders
+        
+        # Сумма всех оплат
+        total_paid = orders.aggregate(paid=Sum('paid_amount'))['paid'] or 0
+        self.total_paid = total_paid
+        
+        # Долг
+        self.debt = total_orders - total_paid
+        
+        # Прибыль (10% от оплаченного)
+        self.profit = total_paid * 0.1
+        
+        self.save()
