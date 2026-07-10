@@ -69,13 +69,13 @@ class UserCreateSerializer(serializers.ModelSerializer):
         can_write_to_owner, can_create_workers, can_see_other_workers
 
     Валидация:
-        - password: минимальная длина 6 символов
+        - password: минимальная длина 8 символов
         - Пароль хешируется перед сохранением
 
     Безопасность:
         - Поле password помечено как write_only (не возвращается в API)
     """
-    password = serializers.CharField(write_only=True, min_length=6)
+    password = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
         model = User
@@ -183,17 +183,17 @@ class ChangePasswordSerializer(serializers.Serializer):
 
     Поля:
         old_password: CharField - текущий пароль для проверки
-        new_password: CharField - новый пароль (минимум 6 символов)
+        new_password: CharField - новый пароль (минимум 8 символов)
 
     Валидация:
         - old_password должен совпадать с текущим паролем
-        - new_password: минимальная длина 6 символов
+        - new_password: минимальная длина 8 символов
 
     Используется:
         - В ChangePasswordView для POST /api/v1/accounts/me/password/
     """
     old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True, min_length=6)
+    new_password = serializers.CharField(required=True, min_length=8)
 
     def validate_old_password(self, value):
         """
@@ -224,7 +224,7 @@ class SetupOwnerSerializer(serializers.Serializer):
 
     Поля:
         username: CharField - имя пользователя (3-150 символов)
-        password: CharField - пароль (минимум 6 символов, write_only)
+        password: CharField - пароль (минимум 8 символов, write_only)
         password_confirm: CharField - подтверждение пароля (write_only)
         full_name: CharField - полное имя
         phone: CharField - телефон (опционально)
@@ -242,7 +242,7 @@ class SetupOwnerSerializer(serializers.Serializer):
         - В SetupOwnerView для POST /api/v1/accounts/setup/owner/
     """
     username = serializers.CharField(min_length=3, max_length=150)
-    password = serializers.CharField(write_only=True, min_length=6)
+    password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
     full_name = serializers.CharField(max_length=255)
     phone = serializers.CharField(max_length=20, required=False, default='')
