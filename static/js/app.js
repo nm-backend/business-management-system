@@ -15,9 +15,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        window.api.logout();
-    });
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            window.api.logout();
+        });
+    }
 
     // Register routes
     window.router.addRoute('/', window.DashboardComponent);

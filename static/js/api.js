@@ -122,6 +122,10 @@ class APIClient {
         window.location.href = '/accounts/login/';
     }
 
+    isAuthenticated() {
+        return !!this.getTokens().access;
+    }
+
     async getMe() {
         return this.request('/accounts/me/');
     }
