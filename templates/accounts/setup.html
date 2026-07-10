@@ -82,12 +82,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Auto login after setup
             await window.api.login(username, password);
             successMsg.style.display = 'block';
+            if (window.toast) window.toast.success('Owner account created');
             setTimeout(() => {
                 window.location.href = '/';
             }, 1000);
         } catch (error) {
             errorMsg.textContent = error.data && error.data.username ? error.data.username[0] : (window.i18n.translate('common.error') || "Error occurred");
             errorMsg.style.display = 'block';
+            if (window.toast) window.toast.error(errorMsg.textContent);
         }
     });
 });

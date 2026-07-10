@@ -32,6 +32,7 @@ class WarehouseComponent {
 
     async loadMaterials(container) {
         const listEl = container.querySelector('#materials-list');
+        window.listStates.tableLoading(listEl, 4);
         try {
             const data = await window.api.request('/warehouse/raw-materials/');
 
@@ -45,12 +46,12 @@ class WarehouseComponent {
                     </tr>
                 `).join('');
             } else {
-                listEl.innerHTML = `<tr><td colspan="4" style="padding: 10px; text-align: center;" data-i18n="common.no_data">Нет данных</td></tr>`;
+                window.listStates.tableEmpty(listEl, 4, 'No materials found');
                 window.i18n.applyTranslations();
             }
         } catch (e) {
             console.error('Failed to load materials', e);
-            listEl.innerHTML = `<tr><td colspan="4" style="padding: 10px; text-align: center; color: red;" data-i18n="common.error">Ошибка загрузки</td></tr>`;
+            window.listStates.tableError(listEl, 4, 'Unable to load materials', () => this.loadMaterials(container));
             window.i18n.applyTranslations();
         }
     }

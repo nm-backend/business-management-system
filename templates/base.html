@@ -8,6 +8,7 @@
     <title data-i18n="app.name">SkladPro.Nod</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'css/ux.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -17,6 +18,9 @@
     {# Основные JavaScript файлы #}
     <script src="{% static 'js/api.js' %}"></script>
     <script src="{% static 'js/i18n.js' %}"></script>
+    <script src="{% static 'js/toast.js' %}"></script>
+    <script src="{% static 'js/dialogs.js' %}"></script>
+    <script src="{% static 'js/list-states.js' %}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

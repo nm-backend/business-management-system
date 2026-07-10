@@ -257,9 +257,10 @@ class ProductionComponent {
             await window.api.request(`/api/v1/production/tasks/${taskId}/accept/`, {
                 method: 'POST'
             });
+            window.toast.success('Task accepted');
             await this.loadTasks(this.container);
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to accept task'));
+            window.toast.error(error.data?.detail || 'Failed to accept task');
         }
     }
 
@@ -277,9 +278,10 @@ class ProductionComponent {
                 method: 'POST',
                 body: JSON.stringify({ reason })
             });
+            window.toast.success('Task refused');
             await this.loadTasks(this.container);
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to refuse task'));
+            window.toast.error(error.data?.detail || 'Failed to refuse task');
         }
     }
 
@@ -299,9 +301,10 @@ class ProductionComponent {
                 method: 'POST',
                 body: JSON.stringify(body)
             });
+            window.toast.success('Work confirmed');
             await this.loadWorks(this.container);
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to confirm work'));
+            window.toast.error(error.data?.detail || 'Failed to confirm work');
         }
     }
 
@@ -319,9 +322,10 @@ class ProductionComponent {
                 method: 'POST',
                 body: JSON.stringify({ reason })
             });
+            window.toast.success('Work rejected');
             await this.loadWorks(this.container);
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to reject work'));
+            window.toast.error(error.data?.detail || 'Failed to reject work');
         }
     }
 }

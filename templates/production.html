@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             await loadTasks();
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to accept task'));
+            window.toast.error(error.data?.detail || 'Failed to accept task');
         }
     };
 
@@ -260,7 +260,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             await loadTasks();
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to refuse task'));
+            window.toast.error(error.data?.detail || 'Failed to refuse task');
         }
     };
 
@@ -271,7 +271,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             await loadWorks();
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to confirm work'));
+            window.toast.error(error.data?.detail || 'Failed to confirm work');
         }
     };
 
@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             await loadWorks();
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to reject work'));
+            window.toast.error(error.data?.detail || 'Failed to reject work');
         }
     };
 

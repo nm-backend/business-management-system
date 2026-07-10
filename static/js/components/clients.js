@@ -55,6 +55,7 @@ class ClientsComponent {
     async loadClients(container) {
         const listEl = container.querySelector('#clients-list');
         const filter = container.querySelector('#client-filter').value;
+        window.listStates.tableLoading(listEl, 6);
         
         try {
             let url = '/api/v1/clients/';
@@ -84,16 +85,17 @@ class ClientsComponent {
                             <button class="btn btn-sm btn-info" onclick="window.router.navigate('#clients/${c.id}')">
                                 <span data-i18n="common.view">Кўриш</span>
                             </button>
+                            ${!c.is_archived ? `<button class="btn btn-sm btn-danger archive-client" data-id="${c.id}">Archive</button>` : ''}
                         </td>
                     </tr>
                 `).join('');
             } else {
-                listEl.innerHTML = `<tr><td colspan="6" style="padding: 10px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</td></tr>`;
+                window.listStates.tableEmpty(listEl, 6, 'No clients found');
             }
             window.i18n.applyTranslations();
         } catch (e) {
             console.error('Failed to load clients', e);
-            listEl.innerHTML = `<tr><td colspan="6" style="padding: 10px; text-align: center; color: red;" data-i18n="common.error">Хатолик</td></tr>`;
+            window.listStates.tableError(listEl, 6, 'Unable to load clients', () => this.loadClients(container));
             window.i18n.applyTranslations();
         }
     }
@@ -169,9 +171,22 @@ class ClientsComponent {
                     body: JSON.stringify(data)
                 });
                 modal.remove();
+                window.toast.success('Client created successfully');
                 await this.loadClients(container);
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add client'));
+                window.toast.error(error.data?.detail || 'Failed to add client');
+            }
+        });
+        container.addEventListener('click', async (event) => {
+            const button = event.target.closest('.archive-client');
+            if (!button) return;
+            if (!await window.confirmation.confirm('Archive this client?')) return;
+            try {
+                await window.api.request(`/api/v1/clients/${button.dataset.id}/archive/`, { method: 'POST' });
+                window.toast.success('Client archived');
+                await this.loadClients(container);
+            } catch (error) {
+                window.toast.error(error.data?.detail || 'Failed to archive client');
             }
         });
     }

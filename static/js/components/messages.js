@@ -304,7 +304,7 @@ class MessagesComponent {
                 modal.remove();
                 await this.loadInbox(container);
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to send message'));
+                window.toast.error(error.data?.detail || 'Failed to send message');
             }
         });
     }
@@ -344,7 +344,7 @@ class MessagesComponent {
                 if (e.target === modal) modal.remove();
             });
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to load message'));
+            window.toast.error(error.data?.detail || 'Failed to load message');
         }
     }
 
@@ -360,7 +360,7 @@ class MessagesComponent {
             });
             await this.loadInbox(this.container);
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to mark message as read'));
+            window.toast.error(error.data?.detail || 'Failed to mark message as read');
         }
     }
 
@@ -376,7 +376,7 @@ class MessagesComponent {
             });
             await this.loadNotifications(this.container);
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to mark notification as read'));
+            window.toast.error(error.data?.detail || 'Failed to mark notification as read');
         }
     }
 
@@ -392,7 +392,7 @@ class MessagesComponent {
             });
             await this.loadNotifications(container);
         } catch (error) {
-            alert('Error: ' + (error.data?.detail || 'Failed to mark all notifications as read'));
+            window.toast.error(error.data?.detail || 'Failed to mark all notifications as read');
         }
     }
 }

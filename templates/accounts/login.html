@@ -47,12 +47,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const errorMsg = document.getElementById('error-message');
         
         errorMsg.style.display = 'none';
+        if (sessionStorage.getItem('session_expired')) {
+            errorMsg.textContent = 'Your session expired. Please sign in again.';
+            errorMsg.style.display = 'block';
+            sessionStorage.removeItem('session_expired');
+        }
         
         try {
             await window.api.login(username, password);
             window.location.href = '/';
         } catch (error) {
+            errorMsg.textContent = error.data?.detail || 'Unable to sign in. Check your credentials.';
             errorMsg.style.display = 'block';
+            if (window.toast) window.toast.error(errorMsg.textContent);
         }
     });
 });

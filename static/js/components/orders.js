@@ -59,6 +59,7 @@ class OrdersComponent {
     async loadOrders(container) {
         const listEl = container.querySelector('#orders-list');
         const statusFilter = container.querySelector('#order-status-filter').value;
+        window.listStates.tableLoading(listEl, 8);
         
         try {
             let url = '/api/v1/orders/';
@@ -94,12 +95,12 @@ class OrdersComponent {
                     </tr>
                 `).join('');
             } else {
-                listEl.innerHTML = `<tr><td colspan="8" style="padding: 10px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</td></tr>`;
+                window.listStates.tableEmpty(listEl, 8, 'No orders found');
             }
             window.i18n.applyTranslations();
         } catch (e) {
             console.error('Failed to load orders', e);
-            listEl.innerHTML = `<tr><td colspan="8" style="padding: 10px; text-align: center; color: red;" data-i18n="common.error">Хатолик</td></tr>`;
+            window.listStates.tableError(listEl, 8, 'Unable to load orders', () => this.loadOrders(container));
             window.i18n.applyTranslations();
         }
     }
@@ -287,9 +288,10 @@ class OrdersComponent {
                     body: JSON.stringify(data)
                 });
                 modal.remove();
+                window.toast.success('Order created successfully');
                 await this.loadOrders(container);
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add order'));
+                window.toast.error(error.data?.detail || 'Failed to add order');
             }
         });
     }

@@ -411,9 +411,10 @@ class FinanceComponent {
                     body: JSON.stringify(data)
                 });
                 modal.remove();
+                window.toast.success('Expense created successfully');
                 await this.loadExpenses(container);
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add expense'));
+                window.toast.error(error.data?.detail || 'Failed to add expense');
             }
         });
     }
@@ -497,9 +498,10 @@ class FinanceComponent {
                     body: JSON.stringify(data)
                 });
                 modal.remove();
+                window.toast.success('Payment created successfully');
                 await this.loadPayments(container);
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add payment'));
+                window.toast.error(error.data?.detail || 'Failed to add payment');
             }
         });
     }
@@ -584,9 +586,10 @@ class FinanceComponent {
                     body: JSON.stringify(data)
                 });
                 modal.remove();
+                window.toast.success('Rate created successfully');
                 await this.loadRates(container);
             } catch (error) {
-                alert('Error: ' + (error.data?.detail || 'Failed to add rate'));
+                window.toast.error(error.data?.detail || 'Failed to add rate');
             }
         });
     }
