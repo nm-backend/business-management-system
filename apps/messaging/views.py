@@ -8,25 +8,20 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from apps.core.viewsets import ActionSerializerMixin
 from .models import Message, Notification
 from .serializers import MessageSerializer, MessageCreateSerializer, NotificationSerializer
 
 
-class MessageViewSet(viewsets.ModelViewSet):
+class MessageViewSet(ActionSerializerMixin, viewsets.ModelViewSet):
     """
     ViewSet для управления сообщениями.
 
     Доступен для всех аутентифицированных пользователей.
     """
     permission_classes = [IsAuthenticated]
-
-    def get_serializer_class(self):
-        """
-        Возвращает сериализатор в зависимости от действия.
-        """
-        if self.action == 'create':
-            return MessageCreateSerializer
-        return MessageSerializer
+    serializer_class = MessageSerializer
+    serializer_action_classes = {'create': MessageCreateSerializer}
 
     def get_queryset(self):
         """

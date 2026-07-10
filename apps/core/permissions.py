@@ -9,44 +9,54 @@ Custom permissions for role-based access control.
 from rest_framework import permissions
 
 
-class IsOwner(permissions.BasePermission):
+class RolePermission(permissions.BasePermission):
+    allowed_roles = ()
+
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and request.user.role in self.allowed_roles
+        )
+
+
+class IsOwner(RolePermission):
     """
     Permission - только владелец.
 
     Разрешает доступ только пользователям с ролью 'owner'.
     """
-    def has_permission(self, request, view):
-        return request.user and request.user.is_owner
+    allowed_roles = ('owner',)
 
 
-class IsAdmin(permissions.BasePermission):
+class IsAdmin(RolePermission):
     """
     Permission - только администратор.
 
     Разрешает доступ только пользователям с ролью 'admin'.
     """
-    def has_permission(self, request, view):
-        return request.user and request.user.is_admin
+    allowed_roles = ('admin',)
 
 
-class IsWorker(permissions.BasePermission):
+class IsWorker(RolePermission):
     """
     Permission - только работник.
 
     Разрешает доступ только пользователям с ролью 'worker'.
     """
-    def has_permission(self, request, view):
-        return request.user and request.user.is_worker
+    allowed_roles = ('worker',)
 
 
-class IsOwnerOrAdmin(permissions.BasePermission):
+class IsOwnerOrAdmin(RolePermission):
     """
     Permission - владелец или администратор.
 
     Разрешает доступ владельцу или администратору.
     """
-    def has_permission(self, request, view):
-        return request.user and (request.user.is_owner or request.user.is_admin)
+    allowed_roles = ('owner', 'admin')
+
+
+class IsOwnerOrAdminOrWorker(RolePermission):
+    allowed_roles = ('owner', 'admin', 'worker')
 
 
 class IsAuthenticated(permissions.BasePermission):
@@ -56,10 +66,10 @@ class IsAuthenticated(permissions.BasePermission):
     Разрешает доступ любому аутентифицированному пользователю.
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated
+        return request.user.is_authenticated
 
 
-class FinancialDataPermission(permissions.BasePermission):
+class FinancialDataPermission(IsOwner):
     """
     Permission - защита финансовых данных.
 
@@ -77,10 +87,6 @@ class FinancialDataPermission(permissions.BasePermission):
     Используется в связке с сериализаторами, которые исключают
     финансовые поля для non-owner пользователей.
     """
-    def has_permission(self, request, view):
-        return request.user and request.user.is_owner
-
-
 class CanCreateWorkers(permissions.BasePermission):
     """
     Permission - может создавать работников.
@@ -90,7 +96,7 @@ class CanCreateWorkers(permissions.BasePermission):
     - Администратору с разрешением can_create_workers
     """
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
+        if not request.user.is_authenticated:
             return False
         if request.user.is_owner:
             return True
@@ -108,7 +114,7 @@ class CanWriteToOwner(permissions.BasePermission):
     - Работнику с разрешением can_write_to_owner
     """
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
+        if not request.user.is_authenticated:
             return False
         return request.user.can_write_to_owner
 
@@ -122,7 +128,7 @@ class CanSeeOtherWorkers(permissions.BasePermission):
     - Администратору с разрешением can_see_other_workers
     """
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
+        if not request.user.is_authenticated:
             return False
         if request.user.is_owner:
             return True
@@ -139,7 +145,7 @@ class IsOwnerOrAssignedWorker(permissions.BasePermission):
     Используется для задач и работ.
     """
     def has_object_permission(self, request, view, obj):
-        if not request.user or not request.user.is_authenticated:
+        if not request.user.is_authenticated:
             return False
         if request.user.is_owner:
             return True
@@ -148,11 +154,9 @@ class IsOwnerOrAssignedWorker(permissions.BasePermission):
         return False
 
 
-class IsOwnerOrAssignedAdmin(permissions.BasePermission):
+class IsOwnerOrAssignedAdmin(IsOwnerOrAdmin):
     """
     Permission - владелец или администратор.
 
     Разрешает доступ владельцу или администратору.
     """
-    def has_permission(self, request, view):
-        return request.user and (request.user.is_owner or request.user.is_admin)

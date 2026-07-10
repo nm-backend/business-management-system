@@ -18,7 +18,8 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
-from core.permissions import IsOwner, IsOwnerOrAdmin
+from apps.core.permissions import IsOwner, IsOwnerOrAdmin
+from apps.core.viewsets import ActionSerializerMixin, OwnerSerializerMixin
 from .models import User
 from .serializers import (
     UserSerializer, UserSelfUpdateSerializer, UserCreateSerializer, UserLimitedSerializer,
@@ -365,7 +366,11 @@ class ChangeLanguageView(APIView):
         )
         return Response({'language': request.user.language, 'message': 'Language updated'})
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(
+    ActionSerializerMixin,
+    OwnerSerializerMixin,
+    viewsets.ModelViewSet,
+):
     """
     ViewSet для управления аккаунтами пользователей через RBAC.
 
@@ -389,6 +394,9 @@ class UserViewSet(viewsets.ModelViewSet):
     - POST /api/v1/accounts/users/{id}/reset_password/ - сброс пароля (owner)
     """
     permission_classes = [IsAuthenticated]
+    serializer_class = UserLimitedSerializer
+    owner_serializer_class = UserSerializer
+    serializer_action_classes = {'create': UserCreateSerializer}
 
     def get_queryset(self):
         """
@@ -408,24 +416,6 @@ class UserViewSet(viewsets.ModelViewSet):
         elif user.is_admin:
             return User.objects.filter(role='worker')
         return User.objects.none()
-
-    def get_serializer_class(self):
-        """
-        Выбирает сериализатор в зависимости от действия и роли пользователя.
-
-        Логика выбора:
-        - create: UserCreateSerializer (для создания с паролем)
-        - owner: UserSerializer (полные данные)
-        - admin: UserLimitedSerializer (без административных полей)
-
-        Возвращает:
-            Serializer class - соответствующий сериализатор
-        """
-        if self.action == 'create':
-            return UserCreateSerializer
-        if self.request.user.is_owner:
-            return UserSerializer
-        return UserLimitedSerializer
 
     def get_permissions(self):
         """

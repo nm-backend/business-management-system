@@ -4,11 +4,10 @@ Views for finance API.
 Этот модуль содержит API views для управления финансами.
 Все финансовые данные доступны только владельцу (owner).
 """
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
+from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, FinancialDataPermission
+from apps.core.permissions import FinancialDataPermission
+from apps.core.viewsets import ActionSerializerMixin
 from .models import Expense, LaborRate, WorkerPayment
 from .serializers import (
     ExpenseSerializer, ExpenseCreateSerializer,
@@ -17,21 +16,15 @@ from .serializers import (
 )
 
 
-class ExpenseViewSet(viewsets.ModelViewSet):
+class ExpenseViewSet(ActionSerializerMixin, viewsets.ModelViewSet):
     """
     ViewSet для управления расходами.
 
     Доступен только владельцу (owner).
     """
     permission_classes = [IsAuthenticated, FinancialDataPermission]
-
-    def get_serializer_class(self):
-        """
-        Возвращает сериализатор в зависимости от действия.
-        """
-        if self.action == 'create':
-            return ExpenseCreateSerializer
-        return ExpenseSerializer
+    serializer_class = ExpenseSerializer
+    serializer_action_classes = {'create': ExpenseCreateSerializer}
 
     def get_queryset(self):
         """
@@ -54,21 +47,15 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class LaborRateViewSet(viewsets.ModelViewSet):
+class LaborRateViewSet(ActionSerializerMixin, viewsets.ModelViewSet):
     """
     ViewSet для управления ставками оплаты труда.
 
     Доступен только владельцу (owner).
     """
     permission_classes = [IsAuthenticated, FinancialDataPermission]
-
-    def get_serializer_class(self):
-        """
-        Возвращает сериализатор в зависимости от действия.
-        """
-        if self.action == 'create':
-            return LaborRateCreateSerializer
-        return LaborRateSerializer
+    serializer_class = LaborRateSerializer
+    serializer_action_classes = {'create': LaborRateCreateSerializer}
 
     def get_queryset(self):
         """
@@ -77,21 +64,15 @@ class LaborRateViewSet(viewsets.ModelViewSet):
         return LaborRate.objects.select_related('product')
 
 
-class WorkerPaymentViewSet(viewsets.ModelViewSet):
+class WorkerPaymentViewSet(ActionSerializerMixin, viewsets.ModelViewSet):
     """
     ViewSet для управления выплатами работникам.
 
     Доступен только владельцу (owner).
     """
     permission_classes = [IsAuthenticated, FinancialDataPermission]
-
-    def get_serializer_class(self):
-        """
-        Возвращает сериализатор в зависимости от действия.
-        """
-        if self.action == 'create':
-            return WorkerPaymentCreateSerializer
-        return WorkerPaymentSerializer
+    serializer_class = WorkerPaymentSerializer
+    serializer_action_classes = {'create': WorkerPaymentCreateSerializer}
 
     def get_queryset(self):
         """

@@ -8,14 +8,18 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, IsOwnerOrAdmin
+from apps.core.viewsets import ActionSerializerMixin, OwnerSerializerMixin
 from .models import Order, OrderStatus, PaymentStatus
 from .serializers import (
     OrderSerializer, OrderLimitedSerializer, OrderCreateSerializer
 )
 
 
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(
+    ActionSerializerMixin,
+    OwnerSerializerMixin,
+    viewsets.ModelViewSet,
+):
     """
     ViewSet для управления заказами.
 
@@ -24,20 +28,9 @@ class OrderViewSet(viewsets.ModelViewSet):
     - Admin/Worker: ограниченный доступ без финансовых данных
     """
     permission_classes = [IsAuthenticated]
-
-    def get_serializer_class(self):
-        """
-        Возвращает сериализатор в зависимости от роли пользователя.
-
-        Owner получает полные данные, остальные - ограниченные.
-        """
-        if self.action == 'create':
-            return OrderCreateSerializer
-
-        request = self.request
-        if request.user and request.user.is_owner:
-            return OrderSerializer
-        return OrderLimitedSerializer
+    serializer_class = OrderLimitedSerializer
+    owner_serializer_class = OrderSerializer
+    serializer_action_classes = {'create': OrderCreateSerializer}
 
     def get_queryset(self):
         """

@@ -8,14 +8,18 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, IsOwnerOrAdmin, FinancialDataPermission
+from apps.core.viewsets import ActionSerializerMixin, OwnerSerializerMixin
 from .models import Client
 from .serializers import (
     ClientSerializer, ClientLimitedSerializer, ClientCreateSerializer
 )
 
 
-class ClientViewSet(viewsets.ModelViewSet):
+class ClientViewSet(
+    ActionSerializerMixin,
+    OwnerSerializerMixin,
+    viewsets.ModelViewSet,
+):
     """
     ViewSet для управления клиентами.
 
@@ -24,20 +28,9 @@ class ClientViewSet(viewsets.ModelViewSet):
     - Admin/Worker: ограниченный доступ без финансовых данных
     """
     permission_classes = [IsAuthenticated]
-
-    def get_serializer_class(self):
-        """
-        Возвращает сериализатор в зависимости от роли пользователя.
-
-        Owner получает полные данные, остальные - ограниченные.
-        """
-        if self.action == 'create':
-            return ClientCreateSerializer
-
-        request = self.request
-        if request.user and request.user.is_owner:
-            return ClientSerializer
-        return ClientLimitedSerializer
+    serializer_class = ClientLimitedSerializer
+    owner_serializer_class = ClientSerializer
+    serializer_action_classes = {'create': ClientCreateSerializer}
 
     def get_queryset(self):
         """
@@ -52,12 +45,6 @@ class ClientViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(is_archived=is_archived.lower() == 'true')
 
         return queryset
-
-    def perform_create(self, serializer):
-        """
-        Создает клиента с текущим пользователем.
-        """
-        serializer.save()
 
     @action(detail=False, methods=['get'])
     def active(self, request):

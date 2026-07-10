@@ -1,6 +1,6 @@
 from rest_framework import filters, viewsets
 from django_filters.rest_framework import DjangoFilterBackend
-from core.permissions import IsOwner
+from apps.core.permissions import IsOwner
 from .models import AuditLog
 from .serializers import AuditLogSerializer
 

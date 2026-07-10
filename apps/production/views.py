@@ -9,7 +9,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAssignedWorker
+from apps.core.viewsets import ActionSerializerMixin, OwnerSerializerMixin
 from .models import Task, WorkRecord, TaskStatus
 from .serializers import (
     TaskSerializer, TaskCreateSerializer,
@@ -17,7 +17,7 @@ from .serializers import (
 )
 
 
-class TaskViewSet(viewsets.ModelViewSet):
+class TaskViewSet(ActionSerializerMixin, viewsets.ModelViewSet):
     """
     ViewSet для управления задачами.
 
@@ -27,14 +27,8 @@ class TaskViewSet(viewsets.ModelViewSet):
     - Worker: видит только свои задачи
     """
     permission_classes = [IsAuthenticated]
-
-    def get_serializer_class(self):
-        """
-        Возвращает сериализатор в зависимости от действия.
-        """
-        if self.action == 'create':
-            return TaskCreateSerializer
-        return TaskSerializer
+    serializer_class = TaskSerializer
+    serializer_action_classes = {'create': TaskCreateSerializer}
 
     def get_queryset(self):
         """
@@ -108,7 +102,11 @@ class TaskViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class WorkRecordViewSet(viewsets.ModelViewSet):
+class WorkRecordViewSet(
+    ActionSerializerMixin,
+    OwnerSerializerMixin,
+    viewsets.ModelViewSet,
+):
     """
     ViewSet для управления записями о работе.
 
@@ -117,20 +115,9 @@ class WorkRecordViewSet(viewsets.ModelViewSet):
     - Admin/Worker: ограниченный доступ без финансовых данных
     """
     permission_classes = [IsAuthenticated]
-
-    def get_serializer_class(self):
-        """
-        Возвращает сериализатор в зависимости от роли пользователя.
-
-        Owner получает полные данные, остальные - ограниченные.
-        """
-        if self.action == 'create':
-            return WorkRecordCreateSerializer
-
-        request = self.request
-        if request.user and request.user.is_owner:
-            return WorkRecordSerializer
-        return WorkRecordLimitedSerializer
+    serializer_class = WorkRecordLimitedSerializer
+    owner_serializer_class = WorkRecordSerializer
+    serializer_action_classes = {'create': WorkRecordCreateSerializer}
 
     def get_queryset(self):
         """

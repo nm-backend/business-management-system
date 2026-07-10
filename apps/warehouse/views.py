@@ -1,9 +1,13 @@
 from rest_framework import viewsets, filters
 from rest_framework.exceptions import MethodNotAllowed
 from django_filters.rest_framework import DjangoFilterBackend
-from apps.audit.models import AuditLog
-from apps.audit.services import collect_model_changes, write_audit_log
-from core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrWorker
+from apps.audit.mixins import AuditCreateUpdateMixin, AuditedArchiveMixin
+from apps.core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrWorker
+from apps.core.viewsets import (
+    HideArchivedFromNonOwnersMixin,
+    OwnerSerializerMixin,
+    ReadWritePermissionMixin,
+)
 from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
 from .serializers import (
     RawMaterialSerializer, RawMaterialOwnerSerializer,
@@ -11,7 +15,13 @@ from .serializers import (
     StockMovementSerializer, StockMovementLimitedSerializer, RecipeSerializer, RecipeItemSerializer
 )
 
-class RawMaterialViewSet(viewsets.ModelViewSet):
+class RawMaterialViewSet(
+    OwnerSerializerMixin,
+    ReadWritePermissionMixin,
+    HideArchivedFromNonOwnersMixin,
+    AuditedArchiveMixin,
+    viewsets.ModelViewSet,
+):
     """
     API склада сырья с разделением финансовых полей по роли.
 
@@ -23,54 +33,20 @@ class RawMaterialViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'stone_type', 'color', 'supplier']
     filterset_fields = ['is_archived', 'unit']
     ordering_fields = ['name', 'quantity', 'created_at']
+    queryset = RawMaterial.objects.all()
+    serializer_class = RawMaterialSerializer
+    owner_serializer_class = RawMaterialOwnerSerializer
+    read_permission_classes = (IsOwnerOrAdminOrWorker,)
+    write_permission_classes = (IsOwnerOrAdmin,)
 
-    def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsOwnerOrAdmin()]
-        return [IsOwnerOrAdminOrWorker()]
 
-    def get_queryset(self):
-        qs = RawMaterial.objects.all()
-        if not self.request.user.is_owner:
-            qs = qs.filter(is_archived=False)
-        return qs
-
-    def get_serializer_class(self):
-        if self.request.user.is_owner:
-            return RawMaterialOwnerSerializer
-        return RawMaterialSerializer
-
-    def perform_create(self, serializer):
-        material = serializer.save()
-        write_audit_log(
-            action=AuditLog.Action.CREATE,
-            actor=self.request.user,
-            target=material,
-            request=self.request,
-        )
-
-    def perform_update(self, serializer):
-        changes = collect_model_changes(serializer.instance, serializer.validated_data)
-        material = serializer.save()
-        if changes:
-            write_audit_log(
-                action=AuditLog.Action.UPDATE,
-                actor=self.request.user,
-                target=material,
-                changes=changes,
-                request=self.request,
-            )
-
-    def perform_destroy(self, instance):
-        instance.archive()
-        write_audit_log(
-            action=AuditLog.Action.ARCHIVE,
-            actor=self.request.user,
-            target=instance,
-            request=self.request,
-        )
-
-class FinishedProductViewSet(viewsets.ModelViewSet):
+class FinishedProductViewSet(
+    OwnerSerializerMixin,
+    ReadWritePermissionMixin,
+    HideArchivedFromNonOwnersMixin,
+    AuditedArchiveMixin,
+    viewsets.ModelViewSet,
+):
     """
     API готовой продукции с тем же правилом RBAC, что и склад сырья.
 
@@ -82,54 +58,14 @@ class FinishedProductViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'category']
     filterset_fields = ['is_archived', 'unit']
     ordering_fields = ['name', 'quantity', 'created_at']
+    queryset = FinishedProduct.objects.all()
+    serializer_class = FinishedProductSerializer
+    owner_serializer_class = FinishedProductOwnerSerializer
+    read_permission_classes = (IsOwnerOrAdminOrWorker,)
+    write_permission_classes = (IsOwnerOrAdmin,)
 
-    def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsOwnerOrAdmin()]
-        return [IsOwnerOrAdminOrWorker()]
 
-    def get_queryset(self):
-        qs = FinishedProduct.objects.all()
-        if not self.request.user.is_owner:
-            qs = qs.filter(is_archived=False)
-        return qs
-
-    def get_serializer_class(self):
-        if self.request.user.is_owner:
-            return FinishedProductOwnerSerializer
-        return FinishedProductSerializer
-
-    def perform_create(self, serializer):
-        product = serializer.save()
-        write_audit_log(
-            action=AuditLog.Action.CREATE,
-            actor=self.request.user,
-            target=product,
-            request=self.request,
-        )
-
-    def perform_update(self, serializer):
-        changes = collect_model_changes(serializer.instance, serializer.validated_data)
-        product = serializer.save()
-        if changes:
-            write_audit_log(
-                action=AuditLog.Action.UPDATE,
-                actor=self.request.user,
-                target=product,
-                changes=changes,
-                request=self.request,
-            )
-
-    def perform_destroy(self, instance):
-        instance.archive()
-        write_audit_log(
-            action=AuditLog.Action.ARCHIVE,
-            actor=self.request.user,
-            target=instance,
-            request=self.request,
-        )
-
-class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
+class StockMovementViewSet(OwnerSerializerMixin, viewsets.ReadOnlyModelViewSet):
     """
     История движения склада доступна только на чтение.
 
@@ -143,13 +79,11 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['movement_type', 'material', 'product', 'created_by']
     search_fields = ['reason']
     ordering_fields = ['created_at']
+    serializer_class = StockMovementLimitedSerializer
+    owner_serializer_class = StockMovementSerializer
 
-    def get_serializer_class(self):
-        if self.request.user.is_owner:
-            return StockMovementSerializer
-        return StockMovementLimitedSerializer
 
-class RecipeViewSet(viewsets.ModelViewSet):
+class RecipeViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     """
     Рецепт описывает, сколько сырья нужно для готового товара.
 
@@ -163,31 +97,11 @@ class RecipeViewSet(viewsets.ModelViewSet):
     filterset_fields = ['product', 'is_active']
     search_fields = ['name', 'description']
 
-    def perform_create(self, serializer):
-        recipe = serializer.save()
-        write_audit_log(
-            action=AuditLog.Action.CREATE,
-            actor=self.request.user,
-            target=recipe,
-            request=self.request,
-        )
-
-    def perform_update(self, serializer):
-        changes = collect_model_changes(serializer.instance, serializer.validated_data)
-        recipe = serializer.save()
-        if changes:
-            write_audit_log(
-                action=AuditLog.Action.UPDATE,
-                actor=self.request.user,
-                target=recipe,
-                changes=changes,
-                request=self.request,
-            )
-
     def destroy(self, request, *args, **kwargs):
         raise MethodNotAllowed('DELETE', detail='Recipe deletion is prohibited. Mark the recipe inactive instead.')
 
-class RecipeItemViewSet(viewsets.ModelViewSet):
+
+class RecipeItemViewSet(AuditCreateUpdateMixin, viewsets.ModelViewSet):
     """
     Строка рецепта связывает конкретный материал и нужное количество.
 
@@ -198,27 +112,6 @@ class RecipeItemViewSet(viewsets.ModelViewSet):
     serializer_class = RecipeItemSerializer
     permission_classes = [IsOwnerOrAdmin]
     filterset_fields = ['recipe', 'material']
-
-    def perform_create(self, serializer):
-        recipe_item = serializer.save()
-        write_audit_log(
-            action=AuditLog.Action.CREATE,
-            actor=self.request.user,
-            target=recipe_item,
-            request=self.request,
-        )
-
-    def perform_update(self, serializer):
-        changes = collect_model_changes(serializer.instance, serializer.validated_data)
-        recipe_item = serializer.save()
-        if changes:
-            write_audit_log(
-                action=AuditLog.Action.UPDATE,
-                actor=self.request.user,
-                target=recipe_item,
-                changes=changes,
-                request=self.request,
-            )
 
     def destroy(self, request, *args, **kwargs):
         raise MethodNotAllowed('DELETE', detail='Recipe item deletion is prohibited. Update the recipe instead.')
