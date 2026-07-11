@@ -2,55 +2,57 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div style="display: flex; height: 100vh;">
+<div class="main-layout">
     {# Боковая панель навигации #}
-    <aside style="width: 250px; background: var(--dark-color); color: #fff; padding: 20px; display: flex; flex-direction: column;">
-        <h2 style="margin-bottom: 30px; text-align: center;" data-i18n="app.name">SkladPro.Nod</h2>
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2 data-i18n="app.name">SkladPro.Nod</h2>
+        </div>
 
-        <nav style="flex: 1;">
-            <ul style="list-style: none;">
-                <li style="margin-bottom: 10px;"><a href="/" style="color: #fff; text-decoration: none;" data-i18n="nav.dashboard">Бош панел</a></li>
-                <li style="margin-bottom: 10px;"><a href="/warehouse/" style="color: #fff; text-decoration: none;" data-i18n="nav.raw_materials">Хом ашё омбори</a></li>
-                <li style="margin-bottom: 10px;"><a href="/finished-products/" style="color: #fff; text-decoration: none;" data-i18n="nav.finished_products">Тайёр маҳсулот</a></li>
-                <li style="margin-bottom: 10px;"><a href="/clients/" style="color: #fff; text-decoration: none;" data-i18n="nav.clients">Мижозлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/orders/" style="color: #fff; text-decoration: none;" data-i18n="nav.orders">Буюртмалар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/production/" style="color: #fff; text-decoration: none;" data-i18n="nav.production">Ишлаб чиқариш</a></li>
-                <li style="margin-bottom: 10px;"><a href="/finance/" style="color: #fff; text-decoration: none;" data-i18n="nav.finance">Молия</a></li>
-                <li style="margin-bottom: 10px;"><a href="/messages/" style="color: #fff; text-decoration: none; font-weight: bold;" data-i18n="nav.messages">Хабарлар</a></li>
-                <li style="margin-bottom: 10px;"><a href="/settings/" style="color: #fff; text-decoration: none;" data-i18n="nav.settings">Созламалар</a></li>
-            </ul>
+        <nav class="sidebar-nav">
+            <a href="/" class="sidebar-nav-item" data-i18n="nav.dashboard">Бош панел</a>
+            <a href="/warehouse/" class="sidebar-nav-item" data-i18n="nav.raw_materials">Хом ашё омбори</a>
+            <a href="/finished-products/" class="sidebar-nav-item" data-i18n="nav.finished_products">Тайёр маҳсулот</a>
+            <a href="/clients/" class="sidebar-nav-item" data-i18n="nav.clients">Мижозлар</a>
+            <a href="/orders/" class="sidebar-nav-item" data-i18n="nav.orders">Буюртмалар</a>
+            <a href="/production/" class="sidebar-nav-item" data-i18n="nav.production">Ишлаб чиқариш</a>
+            <a href="/finance/" class="sidebar-nav-item" data-i18n="nav.finance">Молия</a>
+            <a href="/messages/" class="sidebar-nav-item active" data-i18n="nav.messages">Хабарлар</a>
+            <a href="/settings/" class="sidebar-nav-item" data-i18n="nav.settings">Созламалар</a>
         </nav>
 
         {# Информация о пользователе и кнопка выхода #}
-        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #444;">
-            <p id="user-info" style="margin-bottom: 10px;"></p>
-            <button id="logout-btn" class="btn btn-primary" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
+        <div class="sidebar-footer">
+            <p id="user-info" class="text-sm text-secondary"></p>
+            <button id="logout-btn" class="btn btn-ghost btn-sm" style="width: 100%;" data-i18n="auth.logout">Чиқиш</button>
         </div>
     </aside>
 
     {# Основной контент #}
-    <main style="flex: 1; padding: 20px; overflow-y: auto;">
-        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h1 data-i18n="messages.title">Хабарлар</h1>
-            <div style="display: flex; gap: 10px;">
-                <select id="messages-tab" class="form-control" style="width: auto;">
+    <div class="main-content">
+        <div class="page-header">
+            <div class="navbar-left">
+                <h1 data-i18n="messages.title">Хабарлар</h1>
+            </div>
+            <div class="navbar-right">
+                <select id="messages-tab" class="select" style="width: auto;">
                     <option value="inbox" data-i18n="messages.inbox">Келган хабарлар</option>
                     <option value="sent" data-i18n="messages.sent">Юборилган</option>
                     <option value="notifications" data-i18n="messages.notifications">Уведомления</option>
                 </select>
             </div>
-        </header>
-        
-        <div id="messages-content">
-            <!-- Содержимое загружается динамически -->
         </div>
-    </main>
+        
+        <div class="page-content">
+            <div id="messages-content">
+                <!-- Содержимое загружается динамически -->
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/api.js' %}"></script>
-<script src="{% static 'js/i18n.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
     window.api = new APIClient();
@@ -77,31 +79,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (data && data.length > 0) {
                 contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: var(--space-4);">
                         <button id="compose-btn" class="btn btn-primary" data-i18n="messages.compose">Хабар юбориш</button>
                     </div>
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <div class="table-container">
+                        <table class="table">
                             <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="messages.from">Кимдан</th>
-                                    <th style="padding: 10px;" data-i18n="messages.subject">Мавзу</th>
-                                    <th style="padding: 10px;" data-i18n="messages.date">Сана</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
+                                <tr>
+                                    <th data-i18n="messages.from">Кимдан</th>
+                                    <th data-i18n="messages.subject">Мавзу</th>
+                                    <th data-i18n="messages.date">Сана</th>
+                                    <th data-i18n="common.actions">Амаллар</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${data.map(m => `
-                                    <tr style="border-bottom: 1px solid #eee; ${m.is_unread ? 'font-weight: bold;' : ''}">
-                                        <td style="padding: 10px;">${m.sender_name}</td>
-                                        <td style="padding: 10px;">${m.subject || '(без темы)'}</td>
-                                        <td style="padding: 10px;">${new Date(m.created_at).toLocaleString()}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="viewMessage(${m.id})">
+                                    <tr ${m.is_unread ? 'style="font-weight: var(--font-semibold);"' : ''}>
+                                        <td>${m.sender_name}</td>
+                                        <td>${m.subject || '(без темы)'}</td>
+                                        <td>${new Date(m.created_at).toLocaleString()}</td>
+                                        <td>
+                                            <button class="btn btn-secondary btn-sm" onclick="viewMessage(${m.id})">
                                                 <span data-i18n="common.view">Кўриш</span>
                                             </button>
                                             ${m.is_unread ? `
-                                                <button class="btn btn-sm btn-success" onclick="markRead(${m.id})">
+                                                <button class="btn btn-success btn-sm" onclick="markRead(${m.id})">
                                                     <span data-i18n="messages.mark_read">Ўқиш</span>
                                                 </button>
                                             ` : ''}

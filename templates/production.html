@@ -214,13 +214,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         return displays[status] || status;
     }
 
-    function getWorkStatusBadgeClass(status) {
+    function getWorkStatusClass(status) {
         const classes = {
-            'awaiting_confirmation': 'warning',
-            'confirmed': 'success',
-            'rejected': 'danger'
+            'awaiting_confirmation': 'in-progress',
+            'confirmed': 'ready',
+            'rejected': 'cancelled'
         };
-        return classes[status] || 'secondary';
+        return classes[status] || 'new';
     }
 
     function getWorkStatusDisplay(status) {

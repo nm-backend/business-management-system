@@ -1,27 +1,27 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-    <div class="card" style="width: 100%; max-width: 400px;">
-        <h2 style="text-align: center; margin-bottom: 20px;" data-i18n="app.name">SkladPro.Nod</h2>
-        <h3 style="text-align: center; margin-bottom: 20px;" data-i18n="auth.login">Вход</h3>
+<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: var(--space-6);">
+    <div class="card" style="width: 100%; max-width: 400px; padding: var(--space-8);">
+        <h2 style="text-align: center; margin-bottom: var(--space-2);" data-i18n="app.name">SkladPro.Nod</h2>
+        <h3 style="text-align: center; margin-bottom: var(--space-6); font-size: var(--text-lg); font-weight: var(--font-semibold); color: var(--text-secondary);" data-i18n="auth.login">Вход</h3>
         
-        <div id="error-message" class="alert alert-danger" style="display: none;" data-i18n="auth.login_error"></div>
+        <div id="error-message" class="alert alert-error" style="display: none;" data-i18n="auth.login_error"></div>
 
         <form id="login-form">
-            <div class="form-group">
-                <label for="username" data-i18n="auth.username">Имя пользователя</label>
-                <input type="text" id="username" class="form-control" required>
+            <div style="margin-bottom: var(--space-4);">
+                <label for="username" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="auth.username">Имя пользователя</label>
+                <input type="text" id="username" class="input" required>
             </div>
-            <div class="form-group">
-                <label for="password" data-i18n="auth.password">Пароль</label>
-                <input type="password" id="password" class="form-control" required>
+            <div style="margin-bottom: var(--space-6);">
+                <label for="password" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="auth.password">Пароль</label>
+                <input type="password" id="password" class="input" required>
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;" data-i18n="auth.login_button">Войти в систему</button>
         </form>
         
-        <div style="margin-top: 15px; text-align: center;">
-            <select id="lang-select" class="form-control" style="width: auto; display: inline-block;">
+        <div style="margin-top: var(--space-6); text-align: center;">
+            <select id="lang-select" class="select" style="width: auto; display: inline-block;">
                 <option value="uz_cyrl">Ўзбекча</option>
                 <option value="ru">Русский</option>
             </select>

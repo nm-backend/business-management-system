@@ -1,40 +1,40 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container" style="display: flex; justify-content: center; align-items: center; height: 100vh;">
-    <div class="card" style="width: 100%; max-width: 400px;">
-        <h2 style="text-align: center; margin-bottom: 10px;" data-i18n="setup.title">Настройка системы</h2>
-        <p style="text-align: center; margin-bottom: 20px; color: var(--secondary-color);" data-i18n="setup.description">Создайте аккаунт владельца для начала работы</p>
+<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: var(--space-6);">
+    <div class="card" style="width: 100%; max-width: 400px; padding: var(--space-8);">
+        <h2 style="text-align: center; margin-bottom: var(--space-2);" data-i18n="setup.title">Настройка системы</h2>
+        <p style="text-align: center; margin-bottom: var(--space-6); color: var(--text-secondary); font-size: var(--text-sm);" data-i18n="setup.description">Создайте аккаунт владельца для начала работы</p>
         
-        <div id="error-message" class="alert alert-danger" style="display: none;"></div>
+        <div id="error-message" class="alert alert-error" style="display: none;"></div>
         <div id="success-message" class="alert alert-success" style="display: none;" data-i18n="setup.setup_complete"></div>
 
         <form id="setup-form">
-            <div class="form-group">
-                <label for="full_name" data-i18n="setup.full_name">Полное имя</label>
-                <input type="text" id="full_name" class="form-control" required>
+            <div style="margin-bottom: var(--space-4);">
+                <label for="full_name" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="setup.full_name">Полное имя</label>
+                <input type="text" id="full_name" class="input" required>
             </div>
-            <div class="form-group">
-                <label for="phone" data-i18n="setup.phone">Телефон</label>
-                <input type="text" id="phone" class="form-control">
+            <div style="margin-bottom: var(--space-4);">
+                <label for="phone" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="setup.phone">Телефон</label>
+                <input type="text" id="phone" class="input">
             </div>
-            <div class="form-group">
-                <label for="username" data-i18n="auth.username">Имя пользователя</label>
-                <input type="text" id="username" class="form-control" required>
+            <div style="margin-bottom: var(--space-4);">
+                <label for="username" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="auth.username">Имя пользователя</label>
+                <input type="text" id="username" class="input" required>
             </div>
-            <div class="form-group">
-                <label for="password" data-i18n="auth.password">Пароль</label>
-                <input type="password" id="password" class="form-control" required minlength="8">
+            <div style="margin-bottom: var(--space-4);">
+                <label for="password" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="auth.password">Пароль</label>
+                <input type="password" id="password" class="input" required minlength="8">
             </div>
-            <div class="form-group">
-                <label for="password_confirm" data-i18n="auth.password_confirm">Подтвердите пароль</label>
-                <input type="password" id="password_confirm" class="form-control" required minlength="8">
+            <div style="margin-bottom: var(--space-6);">
+                <label for="password_confirm" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="auth.password_confirm">Подтвердите пароль</label>
+                <input type="password" id="password_confirm" class="input" required minlength="8">
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%;" data-i18n="setup.create_owner">Создать аккаунт владельца</button>
         </form>
         
-        <div style="margin-top: 15px; text-align: center;">
-            <select id="lang-select" class="form-control" style="width: auto; display: inline-block;">
+        <div style="margin-top: var(--space-6); text-align: center;">
+            <select id="lang-select" class="select" style="width: auto; display: inline-block;">
                 <option value="uz_cyrl">Ўзбекча</option>
                 <option value="ru">Русский</option>
             </select>
