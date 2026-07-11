@@ -8,6 +8,13 @@ class Router {
         this.appElement = document.getElementById('app-content');
 
         window.addEventListener('hashchange', () => this.handleRoute());
+
+        // ИСПРАВЛЕНО: без этого первый рендер не происходил вообще —
+        // handleRoute() срабатывал только при РУЧНОЙ смене hash.
+        // 'load' выбран специально: он срабатывает уже после того, как
+        // все синхронные <script> (включая dashboard.js, warehouse.js и т.д.)
+        // выполнились и window.DashboardComponent и другие уже определены.
+        window.addEventListener('load', () => this.handleRoute());
     }
 
     addRoute(path, component) {
@@ -50,7 +57,7 @@ class Router {
         if (path.startsWith('/warehouse')) navId = 'nav-warehouse';
         if (path.startsWith('/clients')) navId = 'nav-clients';
         if (path.startsWith('/settings')) navId = 'nav-settings';
-        
+
         const activeNav = document.getElementById(navId);
         if (activeNav) activeNav.classList.add('active');
 

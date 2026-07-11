@@ -8,6 +8,12 @@ class APIClient {
         this.baseUrl = '/api/v1';
     }
 
+    // ИСПРАВЛЕНО: этого метода не было, но он вызывается в base.html
+    isAuthenticated() {
+        const tokens = this.getTokens();
+        return !!(tokens.access || tokens.refresh);
+    }
+
     getTokens() {
         return {
             access: localStorage.getItem('access_token'),
@@ -128,4 +134,4 @@ class APIClient {
 }
 
 const api = new APIClient();
-window.api = api;
+window.api = api;   
