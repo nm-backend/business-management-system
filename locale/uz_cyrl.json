@@ -15,7 +15,10 @@
     "change_password": "Паролни ўзгартириш",
     "old_password": "Эски парол",
     "new_password": "Янги парол",
-    "password_changed": "Парол муваффақиятли ўзгартирилди"
+    "password_changed": "Парол муваффақиятли ўзгартирилди",
+    "password_mismatch": "Пароллар мос эмас",
+    "session_expired": "Сессия муддати тугади. Қайта киринг",
+    "logout_confirm": "Тизимдан чиқмоқчимисиз?"
   },
   "setup": {
     "title": "Тизимни созлаш",
@@ -59,7 +62,12 @@
     "my_works": "Менинг ишларим",
     "my_earnings": "Менинг иш ҳақим",
     "materials": "Материаллар",
-    "profile": "Профил"
+    "profile": "Профил",
+    "warehouse": "Омбор",
+    "warehouse_short": "Омбор",
+    "my_tasks_short": "Вазифалар",
+    "more": "Кўпроқ",
+    "menu": "Бўлимлар"
   },
   "dashboard": {
     "welcome": "Хуш келибсиз",
@@ -77,7 +85,14 @@
     "revenue_by_period": "Ойлар бўйича даромад",
     "material_usage": "Маҳсулот сотилиши",
     "top_products": "Энг кўп сотилган",
-    "deadline_passed": "Муддати ўтган"
+    "deadline_passed": "Муддати ўтган",
+    "admin_greeting": "Хуш келибсиз, Админ!",
+    "today_indicators": "Бугунги кўрсаткичлар",
+    "submitted_today": "Бугун ишга топширилган",
+    "worker_feedback": "Ишчилар мулоҳазалари",
+    "worker_greeting": "Ассалому алайкум!",
+    "hours_today": "Бугунги соат",
+    "tasks_label": "Вазифалар"
   },
   "warehouse": {
     "title": "Хом ашё омбори",
@@ -139,12 +154,18 @@
     "order_details": "Буюртма тафсилоти",
     "required_materials": "Талаб қилинган материаллар",
     "send_to_worker": "Ишчига юбориш",
-    "material_shortage": "Материал етмовчилик"
+    "material_shortage": "Материал етарли эмас",
+    "custom_product": "Бошқа маҳсулот (номи)",
+    "deliver": "Мижозга бериш",
+    "deliver_confirm": "Буюртма мижозга берилсинми?",
+    "cancel_confirm": "Буюртма бекор қилинсинми?",
+    "add_payment": "Тўлов қабул қилиш"
   },
   "statuses": {
     "new": "Янги",
     "awaiting_material": "Материал кутилмоқда",
     "sent_to_worker": "Ишчига юборилган",
+    "accepted": "Ишчи қабул қилди",
     "accepted_by_worker": "Ишчи қабул қилди",
     "worker_refused": "Ишчи рад этди",
     "in_progress": "Иш жараёнида",
@@ -164,8 +185,10 @@
     "refused": "Рад этилди",
     "in_progress": "Жараёнда",
     "completed": "Бажарилди",
+    "awaiting_confirmation": "Тасдиқлаш кутилмоқда",
     "confirmed": "Тасдиқланди",
-    "rejected": "Рад этилди"
+    "rejected": "Рад этилди",
+    "cancelled": "Бекор қилинди"
   },
   "refusal_reasons": {
     "material_insufficient": "Материал етарли эмас",
@@ -195,7 +218,18 @@
     "hours": "соат",
     "tasks_count": "та вазифа",
     "pending_tasks": "Кутилаётган вазифалар",
-    "in_progress_tasks": "Жараёндаги вазифалар"
+    "in_progress_tasks": "Жараёндаги вазифалар",
+    "tasks": "Вазифалар",
+    "works": "Ишлар",
+    "worker": "Ишчи",
+    "product": "Маҳсулот",
+    "quantity": "Миқдор",
+    "labor_cost": "Иш ҳақи",
+    "labor_cost_auto": "Бўш қолдирилса - ставка бўйича",
+    "confirm_hint": "Тасдиқлашда рецепт бўйича хом ашё омбордан ечилади ва тайёр маҳсулот киримга олинади",
+    "cancel_task_confirm": "Вазифа бекор қилинсинми?",
+    "work_submitted": "Иш тасдиқлашга юборилди",
+    "no_pending_tasks": "Янги вазифалар йўқ"
   },
   "clients": {
     "title": "Мижозлар",
@@ -231,7 +265,30 @@
     "top_selling": "Энг кўп сотилган",
     "most_active_worker": "Энг фаол ишчи",
     "add_expense": "Харажат қўшиш",
-    "cash_flow": "Касса ҳаракати"
+    "cash_flow": "Касса ҳаракати",
+    "labor_rates": "Иш ҳақи ставкалари",
+    "add_payment": "Тўлов қўшиш",
+    "add_rate": "Ставка қўшиш",
+    "worker": "Ишчи",
+    "category": "Категория",
+    "operation": "Амалиёт",
+    "rate": "Ставка",
+    "product": "Маҳсулот",
+    "payment_type": "Тўлов тури",
+    "owner_only": "Бу саҳифа фақат эгаси учун"
+  },
+  "payment_types": {
+    "salary": "Иш ҳақи",
+    "advance": "Аванс",
+    "bonus": "Мукофот",
+    "other": "Бошқа"
+  },
+  "operations": {
+    "cutting": "Кесиш",
+    "polishing": "Силлиқлаш",
+    "mounting": "Монтаж",
+    "packing": "Ўраш",
+    "other": "Бошқа"
   },
   "expense_categories": {
     "rent": "Ижара",
@@ -269,7 +326,18 @@
     "all": "Ҳаммаси",
     "unread": "Ўқилмаган",
     "read": "Ўқилган",
-    "type_message": "Хабар ёзинг..."
+    "type_message": "Хабар ёзинг...",
+    "inbox": "Келган хабарлар",
+    "sent": "Юборилган",
+    "notifications": "Билдиришномалар",
+    "from": "Кимдан",
+    "to": "Кимга",
+    "to_all": "Барчага",
+    "subject": "Мавзу",
+    "content": "Мазмун",
+    "no_messages": "Хабарлар йўқ",
+    "no_notifications": "Билдиришномалар йўқ",
+    "mark_all_read": "Ҳаммасини ўқилган деб белгилаш"
   },
   "notifications": {
     "new_order": "Янги буюртма",
@@ -300,7 +368,16 @@
     "security": "Хавфсизлик ва заҳира нусха",
     "add_role": "Янги роль қўшиш",
     "backup": "Заҳира нусха",
-    "auto_backup": "Автоматик заҳира нусха"
+    "auto_backup": "Автоматик заҳира нусха",
+    "add_account": "Аккаунт қўшиш",
+    "role": "Роль",
+    "block": "Блоклаш",
+    "unblock": "Блокдан чиқариш",
+    "blocked": "Блокланган",
+    "reset_password": "Паролни тиклаш",
+    "can_write_to_owner": "Эгасига ёза олади",
+    "can_create_workers": "Ишчи ярата олади",
+    "can_see_other_workers": "Бошқа ишчиларни кўра олади"
   },
   "export": {
     "title": "Ҳисоботни экспорт қилиш",
@@ -312,7 +389,11 @@
     "download": "Юклаб олиш",
     "select_format": "Формат танланг",
     "select_period": "Давр танланг",
-    "export_button": "Экспорт қилиш"
+    "export_button": "Экспорт қилиш",
+    "stock": "Омбор қолдиқлари",
+    "orders": "Буюртмалар рўйхати",
+    "work": "Ишчилар иши",
+    "finance": "Молиявий ҳисобот"
   },
   "common": {
     "save": "Сақлаш",
@@ -356,7 +437,10 @@
     "other": "Бошқа",
     "receipt_photo": "Чек расми",
     "view_all": "Барчасини кўриш",
-    "per_page": "Саҳифадаги"
+    "per_page": "Саҳифадаги",
+    "currency": "сўм",
+    "page_not_found": "Саҳифа топилмади",
+    "page_load_error": "Саҳифани юклаб бўлмади"
   },
   "admin_analytics": {
     "title": "Операцион таҳлил",

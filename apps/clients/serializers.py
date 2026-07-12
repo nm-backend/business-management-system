@@ -1,39 +1,43 @@
+"""
+Serializers for clients API.
+
+ClientAdminSerializer - для администратора: только булевы статусы оплаты,
+без сумм. ClientOwnerSerializer - полная финансовая карточка клиента.
+"""
 from rest_framework import serializers
-from django.db.models import Sum
+
 from .models import Client, Payment
 
+
 class PaymentSerializer(serializers.ModelSerializer):
+    received_by_name = serializers.CharField(source='received_by.username', read_only=True)
+
     class Meta:
         model = Payment
-        fields = '__all__'
+        fields = [
+            'id', 'client', 'order', 'amount', 'payment_method',
+            'comment', 'received_by', 'received_by_name', 'payment_date',
+            'created_at',
+        ]
+        read_only_fields = ['received_by', 'created_at']
+
 
 class ClientAdminSerializer(serializers.ModelSerializer):
-    has_debt = serializers.SerializerMethodField()
-    has_active_orders = serializers.SerializerMethodField()
+    has_debt = serializers.BooleanField(read_only=True)
+    has_active_orders = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Client
-        fields = ['id', 'name', 'phone', 'address', 'comment', 'is_archived', 'has_debt', 'has_active_orders', 'created_at', 'updated_at']
+        fields = [
+            'id', 'name', 'phone', 'address', 'comment', 'is_archived',
+            'has_debt', 'has_active_orders', 'created_at', 'updated_at',
+        ]
 
-    def get_has_debt(self, obj):
-        # Admin only sees boolean status
-        # Logic to be fleshed out with real orders, mock for now
-        return False
-
-    def get_has_active_orders(self, obj):
-        return False
 
 class ClientOwnerSerializer(ClientAdminSerializer):
-    total_debt = serializers.SerializerMethodField()
-    total_paid = serializers.SerializerMethodField()
+    payments = PaymentSerializer(many=True, read_only=True)
 
     class Meta(ClientAdminSerializer.Meta):
-        fields = ClientAdminSerializer.Meta.fields + ['total_debt', 'total_paid']
-
-    def get_total_debt(self, obj):
-        # Real logic depends on orders
-        return 0
-
-    def get_total_paid(self, obj):
-        total = obj.payments.aggregate(total=Sum('amount'))['total']
-        return total or 0
+        fields = ClientAdminSerializer.Meta.fields + [
+            'total_orders_amount', 'total_paid', 'debt', 'payments',
+        ]

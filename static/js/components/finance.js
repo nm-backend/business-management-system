@@ -1,596 +1,349 @@
 /**
- * Компонент для управления финансами.
- *
- * Отображает расходы, выплаты работникам и ставки оплаты труда.
- * Доступен только владельцу (owner).
+ * Финансы (только owner): аналитика за период, расходы,
+ * выплаты работникам, ставки оплаты труда, экспорт.
  */
 class FinanceComponent {
-    /**
-     * Рендерит страницу финансов.
-     *
-     * @param {HTMLElement} container - Контейнер для рендеринга
-     */
     async render(container) {
-        // Проверка прав доступа
-        const user = await window.api.getMe();
-        if (!user.is_owner) {
+        document.getElementById('page-title').setAttribute('data-i18n', 'finance.title');
+        this.container = container;
+
+        if (!window.currentUser.is_owner) {
             container.innerHTML = `
-                <div class="card" style="padding: 40px; text-align: center;">
-                    <h2 data-i18n="finance.access_denied">Кириш таъқиланди</h2>
-                    <p data-i18n="finance.owner_only">Бу саҳифа фақат эгаси учун</p>
-                </div>
-            `;
+                <div class="card route-error">
+                    <h1>403</h1>
+                    <p data-i18n="finance.owner_only"></p>
+                </div>`;
             window.i18n.applyTranslations();
             return;
         }
 
+        this.tab = 'analytics';
         container.innerHTML = `
-            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h1 data-i18n="finance.title">Молия</h1>
-                <div style="display: flex; gap: 10px;">
-                    <select id="finance-tab" class="form-control" style="width: auto;">
-                        <option value="expenses" data-i18n="finance.expenses">Харажатлар</option>
-                        <option value="payments" data-i18n="finance.worker_payments">Ишчи тўловлари</option>
-                        <option value="rates" data-i18n="finance.labor_rates">Иш ҳақи ставкалари</option>
-                    </select>
-                </div>
-            </header>
-            
-            <div id="finance-content">
-                <!-- Содержимое загружается динамически -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="analytics" data-i18n="nav.analytics"></button>
+                <button class="tab-btn" data-tab="expenses" data-i18n="finance.expenses"></button>
+                <button class="tab-btn" data-tab="payments" data-i18n="nav.worker_payments"></button>
+                <button class="tab-btn" data-tab="rates" data-i18n="finance.labor_rates"></button>
             </div>
+            <div id="finance-content"></div>
         `;
 
-        await this.loadExpenses(container);
-        this.setupEventListeners(container);
-    }
-
-    /**
-     * Загружает список расходов.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    async loadExpenses(container) {
-        const contentEl = container.querySelector('#finance-content');
-        
-        try {
-            const data = await window.api.request('/finance/expenses/');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-expense-btn" class="btn btn-primary" data-i18n="finance.add_expense">Харажат қўшиш</button>
-                    </div>
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="finance.category">Категория</th>
-                                    <th style="padding: 10px;" data-i18n="finance.amount">Сумма</th>
-                                    <th style="padding: 10px;" data-i18n="finance.date">Сана</th>
-                                    <th style="padding: 10px;" data-i18n="finance.comment">Изоҳ</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(e => `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <td style="padding: 10px;">${this.getCategoryDisplay(e.category)}</td>
-                                        <td style="padding: 10px; font-weight: bold;">${e.amount}</td>
-                                        <td style="padding: 10px;">${e.date}</td>
-                                        <td style="padding: 10px;">${e.comment || '-'}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="window.router.navigate('#finance/expenses/${e.id}')">
-                                                <span data-i18n="common.view">Кўриш</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-expense-btn" class="btn btn-primary" data-i18n="finance.add_expense">Харажат қўшиш</button>
-                    </div>
-                    <div class="card" style="padding: 20px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</div>
-                `;
-            }
-            window.i18n.applyTranslations();
-            
-            // Добавляем обработчик для кнопки добавления
-            const addBtn = contentEl.querySelector('#add-expense-btn');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => this.showAddExpenseModal(container));
-            }
-        } catch (e) {
-            console.error('Failed to load expenses', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
-    }
-
-    /**
-     * Загружает список выплат работникам.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    async loadPayments(container) {
-        const contentEl = container.querySelector('#finance-content');
-        
-        try {
-            const data = await window.api.request('/finance/worker-payments/');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-payment-btn" class="btn btn-primary" data-i18n="finance.add_payment">Тўлов қўшиш</button>
-                    </div>
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="finance.worker">Ишчи</th>
-                                    <th style="padding: 10px;" data-i18n="finance.amount">Сумма</th>
-                                    <th style="padding: 10px;" data-i18n="finance.payment_date">Тўлов санаси</th>
-                                    <th style="padding: 10px;" data-i18n="finance.payment_type">Тўлов тури</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(p => `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <td style="padding: 10px;">${p.worker_name}</td>
-                                        <td style="padding: 10px; font-weight: bold;">${p.amount}</td>
-                                        <td style="padding: 10px;">${p.payment_date}</td>
-                                        <td style="padding: 10px;">${this.getPaymentTypeDisplay(p.payment_type)}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="window.router.navigate('#finance/payments/${p.id}')">
-                                                <span data-i18n="common.view">Кўриш</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-payment-btn" class="btn btn-primary" data-i18n="finance.add_payment">Тўлов қўшиш</button>
-                    </div>
-                    <div class="card" style="padding: 20px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</div>
-                `;
-            }
-            window.i18n.applyTranslations();
-            
-            const addBtn = contentEl.querySelector('#add-payment-btn');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => this.showAddPaymentModal(container));
-            }
-        } catch (e) {
-            console.error('Failed to load payments', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
-    }
-
-    /**
-     * Загружает список ставок оплаты труда.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    async loadRates(container) {
-        const contentEl = container.querySelector('#finance-content');
-        
-        try {
-            const data = await window.api.request('/finance/labor-rates/');
-            
-            if (data && data.length > 0) {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-rate-btn" class="btn btn-primary" data-i18n="finance.add_rate">Ставка қўшиш</button>
-                    </div>
-                    <div class="card" style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid #eee;">
-                                    <th style="padding: 10px;" data-i18n="finance.product">Маҳсулот</th>
-                                    <th style="padding: 10px;" data-i18n="finance.operation">Амалиёт</th>
-                                    <th style="padding: 10px;" data-i18n="finance.rate">Ставка</th>
-                                    <th style="padding: 10px;" data-i18n="finance.unit">Бирлик</th>
-                                    <th style="padding: 10px;" data-i18n="common.actions">Амаллар</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${data.map(r => `
-                                    <tr style="border-bottom: 1px solid #eee;">
-                                        <td style="padding: 10px;">${r.product_name}</td>
-                                        <td style="padding: 10px;">${this.getOperationDisplay(r.operation)}</td>
-                                        <td style="padding: 10px; font-weight: bold;">${r.rate_per_unit}</td>
-                                        <td style="padding: 10px;">${r.unit}</td>
-                                        <td style="padding: 10px;">
-                                            <button class="btn btn-sm btn-info" onclick="window.router.navigate('#finance/rates/${r.id}')">
-                                                <span data-i18n="common.view">Кўриш</span>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            } else {
-                contentEl.innerHTML = `
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-                        <button id="add-rate-btn" class="btn btn-primary" data-i18n="finance.add_rate">Ставка қўшиш</button>
-                    </div>
-                    <div class="card" style="padding: 20px; text-align: center;" data-i18n="common.no_data">Маълумот йўқ</div>
-                `;
-            }
-            window.i18n.applyTranslations();
-            
-            const addBtn = contentEl.querySelector('#add-rate-btn');
-            if (addBtn) {
-                addBtn.addEventListener('click', () => this.showAddRateModal(container));
-            }
-        } catch (e) {
-            console.error('Failed to load rates', e);
-            contentEl.innerHTML = `<div class="card" style="padding: 20px; text-align: center; color: red;" data-i18n="common.error">Хатолик</div>`;
-            window.i18n.applyTranslations();
-        }
-    }
-
-    /**
-     * Возвращает отображаемое название категории расхода.
-     *
-     * @param {string} category - Категория
-     * @returns {string} Отображаемое название
-     */
-    getCategoryDisplay(category) {
-        const displays = {
-            'rent': 'Ижара',
-            'electricity': 'Электр энергия',
-            'water': 'Сув',
-            'transport': 'Транспорт',
-            'delivery': 'Етказиб бериш',
-            'taxes': 'Солиқлар',
-            'salary': 'Ишчилар иш ҳақи',
-            'advance': 'Ишчиларга аванс',
-            'equipment_repair': 'Ускуна таъмири',
-            'tools': 'Асбоб сотиб олиш',
-            'consumables': 'Сарфлаш материаллари',
-            'material_loss': 'Материал йўқотиш',
-            'defect': 'Брак',
-            'unforeseen': 'Кутилмаган харажатлар',
-            'owner_withdrawal': 'Эгасининг шахсий чиқими',
-            'worker_debt': 'Ишчилар қарзлари',
-            'client_refund': 'Мижозларга қайтариш',
-            'other': 'Бошқа'
-        };
-        return displays[category] || category;
-    }
-
-    /**
-     * Возвращает отображаемое название типа выплаты.
-     *
-     * @param {string} paymentType - Тип выплаты
-     * @returns {string} Отображаемое название
-     */
-    getPaymentTypeDisplay(paymentType) {
-        const displays = {
-            'salary': 'Иш ҳақи',
-            'advance': 'Аванс',
-            'bonus': 'Мукофот',
-            'other': 'Бошқа'
-        };
-        return displays[paymentType] || paymentType;
-    }
-
-    /**
-     * Возвращает отображаемое название операции.
-     *
-     * @param {string} operation - Операция
-     * @returns {string} Отображаемое название
-     */
-    getOperationDisplay(operation) {
-        const displays = {
-            'cutting': 'Кесиш',
-            'polishing': 'Сийлаш',
-            'mounting': 'Монтаж',
-            'packing': 'Қутлаш',
-            'other': 'Бошқа'
-        };
-        return displays[operation] || operation;
-    }
-
-    /**
-     * Настраивает обработчики событий.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    setupEventListeners(container) {
-        const tab = container.querySelector('#finance-tab');
-        tab.addEventListener('change', (e) => {
-            if (e.target.value === 'expenses') {
-                this.loadExpenses(container);
-            } else if (e.target.value === 'payments') {
-                this.loadPayments(container);
-            } else {
-                this.loadRates(container);
-            }
+        container.querySelectorAll('.tab-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                container.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.tab = btn.dataset.tab;
+                this.loadTab();
+            });
         });
-    }
 
-    /**
-     * Показывает модальное окно для добавления расхода.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    async showAddExpenseModal(container) {
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.style.display = 'block';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 data-i18n="finance.add_expense">Янги харажат</h3>
-                    <button class="close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <form id="add-expense-form">
-                        <div class="form-group">
-                            <label data-i18n="finance.category">Категория</label>
-                            <select name="category" class="form-control" required>
-                                <option value="rent">Ижара</option>
-                                <option value="electricity">Электр энергия</option>
-                                <option value="water">Сув</option>
-                                <option value="transport">Транспорт</option>
-                                <option value="delivery">Етказиб бериш</option>
-                                <option value="taxes">Солиқлар</option>
-                                <option value="salary">Ишчилар иш ҳақи</option>
-                                <option value="advance">Ишчиларга аванс</option>
-                                <option value="equipment_repair">Ускуна таъмири</option>
-                                <option value="tools">Асбоб сотиб олиш</option>
-                                <option value="consumables">Сарфлаш материаллари</option>
-                                <option value="material_loss">Материал йўқотиш</option>
-                                <option value="defect">Брак</option>
-                                <option value="unforeseen">Кутилмаган харажатлар</option>
-                                <option value="owner_withdrawal">Эгасининг шахсий чиқими</option>
-                                <option value="worker_debt">Ишчилар қарзлари</option>
-                                <option value="client_refund">Мижозларга қайтариш</option>
-                                <option value="other">Бошқа</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.amount">Сумма</label>
-                            <input type="number" name="amount" class="form-control" required step="0.01">
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.date">Сана</label>
-                            <input type="date" name="date" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.payment_method">Тўлов усули</label>
-                            <select name="payment_method" class="form-control">
-                                <option value="cash">Нақд</option>
-                                <option value="card">Карта</option>
-                                <option value="transfer">Ўтказма</option>
-                                <option value="other">Бошқа</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.comment">Изоҳ</label>
-                            <textarea name="comment" class="form-control" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сақлаш</button>
-                    </form>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
         window.i18n.applyTranslations();
+        await this.loadTab();
+    }
 
-        modal.querySelector('.close').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
-        });
+    loadTab() {
+        const map = {
+            analytics: () => this.loadAnalytics(),
+            expenses: () => this.loadExpenses(),
+            payments: () => this.loadPayments(),
+            rates: () => this.loadRates(),
+        };
+        return map[this.tab]();
+    }
 
-        modal.querySelector('#add-expense-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            
-            try {
-                await window.api.request('/finance/expenses/', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
+    get contentEl() {
+        return this.container.querySelector('#finance-content');
+    }
+
+    async loadAnalytics() {
+        const el = this.contentEl;
+        window.listStates.loading(el, window.ui.t('common.loading'));
+        const period = this.period || 'month';
+        try {
+            const data = await window.api.request(`/reports/analytics/owner/?period=${period}`);
+            const periods = ['today', 'yesterday', 'week', 'month', 'quarter', 'year'];
+            const row = (labelKey, value, cls = '') => `
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
+                    <span class="text-sm font-bold ${cls}">${window.ui.money(value)}</span>
+                </div>`;
+
+            el.innerHTML = `
+                <div class="tabs">
+                    ${periods.map((p) => `<button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>`).join('')}
+                </div>
+                <div class="list-group">
+                    ${row('finance.revenue', data.revenue)}
+                    ${row('finance.cost_of_goods', data.cost_of_goods)}
+                    ${row('finance.gross_profit', data.gross_profit)}
+                    ${row('finance.expenses', data.expenses_total)}
+                    ${row('finance.salaries', data.salaries)}
+                    ${row('finance.taxes', data.taxes)}
+                    ${row('finance.losses', data.losses)}
+                    ${row('finance.owner_withdrawal', data.owner_withdrawal)}
+                    ${row('finance.net_profit', data.net_profit, data.net_profit < 0 ? 'text-danger' : 'text-success')}
+                    ${row('finance.cash_in_register', data.cash)}
+                    ${row('finance.client_debts', data.client_debts, data.client_debts > 0 ? 'text-danger' : '')}
+                    ${row('finance.worker_debts', data.worker_debts)}
+                </div>
+                <div class="section-title" data-i18n="settings.export"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <a class="btn btn-secondary btn-sm" href="#" id="export-xlsx">📊 Excel</a>
+                    <a class="btn btn-secondary btn-sm" href="#" id="export-pdf">📄 PDF</a>
+                </div>`;
+
+            el.querySelectorAll('[data-period]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    this.period = btn.dataset.period;
+                    this.loadAnalytics();
                 });
-                modal.remove();
-                window.toast.success('Expense created successfully');
-                await this.loadExpenses(container);
-            } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to add expense');
-            }
+            });
+            el.querySelector('#export-xlsx').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.download(`/reports/export/finance/?period=${period}`, 'finance-report.xlsx');
+            });
+            el.querySelector('#export-pdf').addEventListener('click', (e) => {
+                e.preventDefault();
+                this.download(`/reports/export/finance/?period=${period}&format=pdf`, 'finance-report.pdf');
+            });
+            window.i18n.applyTranslations();
+        } catch (e) {
+            window.listStates.error(el, window.ui.t('common.error'), () => this.loadAnalytics());
+        }
+    }
+
+    /** Скачивает файл с JWT-заголовком. */
+    async download(endpoint, filename) {
+        try {
+            const tokens = window.api.getTokens();
+            const response = await fetch(`/api/v1${endpoint}`, {
+                headers: { Authorization: `Bearer ${tokens.access}` },
+            });
+            if (!response.ok) throw new Error('Export failed');
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            window.toast.error(window.ui.t('common.error'));
+        }
+    }
+
+    async loadExpenses() {
+        const el = this.contentEl;
+        window.listStates.loading(el, window.ui.t('common.loading'));
+        try {
+            const response = await window.api.request('/finance/expenses/');
+            const expenses = response.results || response;
+            el.innerHTML = `
+                <button class="btn btn-primary btn-block" id="add-expense-btn" style="margin-bottom:12px;" data-i18n="finance.add_expense"></button>
+                ${expenses.length ? `
+                    <div class="list-group">
+                        ${expenses.map((x) => `
+                            <div class="list-row" style="cursor:default;">
+                                <div>
+                                    <div style="font-weight:600;font-size:14px;" data-i18n="expense_categories.${x.category}"></div>
+                                    <div class="text-sm text-muted">${window.ui.date(x.date)}${x.comment ? ` · ${window.ui.escape(x.comment)}` : ''}</div>
+                                </div>
+                                <span class="font-bold text-danger">-${window.ui.money(x.amount)}</span>
+                            </div>`).join('')}
+                    </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
+            el.querySelector('#add-expense-btn').addEventListener('click', () => this.openExpenseForm());
+            window.i18n.applyTranslations();
+        } catch (e) {
+            window.listStates.error(el, window.ui.t('common.error'), () => this.loadExpenses());
+        }
+    }
+
+    openExpenseForm() {
+        const categories = [
+            'rent', 'electricity', 'water', 'transport', 'delivery', 'taxes', 'salary',
+            'advance', 'equipment_repair', 'tools', 'consumables', 'material_loss',
+            'defect', 'unforeseen', 'owner_withdrawal', 'worker_debt', 'client_refund', 'other',
+        ];
+        const today = new Date().toISOString().slice(0, 10);
+        const modal = window.ui.modal('finance.add_expense', `
+            <form id="expense-form">
+                <div class="form-group"><label data-i18n="finance.category"></label>
+                    <select name="category" class="form-control" required>
+                        ${categories.map((c) => `<option value="${c}" data-i18n="expense_categories.${c}"></option>`).join('')}
+                    </select></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="form-group"><label data-i18n="common.amount"></label>
+                        <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required></div>
+                    <div class="form-group"><label data-i18n="common.date"></label>
+                        <input name="date" type="date" class="form-control" required value="${today}"></div>
+                </div>
+                <div class="form-group"><label data-i18n="common.payment_method"></label>
+                    <select name="payment_method" class="form-control">
+                        <option value="cash" data-i18n="common.cash"></option>
+                        <option value="card" data-i18n="common.card"></option>
+                        <option value="transfer" data-i18n="common.transfer"></option>
+                        <option value="other" data-i18n="common.other"></option>
+                    </select></div>
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <textarea name="comment" class="form-control" rows="2"></textarea></div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
+            </form>
+        `);
+        modal.querySelector('#expense-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request('/finance/expenses/', { method: 'POST', body: JSON.stringify(data) });
+                    modal.remove();
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadExpenses();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
         });
     }
 
-    /**
-     * Показывает модальное окно для добавления выплаты.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    async showAddPaymentModal(container) {
-        // Загрузка работников
-        let workers = [];
+    async loadPayments() {
+        const el = this.contentEl;
+        window.listStates.loading(el, window.ui.t('common.loading'));
         try {
-            workers = await window.api.request('/accounts/users/');
-            workers = workers.filter(w => w.role === 'worker');
+            const response = await window.api.request('/finance/worker-payments/');
+            const payments = response.results || response;
+            el.innerHTML = `
+                <button class="btn btn-primary btn-block" id="add-payment-btn" style="margin-bottom:12px;" data-i18n="finance.add_payment"></button>
+                ${payments.length ? `
+                    <div class="list-group">
+                        ${payments.map((p) => `
+                            <div class="list-row" style="cursor:default;">
+                                <div>
+                                    <div style="font-weight:600;font-size:14px;">${window.ui.escape(p.worker_name)}</div>
+                                    <div class="text-sm text-muted">
+                                        ${window.ui.date(p.payment_date)} · <span data-i18n="payment_types.${p.payment_type}"></span>
+                                    </div>
+                                </div>
+                                <span class="font-bold">${window.ui.money(p.amount)}</span>
+                            </div>`).join('')}
+                    </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
+            el.querySelector('#add-payment-btn').addEventListener('click', () => this.openPaymentForm());
+            window.i18n.applyTranslations();
         } catch (e) {
-            console.error('Failed to load workers', e);
+            window.listStates.error(el, window.ui.t('common.error'), () => this.loadPayments());
         }
+    }
 
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.style.display = 'block';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 data-i18n="finance.add_payment">Янги тўлов</h3>
-                    <button class="close">&times;</button>
+    async openPaymentForm() {
+        const usersResp = await window.api.request('/accounts/users/');
+        const users = usersResp.results || usersResp;
+        const workers = users.filter((u) => u.role === 'worker');
+        const today = new Date().toISOString().slice(0, 10);
+
+        const modal = window.ui.modal('finance.add_payment', `
+            <form id="worker-payment-form">
+                <div class="form-group"><label data-i18n="finance.worker"></label>
+                    <select name="worker" class="form-control" required>
+                        <option value=""></option>
+                        ${workers.map((w) => `<option value="${w.id}">${window.ui.escape(w.full_name || w.username)}</option>`).join('')}
+                    </select></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="form-group"><label data-i18n="common.amount"></label>
+                        <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required></div>
+                    <div class="form-group"><label data-i18n="common.date"></label>
+                        <input name="payment_date" type="date" class="form-control" required value="${today}"></div>
                 </div>
-                <div class="modal-body">
-                    <form id="add-payment-form">
-                        <div class="form-group">
-                            <label data-i18n="finance.worker">Ишчи</label>
-                            <select name="worker" class="form-control" required>
-                                <option value="">Танланг...</option>
-                                ${workers.map(w => `<option value="${w.id}">${w.username} (${w.full_name || ''})</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.amount">Сумма</label>
-                            <input type="number" name="amount" class="form-control" required step="0.01">
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.payment_date">Тўлов санаси</label>
-                            <input type="date" name="payment_date" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.payment_type">Тўлов тури</label>
-                            <select name="payment_type" class="form-control">
-                                <option value="salary">Иш ҳақи</option>
-                                <option value="advance">Аванс</option>
-                                <option value="bonus">Мукофот</option>
-                                <option value="other">Бошқа</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.comment">Изоҳ</label>
-                            <textarea name="comment" class="form-control" rows="3"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сақлаш</button>
-                    </form>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        window.i18n.applyTranslations();
-
-        modal.querySelector('.close').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
-        });
-
-        modal.querySelector('#add-payment-form').addEventListener('submit', async (e) => {
+                <div class="form-group"><label data-i18n="finance.payment_type"></label>
+                    <select name="payment_type" class="form-control">
+                        <option value="salary" data-i18n="payment_types.salary"></option>
+                        <option value="advance" data-i18n="payment_types.advance"></option>
+                        <option value="bonus" data-i18n="payment_types.bonus"></option>
+                        <option value="other" data-i18n="payment_types.other"></option>
+                    </select></div>
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <textarea name="comment" class="form-control" rows="2"></textarea></div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
+            </form>
+        `);
+        modal.querySelector('#worker-payment-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            
-            try {
-                await window.api.request('/finance/worker-payments/', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-                modal.remove();
-                window.toast.success('Payment created successfully');
-                await this.loadPayments(container);
-            } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to add payment');
-            }
+            const data = Object.fromEntries(new FormData(e.target));
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request('/finance/worker-payments/', { method: 'POST', body: JSON.stringify(data) });
+                    modal.remove();
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadPayments();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
         });
     }
 
-    /**
-     * Показывает модальное окно для добавления ставки.
-     *
-     * @param {HTMLElement} container - Контейнер
-     */
-    async showAddRateModal(container) {
-        // Загрузка продуктов
-        let products = [];
+    async loadRates() {
+        const el = this.contentEl;
+        window.listStates.loading(el, window.ui.t('common.loading'));
         try {
-            products = await window.api.request('/warehouse/finished-products/');
+            const response = await window.api.request('/finance/labor-rates/');
+            const rates = response.results || response;
+            el.innerHTML = `
+                <button class="btn btn-primary btn-block" id="add-rate-btn" style="margin-bottom:12px;" data-i18n="finance.add_rate"></button>
+                ${rates.length ? `
+                    <div class="list-group">
+                        ${rates.map((r) => `
+                            <div class="list-row" style="cursor:default;">
+                                <div>
+                                    <div style="font-weight:600;font-size:14px;">${window.ui.escape(r.product_name)}</div>
+                                    <div class="text-sm text-muted" data-i18n="operations.${r.operation}"></div>
+                                </div>
+                                <span class="font-bold">${window.ui.money(r.rate_per_unit)} / <span data-i18n="units.${r.unit}"></span></span>
+                            </div>`).join('')}
+                    </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
+            el.querySelector('#add-rate-btn').addEventListener('click', () => this.openRateForm());
+            window.i18n.applyTranslations();
         } catch (e) {
-            console.error('Failed to load products', e);
+            window.listStates.error(el, window.ui.t('common.error'), () => this.loadRates());
         }
+    }
 
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.style.display = 'block';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3 data-i18n="finance.add_rate">Янги ставка</h3>
-                    <button class="close">&times;</button>
+    async openRateForm() {
+        const productsResp = await window.api.request('/warehouse/finished-products/?is_archived=false');
+        const products = productsResp.results || productsResp;
+        const operations = ['cutting', 'polishing', 'mounting', 'packing', 'other'];
+
+        const modal = window.ui.modal('finance.add_rate', `
+            <form id="rate-form">
+                <div class="form-group"><label data-i18n="finance.product"></label>
+                    <select name="product" class="form-control" required>
+                        <option value=""></option>
+                        ${products.map((p) => `<option value="${p.id}">${window.ui.escape(p.name)}</option>`).join('')}
+                    </select></div>
+                <div class="form-group"><label data-i18n="finance.operation"></label>
+                    <select name="operation" class="form-control">
+                        ${operations.map((o) => `<option value="${o}" data-i18n="operations.${o}"></option>`).join('')}
+                    </select></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="form-group"><label data-i18n="finance.rate"></label>
+                        <input name="rate_per_unit" type="number" step="0.01" min="0.01" class="form-control" required></div>
+                    <div class="form-group"><label data-i18n="warehouse.unit"></label>
+                        <select name="unit" class="form-control">${window.ui.unitOptions('sht')}</select></div>
                 </div>
-                <div class="modal-body">
-                    <form id="add-rate-form">
-                        <div class="form-group">
-                            <label data-i18n="finance.product">Маҳсулот</label>
-                            <select name="product" class="form-control" required>
-                                <option value="">Танланг...</option>
-                                ${products.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.operation">Амалиёт</label>
-                            <select name="operation" class="form-control" required>
-                                <option value="cutting">Кесиш</option>
-                                <option value="polishing">Сийлаш</option>
-                                <option value="mounting">Монтаж</option>
-                                <option value="packing">Қутлаш</option>
-                                <option value="other">Бошқа</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.rate">Ставка</label>
-                            <input type="number" name="rate_per_unit" class="form-control" required step="0.01">
-                        </div>
-                        <div class="form-group">
-                            <label data-i18n="finance.unit">Бирлик</label>
-                            <select name="unit" class="form-control" required>
-                                <option value="sht">Дона</option>
-                                <option value="m2">м²</option>
-                                <option value="m">м</option>
-                                <option value="kg">кг</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary" data-i18n="common.save">Сақлаш</button>
-                    </form>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-        window.i18n.applyTranslations();
-
-        modal.querySelector('.close').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.remove();
-        });
-
-        modal.querySelector('#add-rate-form').addEventListener('submit', async (e) => {
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
+            </form>
+        `);
+        modal.querySelector('#rate-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData);
-            
-            try {
-                await window.api.request('/finance/labor-rates/', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-                modal.remove();
-                window.toast.success('Rate created successfully');
-                await this.loadRates(container);
-            } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to add rate');
-            }
+            const data = Object.fromEntries(new FormData(e.target));
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request('/finance/labor-rates/', { method: 'POST', body: JSON.stringify(data) });
+                    modal.remove();
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadRates();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
         });
     }
 }

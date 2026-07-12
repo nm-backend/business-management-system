@@ -1,7 +1,18 @@
+"""
+Orders models - заказы клиентов.
+
+Суммы заказа (total_amount, paid_amount) - финансовые поля, через API
+они доступны только владельцу.
+"""
+from decimal import Decimal
+
 from django.db import models
+from django.utils import timezone
+
 from apps.core.models import TimestampedModel, SoftDeleteModel
 from apps.clients.models import Client
 from apps.warehouse.models import FinishedProduct
+
 
 class Order(TimestampedModel, SoftDeleteModel):
     class Status(models.TextChoices):
@@ -9,7 +20,7 @@ class Order(TimestampedModel, SoftDeleteModel):
         AWAITING_MATERIAL = 'awaiting_material', 'Ожидает материала'
         SENT_TO_WORKER = 'sent_to_worker', 'Отправлен работнику'
         ACCEPTED = 'accepted', 'Принят работником'
-        WORKER_REJECTED = 'worker_rejected', 'Работник отказался'
+        WORKER_REFUSED = 'worker_refused', 'Работник отказался'
         IN_PROGRESS = 'in_progress', 'В работе'
         AWAITING_CONFIRMATION = 'awaiting_confirmation', 'Ожидает подтверждения'
         READY = 'ready', 'Готов'
@@ -29,8 +40,13 @@ class Order(TimestampedModel, SoftDeleteModel):
     deadline = models.DateTimeField(null=True, blank=True)
     worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
     comment = models.TextField(blank=True)
-    status = models.CharField(max_length=50, choices=Status.choices, default=Status.NEW)
+    photo = models.ImageField(upload_to='orders/', blank=True, null=True)
+    status = models.CharField(max_length=50, choices=Status.choices, default=Status.NEW, db_index=True)
     payment_status = models.CharField(max_length=50, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
+
+    # Финансовые поля (только owner через API).
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
     class Meta:
         verbose_name = 'Order'
@@ -39,3 +55,29 @@ class Order(TimestampedModel, SoftDeleteModel):
 
     def __str__(self):
         return f"Order #{self.id} - {self.client.name}"
+
+    @property
+    def is_paid(self):
+        return (self.paid_amount or Decimal('0')) >= (self.total_amount or Decimal('0'))
+
+    @property
+    def has_debt(self):
+        return not self.is_paid
+
+    @property
+    def is_overdue(self):
+        return bool(
+            self.deadline
+            and self.deadline < timezone.now()
+            and self.status not in (self.Status.DELIVERED, self.Status.CANCELLED)
+        )
+
+    def update_payment_status(self):
+        """Синхронизирует payment_status с суммами total_amount/paid_amount."""
+        if self.paid_amount <= 0:
+            self.payment_status = self.PaymentStatus.UNPAID
+        elif self.is_paid:
+            self.payment_status = self.PaymentStatus.PAID
+        else:
+            self.payment_status = self.PaymentStatus.PARTIAL
+        self.save(update_fields=['payment_status', 'updated_at'])

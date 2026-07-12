@@ -1,36 +1,50 @@
+"""
+Serializers for orders API.
+
+Суммы заказа (total_amount, paid_amount) видит только владелец:
+OrderSerializer - для admin/worker, OrderOwnerSerializer - для owner.
+"""
 from rest_framework import serializers
+
+from apps.production.services import check_material_shortages
 from .models import Order
-from apps.warehouse.models import Recipe, RecipeItem, RawMaterial
+
 
 class OrderSerializer(serializers.ModelSerializer):
     has_material_shortage = serializers.SerializerMethodField()
+    material_shortages = serializers.SerializerMethodField()
+    is_overdue = serializers.BooleanField(read_only=True)
     client_name = serializers.CharField(source='client.name', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
-    worker_name = serializers.CharField(source='worker.get_full_name', read_only=True)
+    worker_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = [
             'id', 'client', 'client_name', 'product', 'product_name', 'custom_product_name',
-            'quantity', 'unit', 'deadline', 'worker', 'worker_name', 'comment',
-            'status', 'payment_status', 'has_material_shortage', 'created_at', 'updated_at'
+            'quantity', 'unit', 'deadline', 'worker', 'worker_name', 'comment', 'photo',
+            'status', 'payment_status', 'has_material_shortage', 'material_shortages',
+            'is_overdue', 'created_at', 'updated_at',
         ]
 
+    def get_worker_name(self, obj):
+        if not obj.worker:
+            return ''
+        return obj.worker.full_name or obj.worker.username
+
+    def get_material_shortages(self, obj):
+        """Нехватка сырья по активному рецепту (без цен, только количества)."""
+        if not hasattr(obj, '_shortages'):
+            if not obj.product or obj.status in (Order.Status.DELIVERED, Order.Status.CANCELLED):
+                obj._shortages = []
+            else:
+                obj._shortages = check_material_shortages(obj.product, obj.quantity)
+        return obj._shortages
+
     def get_has_material_shortage(self, obj):
-        # Strict logic for shortage calculation (Rule 11: Backend checks)
-        # 1. Check if product exists and has a recipe
-        if not obj.product:
-            return False
-        
-        recipe = Recipe.objects.filter(product=obj.product).first()
-        if not recipe:
-            return False
-        
-        # 2. Check each raw material required for the recipe * quantity
-        for item in recipe.items.all():
-            required_qty = item.quantity * obj.quantity
-            material = item.raw_material
-            if material.quantity < required_qty:
-                return True # Shortage found!
-                
-        return False
+        return bool(self.get_material_shortages(obj))
+
+
+class OrderOwnerSerializer(OrderSerializer):
+    class Meta(OrderSerializer.Meta):
+        fields = OrderSerializer.Meta.fields + ['total_amount', 'paid_amount']

@@ -1,63 +1,78 @@
 {% load static %}
-<!DOCTYPE html>
+<!doctype html>
 <html lang="uz">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>SkladPro.Nod</title>
-    <!-- Google Fonts: Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{% static 'css/base.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/ux.css' %}" />
     {% block extra_css %}{% endblock %}
-</head>
-<body>
+  </head>
+  <body>
     <div class="app-container">
-        
-        <!-- Top App Bar -->
-        <header class="top-bar" id="app-top-bar" style="display: none;">
-            <h1 id="page-title">SkladPro</h1>
-            <div class="actions">
-                <span id="user-info" class="text-sm font-bold" style="margin-right: 10px;"></span>
-                <span class="nav-icon" style="font-size: 20px;">🔔</span>
-            </div>
-        </header>
+      <!-- Top App Bar -->
+      <header class="top-bar" id="app-top-bar" style="display: none">
+        <h1 id="page-title">SkladPro</h1>
+        <div class="actions">
+          <button class="icon-btn" id="notifications-btn" type="button" aria-label="Notifications">
+            🔔
+            <span class="notif-badge" id="notif-badge" style="display: none"></span>
+          </button>
+        </div>
+      </header>
 
-        <!-- Main Content -->
-        <main class="main-content" id="app-content">
-            {% block content %}{% endblock %}
-        </main>
+      <!-- Main Content -->
+      <main class="main-content" id="app-content">
+        {% block content %}{% endblock %}
+      </main>
 
-        <!-- Bottom Navigation -->
-        <nav class="bottom-nav" id="app-bottom-nav" style="display: none;">
-            <a href="#/" class="nav-item" id="nav-dashboard">
-                <span class="nav-icon">🏠</span>
-                <span data-i18n="nav.dashboard">Бош саҳифа</span>
-            </a>
-            <a href="#/orders" class="nav-item" id="nav-orders">
-                <span class="nav-icon">📋</span>
-                <span data-i18n="nav.orders">Буюртмалар</span>
-            </a>
-            <a href="#/warehouse" class="nav-item" id="nav-warehouse">
-                <span class="nav-icon">📦</span>
-                <span data-i18n="nav.warehouse">Омбор</span>
-            </a>
-            <a href="#/clients" class="nav-item" id="nav-clients">
-                <span class="nav-icon">👥</span>
-                <span data-i18n="nav.clients">Мижозлар</span>
-            </a>
-            <a href="#/settings" class="nav-item" id="nav-settings">
-                <span class="nav-icon">⚙️</span>
-                <span data-i18n="nav.settings">Кўпроқ</span>
-            </a>
-        </nav>
+      <!-- Bottom Navigation -->
+      <nav class="bottom-nav" id="app-bottom-nav" style="display: none">
+        <a href="#/" class="nav-item" id="nav-dashboard">
+          <span class="nav-icon">🏠</span>
+          <span data-i18n="nav.dashboard">Бош панел</span>
+        </a>
+        <a href="#/orders" class="nav-item" id="nav-orders">
+          <span class="nav-icon">📋</span>
+          <span data-i18n="nav.orders">Буюртмалар</span>
+        </a>
+        <a href="#/production" class="nav-item" id="nav-production" style="display: none">
+          <span class="nav-icon">🛠️</span>
+          <span data-i18n="nav.my_tasks_short">Вазифалар</span>
+        </a>
+        <a href="#/warehouse" class="nav-item" id="nav-warehouse">
+          <span class="nav-icon">📦</span>
+          <span data-i18n="nav.warehouse_short">Омбор</span>
+        </a>
+        <a href="#/clients" class="nav-item" id="nav-clients">
+          <span class="nav-icon">👥</span>
+          <span data-i18n="nav.clients">Мижозлар</span>
+        </a>
+        <a href="#/settings" class="nav-item" id="nav-settings">
+          <span class="nav-icon">⚙️</span>
+          <span data-i18n="nav.more">Кўпроқ</span>
+        </a>
+      </nav>
     </div>
 
     <!-- Core JS -->
     <script src="{% static 'js/api.js' %}"></script>
     <script src="{% static 'js/i18n.js' %}"></script>
-    
+    <script src="{% static 'js/toast.js' %}"></script>
+    <script src="{% static 'js/dialogs.js' %}"></script>
+    <script src="{% static 'js/list-states.js' %}"></script>
+    <script src="{% static 'js/ui.js' %}"></script>
+
     {% block extra_js %}
     <script src="{% static 'js/router.js' %}"></script>
     <script src="{% static 'js/components/dashboard.js' %}"></script>
@@ -65,28 +80,11 @@
     <script src="{% static 'js/components/finished_products.js' %}"></script>
     <script src="{% static 'js/components/orders.js' %}"></script>
     <script src="{% static 'js/components/clients.js' %}"></script>
+    <script src="{% static 'js/components/production.js' %}"></script>
+    <script src="{% static 'js/components/finance.js' %}"></script>
+    <script src="{% static 'js/components/messages.js' %}"></script>
+    <script src="{% static 'js/components/settings.js' %}"></script>
     <script src="{% static 'js/app.js' %}"></script>
-    
-    <script>
-        // Show/hide navigation based on auth status
-        document.addEventListener('DOMContentLoaded', async () => {
-            if (window.api.isAuthenticated()) {
-                document.getElementById('app-top-bar').style.display = 'flex';
-                document.getElementById('app-bottom-nav').style.display = 'flex';
-                
-                try {
-                    const user = await window.api.getMe();
-                    document.getElementById('user-info').textContent = user.username;
-                    
-                    // Modify nav based on role
-                    if (!user.is_owner && !user.is_admin) {
-                        // Worker
-                        document.getElementById('nav-clients').style.display = 'none';
-                    }
-                } catch(e) {}
-            }
-        });
-    </script>
     {% endblock %}
-</body>
+  </body>
 </html>

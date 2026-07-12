@@ -30,20 +30,40 @@ class MessageCreateSerializer(serializers.ModelSerializer):
     """
     Сериализатор для создания сообщения.
 
-    Используется при отправке сообщения.
+    Правила ТЗ:
+    - Владелец пишет кому угодно и всем (is_group).
+    - Администратор пишет работникам и владельцу.
+    - Работник пишет администраторам, владельцу - только если can_write_to_owner.
     """
     class Meta:
         model = Message
-        fields = [
-            'recipient', 'subject', 'content', 'is_group'
-        ]
+        fields = ['recipient', 'subject', 'content', 'is_group']
+
+    def validate(self, data):
+        sender = self.context['request'].user
+        recipient = data.get('recipient')
+        is_group = data.get('is_group', False)
+
+        if is_group:
+            if not sender.is_owner:
+                raise serializers.ValidationError('Only the owner can send group messages')
+            data['recipient'] = None
+            return data
+
+        if not recipient:
+            raise serializers.ValidationError({'recipient': 'Recipient is required'})
+        if recipient == sender:
+            raise serializers.ValidationError({'recipient': 'Cannot send a message to yourself'})
+
+        if sender.is_worker:
+            if recipient.is_worker:
+                raise serializers.ValidationError({'recipient': 'Workers cannot message other workers'})
+            if recipient.is_owner and not sender.can_write_to_owner:
+                raise serializers.ValidationError({'recipient': 'You are not allowed to write to the owner'})
+        return data
 
     def create(self, validated_data):
-        request = self.context.get('request')
-        return Message.objects.create(
-            **validated_data,
-            sender=request.user if request and request.user.is_authenticated else None
-        )
+        return Message.objects.create(**validated_data, sender=self.context['request'].user)
 
 
 class NotificationSerializer(serializers.ModelSerializer):

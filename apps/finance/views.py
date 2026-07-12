@@ -53,6 +53,18 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def perform_create(self, serializer):
+        from apps.messaging.models import Notification
+        from apps.messaging.services import notify
+
+        expense = serializer.save(created_by=self.request.user)
+        notify(
+            self.request.user,
+            Notification.NotificationType.NEW_EXPENSE,
+            'Янги харажат',
+            f'{expense.get_category_display()}: {expense.amount}',
+        )
+
 
 class LaborRateViewSet(viewsets.ModelViewSet):
     """

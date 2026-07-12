@@ -1,25 +1,34 @@
+/**
+ * App bootstrap: авторизация, роль, навигация, маршруты SPA.
+ */
 document.addEventListener('DOMContentLoaded', async () => {
-    // Check auth
-    try {
-        const user = await window.api.getMe();
-        document.getElementById('user-info').textContent = user.full_name || user.username;
-        
-        // Hide certain links based on role
-        if (!user.is_owner && !user.is_admin) {
-            // Worker view - hide items that workers shouldn't see
-            const financeLink = document.querySelector('[href="#/finance"]');
-            if(financeLink) financeLink.parentElement.style.display = 'none';
-        }
-    } catch (e) {
-        // API client handles redirect to login
+    if (!window.api.isAuthenticated()) {
+        window.location.href = '/accounts/login/';
         return;
     }
 
-    document.getElementById('logout-btn').addEventListener('click', () => {
-        window.api.logout();
+    let user;
+    try {
+        user = await window.api.getMe();
+    } catch (e) {
+        return; // APIClient сам уводит на логин при истёкшей сессии
+    }
+    window.currentUser = user;
+
+    document.getElementById('app-top-bar').style.display = 'flex';
+    document.getElementById('app-bottom-nav').style.display = 'flex';
+
+    // Меню по ролям: работник вместо клиентов видит свои задачи.
+    if (user.is_worker) {
+        document.getElementById('nav-clients').style.display = 'none';
+        document.getElementById('nav-production').style.display = 'flex';
+    }
+
+    document.getElementById('notifications-btn').addEventListener('click', () => {
+        window.location.hash = '#/messages?tab=notifications';
     });
 
-    // Register routes
+    // Маршруты SPA
     window.router.addRoute('/', window.DashboardComponent);
     window.router.addRoute('/warehouse', window.WarehouseComponent);
     window.router.addRoute('/finished-products', window.FinishedProductsComponent);
@@ -28,18 +37,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.router.addRoute('/production', window.ProductionComponent);
     window.router.addRoute('/finance', window.FinanceComponent);
     window.router.addRoute('/messages', window.MessagesComponent);
-    
-    // Initial route
-    window.router.handleRoute();
+    window.router.addRoute('/settings', window.SettingsComponent);
 
-    // Highlight active nav link
-    const updateActiveNav = () => {
-        const hash = window.location.hash || '#/';
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.style.opacity = link.getAttribute('href') === hash ? '1' : '0.7';
-        });
-    };
-    
-    window.addEventListener('hashchange', updateActiveNav);
-    updateActiveNav();
+    window.router.handleRoute();
+    refreshNotificationBadge();
+    setInterval(refreshNotificationBadge, 60000);
 });
+
+async function refreshNotificationBadge() {
+    try {
+        const response = await window.api.request('/messaging/notifications/?is_read=false');
+        const count = response.count ?? (response.results || response).length;
+        const badge = document.getElementById('notif-badge');
+        badge.style.display = count > 0 ? 'flex' : 'none';
+        badge.textContent = count > 99 ? '99+' : count;
+    } catch (e) {
+        /* не критично */
+    }
+}
+window.refreshNotificationBadge = refreshNotificationBadge;

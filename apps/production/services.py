@@ -1,0 +1,181 @@
+"""
+Production services - подтверждение и отклонение выполненной работы.
+
+Подтверждение работы - единственная операция, которая меняет склад
+(правило ТЗ: склад меняется только после подтверждения):
+
+1. Проверяется активный рецепт товара.
+2. Проверяется наличие сырья по рецепту.
+3. Сырьё списывается со склада (+ записи StockMovement).
+4. Готовый товар приходуется на склад (+ запись StockMovement).
+5. Работнику начисляется оплата по ставке LaborRate.
+6. Работник получает уведомление, заказ меняет статус.
+
+Всё выполняется в одной транзакции: при нехватке сырья ничего не меняется.
+"""
+from decimal import Decimal
+
+from django.db import transaction
+from django.utils import timezone
+
+from apps.audit.models import AuditLog
+from apps.audit.services import write_audit_log
+from apps.messaging.models import Notification
+from apps.messaging.services import notify
+from apps.warehouse.models import StockMovement
+
+from .models import WorkRecord
+
+
+class MaterialShortageError(Exception):
+    """Сырья на складе меньше, чем требует рецепт."""
+
+    def __init__(self, shortages):
+        self.shortages = shortages  # [{material, required, available}, ...]
+        super().__init__('Not enough raw material to confirm the work')
+
+
+def get_recipe_requirements(product, quantity):
+    """Возвращает [(material, required_qty), ...] по активному рецепту товара."""
+    if not product:
+        return []
+    recipe = product.recipes.filter(is_active=True).prefetch_related('items__material').first()
+    if not recipe:
+        return []
+    return [
+        (item.material, item.quantity_required * Decimal(quantity))
+        for item in recipe.items.all()
+    ]
+
+
+def check_material_shortages(product, quantity):
+    """Возвращает список нехваток сырья для производства quantity товара."""
+    shortages = []
+    for material, required in get_recipe_requirements(product, quantity):
+        if material.quantity < required:
+            shortages.append({
+                'material_id': material.id,
+                'material_name': material.name,
+                'required': required,
+                'available': material.quantity,
+                'missing': required - material.quantity,
+            })
+    return shortages
+
+
+def calculate_labor_cost(work):
+    """Начислено = количество работы x ставка за единицу (по ставке товара)."""
+    from apps.finance.models import LaborRate
+    if not work.product:
+        return Decimal('0')
+    rate = LaborRate.objects.filter(product=work.product).order_by('operation').first()
+    if not rate:
+        return Decimal('0')
+    return rate.rate_per_unit * work.quantity
+
+
+@transaction.atomic
+def confirm_work(work, confirmed_by, labor_cost=None, request=None):
+    """
+    Подтверждает работу: списывает сырьё, приходует товар, начисляет оплату.
+
+    Бросает MaterialShortageError, если сырья не хватает (склад не меняется).
+    """
+    product = work.product
+    requirements = get_recipe_requirements(product, work.quantity)
+
+    # 1-2. Рецепт и наличие сырья (блокируем строки от параллельных подтверждений).
+    shortages = []
+    locked_materials = []
+    for material, required in requirements:
+        material = type(material).objects.select_for_update().get(pk=material.pk)
+        if material.quantity < required:
+            shortages.append({
+                'material_id': material.id,
+                'material_name': material.name,
+                'required': required,
+                'available': material.quantity,
+                'missing': required - material.quantity,
+            })
+        locked_materials.append((material, required))
+    if shortages:
+        raise MaterialShortageError(shortages)
+
+    # 3. Списание сырья.
+    for material, required in locked_materials:
+        material.quantity -= required
+        material.save(update_fields=['quantity', 'updated_at'])
+        StockMovement.objects.create(
+            movement_type=StockMovement.MovementType.PRODUCTION_OUT,
+            material=material,
+            quantity=required,
+            reason=f'Work #{work.id} confirmed',
+            created_by=confirmed_by,
+            related_production_id=work.id,
+            related_order_id=work.task.order_id if work.task else None,
+        )
+
+    # 4. Приход готового товара.
+    if product:
+        product.quantity += work.quantity
+        product.save(update_fields=['quantity', 'updated_at'])
+        StockMovement.objects.create(
+            movement_type=StockMovement.MovementType.PRODUCTION_IN,
+            product=product,
+            quantity=work.quantity,
+            reason=f'Work #{work.id} confirmed',
+            created_by=confirmed_by,
+            related_production_id=work.id,
+            related_order_id=work.task.order_id if work.task else None,
+        )
+
+    # 5. Начисление работнику.
+    if labor_cost is None:
+        labor_cost = calculate_labor_cost(work)
+    work.status = WorkRecord.WorkStatus.CONFIRMED
+    work.confirmed_by = confirmed_by
+    work.confirmed_at = timezone.now()
+    work.labor_cost = labor_cost
+    work.save(update_fields=['status', 'confirmed_by', 'confirmed_at', 'labor_cost', 'updated_at'])
+
+    # 6. Статус задачи/заказа и уведомление работнику.
+    if work.task:
+        work.task.confirm(confirmed_by)
+    notify(
+        work.worker,
+        Notification.NotificationType.WORK_CONFIRMED,
+        'Иш тасдиқланди',
+        f'Иш #{work.id} тасдиқланди: {product.name if product else ""} x {work.quantity}',
+        task=work.task,
+    )
+    write_audit_log(
+        action=AuditLog.Action.UPDATE,
+        actor=confirmed_by,
+        target=work,
+        changes={'status': {'old': 'awaiting_confirmation', 'new': 'confirmed'}},
+        request=request,
+    )
+    return work
+
+
+def reject_work(work, rejected_by, reason, request=None):
+    """Отклоняет работу: склад не меняется, работник получает причину."""
+    work.status = WorkRecord.WorkStatus.REJECTED
+    work.rejection_reason = reason
+    work.confirmed_by = rejected_by
+    work.save(update_fields=['status', 'rejection_reason', 'confirmed_by', 'updated_at'])
+    notify(
+        work.worker,
+        Notification.NotificationType.WORK_REJECTED,
+        'Иш рад этилди',
+        reason or f'Иш #{work.id} рад этилди',
+        task=work.task,
+    )
+    write_audit_log(
+        action=AuditLog.Action.UPDATE,
+        actor=rejected_by,
+        target=work,
+        changes={'status': {'old': 'awaiting_confirmation', 'new': 'rejected'}},
+        request=request,
+    )
+    return work

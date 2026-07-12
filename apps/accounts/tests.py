@@ -89,8 +89,9 @@ class SetupOwnerAPITests(TestCase):
             '/api/v1/accounts/setup/owner/',
             {
                 'username': 'owner',
-                'password': 'secret123',
-                'password_confirm': 'secret123',
+                # Пароль должен проходить CommonPasswordValidator.
+                'password': 'Skl4dPro!Nod',
+                'password_confirm': 'Skl4dPro!Nod',
                 'full_name': 'Owner',
                 'phone': '',
             },

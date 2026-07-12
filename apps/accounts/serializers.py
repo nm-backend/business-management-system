@@ -29,12 +29,16 @@ class UserSerializer(serializers.ModelSerializer):
         Только owner может видеть полный список пользователей
     """
     display_role = serializers.ReadOnlyField()
+    is_owner = serializers.ReadOnlyField()
+    is_admin = serializers.ReadOnlyField()
+    is_worker = serializers.ReadOnlyField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'full_name', 'phone', 'email',
-            'role', 'display_role', 'avatar', 'language',
+            'role', 'display_role', 'is_owner', 'is_admin', 'is_worker',
+            'avatar', 'language',
             'is_active', 'can_write_to_owner', 'can_create_workers',
             'can_see_other_workers', 'created_at', 'updated_at',
         ]

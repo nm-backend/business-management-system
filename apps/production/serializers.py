@@ -5,7 +5,7 @@ Serializers for production API.
 с защитой финансовых данных для non-owner пользователей.
 """
 from rest_framework import serializers
-from .models import Task, WorkRecord, TaskStatus, RefusalReason
+from .models import Task, WorkRecord
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -16,14 +16,25 @@ class TaskSerializer(serializers.ModelSerializer):
     Финансовых полей нет.
     """
     order_id = serializers.IntegerField(source='order.id', read_only=True)
-    worker_name = serializers.CharField(source='worker.username', read_only=True)
+    order_product = serializers.SerializerMethodField()
+    worker_name = serializers.SerializerMethodField()
     assigned_by_name = serializers.CharField(source='assigned_by.username', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
+
+    def get_order_product(self, obj):
+        if not obj.order:
+            return ''
+        if obj.order.product:
+            return obj.order.product.name
+        return obj.order.custom_product_name
+
+    def get_worker_name(self, obj):
+        return obj.worker.full_name or obj.worker.username
 
     class Meta:
         model = Task
         fields = [
-            'id', 'order', 'order_id', 'worker', 'worker_name',
+            'id', 'order', 'order_id', 'order_product', 'worker', 'worker_name',
             'assigned_by', 'assigned_by_name', 'status',
             'refusal_reason', 'refusal_comment',
             'assigned_at', 'accepted_at', 'completed_at',
@@ -41,15 +52,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = Task
-        fields = [
-            'order', 'worker', 'assigned_by', 'is_self_assigned'
-        ]
-
-    def create(self, validated_data):
-        return Task.objects.create(
-            **validated_data,
-            status=TaskStatus.PENDING
-        )
+        fields = ['order', 'worker', 'is_self_assigned']
 
 
 class WorkRecordSerializer(serializers.ModelSerializer):
@@ -112,9 +115,4 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
             'task', 'worker', 'product', 'quantity', 'unit',
             'photo', 'comment'
         ]
-
-    def create(self, validated_data):
-        return WorkRecord.objects.create(
-            **validated_data,
-            status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION
-        )
+        extra_kwargs = {'worker': {'required': False}}

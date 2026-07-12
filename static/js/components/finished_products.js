@@ -1,61 +1,181 @@
 /**
- * FinishedProductsComponent - страница готовой продукции.
- * Отображает список товаров с учетом резервов под заказы.
+ * Готовая продукция: список с резервами, низкие остатки красным,
+ * добавление/редактирование (owner/admin), цены видит только owner.
  */
 class FinishedProductsComponent {
     async render(container) {
-        container.innerHTML = `
-            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h1 data-i18n="warehouse.finished_title">Тайёр маҳсулот</h1>
-                <button id="add-product-btn" class="btn btn-primary" data-i18n="warehouse.add_product">Добавить товар</button>
-            </header>
+        document.getElementById('page-title').setAttribute('data-i18n', 'warehouse.finished_title');
+        const user = window.currentUser;
+        const canEdit = user.is_owner || user.is_admin;
 
-            <div class="card" style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                    <thead>
-                        <tr style="border-bottom: 2px solid #eee;">
-                            <th style="padding: 10px;" data-i18n="warehouse.name">Название</th>
-                            <th style="padding: 10px;" data-i18n="warehouse.category">Категория</th>
-                            <th style="padding: 10px;" data-i18n="warehouse.quantity">Количество</th>
-                            <th style="padding: 10px;" data-i18n="warehouse.reserved">Резерв</th>
-                            <th style="padding: 10px;" data-i18n="warehouse.unit">Единица</th>
-                        </tr>
-                    </thead>
-                    <tbody id="products-list">
-                        <tr><td colspan="5" style="padding: 10px; text-align: center;" data-i18n="common.loading">Загрузка...</td></tr>
-                    </tbody>
-                </table>
+        container.innerHTML = `
+            <div class="tabs">
+                <button class="tab-btn" id="tab-materials" data-i18n="warehouse.title"></button>
+                <button class="tab-btn active" data-i18n="warehouse.finished_title"></button>
             </div>
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="product-search" class="form-control" data-i18n="warehouse.search">
+            </div>
+            ${canEdit ? `<button class="btn btn-primary btn-block" id="add-product-btn" style="margin-bottom:12px;" data-i18n="warehouse.add_product"></button>` : ''}
+            <div class="list-group" id="products-list"></div>
         `;
 
-        await this.loadProducts(container);
+        container.querySelector('#tab-materials').addEventListener('click', () => window.router.navigate('/warehouse'));
+
+        const searchInput = container.querySelector('#product-search');
+        let timer;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                this.search = searchInput.value;
+                this.loadProducts();
+            }, 300);
+        });
+
+        if (canEdit) {
+            container.querySelector('#add-product-btn').addEventListener('click', () => this.openForm());
+        }
+
+        window.i18n.applyTranslations();
+        this.search = '';
+        await this.loadProducts();
     }
 
-    async loadProducts(container) {
-        const listEl = container.querySelector('#products-list');
-        window.listStates.tableLoading(listEl, 5);
+    async loadProducts() {
+        const listEl = document.getElementById('products-list');
+        window.listStates.loading(listEl, window.ui.t('common.loading'));
         try {
-            const data = await window.api.request('/warehouse/finished-products/');
+            let query = '?is_archived=false';
+            if (this.search) query += `&search=${encodeURIComponent(this.search)}`;
+            const response = await window.api.request(`/warehouse/finished-products/${query}`);
+            const products = response.results || response;
 
-            if (data.results && data.results.length > 0) {
-                listEl.innerHTML = data.results.map(p => `
-                    <tr style="border-bottom: 1px solid #eee; ${p.is_low_stock ? 'background-color: #ffebee;' : ''}">
-                        <td style="padding: 10px;">${p.name}</td>
-                        <td style="padding: 10px;">${p.category}</td>
-                        <td style="padding: 10px; font-weight: bold; color: ${p.is_low_stock ? 'red' : 'inherit'}">${p.available_quantity}</td>
-                        <td style="padding: 10px;">${p.reserved_for_orders}</td>
-                        <td style="padding: 10px;">${p.unit_display}</td>
-                    </tr>
-                `).join('');
-            } else {
-                window.listStates.tableEmpty(listEl, 5, 'No finished products found');
-                window.i18n.applyTranslations();
+            if (!products.length) {
+                window.listStates.empty(listEl, window.ui.t('common.no_data'));
+                return;
             }
-        } catch (e) {
-            console.error('Failed to load products', e);
-            window.listStates.tableError(listEl, 5, 'Unable to load products', () => this.loadProducts(container));
+            listEl.innerHTML = products.map((p) => `
+                <div class="list-row" data-id="${p.id}">
+                    <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                        <div class="thumb">${p.photo ? `<img src="${p.photo}" alt="">` : '🪟'}</div>
+                        <div style="min-width:0;">
+                            <div style="font-size:14px;font-weight:600;">${window.ui.escape(p.name)}</div>
+                            <div class="text-sm text-muted">
+                                ${window.ui.escape(p.category || '-')} ·
+                                <span data-i18n="warehouse.reserved"></span>: ${window.ui.qty(p.reserved_for_orders)}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:15px;font-weight:600;" class="${p.is_low_stock ? 'text-danger' : ''}">
+                            ${window.ui.qty(p.available_quantity)} <span data-i18n="units.${p.unit}"></span>
+                        </div>
+                        ${p.is_low_stock ? `<div class="text-sm text-danger" data-i18n="warehouse.low_stock_warning"></div>` : ''}
+                    </div>
+                </div>`).join('');
+
+            listEl.querySelectorAll('[data-id]').forEach((row) => {
+                row.addEventListener('click', () => {
+                    const product = products.find((p) => p.id === Number(row.dataset.id));
+                    this.openDetail(product);
+                });
+            });
             window.i18n.applyTranslations();
+        } catch (e) {
+            window.listStates.error(listEl, window.ui.t('common.error'), () => this.loadProducts());
         }
+    }
+
+    openDetail(p) {
+        const user = window.currentUser;
+        const canEdit = user.is_owner || user.is_admin;
+        const row = (labelKey, value, danger = false) => (!value ? '' : `
+            <div class="list-row" style="cursor:default;">
+                <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
+                <span class="text-sm font-bold ${danger ? 'text-danger' : ''}">${window.ui.escape(String(value))}</span>
+            </div>`);
+
+        const modal = window.ui.modal('warehouse.finished_title', `
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+                <div class="thumb" style="width:56px;height:56px;">${p.photo ? `<img src="${p.photo}" alt="">` : '🪟'}</div>
+                <div>
+                    <div style="font-weight:600;font-size:16px;">${window.ui.escape(p.name)}</div>
+                    <div class="text-sm text-muted">${window.ui.escape(p.category || '')}</div>
+                </div>
+            </div>
+            <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">
+                ${row('warehouse.quantity', `${window.ui.qty(p.quantity)} ${window.ui.t('units.' + p.unit)}`, p.is_low_stock)}
+                ${row('warehouse.reserved', window.ui.qty(p.reserved_for_orders))}
+                ${row('warehouse.min_stock', window.ui.qty(p.min_stock))}
+                ${user.is_owner ? row('warehouse.cost_price', window.ui.money(p.cost_price)) : ''}
+                ${user.is_owner ? row('warehouse.sale_price', window.ui.money(p.sale_price)) : ''}
+                ${row('warehouse.description', p.description)}
+            </div>
+            ${canEdit ? `<button class="btn btn-secondary btn-block" id="edit-product" style="margin-top:14px;" data-i18n="common.edit"></button>` : ''}
+        `);
+
+        if (canEdit) {
+            modal.querySelector('#edit-product').addEventListener('click', () => {
+                modal.remove();
+                this.openForm(p);
+            });
+        }
+    }
+
+    openForm(p = null) {
+        const isOwner = window.currentUser.is_owner;
+        const modal = window.ui.modal(p ? 'common.edit' : 'warehouse.add_product', `
+            <form id="product-form">
+                <div class="form-group"><label data-i18n="warehouse.name"></label>
+                    <input name="name" class="form-control" required value="${window.ui.escape(p?.name || '')}"></div>
+                <div class="form-group"><label data-i18n="warehouse.category"></label>
+                    <input name="category" class="form-control" value="${window.ui.escape(p?.category || '')}"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="form-group"><label data-i18n="warehouse.unit"></label>
+                        <select name="unit" class="form-control">${window.ui.unitOptions(p?.unit || 'izdelie')}</select></div>
+                    <div class="form-group"><label data-i18n="warehouse.quantity"></label>
+                        <input name="quantity" type="number" step="0.001" min="0" class="form-control" required value="${p?.quantity ?? ''}"></div>
+                    <div class="form-group"><label data-i18n="warehouse.min_stock"></label>
+                        <input name="min_stock" type="number" step="0.001" min="0" class="form-control" value="${p?.min_stock ?? 0}"></div>
+                    <div class="form-group"><label data-i18n="warehouse.reserved"></label>
+                        <input name="reserved_for_orders" type="number" step="0.001" min="0" class="form-control" value="${p?.reserved_for_orders ?? 0}"></div>
+                </div>
+                ${isOwner ? `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        <div class="form-group"><label data-i18n="warehouse.cost_price"></label>
+                            <input name="cost_price" type="number" step="0.01" min="0" class="form-control" value="${p?.cost_price ?? 0}"></div>
+                        <div class="form-group"><label data-i18n="warehouse.sale_price"></label>
+                            <input name="sale_price" type="number" step="0.01" min="0" class="form-control" value="${p?.sale_price ?? 0}"></div>
+                    </div>` : ''}
+                <div class="form-group"><label data-i18n="warehouse.description"></label>
+                    <textarea name="description" class="form-control" rows="2">${window.ui.escape(p?.description || '')}</textarea></div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
+            </form>
+        `);
+
+        modal.querySelector('#product-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    if (p) {
+                        await window.api.request(`/warehouse/finished-products/${p.id}/`, {
+                            method: 'PATCH', body: JSON.stringify(data),
+                        });
+                    } else {
+                        await window.api.request('/warehouse/finished-products/', {
+                            method: 'POST', body: JSON.stringify(data),
+                        });
+                    }
+                    modal.remove();
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadProducts();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
     }
 }
 

@@ -1,27 +1,27 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: var(--space-6);">
-    <div class="card" style="width: 100%; max-width: 400px; padding: var(--space-8);">
-        <h2 style="text-align: center; margin-bottom: var(--space-2);" data-i18n="app.name">SkladPro.Nod</h2>
-        <h3 style="text-align: center; margin-bottom: var(--space-6); font-size: var(--text-lg); font-weight: var(--font-semibold); color: var(--text-secondary);" data-i18n="auth.login">Вход</h3>
-        
-        <div id="error-message" class="alert alert-error" style="display: none;" data-i18n="auth.login_error"></div>
+<div style="display: flex; justify-content: center; align-items: center; min-height: 90vh;">
+    <div class="card" style="width: 100%; max-width: 400px; padding: 28px 24px;">
+        <h2 style="text-align: center; margin-bottom: 4px;" data-i18n="app.name">SkladPro.Nod</h2>
+        <p class="text-sm text-muted" style="text-align: center; margin-bottom: 24px;" data-i18n="app.tagline"></p>
+
+        <div id="error-message" class="alert-box" style="display: none;"></div>
 
         <form id="login-form">
-            <div style="margin-bottom: var(--space-4);">
-                <label for="username" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="auth.username">Имя пользователя</label>
-                <input type="text" id="username" class="input" required>
+            <div class="form-group">
+                <label for="username" data-i18n="auth.username"></label>
+                <input type="text" id="username" class="form-control" required autocomplete="username">
             </div>
-            <div style="margin-bottom: var(--space-6);">
-                <label for="password" style="display: block; margin-bottom: var(--space-2); font-weight: var(--font-medium);" data-i18n="auth.password">Пароль</label>
-                <input type="password" id="password" class="input" required>
+            <div class="form-group">
+                <label for="password" data-i18n="auth.password"></label>
+                <input type="password" id="password" class="form-control" required autocomplete="current-password">
             </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;" data-i18n="auth.login_button">Войти в систему</button>
+            <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
         </form>
-        
-        <div style="margin-top: var(--space-6); text-align: center;">
-            <select id="lang-select" class="select" style="width: auto; display: inline-block;">
+
+        <div style="margin-top: 24px; text-align: center;">
+            <select id="lang-select" class="form-control" style="width: auto; display: inline-block;">
                 <option value="uz_cyrl">Ўзбекча</option>
                 <option value="ru">Русский</option>
             </select>
@@ -42,8 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('login-form');
     const errorMsg = document.getElementById('error-message');
     if (sessionStorage.getItem('session_expired')) {
-        errorMsg.textContent = 'Your session expired. Please sign in again.';
-        errorMsg.style.display = 'block';
+        errorMsg.textContent = window.i18n.translate('auth.session_expired');
+        errorMsg.style.display = 'flex';
         sessionStorage.removeItem('session_expired');
     }
 
@@ -52,13 +52,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         errorMsg.style.display = 'none';
-        
+
         try {
             await window.api.login(username, password);
             window.location.href = '/';
         } catch (error) {
-            errorMsg.textContent = error.data?.detail || 'Unable to sign in. Check your credentials.';
-            errorMsg.style.display = 'block';
+            errorMsg.textContent = error.data?.detail || window.i18n.translate('auth.login_error');
+            errorMsg.style.display = 'flex';
         }
     });
 });

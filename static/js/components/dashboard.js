@@ -1,105 +1,217 @@
+/**
+ * Дашборд: у каждой роли своя главная.
+ * Owner - финансовая аналитика, Admin - операционные показатели без денег,
+ * Worker - задачи на сегодня и заработок.
+ */
 class DashboardComponent {
     async render(container) {
-        document.getElementById('page-title').textContent = 'Бош панел';
-        
-        container.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-muted);">Загрузка...</div>`;
-        
-        try {
-            const user = await window.api.getMe();
-            if (user.is_owner) {
-                this.renderOwnerDashboard(container);
-            } else if (user.is_admin) {
-                this.renderAdminDashboard(container);
-            } else {
-                this.renderWorkerDashboard(container);
-            }
-        } catch (error) {
-            container.innerHTML = `<div class="alert-box">Ошибка загрузки профиля</div>`;
-        }
+        document.getElementById('page-title').setAttribute('data-i18n', 'nav.dashboard');
+        window.i18n.applyTranslations();
+
+        const user = window.currentUser;
+        if (user.is_owner) await this.renderOwner(container);
+        else if (user.is_admin) await this.renderAdmin(container);
+        else await this.renderWorker(container);
+        window.i18n.applyTranslations();
     }
 
-    renderOwnerDashboard(container) {
-        container.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <span class="text-sm text-muted">01.05.2024 - 31.05.2024</span>
-                <span class="nav-icon" style="font-size: 16px;">🔽</span>
-            </div>
-            
-            <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div class="metric-title">Даромад</div>
-                    <div class="metric-value">125 750 000 сўм</div>
-                </div>
-                <div class="text-success font-bold" style="font-size: 13px;">↑ 12.5%</div>
-            </div>
-            
-            <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div class="metric-title">Соф фойда</div>
-                    <div class="metric-value">38 450 000 сўм</div>
-                </div>
-                <div class="text-success font-bold" style="font-size: 13px;">↑ 18.3%</div>
-            </div>
-            
-            <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div class="metric-title">Касса қолдиғи</div>
-                    <div class="metric-value">42 300 000 сўм</div>
-                </div>
-                <div class="text-muted font-bold" style="font-size: 18px;">></div>
-            </div>
-        `;
-    }
+    async renderOwner(container) {
+        const period = this.period || 'month';
+        const data = await window.api.request(`/reports/analytics/owner/?period=${period}`);
+        const t = (k) => window.ui.t(k);
+        const periods = ['today', 'yesterday', 'week', 'month', 'quarter', 'year'];
 
-    renderAdminDashboard(container) {
         container.innerHTML = `
-            <div style="margin-bottom: 15px;">
-                <h3 style="font-size: 16px; margin-bottom: 5px;">Хуш келибсиз, Админ!</h3>
-                <span class="text-sm text-muted">Бугунги кўрсаткичлар</span>
+            <div class="tabs">
+                ${periods.map((p) => `
+                    <button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>
+                `).join('')}
             </div>
-            
+
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div class="metric-title" data-i18n="dashboard.revenue"></div>
+                    <div class="metric-value">${window.ui.money(data.revenue)}</div>
+                </div>
+            </div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div class="metric-title" data-i18n="dashboard.net_profit"></div>
+                    <div class="metric-value ${data.net_profit < 0 ? 'text-danger' : ''}">${window.ui.money(data.net_profit)}</div>
+                </div>
+            </div>
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" id="cash-card">
+                <div>
+                    <div class="metric-title" data-i18n="dashboard.cash_balance"></div>
+                    <div class="metric-value">${window.ui.money(data.cash)}</div>
+                </div>
+                <span class="text-muted font-bold" style="font-size:18px;">›</span>
+            </div>
+
             <div class="metrics-grid">
-                <div class="metric-card green">
-                    <div class="metric-title">Янги буюртмалар</div>
-                    <div class="metric-value">12</div>
-                </div>
                 <div class="metric-card yellow">
-                    <div class="metric-title">Иш жараёнида</div>
-                    <div class="metric-value">7</div>
-                </div>
-                <div class="metric-card blue">
-                    <div class="metric-title">Бугун ишга топширилган</div>
-                    <div class="metric-value">23</div>
+                    <div class="metric-title" data-i18n="finance.expenses"></div>
+                    <div class="metric-value" style="font-size:17px;">${window.ui.money(data.expenses_total)}</div>
                 </div>
                 <div class="metric-card purple">
-                    <div class="metric-title">Ишчилар мулоҳазалари</div>
-                    <div class="metric-value">17</div>
+                    <div class="metric-title" data-i18n="finance.gross_profit"></div>
+                    <div class="metric-value" style="font-size:17px;">${window.ui.money(data.gross_profit)}</div>
+                </div>
+                <div class="metric-card blue">
+                    <div class="metric-title" data-i18n="finance.client_debts"></div>
+                    <div class="metric-value" style="font-size:17px;">${window.ui.money(data.client_debts)}</div>
+                </div>
+                <div class="metric-card green">
+                    <div class="metric-title" data-i18n="finance.worker_debts"></div>
+                    <div class="metric-value" style="font-size:17px;">${window.ui.money(data.worker_debts)}</div>
                 </div>
             </div>
-            
-            <div class="alert-box" style="justify-content: space-between;">
-                <span>⚠️ Материал етарли эмас (5 тур)</span>
-                <span style="font-size: 16px;">></span>
+
+            ${data.stock.low_stock_materials > 0 ? `
+                <a class="alert-box" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
+                    <span>⚠️ <span data-i18n="warehouse.low_stock_warning"></span> (${data.stock.low_stock_materials})</span>
+                    <span>›</span>
+                </a>` : ''}
+
+            ${data.top_products.length ? `
+                <div class="section-title" data-i18n="finance.top_selling"></div>
+                <div class="list-group">
+                    ${data.top_products.map((p) => `
+                        <div class="list-row" style="cursor:default;">
+                            <span>${window.ui.escape(p.name)}</span>
+                            <span class="font-bold">${window.ui.qty(p.total_quantity)}</span>
+                        </div>`).join('')}
+                </div>` : ''}
+
+            ${data.most_active_worker ? `
+                <div class="section-title" data-i18n="finance.most_active_worker"></div>
+                <div class="card" style="display:flex;justify-content:space-between;">
+                    <span>${window.ui.escape(data.most_active_worker.name || data.most_active_worker.username)}</span>
+                    <span class="font-bold">${window.ui.qty(data.most_active_worker.total_quantity)}</span>
+                </div>` : ''}
+        `;
+
+        container.querySelectorAll('[data-period]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                this.period = btn.dataset.period;
+                this.renderOwner(container).then(() => window.i18n.applyTranslations());
+            });
+        });
+        const cashCard = container.querySelector('#cash-card');
+        if (cashCard) cashCard.addEventListener('click', () => window.router.navigate('/finance'));
+    }
+
+    async renderAdmin(container) {
+        const data = await window.api.request('/reports/analytics/admin/');
+        const user = window.currentUser;
+
+        container.innerHTML = `
+            <div style="margin-bottom:15px;">
+                <h3 style="font-size:16px;margin-bottom:4px;">
+                    <span data-i18n="dashboard.welcome"></span>, ${window.ui.escape(user.full_name || user.username)}!
+                </h3>
+                <span class="text-sm text-muted" data-i18n="dashboard.today_indicators"></span>
             </div>
+            <div class="metrics-grid">
+                <div class="metric-card green">
+                    <div class="metric-title" data-i18n="dashboard.new_orders"></div>
+                    <div class="metric-value">${data.orders_new}</div>
+                </div>
+                <div class="metric-card yellow">
+                    <div class="metric-title" data-i18n="dashboard.in_progress"></div>
+                    <div class="metric-value">${data.orders_in_progress}</div>
+                </div>
+                <div class="metric-card blue">
+                    <div class="metric-title" data-i18n="statuses.ready"></div>
+                    <div class="metric-value">${data.orders_ready}</div>
+                </div>
+                <div class="metric-card purple">
+                    <div class="metric-title" data-i18n="dashboard.pending_confirmations"></div>
+                    <div class="metric-value">${data.awaiting_confirmation}</div>
+                </div>
+            </div>
+
+            ${data.orders_overdue > 0 ? `
+                <a class="alert-box" href="#/orders" style="text-decoration:none;justify-content:space-between;">
+                    <span>⏰ <span data-i18n="dashboard.deadline_passed"></span>: ${data.orders_overdue}</span><span>›</span>
+                </a>` : ''}
+
+            ${data.low_stock_materials.length ? `
+                <a class="alert-box" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
+                    <span>⚠️ <span data-i18n="warehouse.low_stock_warning"></span> (${data.low_stock_materials.length})</span>
+                    <span>›</span>
+                </a>` : ''}
+
+            ${data.unpaid_clients.length ? `
+                <div class="section-title" data-i18n="admin_analytics.unpaid_clients"></div>
+                <div class="list-group">
+                    ${data.unpaid_clients.map((c) => `
+                        <div class="list-row" style="cursor:default;">
+                            <span>${window.ui.escape(c.name)}</span>
+                            <span class="badge badge-cancel" data-i18n="payment_statuses.unpaid"></span>
+                        </div>`).join('')}
+                </div>` : ''}
+
+            ${data.worker_performance.length ? `
+                <div class="section-title" data-i18n="admin_analytics.worker_performance"></div>
+                <div class="list-group">
+                    ${data.worker_performance.map((w) => `
+                        <div class="list-row" style="cursor:default;">
+                            <span>${window.ui.escape(w.worker_full_name || w.worker_username)}</span>
+                            <span class="font-bold">${window.ui.qty(w.total_quantity)}</span>
+                        </div>`).join('')}
+                </div>` : ''}
         `;
     }
 
-    renderWorkerDashboard(container) {
+    async renderWorker(container) {
+        const [tasksResp, earnings] = await Promise.all([
+            window.api.request('/production/tasks/'),
+            window.api.request('/production/works/my_earnings/'),
+        ]);
+        const tasks = tasksResp.results || tasksResp;
+        const pending = tasks.filter((t) => t.status === 'pending');
+        const active = tasks.filter((t) => ['accepted', 'in_progress'].includes(t.status));
+        const user = window.currentUser;
+
         container.innerHTML = `
-            <div style="margin-bottom: 15px;">
-                <h3 style="font-size: 16px; margin-bottom: 5px;">Ассалому алайкум!</h3>
-                <span class="text-sm text-muted">Бугунги вазифаларим</span>
+            <div style="margin-bottom:15px;">
+                <h3 style="font-size:16px;margin-bottom:4px;">
+                    <span data-i18n="dashboard.worker_greeting"></span> ${window.ui.escape(user.full_name || user.username)}!
+                </h3>
+                <span class="text-sm text-muted" data-i18n="nav.my_tasks"></span>
             </div>
             <div class="metrics-grid">
+                <div class="metric-card yellow">
+                    <div class="metric-title" data-i18n="production.pending_tasks"></div>
+                    <div class="metric-value">${pending.length}</div>
+                </div>
                 <div class="metric-card blue">
-                    <div class="metric-title">Бугунги соат</div>
-                    <div class="metric-value">18 соат</div>
+                    <div class="metric-title" data-i18n="production.in_progress_tasks"></div>
+                    <div class="metric-value">${active.length}</div>
                 </div>
                 <div class="metric-card green">
-                    <div class="metric-title">Вазифалар</div>
-                    <div class="metric-value">5 та</div>
+                    <div class="metric-title" data-i18n="worker_section.total_earned"></div>
+                    <div class="metric-value" style="font-size:17px;">${window.ui.money(earnings.total_earned)}</div>
+                </div>
+                <div class="metric-card purple">
+                    <div class="metric-title" data-i18n="worker_section.remaining"></div>
+                    <div class="metric-value" style="font-size:17px;">${window.ui.money(earnings.remaining)}</div>
                 </div>
             </div>
+
+            ${pending.length ? `
+                <div class="section-title" data-i18n="production.pending_tasks"></div>
+                <div class="list-group">
+                    ${pending.map((t) => `
+                        <a class="list-row" href="#/production" style="text-decoration:none;color:inherit;">
+                            <span>#${t.id} ${window.ui.escape(t.order_product || '')}</span>
+                            ${window.ui.workBadge(t.status)}
+                        </a>`).join('')}
+                </div>` : `
+                <div class="card list-state" data-i18n="production.no_pending_tasks"></div>`}
+
+            <a class="btn btn-primary btn-block" href="#/production" style="margin-top:10px;" data-i18n="worker_section.add_work"></a>
         `;
     }
 }

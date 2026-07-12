@@ -30,21 +30,60 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        Возвращает queryset сообщений.
+        Пользователь видит свои отправленные, полученные и групповые сообщения.
 
-        Пользователь видит только свои отправленные и полученные сообщения.
+        ?box=inbox|sent сужает выборку до входящих или отправленных.
         """
-        queryset = Message.objects.select_related('sender', 'recipient')
+        from django.db.models import Q
         user = self.request.user
+        queryset = Message.objects.select_related('sender', 'recipient')
 
-        if user:
-            queryset = queryset.filter(sender=user) | queryset.filter(recipient=user)
+        box = self.request.query_params.get('box')
+        if box == 'sent':
+            queryset = queryset.filter(sender=user)
+        elif box == 'inbox':
+            queryset = queryset.filter(Q(recipient=user) | Q(is_group=True)).exclude(sender=user)
+        else:
+            queryset = queryset.filter(Q(sender=user) | Q(recipient=user) | Q(is_group=True))
 
         is_read = self.request.query_params.get('is_read')
         if is_read is not None:
             queryset = queryset.filter(is_read=is_read.lower() == 'true')
 
         return queryset
+
+    def perform_create(self, serializer):
+        from .services import notify, notify_staff
+        from apps.accounts.models import User
+
+        message = serializer.save()
+        title = 'Янги хабар'
+        preview = message.content[:80]
+        if message.is_group:
+            recipients = User.objects.filter(is_active=True).exclude(pk=message.sender_id)
+            notify(list(recipients), Notification.NotificationType.NEW_MESSAGE, title, preview)
+        elif message.recipient:
+            notify(message.recipient, Notification.NotificationType.NEW_MESSAGE, title, preview)
+
+    @action(detail=False, methods=['get'])
+    def recipients(self, request):
+        """Список пользователей, которым текущий пользователь может писать."""
+        from apps.accounts.models import User
+
+        user = request.user
+        queryset = User.objects.filter(is_active=True).exclude(pk=user.pk)
+        if user.is_worker:
+            allowed_roles = ['admin']
+            if user.can_write_to_owner:
+                allowed_roles.append('owner')
+            queryset = queryset.filter(role__in=allowed_roles)
+        elif user.is_admin:
+            queryset = queryset.filter(role__in=['worker', 'owner'])
+        data = [
+            {'id': u.id, 'username': u.username, 'full_name': u.full_name, 'role': u.role}
+            for u in queryset
+        ]
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

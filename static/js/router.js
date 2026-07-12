@@ -1,20 +1,11 @@
 /**
- * Router - hash-based роутер для навигации между страницами.
- * Отображает компоненты в #app-content по URL hash.
+ * Hash-роутер SPA. Поддерживает query-часть: #/messages?tab=notifications.
  */
 class Router {
     constructor() {
         this.routes = {};
-        this.appElement = document.getElementById('app-content');
-
+        this.query = new URLSearchParams();
         window.addEventListener('hashchange', () => this.handleRoute());
-
-        // ИСПРАВЛЕНО: без этого первый рендер не происходил вообще —
-        // handleRoute() срабатывал только при РУЧНОЙ смене hash.
-        // 'load' выбран специально: он срабатывает уже после того, как
-        // все синхронные <script> (включая dashboard.js, warehouse.js и т.д.)
-        // выполнились и window.DashboardComponent и другие уже определены.
-        window.addEventListener('load', () => this.handleRoute());
     }
 
     addRoute(path, component) {
@@ -22,60 +13,54 @@ class Router {
     }
 
     async handleRoute() {
-        const path = window.location.hash.slice(1) || '/';
-        let component;
-        switch (path) {
-            case '':
-            case '/':
-                component = window.DashboardComponent;
-                break;
-            case '/warehouse':
-                component = window.WarehouseComponent;
-                break;
-            case '/finished-products':
-                component = window.FinishedProductsComponent;
-                break;
-            case '/orders':
-                component = window.OrdersComponent;
-                break;
-            case '/clients':
-                component = window.ClientsComponent;
-                break;
-            default:
-                component = window.DashboardComponent;
-        }
+        const appElement = document.getElementById('app-content');
+        const hash = window.location.hash.slice(1) || '/';
+        const [path, queryString] = hash.split('?');
+        this.query = new URLSearchParams(queryString || '');
 
+        const component = this.routes[path];
         if (!component) {
-            this.renderNotFound(path);
+            this.renderNotFound(appElement, path);
             return;
         }
 
-        // Highlight active nav item
-        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        // Подсветка активного пункта нижнего меню
+        document.querySelectorAll('.nav-item').forEach((el) => el.classList.remove('active'));
         let navId = 'nav-dashboard';
         if (path.startsWith('/orders')) navId = 'nav-orders';
-        if (path.startsWith('/warehouse')) navId = 'nav-warehouse';
+        if (path.startsWith('/warehouse') || path.startsWith('/finished-products')) navId = 'nav-warehouse';
         if (path.startsWith('/clients')) navId = 'nav-clients';
-        if (path.startsWith('/settings')) navId = 'nav-settings';
-
+        if (path.startsWith('/production')) navId = 'nav-production';
+        if (path.startsWith('/settings') || path.startsWith('/finance') || path.startsWith('/messages')) navId = 'nav-settings';
         const activeNav = document.getElementById(navId);
         if (activeNav) activeNav.classList.add('active');
 
-        this.appElement.innerHTML = '<div class="loading" data-i18n="common.loading">Loading...</div>';
+        appElement.innerHTML = '<div class="list-state list-state-loading"><span class="spinner"></span><span data-i18n="common.loading">Юкланмоқда...</span></div>';
         window.i18n.applyTranslations();
 
         try {
-            await component.render(this.appElement);
+            await component.render(appElement);
             window.i18n.applyTranslations();
         } catch (e) {
             console.error('Error rendering route:', e);
-            this.appElement.innerHTML = '<div class="card route-error"><h1>Something went wrong</h1><p>We could not load this page.</p></div>';
+            appElement.innerHTML = `
+                <div class="card route-error">
+                    <h1 data-i18n="common.error">Хатолик</h1>
+                    <p data-i18n="common.page_load_error">Саҳифани юклаб бўлмади.</p>
+                </div>`;
             window.i18n.applyTranslations();
         }
     }
 
-    renderNotFound(path) {
-        this.appElement.innerHTML = `<div class="card route-error"><p class="eyebrow">404</p><h1>Page not found</h1><p>The route <strong>${path}</strong> does not exist.</p><a class="btn btn-primary" href="#/">Return to dashboard</a></div>`;
+    renderNotFound(appElement, path) {
+        appElement.innerHTML = `
+            <div class="card route-error">
+                <p class="eyebrow">404</p>
+                <h1 data-i18n="common.page_not_found">Саҳифа топилмади</h1>
+                <p><strong>${path}</strong></p>
+                <a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard">Бош панел</a>
+            </div>`;
+        window.i18n.applyTranslations();
     }
 
     navigate(path) {

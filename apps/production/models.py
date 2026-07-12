@@ -123,74 +123,44 @@ class Task(TimestampedModel):
         return f"Task #{self.id} - {self.worker.username} ({self.get_status_display()})"
 
     def accept(self):
-        """
-        Принимает задачу работником.
-
-        Логическая цепочка:
-        - Устанавливает status = ACCEPTED
-        - Устанавливает accepted_at = текущее время
-        - Связанный заказ переводит в ACCEPTED_BY_WORKER
-        """
+        """Работник принимает задачу; связанный заказ переходит в 'принят работником'."""
         from django.utils import timezone
-        self.status = self.TaskStatus.ACCEPTED
+        self.status = TaskStatus.ACCEPTED
         self.accepted_at = timezone.now()
         self.save(update_fields=['status', 'accepted_at'])
-        
-        # Обновляем статус заказа если есть
         if self.order:
-            self.order.status = self.order.OrderStatus.ACCEPTED_BY_WORKER
+            self.order.status = self.order.Status.ACCEPTED
             self.order.save(update_fields=['status'])
 
-    def refuse(self, reason):
-        """
-        Отклоняет задачу работником.
-
-        Логическая цепочка:
-        - Устанавливает status = REFUSED
-        - Устанавливает refusal_reason и refusal_comment
-        - Связанный заказ переводит в WORKER_REFUSED
-        """
-        from django.utils import timezone
-        self.status = self.TaskStatus.REFUSED
-        self.refusal_comment = reason
-        self.save(update_fields=['status', 'refusal_comment'])
-        
-        # Обновляем статус заказа если есть
+    def refuse(self, reason, comment=''):
+        """Работник отказывается от задачи; заказ переходит в 'работник отказался'."""
+        self.status = TaskStatus.REFUSED
+        self.refusal_reason = reason
+        self.refusal_comment = comment
+        self.save(update_fields=['status', 'refusal_reason', 'refusal_comment'])
         if self.order:
-            self.order.status = self.order.OrderStatus.WORKER_REFUSED
+            self.order.status = self.order.Status.WORKER_REFUSED
             self.order.save(update_fields=['status'])
 
     def complete(self):
-        """
-        Отмечает задачу как выполненную.
-
-        Логическая цепочка:
-        - Устанавливает status = COMPLETED
-        - Устанавливает completed_at = текущее время
-        """
+        """Работа сдана на проверку; заказ переходит в 'ожидает подтверждения'."""
         from django.utils import timezone
-        self.status = self.TaskStatus.COMPLETED
+        self.status = TaskStatus.COMPLETED
         self.completed_at = timezone.now()
         self.save(update_fields=['status', 'completed_at'])
+        if self.order:
+            self.order.status = self.order.Status.AWAITING_CONFIRMATION
+            self.order.save(update_fields=['status'])
 
     def confirm(self, confirmed_by):
-        """
-        Подтверждает выполненную задачу администратором/владельцем.
-
-        Логическая цепочка:
-        - Устанавливает status = CONFIRMED
-        - Устанавливает confirmed_at и confirmed_by
-        - Связанный заказ переводит в IN_PROGRESS (если есть)
-        """
+        """Администратор/владелец подтверждает задачу; заказ становится готовым."""
         from django.utils import timezone
-        self.status = self.TaskStatus.CONFIRMED
+        self.status = TaskStatus.CONFIRMED
         self.confirmed_at = timezone.now()
         self.confirmed_by = confirmed_by
         self.save(update_fields=['status', 'confirmed_at', 'confirmed_by'])
-        
-        # Обновляем статус заказа если есть
         if self.order:
-            self.order.status = self.order.OrderStatus.IN_PROGRESS
+            self.order.status = self.order.Status.READY
             self.order.save(update_fields=['status'])
 
 
@@ -283,65 +253,3 @@ class WorkRecord(TimestampedModel):
             bool - True если status == 'confirmed'
         """
         return self.status == self.WorkStatus.CONFIRMED
-
-    def confirm(self, confirmed_by, labor_cost=None):
-        """
-        Подтверждает выполненную работу администратором/владельцем.
-
-        Логическая цепочка:
-        - Устанавливает status = CONFIRMED
-        - Устанавливает confirmed_at и confirmed_by
-        - Устанавливает labor_cost если передан
-        - Обновляет связанную задачу если есть
-        """
-        from django.utils import timezone
-        self.status = self.WorkStatus.CONFIRMED
-        self.confirmed_at = timezone.now()
-        self.confirmed_by = confirmed_by
-        if labor_cost is not None:
-            self.labor_cost = labor_cost
-        self.save(update_fields=['status', 'confirmed_at', 'confirmed_by', 'labor_cost'])
-        
-        # Обновляем связанную задачу если есть
-        if self.task:
-            self.task.confirm(confirmed_by)
-
-    def reject(self, reason):
-        """
-        Отклоняет выполненную работу.
-
-        Логическая цепочка:
-        - Устанавливает status = REJECTED
-        - Устанавливает rejection_reason
-        """
-        self.status = self.WorkStatus.REJECTED
-        self.rejection_reason = reason
-        self.save(update_fields=['status', 'rejection_reason'])
-
-    def calculate_labor_cost(self):
-        """
-        Автоматически рассчитывает стоимость труда на основе ставок.
-
-        Логическая цепочка:
-        - Ищет соответствующую ставку для продукта и операции
-        - Умножает ставку на количество
-        - Возвращает рассчитанную стоимость
-        """
-        from apps.finance.models import LaborRate
-        
-        if not self.product:
-            return 0
-        
-        # Ищем ставку для продукта (по умолчанию - резка)
-        try:
-            rate = LaborRate.objects.filter(
-                product=self.product,
-                operation=LaborRate.OperationType.CUTTING
-            ).first()
-            
-            if rate:
-                return rate.rate_per_unit * self.quantity
-        except:
-            pass
-        
-        return 0

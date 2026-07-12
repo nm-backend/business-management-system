@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     'apps.messaging',  # Сообщения (заглушка)
     'apps.reports',  # Отчеты (заглушка)
     'apps.audit',  # Система аудита действий
+    
+    'drf_spectacular',  # Автоматическая генерация OpenAPI схемы
 ]
 
 # Middleware - обработчики запросов
@@ -124,25 +126,37 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Настройки Django REST Framework
 REST_FRAMEWORK = {
+    # Аутентификация
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',  # JWT токены
-        'rest_framework.authentication.SessionAuthentication',  # Сессии (для админки)
+        'rest_framework_simplejwt.authentication.JWTAuthentication',  # JWT
+        'rest_framework.authentication.SessionAuthentication',         # Django Admin
     ),
+
+    # Генерация OpenAPI (Swagger / ReDoc)
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+
+    # Разрешения по умолчанию
     'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',  # Требовать аутентификацию по умолчанию
+        'rest_framework.permissions.IsAuthenticated',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardPagination',  # Кастомная пагинация
+
+    # Пагинация
+    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardPagination',
     'PAGE_SIZE': 20,
+
+    # Фильтрация
     'DEFAULT_FILTER_BACKENDS': (
-        'django_filters.rest_framework.DjangoFilterBackend',  # Фильтрация по полям
-        'rest_framework.filters.SearchFilter',  # Поиск по тексту
-        'rest_framework.filters.OrderingFilter',  # Сортировка
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
     ),
+
+    # Форматы ответа
     'DEFAULT_RENDERER_CLASSES': (
-        'rest_framework.renderers.JSONRenderer',  # JSON ответ
-        # BrowsableAPIRenderer включается только в development (см. development.py),
-        # чтобы не выставлять интерактивный интерфейс API в production.
-    )
+        'rest_framework.renderers.JSONRenderer',
+        # В development.py можно добавить:
+        # 'rest_framework.renderers.BrowsableAPIRenderer',
+    ),
 }
 
 # Настройки JWT токенов (Simple JWT)
@@ -177,3 +191,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+# Настройки Swagger / ReDoc
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'SkladPro ERP API',
+    'DESCRIPTION': 'ERP система для управления камнеобрабатывающим бизнесом.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+
+    # Не сбрасывать JWT после обновления страницы Swagger
+    'SWAGGER_UI_SETTINGS': {
+        'persistAuthorization': True,
+    },
+}
