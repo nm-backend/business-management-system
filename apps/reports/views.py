@@ -56,6 +56,37 @@ def money(value):
     return value or 0
 
 
+def pct_change(current, previous):
+    """Процент изменения current относительно previous. None, если базы нет."""
+    current = float(current or 0)
+    previous = float(previous or 0)
+    if previous == 0:
+        return None
+    return round((current - previous) / previous * 100, 1)
+
+
+def _period_financials(company_id, date_from, date_to):
+    """Ключевые финансовые итоги за период (для сравнения периодов)."""
+    revenue = money(
+        Payment.objects.filter(company_id=company_id, payment_date__date__range=(date_from, date_to))
+        .aggregate(s=Sum('amount'))['s']
+    )
+    cost_of_goods = money(
+        Order.objects.filter(company_id=company_id, status=Order.Status.DELIVERED,
+                             updated_at__date__range=(date_from, date_to))
+        .aggregate(s=Sum(ExpressionWrapper(F('quantity') * F('product__cost_price'), output_field=MONEY)))['s']
+    )
+    expenses_total = money(
+        Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
+        .aggregate(s=Sum('amount'))['s']
+    )
+    return {
+        'revenue': revenue,
+        'expenses_total': expenses_total,
+        'net_profit': revenue - cost_of_goods - expenses_total,
+    }
+
+
 def owner_analytics_data(company_id, date_from, date_to):
     """Собирает все финансовые показатели владельца за период (в рамках компании)."""
     # Все выборки строго ограничены компанией владельца.
@@ -121,6 +152,14 @@ def owner_analytics_data(company_id, date_from, date_to):
 
     orders_qs = Order.objects.filter(company_id=company_id, created_at__date__range=(date_from, date_to))
     raw_qs = RawMaterial.objects.filter(company_id=company_id, is_archived=False)
+
+    # Сравнение с предыдущим равным по длине периодом (для стрелок % на дашборде).
+    span = (date_to - date_from).days + 1
+    prev_to = date_from - datetime.timedelta(days=1)
+    prev_from = prev_to - datetime.timedelta(days=span - 1)
+    prev = _period_financials(company_id, prev_from, prev_to)
+    net_profit = revenue - cost_of_goods - expenses_total
+
     return {
         'date_from': date_from,
         'date_to': date_to,
@@ -128,6 +167,11 @@ def owner_analytics_data(company_id, date_from, date_to):
         'cost_of_goods': cost_of_goods,
         'gross_profit': revenue - cost_of_goods,
         'expenses_total': expenses_total,
+        'deltas': {
+            'revenue': pct_change(revenue, prev['revenue']),
+            'net_profit': pct_change(net_profit, prev['net_profit']),
+            'expenses_total': pct_change(expenses_total, prev['expenses_total']),
+        },
         'expenses_by_category': {
             row['category']: row['s']
             for row in expenses_qs.values('category').annotate(s=Sum('amount'))

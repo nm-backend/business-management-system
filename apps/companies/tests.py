@@ -91,6 +91,27 @@ class TenantIsolationTests(TestCase):
         usernames = [u['username'] for u in resp.data]
         self.assertTrue(all('BetaCo' not in u for u in usernames))
 
+    def test_cannot_message_user_of_another_company(self):
+        # Владелец A пытается написать владельцу B напрямую (подделав recipient).
+        self.auth(self.a['owner'])
+        resp = self.api.post('/api/v1/messaging/messages/', {
+            'recipient': self.b['owner'].id, 'content': 'hi',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        from apps.messaging.models import Message
+        self.assertFalse(Message.objects.filter(recipient=self.b['owner']).exists())
+
+    def test_messages_list_isolated_by_company(self):
+        from apps.messaging.models import Message
+        # Сообщение внутри компании B.
+        Message.objects.create(company=self.b['company'], sender=self.b['owner'],
+                               recipient=self.b['worker'], content='secret B')
+        self.auth(self.a['owner'])
+        resp = self.api.get('/api/v1/messaging/messages/')
+        rows = resp.data['results'] if isinstance(resp.data, dict) else resp.data
+        contents = [m['content'] for m in rows]
+        self.assertNotIn('secret B', contents)
+
     def test_worker_cannot_be_assigned_across_companies(self):
         self.auth(self.a['owner'])
         resp = self.api.post('/api/v1/production/tasks/', {

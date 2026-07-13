@@ -310,6 +310,43 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .dash-2col { display: grid; grid-template-columns: 1fr; gap: 12px; }
 @media (min-width: 1024px) { .dash-2col { grid-template-columns: 1fr 1fr; align-items: start; } .dash-2col > * { margin-bottom: 0; } }
 
+/* ---------- Reference-style stat cards (icon badge + value + % delta) ---------- */
+.stat-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 16px; }
+@media (min-width: 560px) { .stat-grid { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1024px) { .stat-grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; } }
+.stat-card {
+    background: var(--light-color);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 15px 16px;
+    box-shadow: var(--box-shadow);
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    transition: box-shadow 0.18s, transform 0.12s;
+}
+.stat-card.clickable { cursor: pointer; }
+.stat-card.clickable:hover { box-shadow: var(--shadow-md); }
+.stat-card.clickable:active { transform: scale(0.99); }
+.stat-icon {
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+}
+.stat-icon.green { background: var(--success-soft); }
+.stat-icon.blue { background: var(--primary-soft); }
+.stat-icon.purple { background: #f0ebfe; }
+.stat-icon.orange { background: var(--warning-soft); }
+.stat-icon.red { background: var(--danger-soft); }
+.stat-body { flex: 1; min-width: 0; }
+.stat-title { font-size: 12.5px; color: var(--text-muted); font-weight: 500; margin-bottom: 3px; }
+.stat-value { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-delta { font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 2px; padding: 4px 8px; border-radius: 999px; flex-shrink: 0; white-space: nowrap; }
+.stat-delta.up { color: var(--success-color); background: var(--success-soft); }
+.stat-delta.down { color: var(--danger-color); background: var(--danger-soft); }
+.stat-delta.flat { color: var(--text-muted); background: var(--surface-2); }
+
 /* ---------- Typography utilities ---------- */
 .text-danger { color: var(--danger-color); }
 .text-success { color: var(--success-color); }
