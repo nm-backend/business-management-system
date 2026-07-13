@@ -2,6 +2,10 @@ window.listStates = {
     loading(element, message = 'Loading...') {
         element.innerHTML = `<div class="list-state list-state-loading"><span class="spinner" aria-hidden="true"></span><span>${message}</span></div>`;
     },
+    /** Skeleton-загрузка: серые «пульсирующие» строки вместо спиннера. */
+    skeleton(element, rows = 5) {
+        element.innerHTML = `<div class="skeleton-list">${Array.from({ length: rows }).map(() => '<div class="skeleton-row"></div>').join('')}</div>`;
+    },
     empty(element, message = 'No records found') {
         element.innerHTML = `<div class="list-state list-state-empty"><span class="list-state-icon" aria-hidden="true">—</span><span>${message}</span></div>`;
     },

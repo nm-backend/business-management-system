@@ -39,7 +39,7 @@ class OrdersComponent {
 
     async loadOrders() {
         const listEl = document.getElementById('orders-list');
-        window.listStates.loading(listEl, window.ui.t('common.loading'));
+        window.listStates.skeleton(listEl);
         try {
             const query = this.currentStatus !== 'all' ? `?status=${this.currentStatus}` : '';
             const response = await window.api.request(`/orders/orders/${query}`);

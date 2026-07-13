@@ -120,6 +120,37 @@ class TenantIsolationTests(TestCase):
         self.assertIn(resp.status_code, (403, 400))
 
 
+class CompanyAdminTests(TestCase):
+    """SaaS-онбординг через Django Admin: компания + владелец за один шаг."""
+
+    def setUp(self):
+        from django.test import Client
+        self.sa = User.objects.create_superuser(username='admin_root', password='pw12345X')
+        self.client = Client()
+        self.client.force_login(self.sa)
+
+    def test_admin_creates_company_with_owner(self):
+        resp = self.client.post('/admin/companies/company/add/', {
+            'name': 'AdminMadeCo', 'is_active': 'on',
+            'owner_username': 'am_owner', 'owner_password': 'Str0ng!Pass9',
+            'owner_full_name': 'AM Owner', 'owner_phone': '',
+        })
+        self.assertIn(resp.status_code, (200, 302))
+        company = Company.objects.get(name='AdminMadeCo')
+        owner = User.objects.get(username='am_owner')
+        self.assertEqual(owner.company, company)
+        self.assertEqual(owner.role, User.Role.OWNER)
+        self.assertTrue(owner.check_password('Str0ng!Pass9'))
+
+    def test_admin_add_company_requires_owner(self):
+        resp = self.client.post('/admin/companies/company/add/', {
+            'name': 'NoOwnerCo', 'is_active': 'on',
+            'owner_username': '', 'owner_password': '',
+        })
+        self.assertEqual(resp.status_code, 200)  # форма с ошибкой валидации
+        self.assertFalse(Company.objects.filter(name='NoOwnerCo').exists())
+
+
 class SuperAdminTests(TestCase):
     def setUp(self):
         self.superadmin = User.objects.create_superuser(username='root', password='pw')

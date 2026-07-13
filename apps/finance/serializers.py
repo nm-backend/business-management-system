@@ -38,13 +38,7 @@ class ExpenseCreateSerializer(serializers.ModelSerializer):
             'category', 'amount', 'date', 'comment',
             'receipt_photo', 'payment_method'
         ]
-
-    def create(self, validated_data):
-        request = self.context.get('request')
-        return Expense.objects.create(
-            **validated_data,
-            created_by=request.user if request and request.user.is_authenticated else None
-        )
+    # created_by и company проставляет ViewSet.perform_create.
 
 
 class LaborRateSerializer(serializers.ModelSerializer):
@@ -107,10 +101,4 @@ class WorkerPaymentCreateSerializer(serializers.ModelSerializer):
         fields = [
             'worker', 'amount', 'payment_date', 'payment_type', 'comment'
         ]
-
-    def create(self, validated_data):
-        request = self.context.get('request')
-        return WorkerPayment.objects.create(
-            **validated_data,
-            created_by=request.user if request and request.user.is_authenticated else None
-        )
+    # created_by и company проставляет ViewSet.perform_create.

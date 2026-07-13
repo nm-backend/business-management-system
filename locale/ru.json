@@ -361,6 +361,18 @@
   "footer": {
     "created_by": "Разработано"
   },
+  "about": {
+    "title": "О приложении",
+    "version": "Версия",
+    "developers": "Разработчики",
+    "license": "Лицензия",
+    "contacts": "Контакты",
+    "system": "Информация о системе",
+    "backend_dev": "Backend Developer",
+    "architecture": "Financial Architecture & System Design",
+    "app_name": "Название приложения",
+    "company_label": "Компания"
+  },
   "companies": {
     "title": "Компании",
     "add": "Добавить компанию",

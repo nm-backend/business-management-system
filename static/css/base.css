@@ -347,6 +347,22 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .stat-delta.down { color: var(--danger-color); background: var(--danger-soft); }
 .stat-delta.flat { color: var(--text-muted); background: var(--surface-2); }
 
+/* ---------- Donut chart (inline SVG) ---------- */
+.donut-wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding: 6px 4px; }
+.donut-svg { flex-shrink: 0; }
+.donut-center-num { font-size: 26px; font-weight: 700; fill: var(--text-color); }
+.donut-center-lbl { font-size: 10px; fill: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.donut-legend { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 8px; }
+.donut-legend-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.donut-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.donut-label { flex: 1; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.donut-pct { font-weight: 700; color: var(--text-color); }
+
+/* ---------- Skeleton loader ---------- */
+.skeleton-list { display: flex; flex-direction: column; gap: 10px; }
+.skeleton-row { height: 64px; border-radius: var(--border-radius); background: linear-gradient(100deg, var(--surface-2) 30%, #eef0f4 50%, var(--surface-2) 70%); background-size: 200% 100%; animation: skeleton 1.2s ease-in-out infinite; }
+@keyframes skeleton { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
 /* ---------- Typography utilities ---------- */
 .text-danger { color: var(--danger-color); }
 .text-success { color: var(--success-color); }
@@ -593,41 +609,49 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .route-error h1 { font-size: 22px; margin: 8px 0 10px; }
 .route-error p { color: var(--text-secondary); margin-bottom: 14px; }
 .eyebrow { color: var(--primary-color); font-weight: 700; letter-spacing: 0.12em; font-size: 13px; }
+/* ==========================================================
+   Minimal Footer (GitHub / Facebook style)
+   ========================================================== */
 
-/* ---------- Footer ---------- */
+/* Footer is DESKTOP-ONLY. On mobile the same info lives on the «About» page. */
 .app-footer {
-    margin-top: 18px;
-    padding: 16px 12px 8px;
-    text-align: center;
+    display: none;
+    margin-top: 40px;
+    padding: 20px 0 8px;
     border-top: 1px solid var(--border-color);
+    text-align: center;
+    background: transparent;
+}
+@media (min-width: 1024px) { .app-footer { display: block; } }
+
+.footer-top, .footer-credit {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+.footer-top strong, .footer-credit strong { color: var(--text-color); font-weight: 700; }
+.footer-top span, .footer-credit span { color: var(--text-muted); font-weight: 400; }
+.footer-credit { margin-top: 3px; }
+
+.footer-bottom {
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12px;
     color: var(--text-muted);
-    font-size: 11.5px;
-    line-height: 1.6;
 }
-.app-footer .footer-brand { font-weight: 700; color: var(--text-secondary); letter-spacing: 0.02em; }
-.app-footer .footer-person { color: var(--text-secondary); font-weight: 600; }
-.app-footer .footer-role { color: var(--text-muted); }
-.app-footer a { color: var(--primary-color); text-decoration: none; }
-
-/* Container that lays out cards into a responsive grid.
-   Single column on mobile; multi-column from tablet up. */
-.card-grid > .card { margin-bottom: 12px; }
-/* Loading / empty / error states always span the full grid width. */
-.card-grid > .list-state { grid-column: 1 / -1; }
-
-/* ============================================================
-   TABLET (640–1023px): wider content, multi-column grids,
-   bottom nav still used.
-   ============================================================ */
-@media (min-width: 640px) and (max-width: 1023px) {
-    .main-content { padding: 20px 24px; padding-bottom: calc(var(--bottom-nav-height) + 24px); }
-    #app-content { max-width: 960px; margin: 0 auto; width: 100%; }
-    .metrics-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-    .card-grid > .card { margin-bottom: 0; }
-    .modal-content { max-width: 560px; }
-}
-
+.footer-bottom span + span::before,
+.footer-bottom span + a::before,
+.footer-bottom a + span::before { content: '·'; margin-right: 6px; color: var(--border-strong); }
+.footer-bottom a { color: var(--primary-color); text-decoration: none; font-weight: 600; transition: color 0.2s; }
+.footer-bottom a:hover { color: var(--primary-hover); }
 /* ============================================================
    DESKTOP (≥1024px): full desktop layout — persistent sidebar,
    full-width content, tables/cards span the window.

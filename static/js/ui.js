@@ -117,4 +117,70 @@ window.ui = {
             .map((u) => `<option value="${u}" ${u === selected ? 'selected' : ''} data-i18n="units.${u}"></option>`)
             .join('');
     },
+
+    /**
+     * Карточка показателя в стиле референса: цветной icon-badge, заголовок,
+     * значение и (опционально) % изменения со стрелкой.
+     * opts: { icon, color, titleKey, value, delta (число или null), id, href }
+     */
+    statCard(opts) {
+        let deltaHtml = '';
+        if (opts.delta !== undefined && opts.delta !== null) {
+            const dir = opts.delta > 0 ? 'up' : (opts.delta < 0 ? 'down' : 'flat');
+            const arrow = opts.delta > 0 ? '↑' : (opts.delta < 0 ? '↓' : '→');
+            deltaHtml = `<span class="stat-delta ${dir}">${arrow} ${Math.abs(opts.delta)}%</span>`;
+        }
+        const cls = `stat-card${opts.id || opts.href ? ' clickable' : ''}`;
+        const idAttr = opts.id ? ` id="${opts.id}"` : '';
+        const tag = opts.href ? 'a' : 'div';
+        const hrefAttr = opts.href ? ` href="${opts.href}" style="text-decoration:none;color:inherit;"` : '';
+        return `<${tag} class="${cls}"${idAttr}${hrefAttr}>
+            <div class="stat-icon ${opts.color || 'blue'}">${opts.icon || '📊'}</div>
+            <div class="stat-body">
+                <div class="stat-title" data-i18n="${opts.titleKey}"></div>
+                <div class="stat-value ${opts.valueClass || ''}">${opts.value}</div>
+            </div>
+            ${deltaHtml}
+        </${tag}>`;
+    },
+
+    /**
+     * Пончиковая диаграмма (inline SVG, без внешних библиотек).
+     * segments: [{ label, value, color }]. Возвращает разметку графика + легенды.
+     */
+    donutChart(segments, opts = {}) {
+        const palette = ['#1c64d9', '#16a34a', '#f59e0b', '#8b5cf6', '#e5484d', '#0ea5e9', '#64748b', '#ec4899'];
+        const data = (segments || []).filter((s) => Number(s.value) > 0);
+        const total = data.reduce((sum, s) => sum + Number(s.value), 0);
+        if (!total) {
+            return `<div class="list-state list-state-empty" data-i18n="common.no_data"></div>`;
+        }
+        const r = 60, c = 2 * Math.PI * r, cx = 80, cy = 80;
+        let offset = 0;
+        const arcs = data.map((s, i) => {
+            const frac = Number(s.value) / total;
+            const color = s.color || palette[i % palette.length];
+            const dash = `${(frac * c).toFixed(2)} ${(c - frac * c).toFixed(2)}`;
+            const circle = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="22" stroke-dasharray="${dash}" stroke-dashoffset="${(-offset * c).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
+            offset += frac;
+            return circle;
+        }).join('');
+        const legend = data.map((s, i) => {
+            const color = s.color || palette[i % palette.length];
+            const pct = Math.round((Number(s.value) / total) * 100);
+            return `<div class="donut-legend-row">
+                <span class="donut-dot" style="background:${color}"></span>
+                <span class="donut-label">${this.escape(s.label)}</span>
+                <span class="donut-pct">${pct}%</span>
+            </div>`;
+        }).join('');
+        return `<div class="donut-wrap">
+            <svg class="donut-svg" viewBox="0 0 160 160" width="150" height="150" aria-hidden="true">
+                ${arcs}
+                <text x="80" y="76" text-anchor="middle" class="donut-center-num">${data.length}</text>
+                <text x="80" y="94" text-anchor="middle" class="donut-center-lbl">${this.escape(opts.centerLabel || '')}</text>
+            </svg>
+            <div class="donut-legend">${legend}</div>
+        </div>`;
+    },
 };

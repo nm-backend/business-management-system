@@ -361,6 +361,18 @@
   "footer": {
     "created_by": "Яратувчи"
   },
+  "about": {
+    "title": "Илова ҳақида",
+    "version": "Версия",
+    "developers": "Ишлаб чиқувчилар",
+    "license": "Лицензия",
+    "contacts": "Алоқа",
+    "system": "Тизим маълумоти",
+    "backend_dev": "Backend Developer",
+    "architecture": "Financial Architecture & System Design",
+    "app_name": "Илова номи",
+    "company_label": "Компания"
+  },
   "companies": {
     "title": "Компаниялар",
     "add": "Компания қўшиш",

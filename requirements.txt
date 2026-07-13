@@ -9,4 +9,4 @@ reportlab==4.2.5
 openpyxl==3.1.5
 django-filter==24.3
 gunicorn==23.0.0
-drf-spectacular
+drf-spectacular==0.30.0

@@ -78,6 +78,9 @@ class SettingsComponent {
                 <div class="list-row" id="change-password-row">
                     <span>🔑 <span data-i18n="auth.change_password"></span></span><span>›</span>
                 </div>
+                <div class="list-row" id="about-row">
+                    <span>ℹ️ <span data-i18n="about.title"></span></span><span>›</span>
+                </div>
                 <div class="list-row" id="logout-row">
                     <span class="text-danger">🚪 <span data-i18n="auth.logout"></span></span>
                 </div>
@@ -88,6 +91,7 @@ class SettingsComponent {
             el.addEventListener('click', () => this.changeLanguage(el.dataset.lang));
         });
         container.querySelector('#change-password-row').addEventListener('click', () => this.openChangePassword());
+        container.querySelector('#about-row').addEventListener('click', () => this.openAbout());
         container.querySelector('#logout-row').addEventListener('click', async () => {
             if (await window.confirmation.confirm(window.ui.t('auth.logout_confirm'), window.ui.t('auth.logout'))) {
                 window.api.logout();
@@ -128,6 +132,51 @@ class SettingsComponent {
         } catch (e) {
             window.toast.error(window.ui.t('common.error'));
         }
+    }
+
+    /** «О приложении»: версия, разработчики, лицензия, контакты, инфо о системе. */
+    openAbout() {
+        const user = window.currentUser;
+        const t = (k) => window.ui.t(k);
+        const row = (labelKey, valueHtml) => `
+            <div class="list-row" style="cursor:default;">
+                <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
+                <span class="text-sm font-bold" style="text-align:right;">${valueHtml}</span>
+            </div>`;
+        const modal = window.ui.modal('about.title', `
+            <div style="text-align:center;padding:6px 0 14px;">
+                <div class="stat-icon blue" style="margin:0 auto 10px;width:52px;height:52px;font-size:26px;">🧊</div>
+                <div style="font-weight:800;font-size:18px;">SkladPro.Nod</div>
+                <div class="text-sm text-muted" data-i18n="app.tagline"></div>
+            </div>
+            <div class="section-title" data-i18n="about.system"></div>
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">
+                ${row('about.version', '1.0.0')}
+                ${row('about.app_name', 'SkladPro.Nod')}
+                ${user.company_name ? row('about.company_label', window.ui.escape(user.company_name)) : ''}
+                ${row('roles.' + user.role, window.ui.escape(user.full_name || user.username))}
+            </div>
+            <div class="section-title" data-i18n="about.developers"></div>
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm font-bold">Nurullo Musajanov</span>
+                    <span class="text-sm text-muted">Backend Developer</span>
+                </div>
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm font-bold">Claude (Anthropic AI)</span>
+                    <span class="text-sm text-muted" style="text-align:right;">Financial Architecture &amp; System Design</span>
+                </div>
+            </div>
+            <div class="section-title" data-i18n="about.contacts"></div>
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">
+                ${row('about.license', 'MIT License')}
+                <a class="list-row" href="https://github.com/nm-backend" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">
+                    <span class="text-sm text-muted">GitHub</span>
+                    <span class="text-sm font-bold" style="color:var(--primary-color);">github.com/nm-backend ›</span>
+                </a>
+            </div>
+        `);
+        void modal;
     }
 
     async loadUsers() {

@@ -44,7 +44,7 @@ class WarehouseComponent {
 
     async loadMaterials() {
         const listEl = document.getElementById('materials-list');
-        window.listStates.loading(listEl, window.ui.t('common.loading'));
+        window.listStates.skeleton(listEl);
         try {
             let query = '?is_archived=false';
             if (this.search) query += `&search=${encodeURIComponent(this.search)}`;

@@ -109,6 +109,57 @@ class MessagesComponent {
         }
     }
 
+    /** Группирует уведомления по дню: Сегодня / Вчера / дата. */
+    groupByDay(notifications) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+        const groups = [];
+        const byKey = {};
+        notifications.forEach((n) => {
+            const d = new Date(n.created_at); d.setHours(0, 0, 0, 0);
+            let label;
+            if (d.getTime() === today.getTime()) label = window.ui.t('common.today');
+            else if (d.getTime() === yesterday.getTime()) label = window.ui.t('periods.yesterday');
+            else label = window.ui.date(n.created_at);
+            if (!byKey[label]) { byKey[label] = { label, items: [] }; groups.push(byKey[label]); }
+            byKey[label].items.push(n);
+        });
+        return groups;
+    }
+
+    /** Иконка и цвет по типу уведомления. */
+    notificationStyle(type) {
+        const map = {
+            new_order: ['🆕', 'blue'], new_expense: ['🧾', 'orange'],
+            unpaid_client: ['⚠️', 'red'], overdue_debt: ['⏰', 'red'],
+            worker_refused: ['✕', 'red'], work_awaiting: ['📋', 'orange'],
+            cash_change: ['💰', 'green'], report_ready: ['📊', 'blue'],
+            task_assigned: ['🛠️', 'blue'], task_changed: ['✏️', 'purple'],
+            task_cancelled: ['🚫', 'red'], work_confirmed: ['✅', 'green'],
+            work_rejected: ['✕', 'red'], new_message: ['✉️', 'blue'],
+            work_accrued: ['💵', 'green'], material_shortage: ['⚠️', 'orange'],
+        };
+        return map[type] || ['🔔', 'blue'];
+    }
+
+    renderNotification(n) {
+        const [icon, color] = this.notificationStyle(n.type);
+        return `
+            <div class="list-row" style="cursor:default;${n.is_read ? '' : 'background:var(--primary-soft);'}">
+                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                    <div class="stat-icon ${color}" style="width:36px;height:36px;font-size:16px;border-radius:10px;">${icon}</div>
+                    <div style="min-width:0;">
+                        <div style="font-weight:600;font-size:14px;" data-i18n="notifications.${n.type}"></div>
+                        <div class="text-sm text-muted" style="overflow:hidden;text-overflow:ellipsis;">${window.ui.escape(n.message)}</div>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                    <span class="text-sm text-muted">${window.ui.datetime(n.created_at)}</span>
+                    ${n.is_read ? '' : '<span style="width:8px;height:8px;border-radius:50%;background:var(--primary-color);display:inline-block;"></span>'}
+                </div>
+            </div>`;
+    }
+
     async loadNotifications() {
         const el = this.contentEl;
         window.listStates.loading(el, window.ui.t('common.loading'));
@@ -120,18 +171,15 @@ class MessagesComponent {
                 return;
             }
             const unread = notifications.filter((n) => !n.is_read).length;
+            // Группировка по дням: Сегодня / Вчера / дата.
+            const groups = this.groupByDay(notifications);
             el.innerHTML = `
                 ${unread ? `<button class="btn btn-secondary btn-sm btn-block" id="mark-all-read" style="margin-bottom:12px;" data-i18n="messages_section.mark_all_read"></button>` : ''}
-                <div class="list-group">
-                    ${notifications.map((n) => `
-                        <div class="list-row" style="cursor:default;${n.is_read ? '' : 'background:#eef4ff;'}">
-                            <div style="min-width:0;">
-                                <div style="font-weight:600;font-size:14px;" data-i18n="notifications.${n.type}"></div>
-                                <div class="text-sm text-muted">${window.ui.escape(n.message)}</div>
-                            </div>
-                            <span class="text-sm text-muted" style="flex-shrink:0;">${window.ui.datetime(n.created_at)}</span>
-                        </div>`).join('')}
-                </div>`;
+                ${groups.map((g) => `
+                    <div class="section-title">${window.ui.escape(g.label)}</div>
+                    <div class="list-group">
+                        ${g.items.map((n) => this.renderNotification(n)).join('')}
+                    </div>`).join('')}`;
             const markAll = el.querySelector('#mark-all-read');
             if (markAll) {
                 markAll.addEventListener('click', async () => {

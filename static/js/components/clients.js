@@ -47,7 +47,7 @@ class ClientsComponent {
 
     async loadClients(search = '') {
         const listEl = document.getElementById('clients-list');
-        window.listStates.loading(listEl, window.ui.t('common.loading'));
+        window.listStates.skeleton(listEl);
         try {
             let query = `?is_archived=${this.currentTab === 'archive'}`;
             if (search) query += `&search=${encodeURIComponent(search)}`;

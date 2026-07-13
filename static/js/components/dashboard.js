@@ -15,6 +15,15 @@ class DashboardComponent {
         window.i18n.applyTranslations();
     }
 
+    /** Преобразует expenses_by_category в сегменты для пончика (с переводом категорий). */
+    expenseSegments(data) {
+        const byCat = data.expenses_by_category || {};
+        return Object.keys(byCat)
+            .map((cat) => ({ label: window.ui.t('expense_categories.' + cat), value: Number(byCat[cat]) }))
+            .filter((s) => s.value > 0)
+            .sort((a, b) => b.value - a.value);
+    }
+
     async renderOwner(container) {
         const period = this.period || 'month';
         const data = await window.api.request(`/reports/analytics/owner/?period=${period}`);
@@ -28,35 +37,14 @@ class DashboardComponent {
                 `).join('')}
             </div>
 
-            <div class="metrics-grid">
-                <div class="metric-card accent">
-                    <div class="metric-title" data-i18n="dashboard.revenue"></div>
-                    <div class="metric-value" style="font-size:24px;">${window.ui.money(data.revenue)}</div>
-                </div>
-                <div class="metric-card green">
-                    <div class="metric-title" data-i18n="dashboard.net_profit"></div>
-                    <div class="metric-value ${data.net_profit < 0 ? 'text-danger' : ''}" style="font-size:20px;">${window.ui.money(data.net_profit)}</div>
-                </div>
-                <div class="metric-card blue" id="cash-card" style="cursor:pointer;">
-                    <div class="metric-title" data-i18n="dashboard.cash_balance"></div>
-                    <div class="metric-value" style="font-size:20px;">${window.ui.money(data.cash)}</div>
-                </div>
-                <div class="metric-card purple">
-                    <div class="metric-title" data-i18n="finance.gross_profit"></div>
-                    <div class="metric-value" style="font-size:20px;">${window.ui.money(data.gross_profit)}</div>
-                </div>
-                <div class="metric-card yellow">
-                    <div class="metric-title" data-i18n="finance.expenses"></div>
-                    <div class="metric-value" style="font-size:20px;">${window.ui.money(data.expenses_total)}</div>
-                </div>
-                <div class="metric-card blue">
-                    <div class="metric-title" data-i18n="finance.client_debts"></div>
-                    <div class="metric-value ${data.client_debts > 0 ? 'text-danger' : ''}" style="font-size:20px;">${window.ui.money(data.client_debts)}</div>
-                </div>
-                <div class="metric-card green">
-                    <div class="metric-title" data-i18n="finance.worker_debts"></div>
-                    <div class="metric-value" style="font-size:20px;">${window.ui.money(data.worker_debts)}</div>
-                </div>
+            <div class="stat-grid">
+                ${window.ui.statCard({ icon: '📈', color: 'green', titleKey: 'dashboard.revenue', value: window.ui.money(data.revenue), delta: data.deltas?.revenue })}
+                ${window.ui.statCard({ icon: '💚', color: 'green', titleKey: 'dashboard.net_profit', value: window.ui.money(data.net_profit), delta: data.deltas?.net_profit, valueClass: data.net_profit < 0 ? 'text-danger' : '' })}
+                ${window.ui.statCard({ icon: '💼', color: 'blue', titleKey: 'dashboard.cash_balance', value: window.ui.money(data.cash), id: 'cash-card' })}
+                ${window.ui.statCard({ icon: '📊', color: 'purple', titleKey: 'finance.gross_profit', value: window.ui.money(data.gross_profit) })}
+                ${window.ui.statCard({ icon: '🧾', color: 'orange', titleKey: 'finance.expenses', value: window.ui.money(data.expenses_total), delta: data.deltas?.expenses_total })}
+                ${window.ui.statCard({ icon: '👥', color: 'red', titleKey: 'finance.client_debts', value: window.ui.money(data.client_debts), valueClass: data.client_debts > 0 ? 'text-danger' : '' })}
+                ${window.ui.statCard({ icon: '🔧', color: 'blue', titleKey: 'finance.worker_debts', value: window.ui.money(data.worker_debts) })}
             </div>
 
             ${data.stock.low_stock_materials > 0 ? `
@@ -66,8 +54,14 @@ class DashboardComponent {
                 </a>` : ''}
 
             <div class="dash-2col">
-                ${data.top_products.length ? `
-                    <div>
+                <div>
+                    <div class="section-title" data-i18n="finance.expenses"></div>
+                    <div class="card">
+                        ${window.ui.donutChart(this.expenseSegments(data), { centerLabel: window.ui.t('finance.expenses') })}
+                    </div>
+                </div>
+                <div>
+                    ${data.top_products.length ? `
                         <div class="section-title" data-i18n="finance.top_selling"></div>
                         <div class="list-group">
                             ${data.top_products.map((p) => `
@@ -75,18 +69,16 @@ class DashboardComponent {
                                     <span>${window.ui.escape(p.name)}</span>
                                     <span class="font-bold">${window.ui.qty(p.total_quantity)}</span>
                                 </div>`).join('')}
-                        </div>
-                    </div>` : ''}
-                ${data.most_active_worker ? `
-                    <div>
+                        </div>` : ''}
+                    ${data.most_active_worker ? `
                         <div class="section-title" data-i18n="finance.most_active_worker"></div>
                         <div class="list-group">
                             <div class="list-row" style="cursor:default;">
                                 <span>${window.ui.escape(data.most_active_worker.name || data.most_active_worker.username)}</span>
                                 <span class="font-bold">${window.ui.qty(data.most_active_worker.total_quantity)}</span>
                             </div>
-                        </div>
-                    </div>` : ''}
+                        </div>` : ''}
+                </div>
             </div>
         `;
 
@@ -111,23 +103,11 @@ class DashboardComponent {
                 </h3>
                 <span class="text-sm text-muted" data-i18n="dashboard.today_indicators"></span>
             </div>
-            <div class="metrics-grid">
-                <div class="metric-card green">
-                    <div class="metric-title" data-i18n="dashboard.new_orders"></div>
-                    <div class="metric-value">${data.orders_new}</div>
-                </div>
-                <div class="metric-card yellow">
-                    <div class="metric-title" data-i18n="dashboard.in_progress"></div>
-                    <div class="metric-value">${data.orders_in_progress}</div>
-                </div>
-                <div class="metric-card blue">
-                    <div class="metric-title" data-i18n="statuses.ready"></div>
-                    <div class="metric-value">${data.orders_ready}</div>
-                </div>
-                <div class="metric-card purple">
-                    <div class="metric-title" data-i18n="dashboard.pending_confirmations"></div>
-                    <div class="metric-value">${data.awaiting_confirmation}</div>
-                </div>
+            <div class="stat-grid">
+                ${window.ui.statCard({ icon: '🆕', color: 'green', titleKey: 'dashboard.new_orders', value: data.orders_new })}
+                ${window.ui.statCard({ icon: '⏳', color: 'orange', titleKey: 'dashboard.in_progress', value: data.orders_in_progress })}
+                ${window.ui.statCard({ icon: '✅', color: 'blue', titleKey: 'statuses.ready', value: data.orders_ready })}
+                ${window.ui.statCard({ icon: '📋', color: 'purple', titleKey: 'dashboard.pending_confirmations', value: data.awaiting_confirmation })}
             </div>
 
             ${data.orders_overdue > 0 ? `
@@ -180,23 +160,11 @@ class DashboardComponent {
                 </h3>
                 <span class="text-sm text-muted" data-i18n="nav.my_tasks"></span>
             </div>
-            <div class="metrics-grid">
-                <div class="metric-card yellow">
-                    <div class="metric-title" data-i18n="production.pending_tasks"></div>
-                    <div class="metric-value">${pending.length}</div>
-                </div>
-                <div class="metric-card blue">
-                    <div class="metric-title" data-i18n="production.in_progress_tasks"></div>
-                    <div class="metric-value">${active.length}</div>
-                </div>
-                <div class="metric-card green">
-                    <div class="metric-title" data-i18n="worker_section.total_earned"></div>
-                    <div class="metric-value" style="font-size:17px;">${window.ui.money(earnings.total_earned)}</div>
-                </div>
-                <div class="metric-card purple">
-                    <div class="metric-title" data-i18n="worker_section.remaining"></div>
-                    <div class="metric-value" style="font-size:17px;">${window.ui.money(earnings.remaining)}</div>
-                </div>
+            <div class="stat-grid">
+                ${window.ui.statCard({ icon: '📥', color: 'orange', titleKey: 'production.pending_tasks', value: pending.length })}
+                ${window.ui.statCard({ icon: '🛠️', color: 'blue', titleKey: 'production.in_progress_tasks', value: active.length })}
+                ${window.ui.statCard({ icon: '💰', color: 'green', titleKey: 'worker_section.total_earned', value: window.ui.money(earnings.total_earned) })}
+                ${window.ui.statCard({ icon: '👛', color: 'purple', titleKey: 'worker_section.remaining', value: window.ui.money(earnings.remaining) })}
             </div>
 
             ${pending.length ? `
