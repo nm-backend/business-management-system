@@ -211,6 +211,7 @@ def write_audit_log(
     )
 
     return AuditLog.objects.create(
+        company=getattr(actor, 'company', None) if actor_is_authenticated else None,
         actor=actor if actor_is_authenticated else None,
         actor_username=getattr(actor, 'username', '') if actor_is_authenticated else '',
         actor_role=getattr(actor, 'role', '') if actor_is_authenticated else '',

@@ -64,6 +64,7 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
         - Поддерживает мягкое удаление (SoftDeleteModel)
         - Автоматические временные метки (TimestampedModel)
     """
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='raw_materials', null=True)
     name = models.CharField(max_length=255)
     stone_type = models.CharField(max_length=100, blank=True)
     color = models.CharField(max_length=100, blank=True)
@@ -139,6 +140,7 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         - Автоматические временные метки (TimestampedModel)
         - Резервирование под заказы для точного учета
     """
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='finished_products', null=True)
     name = models.CharField(max_length=255)
     category = models.CharField(max_length=100, blank=True)
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.IZDELIE)
@@ -240,6 +242,7 @@ class StockMovement(TimestampedModel):
         ADJUSTMENT = 'adjustment', 'Корректировка'
         LOSS = 'loss', 'Потеря/Брак'
 
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='stock_movements', null=True)
     movement_type = models.CharField(max_length=20, choices=MovementType.choices, db_index=True)
     material = models.ForeignKey(RawMaterial, on_delete=models.CASCADE, null=True, blank=True, related_name='movements')
     product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, null=True, blank=True, related_name='movements')
@@ -296,6 +299,7 @@ class Recipe(TimestampedModel):
         - Одна продукция может иметь несколько рецептов
         - Можно деактивировать старые рецепты вместо удаления
     """
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='recipes', null=True)
     product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, related_name='recipes')
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)

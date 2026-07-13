@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from apps.core.permissions import IsCompanyMember
 from .models import Message, Notification
 from .serializers import MessageSerializer, MessageCreateSerializer, NotificationSerializer
 
@@ -18,7 +18,8 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     Доступен для всех аутентифицированных пользователей.
     """
-    permission_classes = [IsAuthenticated]
+    queryset = Message.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember]
 
     def get_serializer_class(self):
         """
@@ -30,13 +31,16 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        Пользователь видит свои отправленные, полученные и групповые сообщения.
+        Пользователь видит свои отправленные, полученные и групповые сообщения
+        в рамках своей компании.
 
         ?box=inbox|sent сужает выборку до входящих или отправленных.
         """
         from django.db.models import Q
+        if getattr(self, 'swagger_fake_view', False):
+            return Message.objects.none()
         user = self.request.user
-        queryset = Message.objects.select_related('sender', 'recipient')
+        queryset = Message.objects.filter(company=user.company_id).select_related('sender', 'recipient')
 
         box = self.request.query_params.get('box')
         if box == 'sent':
@@ -53,14 +57,16 @@ class MessageViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        from .services import notify, notify_staff
+        from .services import notify
         from apps.accounts.models import User
 
-        message = serializer.save()
+        message = serializer.save(company=self.request.user.company)
         title = 'Янги хабар'
         preview = message.content[:80]
         if message.is_group:
-            recipients = User.objects.filter(is_active=True).exclude(pk=message.sender_id)
+            recipients = User.objects.filter(
+                is_active=True, company_id=message.company_id,
+            ).exclude(pk=message.sender_id)
             notify(list(recipients), Notification.NotificationType.NEW_MESSAGE, title, preview)
         elif message.recipient:
             notify(message.recipient, Notification.NotificationType.NEW_MESSAGE, title, preview)
@@ -71,7 +77,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         from apps.accounts.models import User
 
         user = request.user
-        queryset = User.objects.filter(is_active=True).exclude(pk=user.pk)
+        queryset = User.objects.filter(is_active=True, company_id=user.company_id).exclude(pk=user.pk)
         if user.is_worker:
             allowed_roles = ['admin']
             if user.can_write_to_owner:
@@ -113,20 +119,22 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     Только чтение, уведомления создаются автоматически системой.
     """
-    permission_classes = [IsAuthenticated]
+    queryset = Notification.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember]
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
         """
         Возвращает queryset уведомлений.
 
-        Пользователь видит только свои уведомления.
+        Пользователь видит только свои уведомления своей компании.
         """
-        queryset = Notification.objects.select_related('user', 'related_order', 'related_task')
+        if getattr(self, 'swagger_fake_view', False):
+            return Notification.objects.none()
         user = self.request.user
-
-        if user:
-            queryset = queryset.filter(user=user)
+        queryset = Notification.objects.filter(
+            user=user, company_id=user.company_id,
+        ).select_related('user', 'related_order', 'related_task')
 
         is_read = self.request.query_params.get('is_read')
         if is_read is not None:

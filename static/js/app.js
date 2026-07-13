@@ -16,6 +16,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.currentUser = user;
 
     document.getElementById('app-top-bar').style.display = 'flex';
+
+    // Платформенный супер-администратор управляет только компаниями.
+    if (user.is_superadmin) {
+        document.getElementById('app-bottom-nav').style.display = 'none';
+        document.getElementById('notifications-btn').style.display = 'none';
+        window.router.addRoute('/', window.CompaniesComponent);
+        window.router.addRoute('/companies', window.CompaniesComponent);
+        window.router.addRoute('/settings', window.SettingsComponent);
+        window.router.handleRoute();
+        return;
+    }
+
     document.getElementById('app-bottom-nav').style.display = 'flex';
 
     // Меню по ролям: работник вместо клиентов видит свои задачи.

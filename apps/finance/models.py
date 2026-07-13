@@ -90,6 +90,7 @@ class Expense(TimestampedModel):
         - Фото чека для подтверждения
         - Категоризация расходов
     """
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='expenses', null=True)
     category = models.CharField(max_length=30, choices=ExpenseCategory.choices, db_index=True)
     amount = models.DecimalField(max_digits=15, decimal_places=2)
     date = models.DateField(db_index=True)
@@ -158,6 +159,7 @@ class LaborRate(TimestampedModel):
         PACKING = 'packing', 'Қутлаш'
         OTHER = 'other', 'Бошқа'
 
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='labor_rates', null=True)
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.CASCADE, related_name='labor_rates')
     operation = models.CharField(max_length=20, choices=OperationType.choices)
     rate_per_unit = models.DecimalField(max_digits=15, decimal_places=2)
@@ -220,6 +222,7 @@ class WorkerPayment(TimestampedModel):
         BONUS = 'bonus', 'Мукофот'
         OTHER = 'other', 'Бошқа'
 
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='worker_payments', null=True)
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=15, decimal_places=2)
     payment_date = models.DateField(db_index=True)

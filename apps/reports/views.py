@@ -15,14 +15,14 @@ Reports views - аналитика и экспорт отчётов.
 import datetime
 import io
 
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Q, Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum
 from django.http import HttpResponse
 from django.utils import timezone
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.clients.models import Client, Payment
+from apps.core.permissions import IsCompanyMember
 from apps.finance.models import Expense, ExpenseCategory, WorkerPayment
 from apps.orders.models import Order
 from apps.production.models import WorkRecord
@@ -56,12 +56,14 @@ def money(value):
     return value or 0
 
 
-def owner_analytics_data(date_from, date_to):
-    """Собирает все финансовые показатели владельца за период."""
-    payments = Payment.objects.filter(payment_date__date__range=(date_from, date_to))
+def owner_analytics_data(company_id, date_from, date_to):
+    """Собирает все финансовые показатели владельца за период (в рамках компании)."""
+    # Все выборки строго ограничены компанией владельца.
+    payments = Payment.objects.filter(company_id=company_id, payment_date__date__range=(date_from, date_to))
     revenue = money(payments.aggregate(s=Sum('amount'))['s'])
 
     delivered = Order.objects.filter(
+        company_id=company_id,
         status=Order.Status.DELIVERED,
         updated_at__date__range=(date_from, date_to),
     ).select_related('product')
@@ -69,7 +71,7 @@ def owner_analytics_data(date_from, date_to):
         s=Sum(ExpressionWrapper(F('quantity') * F('product__cost_price'), output_field=MONEY)),
     )['s'])
 
-    expenses_qs = Expense.objects.filter(date__range=(date_from, date_to))
+    expenses_qs = Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
     expenses_total = money(expenses_qs.aggregate(s=Sum('amount'))['s'])
 
     def expenses_by(*categories):
@@ -81,33 +83,35 @@ def owner_analytics_data(date_from, date_to):
     owner_withdrawal = expenses_by(ExpenseCategory.OWNER_WITHDRAWAL)
 
     worker_payments = money(
-        WorkerPayment.objects.filter(payment_date__range=(date_from, date_to))
+        WorkerPayment.objects.filter(company_id=company_id, payment_date__range=(date_from, date_to))
         .aggregate(s=Sum('amount'))['s']
     )
 
-    client_debts = money(Client.objects.aggregate(s=Sum('debt'))['s'])
+    client_debts = money(Client.objects.filter(company_id=company_id).aggregate(s=Sum('debt'))['s'])
     worker_earned = money(WorkRecord.objects.filter(
-        status=WorkRecord.WorkStatus.CONFIRMED,
+        company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED,
     ).aggregate(s=Sum('labor_cost'))['s'])
-    worker_paid_total = money(WorkerPayment.objects.aggregate(s=Sum('amount'))['s'])
+    worker_paid_total = money(
+        WorkerPayment.objects.filter(company_id=company_id).aggregate(s=Sum('amount'))['s']
+    )
     worker_debts = max(worker_earned - worker_paid_total, 0)
 
-    # Касса считается за всё время (текущий остаток).
+    # Касса считается за всё время (текущий остаток) в рамках компании.
     cash = (
-        money(Payment.objects.aggregate(s=Sum('amount'))['s'])
-        - money(Expense.objects.aggregate(s=Sum('amount'))['s'])
+        money(Payment.objects.filter(company_id=company_id).aggregate(s=Sum('amount'))['s'])
+        - money(Expense.objects.filter(company_id=company_id).aggregate(s=Sum('amount'))['s'])
         - worker_paid_total
     )
 
     top_products = list(
-        Order.objects.filter(status=Order.Status.DELIVERED, product__isnull=False,
+        Order.objects.filter(company_id=company_id, status=Order.Status.DELIVERED, product__isnull=False,
                              updated_at__date__range=(date_from, date_to))
         .values(name=F('product__name'))
         .annotate(total_quantity=Sum('quantity'), orders=Count('id'))
         .order_by('-total_quantity')[:5]
     )
     top_worker = (
-        WorkRecord.objects.filter(status=WorkRecord.WorkStatus.CONFIRMED,
+        WorkRecord.objects.filter(company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED,
                                   confirmed_at__date__range=(date_from, date_to))
         .values(name=F('worker__full_name'), username=F('worker__username'))
         .annotate(total_quantity=Sum('quantity'), works=Count('id'))
@@ -115,7 +119,8 @@ def owner_analytics_data(date_from, date_to):
         .first()
     )
 
-    orders_qs = Order.objects.filter(created_at__date__range=(date_from, date_to))
+    orders_qs = Order.objects.filter(company_id=company_id, created_at__date__range=(date_from, date_to))
+    raw_qs = RawMaterial.objects.filter(company_id=company_id, is_archived=False)
     return {
         'date_from': date_from,
         'date_to': date_to,
@@ -141,19 +146,18 @@ def owner_analytics_data(date_from, date_to):
         'top_products': top_products,
         'most_active_worker': top_worker,
         'stock': {
-            'raw_materials': RawMaterial.objects.filter(is_archived=False).count(),
-            'low_stock_materials': sum(
-                1 for m in RawMaterial.objects.filter(is_archived=False) if m.is_low_stock
-            ),
-            'finished_products': FinishedProduct.objects.filter(is_archived=False).count(),
+            'raw_materials': raw_qs.count(),
+            'low_stock_materials': sum(1 for m in raw_qs if m.is_low_stock),
+            'finished_products': FinishedProduct.objects.filter(
+                company_id=company_id, is_archived=False).count(),
         },
     }
 
 
-def admin_analytics_data():
-    """Операционные показатели без денег (для администратора)."""
+def admin_analytics_data(company_id):
+    """Операционные показатели без денег (для администратора), в рамках компании."""
     now = timezone.now()
-    orders = Order.objects.filter(is_archived=False)
+    orders = Order.objects.filter(company_id=company_id, is_archived=False)
     active_statuses = (
         Order.Status.SENT_TO_WORKER, Order.Status.ACCEPTED, Order.Status.IN_PROGRESS,
         Order.Status.AWAITING_CONFIRMATION,
@@ -163,17 +167,17 @@ def admin_analytics_data():
             'id': m.id, 'name': m.name, 'quantity': m.quantity,
             'min_stock': m.min_stock, 'unit': m.unit,
         }
-        for m in RawMaterial.objects.filter(is_archived=False)
+        for m in RawMaterial.objects.filter(company_id=company_id, is_archived=False)
         if m.is_low_stock
     ]
     worker_performance = list(
-        WorkRecord.objects.filter(status=WorkRecord.WorkStatus.CONFIRMED)
+        WorkRecord.objects.filter(company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED)
         .values(worker_username=F('worker__username'), worker_full_name=F('worker__full_name'))
         .annotate(total_quantity=Sum('quantity'), works=Count('id'))
         .order_by('-total_quantity')
     )
     unpaid_clients = list(
-        Client.objects.filter(is_archived=False, debt__gt=0).values('id', 'name')
+        Client.objects.filter(company_id=company_id, is_archived=False, debt__gt=0).values('id', 'name')
     )
     return {
         'orders_new': orders.filter(status=Order.Status.NEW).count(),
@@ -183,7 +187,7 @@ def admin_analytics_data():
             deadline__lt=now,
         ).exclude(status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED)).count(),
         'awaiting_confirmation': WorkRecord.objects.filter(
-            status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION,
+            company_id=company_id, status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION,
         ).count(),
         'low_stock_materials': low_stock,
         'worker_performance': worker_performance,
@@ -193,19 +197,19 @@ def admin_analytics_data():
 
 class OwnerAnalyticsView(APIView):
     """GET /api/v1/reports/analytics/owner/?period=month - только владелец."""
-    permission_classes = [IsAuthenticated, IsOwner]
+    permission_classes = [IsCompanyMember, IsOwner]
 
     def get(self, request):
         date_from, date_to = parse_period(request)
-        return Response(owner_analytics_data(date_from, date_to))
+        return Response(owner_analytics_data(request.user.company_id, date_from, date_to))
 
 
 class AdminAnalyticsView(APIView):
     """GET /api/v1/reports/analytics/admin/ - владелец и администратор."""
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
 
     def get(self, request):
-        return Response(admin_analytics_data())
+        return Response(admin_analytics_data(request.user.company_id))
 
 
 def xlsx_response(rows, filename, sheet_title):
@@ -266,11 +270,11 @@ def pdf_response(title, rows, filename):
 
 class OwnerFinanceExportView(APIView):
     """GET /api/v1/reports/export/finance/?format=xlsx|pdf - полный финансовый отчёт."""
-    permission_classes = [IsAuthenticated, IsOwner]
+    permission_classes = [IsCompanyMember, IsOwner]
 
     def get(self, request):
         date_from, date_to = parse_period(request)
-        data = owner_analytics_data(date_from, date_to)
+        data = owner_analytics_data(request.user.company_id, date_from, date_to)
         rows = [
             ['Кўрсаткич', 'Қиймат'],
             ['Давр', f"{date_from} - {date_to}"],
@@ -295,18 +299,19 @@ class OwnerFinanceExportView(APIView):
 
 class AdminStockExportView(APIView):
     """GET /api/v1/reports/export/stock/ - складские остатки без цен (админ/владелец)."""
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
 
     def get(self, request):
+        company_id = request.user.company_id
         rows = [['Номи', 'Тури', 'Миқдор', 'Бирлик', 'Мин. қолдиқ', 'Етишмайди']]
-        for m in RawMaterial.objects.filter(is_archived=False).order_by('name'):
+        for m in RawMaterial.objects.filter(company_id=company_id, is_archived=False).order_by('name'):
             rows.append([
                 m.name, m.stone_type, m.quantity, m.get_unit_display(),
                 m.min_stock, 'Ха' if m.is_low_stock else '',
             ])
         rows.append([])
         rows.append(['Тайёр маҳсулот', '', '', '', '', ''])
-        for p in FinishedProduct.objects.filter(is_archived=False).order_by('name'):
+        for p in FinishedProduct.objects.filter(company_id=company_id, is_archived=False).order_by('name'):
             rows.append([
                 p.name, p.category, p.quantity, p.get_unit_display(),
                 p.min_stock, 'Ха' if p.is_low_stock else '',
@@ -318,11 +323,14 @@ class AdminStockExportView(APIView):
 
 class AdminOrdersExportView(APIView):
     """GET /api/v1/reports/export/orders/ - список заказов без сумм (админ/владелец)."""
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
 
     def get(self, request):
         rows = [['#', 'Мижоз', 'Маҳсулот', 'Миқдор', 'Ҳолат', 'Тўлов', 'Муддат']]
-        for o in Order.objects.filter(is_archived=False).select_related('client', 'product'):
+        orders = Order.objects.filter(
+            company_id=request.user.company_id, is_archived=False,
+        ).select_related('client', 'product')
+        for o in orders:
             rows.append([
                 o.id, o.client.name,
                 o.product.name if o.product else o.custom_product_name,
@@ -336,11 +344,11 @@ class AdminOrdersExportView(APIView):
 
 class AdminWorkExportView(APIView):
     """GET /api/v1/reports/export/work/ - выработка работников по количеству."""
-    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
 
     def get(self, request):
         rows = [['Ишчи', 'Тасдиқланган ишлар', 'Умумий миқдор']]
-        for row in admin_analytics_data()['worker_performance']:
+        for row in admin_analytics_data(request.user.company_id)['worker_performance']:
             rows.append([
                 row['worker_full_name'] or row['worker_username'],
                 row['works'], row['total_quantity'],

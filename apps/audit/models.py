@@ -68,6 +68,13 @@ class AuditLog(TimestampedModel):
         CHANGE_PASSWORD = 'change_password', 'Change password'
         CHANGE_LANGUAGE = 'change_language', 'Change language'
 
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

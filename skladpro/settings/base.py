@@ -43,14 +43,15 @@ INSTALLED_APPS = [
 
     # Local apps
     'apps.core',  # Базовые модели и утилиты
+    'apps.companies',  # Компании (арендаторы) - мультикомпанийная изоляция
     'apps.accounts',  # Управление пользователями и аутентификация
     'apps.warehouse',  # Управление складом (сырье и готовая продукция)
-    'apps.orders',  # Управление заказами (заглушка)
-    'apps.production',  # Управление производством (заглушка)
-    'apps.clients',  # Управление клиентами (заглушка)
-    'apps.finance',  # Финансовые отчеты (заглушка)
-    'apps.messaging',  # Сообщения (заглушка)
-    'apps.reports',  # Отчеты (заглушка)
+    'apps.orders',  # Управление заказами
+    'apps.production',  # Производство: задачи и подтверждение работ
+    'apps.clients',  # Клиенты и оплаты
+    'apps.finance',  # Расходы, ставки и выплаты работникам
+    'apps.messaging',  # Сообщения и уведомления
+    'apps.reports',  # Аналитика и экспорт отчетов
     'apps.audit',  # Система аудита действий
     
     'drf_spectacular',  # Автоматическая генерация OpenAPI схемы
@@ -82,6 +83,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'skladpro.context_processors.asset_version',
             ],
         },
     },
@@ -186,6 +188,9 @@ MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директо
 
 # Тип авто-поля по умолчанию
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Версия статики для cache-busting (?v=...). Бампайте при изменении CSS/JS.
+ASSET_VERSION = '20260713b'
 
 # URL для аутентификации
 LOGIN_URL = '/accounts/login/'

@@ -32,18 +32,20 @@ class UserSerializer(serializers.ModelSerializer):
     is_owner = serializers.ReadOnlyField()
     is_admin = serializers.ReadOnlyField()
     is_worker = serializers.ReadOnlyField()
+    is_superadmin = serializers.ReadOnlyField()
+    company_name = serializers.CharField(source='company.name', read_only=True, default=None)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'full_name', 'phone', 'email',
-            'role', 'display_role', 'is_owner', 'is_admin', 'is_worker',
-            'avatar', 'language',
+            'role', 'display_role', 'is_owner', 'is_admin', 'is_worker', 'is_superadmin',
+            'company', 'company_name', 'avatar', 'language',
             'is_active', 'can_write_to_owner', 'can_create_workers',
             'can_see_other_workers', 'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'id', 'role', 'created_at', 'updated_at', 'display_role',
+            'id', 'role', 'company', 'created_at', 'updated_at', 'display_role',
         ]
 
 
@@ -190,6 +192,9 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError('Invalid username or password')
         if not user.is_active:
             raise serializers.ValidationError('Account is deactivated')
+        # Пользователь заблокированной компании не может войти.
+        if user.company_id is not None and not user.company.is_active:
+            raise serializers.ValidationError('Company is deactivated')
         data['user'] = user
         return data
 
@@ -320,11 +325,14 @@ class SetupOwnerSerializer(serializers.Serializer):
         """
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
+        # Первый пользователь системы - платформенный супер-администратор:
+        # он создаёт компании и их владельцев, но сам к компании не привязан.
         user = User(
             username=validated_data['username'],
             full_name=validated_data.get('full_name', ''),
             phone=validated_data.get('phone', ''),
-            role=User.Role.OWNER,
+            role=User.Role.SUPERADMIN,
+            company=None,
             is_staff=True,
             is_superuser=True,
         )

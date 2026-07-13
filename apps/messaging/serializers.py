@@ -54,6 +54,8 @@ class MessageCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'recipient': 'Recipient is required'})
         if recipient == sender:
             raise serializers.ValidationError({'recipient': 'Cannot send a message to yourself'})
+        if recipient.company_id != sender.company_id:
+            raise serializers.ValidationError({'recipient': 'Recipient must belong to your company'})
 
         if sender.is_worker:
             if recipient.is_worker:

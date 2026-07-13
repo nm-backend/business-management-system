@@ -1,31 +1,49 @@
 from django.contrib import admin
+
 from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
+
 
 @admin.register(RawMaterial)
 class RawMaterialAdmin(admin.ModelAdmin):
-    list_display = ['name', 'stone_type', 'quantity', 'unit', 'min_stock', 'is_low_stock']
-    list_filter = ['stone_type', 'unit', 'is_archived']
-    search_fields = ['name', 'supplier', 'comment']
+    list_display = ('name', 'company', 'stone_type', 'quantity', 'unit', 'min_stock', 'is_low_stock', 'is_archived')
+    list_filter = ('company', 'stone_type', 'unit', 'is_archived')
+    search_fields = ('name', 'supplier', 'comment')
+    autocomplete_fields = ('company',)
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('name',)
+
 
 @admin.register(FinishedProduct)
 class FinishedProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'quantity', 'available_quantity', 'unit']
-    list_filter = ['category', 'unit', 'is_archived']
-    search_fields = ['name', 'description']
+    list_display = ('name', 'company', 'category', 'quantity', 'available_quantity', 'unit', 'is_archived')
+    list_filter = ('company', 'category', 'unit', 'is_archived')
+    search_fields = ('name', 'description')
+    autocomplete_fields = ('company',)
+    readonly_fields = ('created_at', 'updated_at')
+    ordering = ('name',)
+
 
 @admin.register(StockMovement)
 class StockMovementAdmin(admin.ModelAdmin):
-    list_display = ['movement_type', 'material', 'product', 'quantity', 'created_at']
-    list_filter = ['movement_type', 'created_at']
-    search_fields = ['reason', 'material__name', 'product__name']
+    list_display = ('id', 'company', 'movement_type', 'material', 'product', 'quantity', 'created_at')
+    list_filter = ('company', 'movement_type', 'created_at')
+    search_fields = ('reason', 'material__name', 'product__name')
+    autocomplete_fields = ('company', 'material', 'product', 'created_by')
+    date_hierarchy = 'created_at'
+    readonly_fields = ('created_at', 'updated_at')
+
 
 class RecipeItemInline(admin.TabularInline):
     model = RecipeItem
     extra = 1
+    autocomplete_fields = ('material',)
+
 
 @admin.register(Recipe)
 class RecipeAdmin(admin.ModelAdmin):
-    list_display = ['name', 'product', 'is_active']
-    list_filter = ['is_active']
-    search_fields = ['name', 'product__name']
+    list_display = ('name', 'company', 'product', 'is_active')
+    list_filter = ('company', 'is_active')
+    search_fields = ('name', 'product__name')
+    autocomplete_fields = ('company', 'product')
     inlines = [RecipeItemInline]
+    readonly_fields = ('created_at', 'updated_at')

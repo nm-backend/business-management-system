@@ -55,7 +55,7 @@ class SettingsComponent {
                 </div>
                 <button class="btn btn-primary btn-block" id="add-user-btn" style="margin-bottom:16px;" data-i18n="settings.add_account"></button>` : ''}
 
-            ${!user.is_worker ? `
+            ${user.is_owner || user.is_admin ? `
                 <div class="section-title" data-i18n="settings.export"></div>
                 <div class="list-group">
                     <div class="list-row" data-export="/reports/export/stock/" data-file="stock-report.xlsx">

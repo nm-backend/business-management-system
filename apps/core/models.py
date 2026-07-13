@@ -5,7 +5,6 @@ Core models - базовые абстрактные модели для всег
 в других приложениях как базовые классы для обеспечения единообразия.
 """
 from django.db import models
-from django.conf import settings
 
 
 class TimestampedModel(models.Model):

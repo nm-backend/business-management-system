@@ -6,14 +6,16 @@ Views for production API.
 - Worker: видит только свои задачи и работы, принимает/отказывается,
   сдаёт работу на подтверждение, видит свой заработок.
 """
+from decimal import Decimal, InvalidOperation
+
 from django.db.models import Sum
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.mixins import CreateModelMixin
-from rest_framework.permissions import IsAuthenticated
 
+from apps.core.permissions import IsCompanyMember
 from apps.messaging.models import Notification
 from apps.messaging.services import notify, notify_staff
 from .models import RefusalReason, Task, TaskStatus, WorkRecord
@@ -41,7 +43,8 @@ class ReadAfterCreateMixin(CreateModelMixin):
 
 class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
     """Задачи работников: назначение, принятие, отказ."""
-    permission_classes = [IsAuthenticated]
+    queryset = Task.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember]
     read_serializer_class = TaskSerializer
 
     def get_serializer_class(self):
@@ -50,7 +53,11 @@ class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
         return TaskSerializer
 
     def get_queryset(self):
-        queryset = Task.objects.select_related('worker', 'assigned_by', 'order', 'order__client', 'order__product')
+        if getattr(self, 'swagger_fake_view', False):
+            return Task.objects.none()
+        queryset = Task.objects.filter(
+            company=self.request.user.company_id,
+        ).select_related('worker', 'assigned_by', 'order', 'order__client', 'order__product')
         if self.request.user.is_worker:
             queryset = queryset.filter(worker=self.request.user)
         status_filter = self.request.query_params.get('status')
@@ -60,12 +67,19 @@ class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        # Работника/заказ нельзя взять из другой компании.
+        worker = serializer.validated_data.get('worker')
+        order = serializer.validated_data.get('order')
+        if worker and worker.company_id != user.company_id:
+            raise PermissionDenied('Worker must belong to your company')
+        if order and order.company_id != user.company_id:
+            raise PermissionDenied('Order must belong to your company')
         if user.is_worker:
             # Работник может создать только самостоятельную работу для себя.
-            task = serializer.save(worker=user, assigned_by=user, is_self_assigned=True,
-                                   status=TaskStatus.ACCEPTED)
+            task = serializer.save(company=user.company, worker=user, assigned_by=user,
+                                   is_self_assigned=True, status=TaskStatus.ACCEPTED)
         else:
-            task = serializer.save(assigned_by=user)
+            task = serializer.save(company=user.company, assigned_by=user)
             if task.order:
                 task.order.worker = task.worker
                 task.order.status = task.order.Status.SENT_TO_WORKER
@@ -113,6 +127,7 @@ class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST)
         task.refuse(reason, request.data.get('comment', ''))
         notify_staff(
+            task.company_id,
             Notification.NotificationType.WORKER_REFUSED,
             'Ишчи рад этди',
             f'{request.user.full_name or request.user.username} вазифа #{task.id} дан бош тортди: '
@@ -141,11 +156,14 @@ class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
 
 class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
     """Работы: сдача на подтверждение, подтверждение (меняет склад), отклонение."""
-    permission_classes = [IsAuthenticated]
+    queryset = WorkRecord.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember]
 
     def get_serializer_class(self):
         if self.action == 'create':
             return WorkRecordCreateSerializer
+        if getattr(self, 'swagger_fake_view', False):
+            return WorkRecordSerializer
         user = self.request.user
         # Owner видит labor_cost везде; работник — только в своих записях
         # (queryset уже отфильтрован); администратор денег не видит.
@@ -161,7 +179,11 @@ class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
         return WorkRecordLimitedSerializer
 
     def get_queryset(self):
-        queryset = WorkRecord.objects.select_related('worker', 'product', 'confirmed_by', 'task')
+        if getattr(self, 'swagger_fake_view', False):
+            return WorkRecord.objects.none()
+        queryset = WorkRecord.objects.filter(
+            company=self.request.user.company_id,
+        ).select_related('worker', 'product', 'confirmed_by', 'task')
         if self.request.user.is_worker:
             queryset = queryset.filter(worker=self.request.user)
         status_filter = self.request.query_params.get('status')
@@ -171,11 +193,19 @@ class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        # Товар/задача должны быть из своей компании.
+        product = serializer.validated_data.get('product')
+        task = serializer.validated_data.get('task')
+        if product and product.company_id != user.company_id:
+            raise PermissionDenied('Product must belong to your company')
+        if task and task.company_id != user.company_id:
+            raise PermissionDenied('Task must belong to your company')
         if user.is_worker:
-            work = serializer.save(worker=user)
+            work = serializer.save(company=user.company, worker=user)
         else:
-            work = serializer.save()
+            work = serializer.save(company=user.company)
         notify_staff(
+            work.company_id,
             Notification.NotificationType.WORK_AWAITING,
             'Иш тасдиқлашни кутмоқда',
             f'{work.worker.full_name or work.worker.username}: '
@@ -202,15 +232,25 @@ class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
 
         labor_cost = None
         if request.user.is_owner and request.data.get('labor_cost') not in (None, ''):
-            labor_cost = request.data['labor_cost']
+            try:
+                labor_cost = Decimal(str(request.data['labor_cost']))
+            except (InvalidOperation, TypeError):
+                return Response({'labor_cost': 'Must be a valid number'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if labor_cost < 0:
+                return Response({'labor_cost': 'Must not be negative'},
+                                status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            services.confirm_work(work, request.user, labor_cost=labor_cost, request=request)
+            work = services.confirm_work(work, request.user, labor_cost=labor_cost, request=request)
         except services.MaterialShortageError as error:
             return Response(
                 {'detail': 'Материал етарли эмас', 'shortages': error.shortages},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except services.AlreadyProcessedError:
+            return Response({'detail': 'Work has already been processed'},
+                            status=status.HTTP_409_CONFLICT)
         return Response(self.get_serializer(work).data)
 
     @action(detail=True, methods=['post'])
@@ -223,7 +263,11 @@ class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
         if work.status != WorkRecord.WorkStatus.AWAITING_CONFIRMATION:
             return Response({'detail': 'Work is not awaiting confirmation'},
                             status=status.HTTP_400_BAD_REQUEST)
-        services.reject_work(work, request.user, request.data.get('reason', ''), request=request)
+        try:
+            work = services.reject_work(work, request.user, request.data.get('reason', ''), request=request)
+        except services.AlreadyProcessedError:
+            return Response({'detail': 'Work has already been processed'},
+                            status=status.HTTP_409_CONFLICT)
         return Response(self.get_serializer(work).data)
 
     @action(detail=False, methods=['get'])

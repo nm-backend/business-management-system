@@ -32,6 +32,7 @@ class Order(TimestampedModel, SoftDeleteModel):
         PARTIAL = 'partial', 'Частичная оплата'
         PAID = 'paid', 'Оплачено'
 
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='orders', null=True)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='orders')
     product = models.ForeignKey(FinishedProduct, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     custom_product_name = models.CharField(max_length=255, blank=True)

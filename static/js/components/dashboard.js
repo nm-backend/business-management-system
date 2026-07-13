@@ -28,11 +28,9 @@ class DashboardComponent {
                 `).join('')}
             </div>
 
-            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <div class="metric-title" data-i18n="dashboard.revenue"></div>
-                    <div class="metric-value">${window.ui.money(data.revenue)}</div>
-                </div>
+            <div class="card hero-card" style="margin-bottom:12px;">
+                <div class="metric-title" data-i18n="dashboard.revenue"></div>
+                <div class="metric-value" style="font-size:28px;">${window.ui.money(data.revenue)}</div>
             </div>
             <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
                 <div>

@@ -6,7 +6,7 @@ Views for orders API.
 """
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -14,26 +14,30 @@ from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.messaging.models import Notification
 from apps.messaging.services import notify_staff
+from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin
 from .models import Order
 from .serializers import OrderSerializer, OrderOwnerSerializer
 
 
 class OrderViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    queryset = Order.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['custom_product_name', 'comment', 'client__name']
     filterset_fields = ['status', 'payment_status', 'worker', 'client']
     ordering_fields = ['created_at', 'deadline']
 
     def get_serializer_class(self):
-        if self.request.user.is_owner:
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
             return OrderOwnerSerializer
         return OrderSerializer
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Order.objects.none()
         user = self.request.user
-        queryset = Order.objects.select_related('client', 'product', 'worker')
+        queryset = Order.objects.filter(company=user.company_id).select_related('client', 'product', 'worker')
         if user.is_owner or user.is_admin:
             return queryset
         return queryset.filter(worker=user)
@@ -41,13 +45,22 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy',
                            'deliver', 'cancel'):
-            return [IsOwnerOrAdmin()]
-        return [IsAuthenticated()]
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
+        return [IsCompanyMember()]
 
     def perform_create(self, serializer):
-        order = serializer.save()
+        # Заказ можно создать только на клиента/товар своей компании.
+        company = self.request.user.company
+        client = serializer.validated_data.get('client')
+        product = serializer.validated_data.get('product')
+        if client and client.company_id != company.id:
+            raise PermissionDenied('Client must belong to your company')
+        if product and product.company_id != company.id:
+            raise PermissionDenied('Product must belong to your company')
+        order = serializer.save(company=company)
         order.client.recalculate_financials()
         notify_staff(
+            company,
             Notification.NotificationType.NEW_ORDER,
             'Янги буюртма',
             f'#{order.id} {order.client.name}: '
@@ -102,6 +115,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         if order.payment_status != Order.PaymentStatus.PAID:
             # Без сумм: администратор видит только факт неоплаты.
             notify_staff(
+                order.company_id,
                 Notification.NotificationType.UNPAID_CLIENT,
                 'Мижоз тўлов қилмади',
                 f'Буюртма #{order.id}, мижоз: {order.client.name}',

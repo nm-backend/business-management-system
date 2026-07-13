@@ -9,6 +9,37 @@ Custom permissions for role-based access control.
 from rest_framework import permissions
 
 
+class IsSuperAdmin(permissions.BasePermission):
+    """
+    Permission - платформенный супер-администратор.
+
+    Управляет компаниями (арендаторами), не привязан к компании и не имеет
+    доступа к бизнес-данным компаний.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.is_superadmin)
+
+
+class IsCompanyMember(permissions.BasePermission):
+    """
+    Permission - пользователь состоит в компании (арендаторе).
+
+    База для всех бизнес-эндпоинтов: доступ только аутентифицированным
+    пользователям owner/admin/worker, у которых задана company. Супер-админ
+    (company=None) к данным компаний не допускается.
+    """
+    message = 'You must belong to a company to access this resource.'
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and not user.is_superadmin
+            and user.company_id is not None
+        )
+
+
 class IsOwner(permissions.BasePermission):
     """
     Permission - только владелец.

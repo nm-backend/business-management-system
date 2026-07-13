@@ -30,10 +30,13 @@ class UserManagerTests(TestCase):
         self.assertEqual(user.full_name, 'Mary M')
 
     def test_create_superuser_defaults(self):
-        owner = User.objects.create_superuser(username='boss', password='p')
-        self.assertTrue(owner.is_staff)
-        self.assertTrue(owner.is_superuser)
-        self.assertEqual(owner.role, User.Role.OWNER)
+        # Django-суперпользователь = платформенный супер-администратор (без компании).
+        superadmin = User.objects.create_superuser(username='boss', password='p')
+        self.assertTrue(superadmin.is_staff)
+        self.assertTrue(superadmin.is_superuser)
+        self.assertEqual(superadmin.role, User.Role.SUPERADMIN)
+        self.assertIsNone(superadmin.company)
+        self.assertTrue(superadmin.is_superadmin)
 
     def test_create_superuser_respects_overrides(self):
         owner = User.objects.create_superuser(

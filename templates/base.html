@@ -14,8 +14,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="{% static 'css/base.css' %}" />
-    <link rel="stylesheet" href="{% static 'css/ux.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/base.css' %}?v={{ ASSET_VERSION }}" />
+    <link rel="stylesheet" href="{% static 'css/ux.css' %}?v={{ ASSET_VERSION }}" />
     {% block extra_css %}{% endblock %}
   </head>
   <body>
@@ -32,8 +32,20 @@
       </header>
 
       <!-- Main Content -->
-      <main class="main-content" id="app-content">
-        {% block content %}{% endblock %}
+      <main class="main-content">
+        <div id="app-content">{% block content %}{% endblock %}</div>
+        <footer class="app-footer">
+          <div>
+            <span data-i18n="footer.created_by">Created by</span>
+            <span class="footer-person">Nurullo Musajanov</span>
+            <span class="footer-role">— Backend Developer</span>
+          </div>
+          <div>
+            <span class="footer-person">Claude (Anthropic AI)</span>
+            <span class="footer-role">— Financial System Architecture &amp; Development Assistant</span>
+          </div>
+          <div class="footer-brand">SkladPro.Nod · © 2026</div>
+        </footer>
       </main>
 
       <!-- Bottom Navigation -->
@@ -66,25 +78,26 @@
     </div>
 
     <!-- Core JS -->
-    <script src="{% static 'js/api.js' %}"></script>
-    <script src="{% static 'js/i18n.js' %}"></script>
-    <script src="{% static 'js/toast.js' %}"></script>
-    <script src="{% static 'js/dialogs.js' %}"></script>
-    <script src="{% static 'js/list-states.js' %}"></script>
-    <script src="{% static 'js/ui.js' %}"></script>
+    <script src="{% static 'js/api.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/i18n.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/toast.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/dialogs.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/list-states.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/ui.js' %}?v={{ ASSET_VERSION }}"></script>
 
     {% block extra_js %}
-    <script src="{% static 'js/router.js' %}"></script>
-    <script src="{% static 'js/components/dashboard.js' %}"></script>
-    <script src="{% static 'js/components/warehouse.js' %}"></script>
-    <script src="{% static 'js/components/finished_products.js' %}"></script>
-    <script src="{% static 'js/components/orders.js' %}"></script>
-    <script src="{% static 'js/components/clients.js' %}"></script>
-    <script src="{% static 'js/components/production.js' %}"></script>
-    <script src="{% static 'js/components/finance.js' %}"></script>
-    <script src="{% static 'js/components/messages.js' %}"></script>
-    <script src="{% static 'js/components/settings.js' %}"></script>
-    <script src="{% static 'js/app.js' %}"></script>
+    <script src="{% static 'js/router.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/dashboard.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/warehouse.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/finished_products.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/orders.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/clients.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/production.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/finance.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/messages.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/settings.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/companies.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/app.js' %}?v={{ ASSET_VERSION }}"></script>
     {% endblock %}
   </body>
 </html>

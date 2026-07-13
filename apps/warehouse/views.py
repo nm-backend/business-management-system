@@ -1,8 +1,9 @@
 from rest_framework import viewsets, filters
-from rest_framework.exceptions import MethodNotAllowed
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
+from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrWorker
 from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
 from .serializers import (
@@ -19,6 +20,7 @@ class RawMaterialViewSet(viewsets.ModelViewSet):
     Serializer выбирается по роли: owner получает цены, admin/worker получают
     только складские количества, чтобы финансовые данные не уходили через API.
     """
+    queryset = RawMaterial.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'stone_type', 'color', 'supplier']
     filterset_fields = ['is_archived', 'unit']
@@ -26,22 +28,24 @@ class RawMaterialViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsOwnerOrAdmin()]
-        return [IsOwnerOrAdminOrWorker()]
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
+        return [IsCompanyMember(), IsOwnerOrAdminOrWorker()]
 
     def get_queryset(self):
-        qs = RawMaterial.objects.all()
+        if getattr(self, 'swagger_fake_view', False):
+            return RawMaterial.objects.none()
+        qs = RawMaterial.objects.filter(company=self.request.user.company_id)
         if not self.request.user.is_owner:
             qs = qs.filter(is_archived=False)
         return qs
 
     def get_serializer_class(self):
-        if self.request.user.is_owner:
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
             return RawMaterialOwnerSerializer
         return RawMaterialSerializer
 
     def perform_create(self, serializer):
-        material = serializer.save()
+        material = serializer.save(company=self.request.user.company)
         write_audit_log(
             action=AuditLog.Action.CREATE,
             actor=self.request.user,
@@ -78,6 +82,7 @@ class FinishedProductViewSet(viewsets.ModelViewSet):
     серверная защита: frontend не может случайно показать то, что backend не
     отправил.
     """
+    queryset = FinishedProduct.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'category']
     filterset_fields = ['is_archived', 'unit']
@@ -85,22 +90,24 @@ class FinishedProductViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsOwnerOrAdmin()]
-        return [IsOwnerOrAdminOrWorker()]
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
+        return [IsCompanyMember(), IsOwnerOrAdminOrWorker()]
 
     def get_queryset(self):
-        qs = FinishedProduct.objects.all()
+        if getattr(self, 'swagger_fake_view', False):
+            return FinishedProduct.objects.none()
+        qs = FinishedProduct.objects.filter(company=self.request.user.company_id)
         if not self.request.user.is_owner:
             qs = qs.filter(is_archived=False)
         return qs
 
     def get_serializer_class(self):
-        if self.request.user.is_owner:
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
             return FinishedProductOwnerSerializer
         return FinishedProductSerializer
 
     def perform_create(self, serializer):
-        product = serializer.save()
+        product = serializer.save(company=self.request.user.company)
         write_audit_log(
             action=AuditLog.Action.CREATE,
             actor=self.request.user,
@@ -137,15 +144,20 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
     история должна быть следом этих операций. Поэтому здесь нет ручного create,
     update или delete.
     """
-    queryset = StockMovement.objects.all()
-    permission_classes = [IsOwnerOrAdmin]
+    queryset = StockMovement.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['movement_type', 'material', 'product', 'created_by']
     search_fields = ['reason']
     ordering_fields = ['created_at']
 
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return StockMovement.objects.none()
+        return StockMovement.objects.filter(company=self.request.user.company_id)
+
     def get_serializer_class(self):
-        if self.request.user.is_owner:
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
             return StockMovementSerializer
         return StockMovementLimitedSerializer
 
@@ -156,15 +168,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
     Удаление рецепта запрещено: если рецепт больше не нужен, его выключают через
     is_active. Так сохраняется история решений и производство не теряет след.
     """
-    queryset = Recipe.objects.all()
+    queryset = Recipe.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     serializer_class = RecipeSerializer
-    permission_classes = [IsOwnerOrAdmin]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['product', 'is_active']
     search_fields = ['name', 'description']
 
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Recipe.objects.none()
+        return Recipe.objects.filter(company=self.request.user.company_id)
+
     def perform_create(self, serializer):
-        recipe = serializer.save()
+        recipe = serializer.save(company=self.request.user.company)
         write_audit_log(
             action=AuditLog.Action.CREATE,
             actor=self.request.user,
@@ -194,12 +211,24 @@ class RecipeItemViewSet(viewsets.ModelViewSet):
     Удаление строки запрещено по той же причине, что и удаление рецепта: лучше
     обновить рецепт явно, чем потерять историю производственных норм.
     """
-    queryset = RecipeItem.objects.all()
+    queryset = RecipeItem.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     serializer_class = RecipeItemSerializer
-    permission_classes = [IsOwnerOrAdmin]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
     filterset_fields = ['recipe', 'material']
 
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return RecipeItem.objects.none()
+        # У строки рецепта нет прямого company - изолируем через рецепт.
+        return RecipeItem.objects.filter(recipe__company=self.request.user.company_id)
+
     def perform_create(self, serializer):
+        # Нельзя добавить строку в чужой рецепт/материал.
+        company_id = self.request.user.company_id
+        recipe = serializer.validated_data.get('recipe')
+        material = serializer.validated_data.get('material')
+        if (recipe and recipe.company_id != company_id) or (material and material.company_id != company_id):
+            raise PermissionDenied('Recipe and material must belong to your company')
         recipe_item = serializer.save()
         write_audit_log(
             action=AuditLog.Action.CREATE,

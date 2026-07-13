@@ -70,10 +70,9 @@ class APIClient {
         }
 
         if (!response.ok) {
+            // Тело ошибки прокидываем вызывающему коду; он сам показывает toast
+            // с локализованным текстом (window.ui.errorText), чтобы не было дублей.
             const errorData = await response.json().catch(() => ({}));
-            if (window.toast && response.status !== 401) {
-                window.toast.error(errorData.detail || 'Request failed');
-            }
             throw { status: response.status, data: errorData };
         }
 

@@ -6,6 +6,7 @@ from .models import AuditLog
 class AuditLogAdmin(admin.ModelAdmin):
     list_display = [
         'created_at',
+        'company',
         'actor_username',
         'actor_role',
         'action',
@@ -13,9 +14,11 @@ class AuditLogAdmin(admin.ModelAdmin):
         'object_id',
         'ip_address',
     ]
-    list_filter = ['action', 'actor_role', 'object_type', 'created_at']
+    list_filter = ['company', 'action', 'actor_role', 'object_type', 'created_at']
     search_fields = ['actor_username', 'object_repr', 'object_id']
+    date_hierarchy = 'created_at'
     readonly_fields = [
+        'company',
         'actor',
         'actor_username',
         'actor_role',

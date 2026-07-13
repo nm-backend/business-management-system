@@ -63,9 +63,12 @@ class UserManager(BaseUserManager):
         Возвращает:
             User - созданный суперпользователь (владелец)
         """
+        # Django-суперпользователь = платформенный супер-администратор:
+        # управляет компаниями, сам к компании не привязан.
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('role', 'owner')
+        extra_fields.setdefault('role', 'superadmin')
+        extra_fields.setdefault('company', None)
         return self.create_user(username, password, **extra_fields)
 
     def owners(self):

@@ -19,6 +19,7 @@ ACTIVE_ORDER_STATUSES = (
 
 
 class Client(TimestampedModel, SoftDeleteModel):
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='clients', null=True)
     name = models.CharField(max_length=255)
     phone = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
@@ -52,13 +53,22 @@ class Client(TimestampedModel, SoftDeleteModel):
         return not self.is_archived
 
     def recalculate_financials(self):
-        """Пересчитывает сумму заказов, оплат и долг по данным заказов и платежей."""
-        totals = self.orders.filter(is_archived=False).exclude(status='cancelled').aggregate(
-            total=Sum('total_amount'),
-        )
-        paid = self.payments.aggregate(total=Sum('amount'))
-        self.total_orders_amount = totals['total'] or Decimal('0')
-        self.total_paid = paid['total'] or Decimal('0')
+        """
+        Пересчитывает сумму заказов, оплат и долг по действующим заказам.
+
+        Оплаты и суммы считаются по одному и тому же набору заказов (не отменённых
+        и не архивных). Оплата по отменённому заказу не гасит долг по другим заказам;
+        платежи без привязки к заказу (order=None) считаются как аванс клиента.
+        """
+        active_orders = self.orders.filter(is_archived=False).exclude(status='cancelled')
+        orders_total = active_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+        active_ids = list(active_orders.values_list('id', flat=True))
+        paid = self.payments.filter(
+            models.Q(order_id__in=active_ids) | models.Q(order__isnull=True),
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+
+        self.total_orders_amount = orders_total
+        self.total_paid = paid
         self.debt = max(self.total_orders_amount - self.total_paid, Decimal('0'))
         self.save(update_fields=['total_orders_amount', 'total_paid', 'debt', 'updated_at'])
 
@@ -77,6 +87,7 @@ class Payment(TimestampedModel):
         TRANSFER = 'transfer', 'Перевод'
         OTHER = 'other', 'Другое'
 
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='payments', null=True)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='payments')
     order = models.ForeignKey(
         'orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='payments',

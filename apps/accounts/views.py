@@ -44,16 +44,17 @@ class SetupCheckView(APIView):
         {'setup_required': bool} - True если владелец еще не создан
     """
     permission_classes = [AllowAny]
+    authentication_classes = []  # публичный эндпоинт: без сессии/CSRF
 
     def get(self, request):
         """
-        Проверяет, существует ли владелец в системе.
+        Проверяет, существует ли платформенный супер-администратор.
 
         Возвращает:
             Response с {'setup_required': True/False}
         """
-        owner_exists = User.objects.filter(role='owner').exists()
-        return Response({'setup_required': not owner_exists})
+        superadmin_exists = User.objects.filter(role=User.Role.SUPERADMIN).exists()
+        return Response({'setup_required': not superadmin_exists})
 
 
 class SetupOwnerView(APIView):
@@ -85,6 +86,7 @@ class SetupOwnerView(APIView):
         }
     """
     permission_classes = [AllowAny]
+    authentication_classes = []  # публичный эндпоинт: без сессии/CSRF
 
     def post(self, request):
         """
@@ -101,15 +103,15 @@ class SetupOwnerView(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             with transaction.atomic():
-                if User.objects.filter(role=User.Role.OWNER).exists():
+                if User.objects.filter(role=User.Role.SUPERADMIN).exists():
                     return Response(
-                        {'error': 'Owner already exists. Setup is complete.'},
+                        {'error': 'Setup is already complete.'},
                         status=status.HTTP_403_FORBIDDEN,
                     )
                 user = serializer.save()
         except IntegrityError:
             return Response(
-                {'error': 'Owner already exists. Setup is complete.'},
+                {'error': 'Setup is already complete.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         write_audit_log(
@@ -148,6 +150,7 @@ class LoginView(APIView):
         }
     """
     permission_classes = [AllowAny]
+    authentication_classes = []  # публичный эндпоинт: без сессии/CSRF
 
     def post(self, request):
         """
@@ -399,6 +402,7 @@ class UserViewSet(viewsets.ModelViewSet):
     - POST /api/v1/accounts/users/{id}/toggle_active/ - активация/деактивация (owner)
     - POST /api/v1/accounts/users/{id}/reset_password/ - сброс пароля (owner)
     """
+    queryset = User.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -413,11 +417,14 @@ class UserViewSet(viewsets.ModelViewSet):
         Возвращает:
             QuerySet - отфильтрованный список пользователей
         """
+        if getattr(self, 'swagger_fake_view', False):
+            return User.objects.none()
         user = self.request.user
+        # Пользователи всегда ограничены своей компанией.
         if user.is_owner:
-            return User.objects.all()
+            return User.objects.filter(company_id=user.company_id)
         elif user.is_admin:
-            return User.objects.filter(role='worker')
+            return User.objects.filter(company_id=user.company_id, role='worker')
         return User.objects.none()
 
     def get_serializer_class(self):
@@ -434,7 +441,7 @@ class UserViewSet(viewsets.ModelViewSet):
         """
         if self.action == 'create':
             return UserCreateSerializer
-        if self.request.user.is_owner:
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
             return UserSerializer
         return UserLimitedSerializer
 
@@ -476,10 +483,10 @@ class UserViewSet(viewsets.ModelViewSet):
         requested_role = serializer.validated_data.get('role', User.Role.WORKER)
 
         if user.is_owner:
-            # Владелец может создавать admin и worker
-            if requested_role == User.Role.OWNER:
-                raise ValidationError({'role': 'Owner account already exists'})
-            created_user = serializer.save()
+            # Владелец может создавать admin и worker только в своей компании.
+            if requested_role in (User.Role.OWNER, User.Role.SUPERADMIN):
+                raise ValidationError({'role': 'Owner can create only admin or worker accounts'})
+            created_user = serializer.save(company=user.company)
             write_audit_log(
                 action=AuditLog.Action.CREATE,
                 actor=user,
@@ -490,12 +497,13 @@ class UserViewSet(viewsets.ModelViewSet):
             return
 
         if user.is_admin:
-            # Администратор может создавать только workers
+            # Администратор может создавать только workers своей компании.
             if not user.can_create_workers:
                 raise PermissionDenied('You do not have permission to create workers')
             if requested_role != User.Role.WORKER:
                 raise PermissionDenied('Administrators can create only worker accounts')
             created_user = serializer.save(
+                company=user.company,
                 role=User.Role.WORKER,
                 can_write_to_owner=False,
                 can_create_workers=False,

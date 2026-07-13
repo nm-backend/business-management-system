@@ -5,7 +5,7 @@ Serializers for finance API.
 Все финансовые данные доступны только владельцу (owner).
 """
 from rest_framework import serializers
-from .models import Expense, LaborRate, WorkerPayment, ExpenseCategory, PaymentMethod
+from .models import Expense, LaborRate, WorkerPayment
 
 
 class ExpenseSerializer(serializers.ModelSerializer):

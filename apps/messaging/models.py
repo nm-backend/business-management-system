@@ -32,6 +32,7 @@ class Message(TimestampedModel):
         - Отслеживание прочтения
         - Личные и групповые сообщения
     """
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='messages', null=True)
     sender = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='sent_messages')
     recipient = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='received_messages', null=True, blank=True)
     subject = models.CharField(max_length=255, blank=True, default='')
@@ -139,6 +140,7 @@ class Notification(TimestampedModel):
         WORK_ACCRUED = 'work_accrued', 'Шахсий иш ҳисобланди'
         MATERIAL_SHORTAGE = 'material_shortage', 'Материал етишмовчилиги'
 
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='notifications', null=True)
     user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='notifications')
     type = models.CharField(max_length=30, choices=NotificationType.choices, db_index=True)
     title = models.CharField(max_length=255)

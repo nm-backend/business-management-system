@@ -70,3 +70,28 @@ class ClientRecalculateFinancialsTests(TestCase):
         self.assertEqual(client.total_orders_amount, 0)
         self.assertEqual(client.total_paid, 0)
         self.assertEqual(client.debt, 0)
+
+    def test_payment_on_cancelled_order_does_not_offset_other_debt(self):
+        import datetime
+        from django.utils import timezone
+        from apps.clients.models import Payment
+
+        client = Client.objects.create(name='Mixed')
+        Order.objects.create(
+            client=client, quantity=Decimal('1'), unit='sht',
+            deadline=datetime.date(2024, 1, 1), total_amount=Decimal('100'), status='new',
+        )
+        cancelled = Order.objects.create(
+            client=client, quantity=Decimal('1'), unit='sht',
+            deadline=datetime.date(2024, 1, 1), total_amount=Decimal('50'), status='cancelled',
+        )
+        # Оплата 50 была сделана по отменённому заказу.
+        Payment.objects.create(
+            client=client, order=cancelled, amount=Decimal('50'), payment_date=timezone.now(),
+        )
+        client.recalculate_financials()
+        client.refresh_from_db()
+        # Долг = 100 (активный заказ), оплата отменённого заказа его не гасит.
+        self.assertEqual(client.total_orders_amount, Decimal('100'))
+        self.assertEqual(client.total_paid, Decimal('0'))
+        self.assertEqual(client.debt, Decimal('100'))

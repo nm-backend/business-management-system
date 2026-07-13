@@ -30,9 +30,13 @@ window.ui = {
     },
 
     escape(value) {
-        const div = document.createElement('div');
-        div.textContent = value ?? '';
-        return div.innerHTML;
+        // Экранируем и кавычки: значение может подставляться в value="..." формы.
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
 
     /**

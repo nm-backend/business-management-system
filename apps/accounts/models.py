@@ -46,10 +46,13 @@ class User(AbstractUser):
         """
         Роли пользователей в системе.
 
-        OWNER: владелец бизнеса - полный доступ ко всем данным
-        ADMIN: администратор - управление складом и работниками
+        SUPERADMIN: платформенный супер-администратор - управляет компаниями,
+                    не привязан к компании, не видит бизнес-данные.
+        OWNER: владелец бизнеса - полный доступ ко всем данным своей компании
+        ADMIN: администратор - управление складом и работниками своей компании
         WORKER: работник - ограниченный доступ для выполнения задач
         """
+        SUPERADMIN = 'superadmin', 'Super Administrator'
         OWNER = 'owner', 'Egasi'
         ADMIN = 'admin', 'Administrator'
         WORKER = 'worker', 'Ishchi'
@@ -64,9 +67,18 @@ class User(AbstractUser):
         UZBEK = 'uz_cyrl', 'Ўзбекча'
         RUSSIAN = 'ru', 'Русский'
 
+    # Компания (арендатор). None только для платформенного супер-администратора.
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='users',
+    )
+
     # Основные поля профиля
     email = models.EmailField(blank=True, default='')
-    role = models.CharField(max_length=10, choices=Role.choices, default=Role.WORKER, db_index=True)
+    role = models.CharField(max_length=12, choices=Role.choices, default=Role.WORKER, db_index=True)
     phone = models.CharField(max_length=20, blank=True, default='')
     full_name = models.CharField(max_length=255, blank=True, default='')
     avatar = models.ImageField(upload_to='avatars/', blank=True, default='')
@@ -89,10 +101,11 @@ class User(AbstractUser):
         verbose_name_plural = 'Users'
         ordering = ['-created_at']
         constraints = [
+            # Ровно один владелец на компанию (а не один на всю систему).
             models.UniqueConstraint(
-                fields=['role'],
+                fields=['company'],
                 condition=models.Q(role='owner'),
-                name='accounts_single_owner',
+                name='accounts_single_owner_per_company',
             ),
         ]
 
@@ -103,6 +116,16 @@ class User(AbstractUser):
         Возвращает полное имя если оно указано, иначе username.
         """
         return self.full_name or self.username
+
+    @property
+    def is_superadmin(self):
+        """
+        Проверяет, является ли пользователь платформенным супер-администратором.
+
+        Возвращает:
+            bool - True если role == 'superadmin'
+        """
+        return self.role == self.Role.SUPERADMIN
 
     @property
     def is_owner(self):

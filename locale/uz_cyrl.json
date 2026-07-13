@@ -23,13 +23,14 @@
   "setup": {
     "title": "Тизимни созлаш",
     "welcome": "SkladPro.Nod га хуш келибсиз!",
-    "description": "Бошлаш учун эгаси аккаунтини яратинг",
-    "create_owner": "Эгаси аккаунтини яратиш",
+    "description": "Бошлаш учун платформа супер-администраторини яратинг",
+    "create_owner": "Супер-администратор яратиш",
     "full_name": "Тўлиқ исм",
     "phone": "Телефон",
     "setup_complete": "Созлаш муваффақиятли тугалланди!"
   },
   "roles": {
+    "superadmin": "Супер администратор",
     "owner": "Egasi",
     "admin": "Administrator",
     "worker": "Ishchi"
@@ -356,6 +357,19 @@
     "new_message": "Янги хабар",
     "work_accrued": "Шахсий иш ҳисобланди",
     "material_shortage": "Материал етишмовчилиги"
+  },
+  "footer": {
+    "created_by": "Яратувчи"
+  },
+  "companies": {
+    "title": "Компаниялар",
+    "add": "Компания қўшиш",
+    "name": "Компания номи",
+    "owner": "Эгаси",
+    "owner_account": "Эгаси аккаунти",
+    "users": "Фойдаланувчилар",
+    "block": "Блоклаш",
+    "unblock": "Блокдан чиқариш"
   },
   "settings": {
     "title": "Созламалар",

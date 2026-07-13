@@ -82,6 +82,7 @@ class Task(TimestampedModel):
         - Отслеживание всего жизненного цикла задачи
         - Связь с заказами и работниками
     """
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='tasks', null=True)
     order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='tasks')
     assigned_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='assigned_tasks')
@@ -205,6 +206,7 @@ class WorkRecord(TimestampedModel):
         CONFIRMED = 'confirmed', 'Тасдиқланди'
         REJECTED = 'rejected', 'Рад этилди'
 
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='work_records', null=True)
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='work_records', null=True, blank=True)
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='work_records')
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records')

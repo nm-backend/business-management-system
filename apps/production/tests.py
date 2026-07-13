@@ -143,6 +143,31 @@ class WorkConfirmServiceTests(TestCase):
         self.assertEqual(self.material.quantity, Decimal('10'))
         self.assertEqual(StockMovement.objects.count(), 0)
 
+    def test_reject_resets_task_and_order_for_rework(self):
+        import datetime
+        client = Client.objects.create(name='C')
+        order = Order.objects.create(
+            client=client, quantity=Decimal('1'), unit='sht', deadline=datetime.date(2024, 1, 1),
+        )
+        task = Task.objects.create(worker=self.worker, order=order, status='accepted')
+        task.complete()  # -> task COMPLETED, order AWAITING_CONFIRMATION
+        work = self._work(task=task)
+        services.reject_work(work, self.owner, 'redo it')
+        task.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(task.status, 'accepted')
+        self.assertIsNone(task.completed_at)
+        self.assertEqual(order.status, Order.Status.IN_PROGRESS)
+
+    def test_double_confirm_raises_already_processed(self):
+        work = self._work()
+        services.confirm_work(work, self.owner, labor_cost=Decimal('10'))
+        with self.assertRaises(services.AlreadyProcessedError):
+            services.confirm_work(work, self.owner, labor_cost=Decimal('10'))
+        self.material.refresh_from_db()
+        # Сырьё списано ровно один раз (4), а не дважды.
+        self.assertEqual(self.material.quantity, Decimal('6'))
+
     def test_str(self):
         work = self._work()
         self.assertIn(f'Work #{work.id}', str(work))

@@ -4,11 +4,9 @@ Views for finance API.
 Этот модуль содержит API views для управления финансами.
 Все финансовые данные доступны только владельцу (owner).
 """
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, FinancialDataPermission
+from rest_framework import viewsets
+from rest_framework.exceptions import PermissionDenied
+from apps.core.permissions import IsCompanyMember, FinancialDataPermission
 from .models import Expense, LaborRate, WorkerPayment
 from .serializers import (
     ExpenseSerializer, ExpenseCreateSerializer,
@@ -23,7 +21,8 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
     Доступен только владельцу (owner).
     """
-    permission_classes = [IsAuthenticated, FinancialDataPermission]
+    queryset = Expense.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember, FinancialDataPermission]
 
     def get_serializer_class(self):
         """
@@ -39,7 +38,9 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
         Фильтрация по категории и дате.
         """
-        queryset = Expense.objects.select_related('created_by')
+        if getattr(self, 'swagger_fake_view', False):
+            return Expense.objects.none()
+        queryset = Expense.objects.filter(company=self.request.user.company_id).select_related('created_by')
         category = self.request.query_params.get('category')
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
@@ -57,7 +58,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         from apps.messaging.models import Notification
         from apps.messaging.services import notify
 
-        expense = serializer.save(created_by=self.request.user)
+        expense = serializer.save(created_by=self.request.user, company=self.request.user.company)
         notify(
             self.request.user,
             Notification.NotificationType.NEW_EXPENSE,
@@ -72,7 +73,8 @@ class LaborRateViewSet(viewsets.ModelViewSet):
 
     Доступен только владельцу (owner).
     """
-    permission_classes = [IsAuthenticated, FinancialDataPermission]
+    queryset = LaborRate.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember, FinancialDataPermission]
 
     def get_serializer_class(self):
         """
@@ -86,7 +88,15 @@ class LaborRateViewSet(viewsets.ModelViewSet):
         """
         Возвращает queryset ставок оплаты.
         """
-        return LaborRate.objects.select_related('product')
+        if getattr(self, 'swagger_fake_view', False):
+            return LaborRate.objects.none()
+        return LaborRate.objects.filter(company=self.request.user.company_id).select_related('product')
+
+    def perform_create(self, serializer):
+        product = serializer.validated_data.get('product')
+        if product and product.company_id != self.request.user.company_id:
+            raise PermissionDenied('Product must belong to your company')
+        serializer.save(company=self.request.user.company)
 
 
 class WorkerPaymentViewSet(viewsets.ModelViewSet):
@@ -95,7 +105,8 @@ class WorkerPaymentViewSet(viewsets.ModelViewSet):
 
     Доступен только владельцу (owner).
     """
-    permission_classes = [IsAuthenticated, FinancialDataPermission]
+    queryset = WorkerPayment.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    permission_classes = [IsCompanyMember, FinancialDataPermission]
 
     def get_serializer_class(self):
         """
@@ -111,7 +122,11 @@ class WorkerPaymentViewSet(viewsets.ModelViewSet):
 
         Фильтрация по работнику и дате.
         """
-        queryset = WorkerPayment.objects.select_related('worker', 'created_by')
+        if getattr(self, 'swagger_fake_view', False):
+            return WorkerPayment.objects.none()
+        queryset = WorkerPayment.objects.filter(
+            company=self.request.user.company_id,
+        ).select_related('worker', 'created_by')
         worker_id = self.request.query_params.get('worker')
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
@@ -124,3 +139,9 @@ class WorkerPaymentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(payment_date__lte=date_to)
 
         return queryset
+
+    def perform_create(self, serializer):
+        worker = serializer.validated_data.get('worker')
+        if worker and worker.company_id != self.request.user.company_id:
+            raise PermissionDenied('Worker must belong to your company')
+        serializer.save(created_by=self.request.user, company=self.request.user.company)

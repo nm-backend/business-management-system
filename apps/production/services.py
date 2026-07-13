@@ -24,7 +24,7 @@ from apps.messaging.models import Notification
 from apps.messaging.services import notify
 from apps.warehouse.models import StockMovement
 
-from .models import WorkRecord
+from .models import TaskStatus, WorkRecord
 
 
 class MaterialShortageError(Exception):
@@ -74,13 +74,24 @@ def calculate_labor_cost(work):
     return rate.rate_per_unit * work.quantity
 
 
+class AlreadyProcessedError(Exception):
+    """Работа уже подтверждена или отклонена другим запросом."""
+
+
 @transaction.atomic
 def confirm_work(work, confirmed_by, labor_cost=None, request=None):
     """
     Подтверждает работу: списывает сырьё, приходует товар, начисляет оплату.
 
     Бросает MaterialShortageError, если сырья не хватает (склад не меняется).
+    Бросает AlreadyProcessedError при повторном подтверждении (защита от гонки).
     """
+    # Блокируем строку работы и перепроверяем статус внутри транзакции,
+    # чтобы два одновременных подтверждения не списали склад дважды.
+    work = WorkRecord.objects.select_for_update().get(pk=work.pk)
+    if work.status != WorkRecord.WorkStatus.AWAITING_CONFIRMATION:
+        raise AlreadyProcessedError()
+
     product = work.product
     requirements = get_recipe_requirements(product, work.quantity)
 
@@ -106,6 +117,7 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
         material.quantity -= required
         material.save(update_fields=['quantity', 'updated_at'])
         StockMovement.objects.create(
+            company_id=work.company_id,
             movement_type=StockMovement.MovementType.PRODUCTION_OUT,
             material=material,
             quantity=required,
@@ -115,11 +127,13 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
             related_order_id=work.task.order_id if work.task else None,
         )
 
-    # 4. Приход готового товара.
+    # 4. Приход готового товара (блокируем строку от параллельного read-modify-write).
     if product:
+        product = type(product).objects.select_for_update().get(pk=product.pk)
         product.quantity += work.quantity
         product.save(update_fields=['quantity', 'updated_at'])
         StockMovement.objects.create(
+            company_id=work.company_id,
             movement_type=StockMovement.MovementType.PRODUCTION_IN,
             product=product,
             quantity=work.quantity,
@@ -158,12 +172,32 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
     return work
 
 
+@transaction.atomic
 def reject_work(work, rejected_by, reason, request=None):
-    """Отклоняет работу: склад не меняется, работник получает причину."""
+    """
+    Отклоняет работу: склад не меняется, работник получает причину.
+
+    Связанная задача возвращается в работу (ACCEPTED), а заказ — в IN_PROGRESS,
+    чтобы работник мог переделать и повторно сдать работу (иначе задача зависла бы).
+    """
+    work = WorkRecord.objects.select_for_update().get(pk=work.pk)
+    if work.status != WorkRecord.WorkStatus.AWAITING_CONFIRMATION:
+        raise AlreadyProcessedError()
+
     work.status = WorkRecord.WorkStatus.REJECTED
     work.rejection_reason = reason
     work.confirmed_by = rejected_by
     work.save(update_fields=['status', 'rejection_reason', 'confirmed_by', 'updated_at'])
+
+    task = work.task
+    if task and task.status == TaskStatus.COMPLETED:
+        task.status = TaskStatus.ACCEPTED
+        task.completed_at = None
+        task.save(update_fields=['status', 'completed_at'])
+        if task.order and task.order.status == task.order.Status.AWAITING_CONFIRMATION:
+            task.order.status = task.order.Status.IN_PROGRESS
+            task.order.save(update_fields=['status'])
+
     notify(
         work.worker,
         Notification.NotificationType.WORK_REJECTED,
