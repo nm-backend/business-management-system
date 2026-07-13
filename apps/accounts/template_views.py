@@ -8,17 +8,21 @@ def _setup_done():
 
 
 def index_view(request):
-    """Main entry point."""
+    """
+    Точка входа SPA. Аутентификация — на стороне SPA (JWT), поэтому здесь
+    не завязываемся на Django-сессию (иначе возможен цикл редиректов).
+    """
     if not _setup_done():
         return redirect('setup-page')
     return render(request, 'index.html')
 
 def login_view(request):
-    """Login page."""
+    """
+    Страница входа. Всегда рендерится (SPA сам решает, авторизован ли
+    пользователь по JWT); не редиректим по Django-сессии.
+    """
     if not _setup_done():
         return redirect('setup-page')
-    if request.user.is_authenticated:
-        return redirect('index')
     return render(request, 'accounts/login.html')
 
 def setup_view(request):

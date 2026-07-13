@@ -190,7 +190,7 @@ MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директо
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Версия статики для cache-busting (?v=...). Бампайте при изменении CSS/JS.
-ASSET_VERSION = '20260713b'
+ASSET_VERSION = '20260713d'
 
 # URL для аутентификации
 LOGIN_URL = '/accounts/login/'

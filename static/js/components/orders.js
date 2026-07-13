@@ -18,7 +18,7 @@ class OrdersComponent {
                         data-i18n="${s === 'all' ? 'common.all' : 'statuses.' + s}"></button>`).join('')}
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-order-btn" style="margin-bottom:12px;" data-i18n="orders.new_order"></button>` : ''}
-            <div id="orders-list"></div>
+            <div id="orders-list" class="card-grid"></div>
         `;
 
         container.querySelectorAll('.tab-btn').forEach((btn) => {

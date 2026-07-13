@@ -18,7 +18,7 @@ class ClientsComponent {
                 <input type="text" id="client-search" class="form-control" data-i18n="common.search">
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-client-btn" style="margin-bottom:12px;" data-i18n="clients.add_client"></button>` : ''}
-            <div id="clients-list"></div>
+            <div id="clients-list" class="card-grid"></div>
         `;
 
         container.querySelectorAll('.tab-btn').forEach((btn) => {

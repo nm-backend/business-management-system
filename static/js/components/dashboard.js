@@ -28,40 +28,34 @@ class DashboardComponent {
                 `).join('')}
             </div>
 
-            <div class="card hero-card" style="margin-bottom:12px;">
-                <div class="metric-title" data-i18n="dashboard.revenue"></div>
-                <div class="metric-value" style="font-size:28px;">${window.ui.money(data.revenue)}</div>
-            </div>
-            <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <div class="metric-title" data-i18n="dashboard.net_profit"></div>
-                    <div class="metric-value ${data.net_profit < 0 ? 'text-danger' : ''}">${window.ui.money(data.net_profit)}</div>
-                </div>
-            </div>
-            <div class="card" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" id="cash-card">
-                <div>
-                    <div class="metric-title" data-i18n="dashboard.cash_balance"></div>
-                    <div class="metric-value">${window.ui.money(data.cash)}</div>
-                </div>
-                <span class="text-muted font-bold" style="font-size:18px;">›</span>
-            </div>
-
             <div class="metrics-grid">
-                <div class="metric-card yellow">
-                    <div class="metric-title" data-i18n="finance.expenses"></div>
-                    <div class="metric-value" style="font-size:17px;">${window.ui.money(data.expenses_total)}</div>
+                <div class="metric-card accent">
+                    <div class="metric-title" data-i18n="dashboard.revenue"></div>
+                    <div class="metric-value" style="font-size:24px;">${window.ui.money(data.revenue)}</div>
+                </div>
+                <div class="metric-card green">
+                    <div class="metric-title" data-i18n="dashboard.net_profit"></div>
+                    <div class="metric-value ${data.net_profit < 0 ? 'text-danger' : ''}" style="font-size:20px;">${window.ui.money(data.net_profit)}</div>
+                </div>
+                <div class="metric-card blue" id="cash-card" style="cursor:pointer;">
+                    <div class="metric-title" data-i18n="dashboard.cash_balance"></div>
+                    <div class="metric-value" style="font-size:20px;">${window.ui.money(data.cash)}</div>
                 </div>
                 <div class="metric-card purple">
                     <div class="metric-title" data-i18n="finance.gross_profit"></div>
-                    <div class="metric-value" style="font-size:17px;">${window.ui.money(data.gross_profit)}</div>
+                    <div class="metric-value" style="font-size:20px;">${window.ui.money(data.gross_profit)}</div>
+                </div>
+                <div class="metric-card yellow">
+                    <div class="metric-title" data-i18n="finance.expenses"></div>
+                    <div class="metric-value" style="font-size:20px;">${window.ui.money(data.expenses_total)}</div>
                 </div>
                 <div class="metric-card blue">
                     <div class="metric-title" data-i18n="finance.client_debts"></div>
-                    <div class="metric-value" style="font-size:17px;">${window.ui.money(data.client_debts)}</div>
+                    <div class="metric-value ${data.client_debts > 0 ? 'text-danger' : ''}" style="font-size:20px;">${window.ui.money(data.client_debts)}</div>
                 </div>
                 <div class="metric-card green">
                     <div class="metric-title" data-i18n="finance.worker_debts"></div>
-                    <div class="metric-value" style="font-size:17px;">${window.ui.money(data.worker_debts)}</div>
+                    <div class="metric-value" style="font-size:20px;">${window.ui.money(data.worker_debts)}</div>
                 </div>
             </div>
 
@@ -71,22 +65,29 @@ class DashboardComponent {
                     <span>›</span>
                 </a>` : ''}
 
-            ${data.top_products.length ? `
-                <div class="section-title" data-i18n="finance.top_selling"></div>
-                <div class="list-group">
-                    ${data.top_products.map((p) => `
-                        <div class="list-row" style="cursor:default;">
-                            <span>${window.ui.escape(p.name)}</span>
-                            <span class="font-bold">${window.ui.qty(p.total_quantity)}</span>
-                        </div>`).join('')}
-                </div>` : ''}
-
-            ${data.most_active_worker ? `
-                <div class="section-title" data-i18n="finance.most_active_worker"></div>
-                <div class="card" style="display:flex;justify-content:space-between;">
-                    <span>${window.ui.escape(data.most_active_worker.name || data.most_active_worker.username)}</span>
-                    <span class="font-bold">${window.ui.qty(data.most_active_worker.total_quantity)}</span>
-                </div>` : ''}
+            <div class="dash-2col">
+                ${data.top_products.length ? `
+                    <div>
+                        <div class="section-title" data-i18n="finance.top_selling"></div>
+                        <div class="list-group">
+                            ${data.top_products.map((p) => `
+                                <div class="list-row" style="cursor:default;">
+                                    <span>${window.ui.escape(p.name)}</span>
+                                    <span class="font-bold">${window.ui.qty(p.total_quantity)}</span>
+                                </div>`).join('')}
+                        </div>
+                    </div>` : ''}
+                ${data.most_active_worker ? `
+                    <div>
+                        <div class="section-title" data-i18n="finance.most_active_worker"></div>
+                        <div class="list-group">
+                            <div class="list-row" style="cursor:default;">
+                                <span>${window.ui.escape(data.most_active_worker.name || data.most_active_worker.username)}</span>
+                                <span class="font-bold">${window.ui.qty(data.most_active_worker.total_quantity)}</span>
+                            </div>
+                        </div>
+                    </div>` : ''}
+            </div>
         `;
 
         container.querySelectorAll('[data-period]').forEach((btn) => {

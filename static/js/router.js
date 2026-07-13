@@ -24,16 +24,23 @@ class Router {
             return;
         }
 
-        // Подсветка активного пункта нижнего меню
-        document.querySelectorAll('.nav-item').forEach((el) => el.classList.remove('active'));
-        let navId = 'nav-dashboard';
-        if (path.startsWith('/orders')) navId = 'nav-orders';
-        if (path.startsWith('/warehouse') || path.startsWith('/finished-products')) navId = 'nav-warehouse';
-        if (path.startsWith('/clients')) navId = 'nav-clients';
-        if (path.startsWith('/production')) navId = 'nav-production';
-        if (path.startsWith('/settings') || path.startsWith('/finance') || path.startsWith('/messages')) navId = 'nav-settings';
-        const activeNav = document.getElementById(navId);
-        if (activeNav) activeNav.classList.add('active');
+        // Подсветка активного пункта в обоих меню (сайдбар + нижнее) по data-nav.
+        let navKey = 'dashboard';
+        if (path.startsWith('/orders')) navKey = 'orders';
+        if (path.startsWith('/warehouse')) navKey = 'warehouse';
+        if (path.startsWith('/finished-products')) navKey = 'warehouse';
+        if (path.startsWith('/clients')) navKey = 'clients';
+        if (path.startsWith('/production')) navKey = 'production';
+        if (path.startsWith('/finance')) navKey = 'finance';
+        if (path.startsWith('/messages')) navKey = 'messages';
+        if (path.startsWith('/companies')) navKey = 'companies';
+        if (path.startsWith('/settings')) navKey = 'settings';
+        // На мобильном отдельного пункта нет — часть страниц подсвечивают «Кўпроқ».
+        const bottomKey = ['finance', 'messages', 'companies'].includes(navKey) ? 'settings' : navKey;
+        document.querySelectorAll('.sidebar-link, .nav-item').forEach((el) => {
+            const key = el.classList.contains('sidebar-link') ? navKey : bottomKey;
+            el.classList.toggle('active', el.dataset.nav === key);
+        });
 
         appElement.innerHTML = '<div class="list-state list-state-loading"><span class="spinner"></span><span data-i18n="common.loading">Юкланмоқда...</span></div>';
         window.i18n.applyTranslations();

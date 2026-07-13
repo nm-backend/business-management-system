@@ -43,8 +43,7 @@ html { -webkit-text-size-adjust: 100%; }
 
 body {
     font-family: var(--font-family);
-    /* Soft backdrop that frames the mobile app on large screens. */
-    background: linear-gradient(160deg, #e9ecf3 0%, #eef1f6 100%);
+    background: var(--bg-color);
     color: var(--text-color);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
@@ -57,29 +56,28 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.16); border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* ---------- App shell ---------- */
+/* ---------- App shell (mobile-first: single column, bottom nav) ---------- */
 .app-container {
-    max-width: var(--app-max-width);
-    margin: 0 auto;
     background-color: var(--bg-color);
     min-height: 100vh;
     min-height: 100dvh;
     position: relative;
-    box-shadow: var(--shadow-lg);
     display: flex;
     flex-direction: column;
 }
+.app-body { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 
-@media (max-width: 480px) {
-    body { background: var(--bg-color); }
-    .app-container { max-width: 100%; box-shadow: none; }
-}
+/* Chrome is hidden until the SPA marks the session authenticated. */
+.app-sidebar { display: none; }
+.top-bar { display: none; }
+.bottom-nav { display: none; }
+body.authenticated .top-bar { display: flex; }
+body.authenticated .bottom-nav { display: flex; }
 
-/* ---------- Top bar ---------- */
+/* ---------- Top bar (display toggled by .authenticated) ---------- */
 .top-bar {
     height: var(--top-bar-height);
     background-color: var(--light-color);
-    display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 0 16px;
@@ -110,18 +108,16 @@ body {
 }
 #app-content { flex: 1; }
 
-/* ---------- Bottom navigation ---------- */
+/* ---------- Bottom navigation (mobile/tablet only; display toggled by .authenticated) ---------- */
 .bottom-nav {
     height: var(--bottom-nav-height);
-    background-color: rgba(255, 255, 255, 0.94);
+    background-color: rgba(255, 255, 255, 0.96);
     backdrop-filter: saturate(180%) blur(12px);
     position: fixed;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 0;
     width: 100%;
-    max-width: var(--app-max-width);
-    display: flex;
     justify-content: space-around;
     align-items: center;
     border-top: 1px solid var(--border-color);
@@ -304,6 +300,15 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .metric-card.purple::before { background: var(--purple-color); }
 .metric-title { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 .metric-value { font-size: 22px; font-weight: 700; color: var(--text-color); letter-spacing: -0.01em; }
+/* Accent (gradient) stat tile — used for the primary figure (revenue). */
+.metric-card.accent { background: linear-gradient(135deg, var(--primary-color) 0%, #2f7bed 100%); border: none; box-shadow: 0 6px 18px rgba(28, 100, 217, 0.25); }
+.metric-card.accent::before { display: none; }
+.metric-card.accent .metric-title { color: rgba(255, 255, 255, 0.85); }
+.metric-card.accent .metric-value { color: #fff; }
+
+/* Two-column dashboard section on wider screens (stacks on mobile). */
+.dash-2col { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 1024px) { .dash-2col { grid-template-columns: 1fr 1fr; align-items: start; } .dash-2col > * { margin-bottom: 0; } }
 
 /* ---------- Typography utilities ---------- */
 .text-danger { color: var(--danger-color); }
@@ -566,3 +571,105 @@ textarea.form-control { resize: vertical; min-height: 60px; }
 .app-footer .footer-person { color: var(--text-secondary); font-weight: 600; }
 .app-footer .footer-role { color: var(--text-muted); }
 .app-footer a { color: var(--primary-color); text-decoration: none; }
+
+/* Container that lays out cards into a responsive grid.
+   Single column on mobile; multi-column from tablet up. */
+.card-grid > .card { margin-bottom: 12px; }
+/* Loading / empty / error states always span the full grid width. */
+.card-grid > .list-state { grid-column: 1 / -1; }
+
+/* ============================================================
+   TABLET (640–1023px): wider content, multi-column grids,
+   bottom nav still used.
+   ============================================================ */
+@media (min-width: 640px) and (max-width: 1023px) {
+    .main-content { padding: 20px 24px; padding-bottom: calc(var(--bottom-nav-height) + 24px); }
+    #app-content { max-width: 960px; margin: 0 auto; width: 100%; }
+    .metrics-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .card-grid > .card { margin-bottom: 0; }
+    .modal-content { max-width: 560px; }
+}
+
+/* ============================================================
+   DESKTOP (≥1024px): full desktop layout — persistent sidebar,
+   full-width content, tables/cards span the window.
+   ============================================================ */
+@media (min-width: 1024px) {
+    .app-container { flex-direction: row; align-items: stretch; }
+    .app-body { min-height: 100vh; min-width: 0; }
+
+    /* Sidebar replaces the bottom nav */
+    body.authenticated .app-sidebar {
+        display: flex;
+        flex-direction: column;
+        width: 260px;
+        flex-shrink: 0;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        background: var(--light-color);
+        border-right: 1px solid var(--border-color);
+        padding: 14px 12px;
+    }
+    body.authenticated .bottom-nav { display: none; }
+
+    .sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+        padding: 8px 10px 18px;
+        color: var(--text-color);
+        text-decoration: none;
+    }
+    .sidebar-brand-mark { font-size: 22px; }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; }
+    .sidebar-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        transition: background 0.15s, color 0.15s;
+    }
+    .sidebar-link .nav-icon { font-size: 18px; width: 22px; text-align: center; }
+    .sidebar-link:hover { background: var(--surface-2); color: var(--text-color); }
+    .sidebar-link.active { background: var(--primary-soft); color: var(--primary-color); font-weight: 600; }
+    .sidebar-footer { border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 8px; }
+    .sidebar-user { font-size: 13px; font-weight: 600; color: var(--text-secondary); padding: 4px 10px 10px; }
+    .sidebar-logout { width: 100%; }
+
+    /* Top bar spans the content area */
+    body.authenticated .top-bar { padding: 0 40px; height: 64px; }
+    .top-bar h1 { font-size: 20px; }
+
+    /* Content uses the monitor width (small side padding only) */
+    .main-content { padding: 28px 40px 40px; }
+    #app-content { width: 100%; max-width: 1760px; margin: 0 auto; }
+
+    /* Denser grids on wide screens */
+    .metrics-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+    .card-grid > .card { margin-bottom: 0; }
+
+    /* Wider modals/forms */
+    .modal { align-items: center; padding: 24px; }
+    .modal-content { max-width: 680px; border-radius: 18px; }
+    .modal-body { padding: 16px 28px 28px; }
+
+    /* Full-width footer */
+    .app-footer { text-align: center; padding: 20px 40px 12px; }
+}
+
+/* Constrain the mid dashboard hero on very wide screens so it stays balanced */
+@media (min-width: 1024px) {
+    .hero-card { border-radius: 18px; }
+}

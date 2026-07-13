@@ -20,57 +20,103 @@
   </head>
   <body>
     <div class="app-container">
-      <!-- Top App Bar -->
-      <header class="top-bar" id="app-top-bar" style="display: none">
-        <h1 id="page-title">SkladPro</h1>
-        <div class="actions">
-          <button class="icon-btn" id="notifications-btn" type="button" aria-label="Notifications">
-            🔔
-            <span class="notif-badge" id="notif-badge" style="display: none"></span>
-          </button>
+      <!-- Desktop Sidebar -->
+      <aside class="app-sidebar" id="app-sidebar">
+        <a href="#/" class="sidebar-brand">
+          <span class="sidebar-brand-mark">🧊</span>
+          <span>SkladPro.Nod</span>
+        </a>
+        <nav class="sidebar-nav">
+          <a href="#/" class="sidebar-link" data-nav="dashboard">
+            <span class="nav-icon">🏠</span><span data-i18n="nav.dashboard">Бош панел</span>
+          </a>
+          <a href="#/orders" class="sidebar-link" data-nav="orders">
+            <span class="nav-icon">📋</span><span data-i18n="nav.orders">Буюртмалар</span>
+          </a>
+          <a href="#/warehouse" class="sidebar-link" data-nav="warehouse">
+            <span class="nav-icon">📦</span><span data-i18n="nav.raw_materials">Хом ашё омбори</span>
+          </a>
+          <a href="#/finished-products" class="sidebar-link" data-nav="warehouse" data-role="staff">
+            <span class="nav-icon">🪟</span><span data-i18n="nav.finished_products">Тайёр маҳсулот</span>
+          </a>
+          <a href="#/production" class="sidebar-link" data-nav="production" data-role="staff-worker">
+            <span class="nav-icon">🛠️</span><span data-i18n="nav.production">Ишлаб чиқариш</span>
+          </a>
+          <a href="#/clients" class="sidebar-link" data-nav="clients" data-role="staff">
+            <span class="nav-icon">👥</span><span data-i18n="nav.clients">Мижозлар</span>
+          </a>
+          <a href="#/finance" class="sidebar-link" data-nav="finance" data-role="owner">
+            <span class="nav-icon">💰</span><span data-i18n="nav.analytics">Молия</span>
+          </a>
+          <a href="#/messages" class="sidebar-link" data-nav="messages">
+            <span class="nav-icon">✉️</span><span data-i18n="messages_section.title">Хабарлар</span>
+          </a>
+          <a href="#/companies" class="sidebar-link" data-nav="companies" data-role="superadmin">
+            <span class="nav-icon">🏢</span><span data-i18n="companies.title">Компаниялар</span>
+          </a>
+          <a href="#/settings" class="sidebar-link" data-nav="settings">
+            <span class="nav-icon">⚙️</span><span data-i18n="settings.title">Созламалар</span>
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="sidebar-user" id="sidebar-user"></div>
+          <button class="btn btn-secondary btn-sm sidebar-logout" id="sidebar-logout" type="button" data-i18n="auth.logout">Чиқиш</button>
         </div>
-      </header>
+      </aside>
 
-      <!-- Main Content -->
-      <main class="main-content">
-        <div id="app-content">{% block content %}{% endblock %}</div>
-        <footer class="app-footer">
-          <div>
-            <span data-i18n="footer.created_by">Created by</span>
-            <span class="footer-person">Nurullo Musajanov</span>
-            <span class="footer-role">— Backend Developer</span>
+      <div class="app-body">
+        <!-- Top App Bar -->
+        <header class="top-bar" id="app-top-bar">
+          <h1 id="page-title">SkladPro</h1>
+          <div class="actions">
+            <button class="icon-btn" id="notifications-btn" type="button" aria-label="Notifications">
+              🔔
+              <span class="notif-badge" id="notif-badge" style="display: none"></span>
+            </button>
           </div>
-          <div>
-            <span class="footer-person">Claude (Anthropic AI)</span>
-            <span class="footer-role">— Financial System Architecture &amp; Development Assistant</span>
-          </div>
-          <div class="footer-brand">SkladPro.Nod · © 2026</div>
-        </footer>
-      </main>
+        </header>
 
-      <!-- Bottom Navigation -->
-      <nav class="bottom-nav" id="app-bottom-nav" style="display: none">
-        <a href="#/" class="nav-item" id="nav-dashboard">
+        <!-- Main Content -->
+        <main class="main-content">
+          <div id="app-content">{% block content %}{% endblock %}</div>
+          <footer class="app-footer">
+            <div>
+              <span data-i18n="footer.created_by">Created by</span>
+              <span class="footer-person">Nurullo Musajanov</span>
+              <span class="footer-role">— Backend Developer</span>
+            </div>
+            <div>
+              <span class="footer-person">Claude (Anthropic AI)</span>
+              <span class="footer-role">— Financial System Architecture &amp; Development Assistant</span>
+            </div>
+            <div class="footer-brand">SkladPro.Nod · © 2026</div>
+          </footer>
+        </main>
+      </div>
+
+      <!-- Mobile Bottom Navigation -->
+      <nav class="bottom-nav" id="app-bottom-nav">
+        <a href="#/" class="nav-item" id="nav-dashboard" data-nav="dashboard">
           <span class="nav-icon">🏠</span>
           <span data-i18n="nav.dashboard">Бош панел</span>
         </a>
-        <a href="#/orders" class="nav-item" id="nav-orders">
+        <a href="#/orders" class="nav-item" id="nav-orders" data-nav="orders">
           <span class="nav-icon">📋</span>
           <span data-i18n="nav.orders">Буюртмалар</span>
         </a>
-        <a href="#/production" class="nav-item" id="nav-production" style="display: none">
+        <a href="#/production" class="nav-item" id="nav-production" data-nav="production" style="display: none">
           <span class="nav-icon">🛠️</span>
           <span data-i18n="nav.my_tasks_short">Вазифалар</span>
         </a>
-        <a href="#/warehouse" class="nav-item" id="nav-warehouse">
+        <a href="#/warehouse" class="nav-item" id="nav-warehouse" data-nav="warehouse">
           <span class="nav-icon">📦</span>
           <span data-i18n="nav.warehouse_short">Омбор</span>
         </a>
-        <a href="#/clients" class="nav-item" id="nav-clients">
+        <a href="#/clients" class="nav-item" id="nav-clients" data-nav="clients">
           <span class="nav-icon">👥</span>
           <span data-i18n="nav.clients">Мижозлар</span>
         </a>
-        <a href="#/settings" class="nav-item" id="nav-settings">
+        <a href="#/settings" class="nav-item" id="nav-settings" data-nav="settings">
           <span class="nav-icon">⚙️</span>
           <span data-i18n="nav.more">Кўпроқ</span>
         </a>
