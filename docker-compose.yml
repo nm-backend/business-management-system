@@ -1,0 +1,64 @@
+# ── SkladPro.Nod — полный стек одной командой: docker compose up --build ──
+# Сервисы: web (Django+Channels/ASGI), db (PostgreSQL), redis (канальный слой).
+# Значения по умолчанию заданы прямо здесь — новый разработчик может запустить
+# без .env. Для переопределения создайте .env рядом с этим файлом.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-skladpro_db}
+      POSTGRES_USER: ${DB_USER:-skladpro}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-skladpro}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-skladpro} -d ${DB_NAME:-skladpro_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    build: .
+    command: daphne -b 0.0.0.0 -p 8000 skladpro.asgi:application
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-dev-insecure-secret-change-me}
+      DJANGO_ENV: ${DJANGO_ENV:-development}
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,web}
+      DB_NAME: ${DB_NAME:-skladpro_db}
+      DB_USER: ${DB_USER:-skladpro}
+      DB_PASSWORD: ${DB_PASSWORD:-skladpro}
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - .:/app                 # dev: код с хоста (перезапуск web применяет изменения)
+      - media_data:/app/media       # загруженные файлы
+      - static_data:/app/staticfiles  # собранная статика (WhiteNoise)
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  redis_data:
+  media_data:
+  static_data:

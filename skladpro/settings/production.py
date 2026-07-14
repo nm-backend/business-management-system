@@ -3,6 +3,17 @@ from decouple import config
 
 DEBUG = False
 
+# Channels: в production канальный слой должен быть общим для всех воркеров —
+# используем Redis (pub/sub-бэкенд). Задайте REDIS_URL в окружении.
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
+        'CONFIG': {
+            'hosts': [config('REDIS_URL', default='redis://127.0.0.1:6379/0')],
+        },
+    },
+}
+
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=lambda v: [s.strip() for s in v.split(',')])
 
 CORS_ALLOW_ALL_ORIGINS = False

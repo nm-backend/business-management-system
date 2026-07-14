@@ -494,5 +494,26 @@
     "remaining": "Қолган",
     "payment_history": "Тўловлар тарихи",
     "material_check": "Материал қолдиқлари"
+  },
+  "chat": {
+    "title": "Чат",
+    "tab_chat": "Чат",
+    "tab_notifications": "Билдиришномалар",
+    "general": "Умумий чат",
+    "general_desc": "Компаниянинг барча ходимлари",
+    "employees": "Ходимлар",
+    "search_placeholder": "Ходим қидириш...",
+    "new_conversation": "Янги суҳбат",
+    "start_chat": "Суҳбат бошлаш",
+    "type_message": "Хабар ёзинг...",
+    "send": "Юбориш",
+    "no_conversations": "Ҳали суҳбатлар йўқ",
+    "no_messages": "Ҳали хабарлар йўқ. Суҳбатни бошланг!",
+    "no_employees": "Ходимлар топилмади",
+    "select_chat": "Суҳбатни танланг",
+    "select_chat_hint": "Чапдаги рўйхатдан суҳбат танланг ёки ходим билан янги суҳбат бошланг",
+    "you": "Сиз",
+    "loading": "Юкланмоқда...",
+    "error": "Хатолик юз берди"
   }
 }

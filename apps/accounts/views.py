@@ -10,7 +10,9 @@ API views for authentication and user management.
 Все действия записываются в audit log для безопасности и отслеживания.
 """
 from django.db import IntegrityError, transaction
-from rest_framework import viewsets, status
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
+from rest_framework import filters, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -19,12 +21,13 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
+from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwner, IsOwnerOrAdmin
-from .models import User
+from .models import Skill, User
 from .serializers import (
     UserSerializer, UserSelfUpdateSerializer, UserCreateSerializer, UserLimitedSerializer,
     LoginSerializer, ChangePasswordSerializer, SetupOwnerSerializer,
-    LanguageSerializer,
+    LanguageSerializer, SkillSerializer,
 )
 
 
@@ -379,6 +382,67 @@ class ChangeLanguageView(APIView):
         )
         return Response({'language': request.user.language, 'message': 'Language updated'})
 
+@extend_schema(tags=['Employees'])
+class SkillViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet каталога навыков компании (Skill).
+
+    Навыки изолированы по компании: пользователь видит и меняет только навыки
+    своей компании. Чтение доступно любому сотруднику компании; создание,
+    изменение и удаление — только владельцу или администратору.
+
+    Endpoint: /api/v1/accounts/skills/
+    """
+    serializer_class = SkillSerializer
+    queryset = Skill.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'category']
+    ordering_fields = ['name', 'created_at']
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
+        return [IsCompanyMember()]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Skill.objects.none()
+        return Skill.objects.filter(company_id=self.request.user.company_id)
+
+    def perform_create(self, serializer):
+        skill = serializer.save(company=self.request.user.company)
+        write_audit_log(
+            action=AuditLog.Action.CREATE,
+            actor=self.request.user,
+            target=skill,
+            metadata={'name': skill.name},
+            request=self.request,
+        )
+
+    def perform_update(self, serializer):
+        changes = collect_model_changes(serializer.instance, serializer.validated_data)
+        skill = serializer.save()
+        if changes:
+            write_audit_log(
+                action=AuditLog.Action.UPDATE,
+                actor=self.request.user,
+                target=skill,
+                changes=changes,
+                request=self.request,
+            )
+
+    def perform_destroy(self, instance):
+        write_audit_log(
+            action=AuditLog.Action.DELETE,
+            actor=self.request.user,
+            target=instance,
+            metadata={'name': instance.name},
+            request=self.request,
+        )
+        instance.delete()
+
+
+@extend_schema(tags=['Employees'])
 class UserViewSet(viewsets.ModelViewSet):
     """
     ViewSet для управления аккаунтами пользователей через RBAC.
@@ -404,6 +468,10 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     queryset = User.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['username', 'full_name', 'phone', 'position', 'department']
+    filterset_fields = ['role', 'is_active', 'status', 'department']
+    ordering_fields = ['full_name', 'created_at', 'hire_date']
 
     def get_queryset(self):
         """
@@ -414,6 +482,8 @@ class UserViewSet(viewsets.ModelViewSet):
         - Admin: видит только работников
         - Worker: не видит никого (пустой queryset)
 
+        Доп. фильтр ?skill=<id> сужает выборку по навыку (в рамках компании).
+
         Возвращает:
             QuerySet - отфильтрованный список пользователей
         """
@@ -422,10 +492,17 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.request.user
         # Пользователи всегда ограничены своей компанией.
         if user.is_owner:
-            return User.objects.filter(company_id=user.company_id)
+            queryset = User.objects.filter(company_id=user.company_id)
         elif user.is_admin:
-            return User.objects.filter(company_id=user.company_id, role='worker')
-        return User.objects.none()
+            queryset = User.objects.filter(company_id=user.company_id, role='worker')
+        else:
+            return User.objects.none()
+
+        skill_id = self.request.query_params.get('skill')
+        if skill_id:
+            queryset = queryset.filter(skills__id=skill_id)
+
+        return queryset.select_related('company').prefetch_related('skills').distinct()
 
     def get_serializer_class(self):
         """
@@ -524,11 +601,23 @@ class UserViewSet(viewsets.ModelViewSet):
         """
         Обновляет пользователя и записывает изменения в audit log.
 
-        Только владелец может обновлять пользователей.
-        Изменения полей записываются в audit log для отслеживания истории.
+        Только владелец может обновлять пользователей. Изменения скалярных полей
+        и назначенных навыков (M2M) записываются в audit log. M2M обрабатывается
+        отдельно: collect_model_changes не умеет сравнивать менеджер отношений,
+        а DRF применяет M2M только ПОСЛЕ save(), поэтому снимаем старые id до, а
+        новые — после сохранения.
         """
-        changes = collect_model_changes(serializer.instance, serializer.validated_data)
+        instance = serializer.instance
+        old_skill_ids = sorted(instance.skills.values_list('id', flat=True))
+        scalar_data = {k: v for k, v in serializer.validated_data.items() if k != 'skills'}
+        changes = collect_model_changes(instance, scalar_data)
+
         updated_user = serializer.save()
+
+        new_skill_ids = sorted(updated_user.skills.values_list('id', flat=True))
+        if old_skill_ids != new_skill_ids:
+            changes['skills'] = {'old': old_skill_ids, 'new': new_skill_ids}
+
         if changes:
             write_audit_log(
                 action=AuditLog.Action.UPDATE,

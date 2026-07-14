@@ -12,7 +12,59 @@ AbstractUser для поддержки ролевой системы и допо
 """
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+
+from apps.core.models import TimestampedModel
+
 from .managers import UserManager
+
+
+class Skill(TimestampedModel):
+    """
+    Профессиональный навык сотрудника (Python, Sales, Manager, Designer и т.д.).
+
+    Каталог навыков компании. Навык привязан к компании (арендатору), поэтому
+    одна компания НИКОГДА не видит навыки другой. Изоляция обеспечивается на
+    уровне queryset во view (SkillViewSet.get_queryset фильтрует по
+    request.user.company_id) и проверяется тестами изоляции.
+
+    Поля:
+        company: ForeignKey - компания-владелец (арендатор). Ключ изоляции.
+        name: CharField - название навыка (уникально в рамках компании).
+        category: CharField - необязательная категория для группировки
+                  (например: «Технологии», «Продажи»).
+
+    Особенности:
+        - Наследует TimestampedModel (created_at/updated_at).
+        - Уникальность имени в пределах компании (две разные компании могут
+          иметь навык с одинаковым именем).
+    """
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        related_name='skills',
+    )
+    name = models.CharField(max_length=100)
+    category = models.CharField(max_length=50, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Skill'
+        verbose_name_plural = 'Skills'
+        ordering = ['name']
+        constraints = [
+            # Имя навыка уникально в пределах компании, но не глобально.
+            models.UniqueConstraint(
+                fields=['company', 'name'],
+                name='accounts_skill_unique_per_company',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['company', 'name']),
+        ]
+
+    def __str__(self):
+        """Строковое представление навыка — его название."""
+        return self.name
 
 
 class User(AbstractUser):
@@ -67,6 +119,18 @@ class User(AbstractUser):
         UZBEK = 'uz_cyrl', 'Ўзбекча'
         RUSSIAN = 'ru', 'Русский'
 
+    class Status(models.TextChoices):
+        """
+        Кадровый статус сотрудника (НЕ путать с is_active — блокировкой входа).
+
+        ACTIVE: работает
+        ON_LEAVE: в отпуске
+        SUSPENDED: временно отстранён
+        """
+        ACTIVE = 'active', 'Faol'
+        ON_LEAVE = 'on_leave', 'Taʼtilda'
+        SUSPENDED = 'suspended', 'Toʼxtatilgan'
+
     # Компания (арендатор). None только для платформенного супер-администратора.
     company = models.ForeignKey(
         'companies.Company',
@@ -83,6 +147,20 @@ class User(AbstractUser):
     full_name = models.CharField(max_length=255, blank=True, default='')
     avatar = models.ImageField(upload_to='avatars/', blank=True, default='')
     language = models.CharField(max_length=10, choices=Language.choices, default=Language.UZBEK)
+
+    # Расширенный профиль сотрудника
+    position = models.CharField(max_length=255, blank=True, default='')      # должность
+    department = models.CharField(max_length=255, blank=True, default='')    # отдел
+    birth_date = models.DateField(null=True, blank=True)                     # дата рождения (опц.)
+    hire_date = models.DateField(null=True, blank=True)                      # дата найма
+    bio = models.TextField(blank=True, default='')                          # о себе
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True,
+    )
+    last_activity = models.DateTimeField(null=True, blank=True)              # последняя активность
+
+    # Профессиональные навыки (каталог навыков компании)
+    skills = models.ManyToManyField('Skill', blank=True, related_name='employees')
 
     # Дополнительные права для администраторов
     can_write_to_owner = models.BooleanField(default=False)

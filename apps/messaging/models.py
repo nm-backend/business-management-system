@@ -1,81 +1,135 @@
 """
-Messaging models - управление сообщениями и уведомлениями.
+Messaging models — внутренний корпоративный чат и системные уведомления.
 
-Этот модуль содержит модели для внутреннего чата между пользователями
-и системы уведомлений о важных событиях.
+Чат построен вокруг модели «беседы» (Conversation), чтобы одинаково
+поддерживать общий чат компании, личные сообщения и (в будущем) группы.
+
+БЕЗОПАСНОСТЬ (multi-tenant): у каждой беседы и каждого сообщения есть
+company. Все выборки фильтруются и по company, и по участию пользователя
+(ConversationParticipant), поэтому компания A физически не может получить
+беседы или сообщения компании B даже через прямой API-запрос.
 """
 from django.db import models
+
 from apps.core.models import TimestampedModel
 
 
-class Message(TimestampedModel):
+class Conversation(TimestampedModel):
     """
-    Модель сообщения во внутреннем чате.
+    Беседа (чат): общий чат компании, личный диалог или группа.
 
-    Хранит сообщения между пользователями системы.
-    Поддерживает личные сообщения и групповые рассылки.
+    Виды (kind):
+        GENERAL — общий чат компании (ровно один на компанию, участники —
+                  все сотрудники компании).
+        DIRECT  — личный диалог двух сотрудников одной компании.
+        GROUP   — групповой чат (задел на будущее).
 
     Поля:
-        sender: ForeignKey - отправитель
-        recipient: ForeignKey - получатель (null для групповых сообщений)
-        subject: CharField - тема сообщения
-        content: TextField - содержание
-        is_read: BooleanField - прочитано ли
-        is_group: BooleanField - групповое ли сообщение
-        read_at: DateTimeField - когда прочитано
-
-    Свойства:
-        is_unread: bool - True если не прочитано
-
-    Особенности:
-        - Автоматические временные метки (TimestampedModel)
-        - Отслеживание прочтения
-        - Личные и групповые сообщения
+        company: FK — компания-владелец (арендатор). Ключ изоляции.
+        kind: вид беседы.
+        title: название (для общего/группового чата; у DIRECT пустое —
+               имя показывается как имя собеседника).
+        created_by: кто создал беседу (null для авто-созданного общего чата).
     """
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='messages', null=True)
-    sender = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='sent_messages')
-    recipient = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='received_messages', null=True, blank=True)
-    subject = models.CharField(max_length=255, blank=True, default='')
-    content = models.TextField()
-    is_read = models.BooleanField(default=False)
-    is_group = models.BooleanField(default=False)
-    read_at = models.DateTimeField(null=True, blank=True)
+    class Kind(models.TextChoices):
+        GENERAL = 'general', 'Общий чат компании'
+        DIRECT = 'direct', 'Личный диалог'
+        GROUP = 'group', 'Групповой чат'
+
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='conversations',
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices, db_index=True)
+    title = models.CharField(max_length=255, blank=True, default='')
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='created_conversations',
+    )
 
     class Meta:
-        """
-        Метаданные модели Message.
-
-        Атрибуты:
-            verbose_name: человекочитаемое имя модели
-            verbose_name_plural: множественное число
-            ordering: сортировка по убыванию даты создания
-            indexes: индексы для оптимизации запросов
-        """
-        verbose_name = 'Message'
-        verbose_name_plural = 'Messages'
-        ordering = ['-created_at']
+        verbose_name = 'Conversation'
+        verbose_name_plural = 'Conversations'
+        ordering = ['-updated_at']
         indexes = [
-            models.Index(fields=['sender', 'created_at']),
-            models.Index(fields=['recipient', 'is_read']),
+            models.Index(fields=['company', 'kind']),
+            models.Index(fields=['company', '-updated_at']),
+        ]
+        constraints = [
+            # Ровно один общий чат на компанию.
+            models.UniqueConstraint(
+                fields=['company'],
+                condition=models.Q(kind='general'),
+                name='unique_general_chat_per_company',
+            ),
         ]
 
     def __str__(self):
-        """
-        Строковое представление сообщения.
+        return f"{self.get_kind_display()} #{self.pk} ({self.company_id})"
 
-        Возвращает отправителя и тему.
-        """
-        return f"{self.sender.username} - {self.subject or 'No subject'}"
 
-    @property
-    def is_unread(self):
-        """
-        Проверяет, не прочитано ли сообщение.
+class ConversationParticipant(TimestampedModel):
+    """
+    Участник беседы.
 
-        Возвращает:
-            bool - True если is_read == False
-        """
-        return not self.is_read
+    Хранит членство пользователя в беседе и указатель прочтения
+    (last_read_at) — по нему считаются непрочитанные сообщения:
+    непрочитанные = сообщения беседы, созданные позже last_read_at
+    и отправленные не самим пользователем.
+    """
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name='participants',
+    )
+    user = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE, related_name='chat_participations',
+    )
+    last_read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Conversation participant'
+        verbose_name_plural = 'Conversation participants'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['conversation', 'user'],
+                name='unique_participant_per_conversation',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'conversation']),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} @ conversation {self.conversation_id}"
+
+
+class ChatMessage(TimestampedModel):
+    """
+    Сообщение в беседе.
+
+    company денормализована из беседы для быстрой и надёжной фильтрации
+    изоляции (и фильтров в админке).
+    """
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='chat_messages',
+    )
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name='messages',
+    )
+    sender = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE, related_name='chat_messages',
+    )
+    content = models.TextField()
+
+    class Meta:
+        verbose_name = 'Chat message'
+        verbose_name_plural = 'Chat messages'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['conversation', 'created_at']),
+            models.Index(fields=['company', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.sender_id}: {self.content[:40]}"
 
 
 class Notification(TimestampedModel):

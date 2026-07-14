@@ -1,71 +1,155 @@
 """
-Serializers for messaging API.
-
-Этот модуль содержит сериализаторы для моделей Message и Notification.
+Serializers for messaging API — чат (беседы, сообщения, сотрудники)
+и уведомления.
 """
 from rest_framework import serializers
-from .models import Message, Notification
+
+from apps.accounts.models import User
+
+from .models import ChatMessage, Conversation, Notification
+from .services import GENERAL_TITLE, unread_count
 
 
-class MessageSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор сообщения.
-
-    Используется для всех ролей.
-    """
-    sender_name = serializers.CharField(source='sender.username', read_only=True)
-    recipient_name = serializers.CharField(source='recipient.username', read_only=True)
+class EmployeeSerializer(serializers.ModelSerializer):
+    """Сотрудник компании — для списка контактов и старта диалога."""
+    display_role = serializers.CharField(read_only=True)
 
     class Meta:
-        model = Message
+        model = User
+        fields = ['id', 'username', 'full_name', 'role', 'display_role', 'avatar']
+
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    """Сообщение чата для чтения."""
+    sender_name = serializers.SerializerMethodField()
+    is_mine = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatMessage
+        fields = ['id', 'conversation', 'sender', 'sender_name', 'content', 'is_mine', 'created_at']
+        read_only_fields = fields
+
+    def get_sender_name(self, obj):
+        return obj.sender.full_name or obj.sender.username
+
+    def get_is_mine(self, obj):
+        request = self.context.get('request')
+        return bool(request and obj.sender_id == request.user.id)
+
+
+class ChatMessageCreateSerializer(serializers.ModelSerializer):
+    """
+    Создание сообщения. Пользователь может писать только в свою беседу
+    своей компании (проверяется по участию и company).
+    """
+    class Meta:
+        model = ChatMessage
+        fields = ['conversation', 'content']
+
+    def validate_content(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('Сообщение не может быть пустым.')
+        return value
+
+    def validate_conversation(self, conversation):
+        user = self.context['request'].user
+        if conversation.company_id != user.company_id:
+            # Не раскрываем существование чужой беседы.
+            raise serializers.ValidationError('Беседа не найдена.')
+        is_general = conversation.kind == Conversation.Kind.GENERAL
+        is_member = conversation.participants.filter(user=user).exists()
+        if not is_general and not is_member:
+            raise serializers.ValidationError('Вы не участник этой беседы.')
+        return conversation
+
+
+class ConversationSerializer(serializers.ModelSerializer):
+    """
+    Беседа для списка чатов: отображаемое имя, собеседник (для DIRECT),
+    последнее сообщение и число непрочитанных.
+    """
+    display_title = serializers.SerializerMethodField()
+    other_user = serializers.SerializerMethodField()
+    last_message = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conversation
         fields = [
-            'id', 'sender', 'sender_name', 'recipient', 'recipient_name',
-            'subject', 'content', 'is_read', 'is_group',
-            'read_at', 'is_unread', 'created_at', 'updated_at'
+            'id', 'kind', 'display_title', 'other_user',
+            'last_message', 'unread_count', 'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at', 'read_at', 'sender']
+
+    def _request_user(self):
+        request = self.context.get('request')
+        return request.user if request else None
+
+    def _other_participant(self, obj):
+        """Собеседник в личном диалоге (не текущий пользователь)."""
+        user = self._request_user()
+        if obj.kind != Conversation.Kind.DIRECT or not user:
+            return None
+        for participant in obj.participants.all():
+            if participant.user_id != user.id:
+                return participant.user
+        return None
+
+    def get_display_title(self, obj):
+        if obj.kind == Conversation.Kind.GENERAL:
+            return obj.title or GENERAL_TITLE
+        if obj.kind == Conversation.Kind.DIRECT:
+            other = self._other_participant(obj)
+            if other:
+                return other.full_name or other.username
+        return obj.title
+
+    def get_other_user(self, obj):
+        other = self._other_participant(obj)
+        if not other:
+            return None
+        return {
+            'id': other.id,
+            'username': other.username,
+            'full_name': other.full_name,
+            'role': other.role,
+        }
+
+    def get_last_message(self, obj):
+        last = obj.messages.order_by('-created_at').select_related('sender').first()
+        if not last:
+            return None
+        return {
+            'content': last.content[:120],
+            'created_at': last.created_at.isoformat(),
+            'sender': last.sender_id,
+            'sender_name': last.sender.full_name or last.sender.username,
+        }
+
+    def get_unread_count(self, obj):
+        user = self._request_user()
+        if not user:
+            return 0
+        return unread_count(obj, user)
 
 
-class MessageCreateSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор для создания сообщения.
+class StartDirectSerializer(serializers.Serializer):
+    """Вход для старта личного диалога: id сотрудника своей компании."""
+    user_id = serializers.IntegerField()
 
-    Правила ТЗ:
-    - Владелец пишет кому угодно и всем (is_group).
-    - Администратор пишет работникам и владельцу.
-    - Работник пишет администраторам, владельцу - только если can_write_to_owner.
-    """
-    class Meta:
-        model = Message
-        fields = ['recipient', 'subject', 'content', 'is_group']
-
-    def validate(self, data):
-        sender = self.context['request'].user
-        recipient = data.get('recipient')
-        is_group = data.get('is_group', False)
-
-        if is_group:
-            if not sender.is_owner:
-                raise serializers.ValidationError('Only the owner can send group messages')
-            data['recipient'] = None
-            return data
-
-        if not recipient:
-            raise serializers.ValidationError({'recipient': 'Recipient is required'})
-        if recipient == sender:
-            raise serializers.ValidationError({'recipient': 'Cannot send a message to yourself'})
-        if recipient.company_id != sender.company_id:
-            raise serializers.ValidationError({'recipient': 'Recipient must belong to your company'})
-
-        if sender.is_worker:
-            if recipient.is_worker:
-                raise serializers.ValidationError({'recipient': 'Workers cannot message other workers'})
-            if recipient.is_owner and not sender.can_write_to_owner:
-                raise serializers.ValidationError({'recipient': 'You are not allowed to write to the owner'})
-        return data
-
-    def create(self, validated_data):
-        return Message.objects.create(**validated_data, sender=self.context['request'].user)
+    def validate_user_id(self, value):
+        request = self.context['request']
+        me = request.user
+        if value == me.id:
+            raise serializers.ValidationError('Нельзя начать диалог с самим собой.')
+        try:
+            other = User.objects.get(pk=value, is_active=True)
+        except User.DoesNotExist:
+            raise serializers.ValidationError('Сотрудник не найден.')
+        if other.company_id != me.company_id or other.is_superadmin:
+            raise serializers.ValidationError('Сотрудник не найден.')
+        self.context['other_user'] = other
+        return value
 
 
 class NotificationSerializer(serializers.ModelSerializer):

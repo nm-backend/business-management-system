@@ -9,4 +9,10 @@ reportlab==4.2.5
 openpyxl==3.1.5
 django-filter==24.3
 gunicorn==23.0.0
+whitenoise==6.8.2  # раздача статики под ASGI/WSGI (Docker/production)
 drf-spectacular==0.30.0
+
+# Real-time chat (WebSocket)
+channels==4.2.0
+daphne==4.1.2
+channels-redis==4.2.1  # только для production (Redis channel layer); в dev используется in-memory

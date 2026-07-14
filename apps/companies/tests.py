@@ -85,32 +85,45 @@ class TenantIsolationTests(TestCase):
         # A создала 1 заказ; аналитика не должна считать заказ B.
         self.assertEqual(resp.data['orders_count'], 1)
 
-    def test_message_recipients_scoped_to_company(self):
+    def test_employees_scoped_to_company(self):
         self.auth(self.a['worker'])
-        resp = self.api.get('/api/v1/messaging/messages/recipients/')
-        usernames = [u['username'] for u in resp.data]
+        resp = self.api.get('/api/v1/messaging/employees/')
+        rows = resp.data['results'] if isinstance(resp.data, dict) else resp.data
+        usernames = [u['username'] for u in rows]
         self.assertTrue(all('BetaCo' not in u for u in usernames))
+        self.assertNotIn(self.a['worker'].username, usernames)  # себя не показываем
 
-    def test_cannot_message_user_of_another_company(self):
-        # Владелец A пытается написать владельцу B напрямую (подделав recipient).
+    def test_cannot_start_direct_with_other_company_user(self):
+        # Владелец A пытается открыть личный диалог с владельцем B.
         self.auth(self.a['owner'])
-        resp = self.api.post('/api/v1/messaging/messages/', {
-            'recipient': self.b['owner'].id, 'content': 'hi',
+        resp = self.api.post('/api/v1/messaging/conversations/start_direct/', {
+            'user_id': self.b['owner'].id,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
-        from apps.messaging.models import Message
-        self.assertFalse(Message.objects.filter(recipient=self.b['owner']).exists())
 
-    def test_messages_list_isolated_by_company(self):
-        from apps.messaging.models import Message
-        # Сообщение внутри компании B.
-        Message.objects.create(company=self.b['company'], sender=self.b['owner'],
-                               recipient=self.b['worker'], content='secret B')
+    def test_conversations_isolated_by_company(self):
+        from apps.messaging.models import ChatMessage
+        from apps.messaging.services import ensure_general_conversation
+        # Общий чат и сообщение внутри компании B.
+        conv_b = ensure_general_conversation(self.b['company'])
+        ChatMessage.objects.create(
+            company=self.b['company'], conversation=conv_b,
+            sender=self.b['owner'], content='secret B',
+        )
         self.auth(self.a['owner'])
-        resp = self.api.get('/api/v1/messaging/messages/')
+        # Список бесед A не содержит беседу компании B.
+        resp = self.api.get('/api/v1/messaging/conversations/')
         rows = resp.data['results'] if isinstance(resp.data, dict) else resp.data
-        contents = [m['content'] for m in rows]
-        self.assertNotIn('secret B', contents)
+        self.assertNotIn(conv_b.id, [c['id'] for c in rows])
+        # Прямой доступ к чужой беседе и её сообщениям — 404.
+        self.assertEqual(self.api.get(f'/api/v1/messaging/conversations/{conv_b.id}/').status_code, 404)
+        self.assertEqual(self.api.get(f'/api/v1/messaging/conversations/{conv_b.id}/messages/').status_code, 404)
+        # Отправка в чужую беседу запрещена.
+        post = self.api.post('/api/v1/messaging/messages/', {
+            'conversation': conv_b.id, 'content': 'inject',
+        }, format='json')
+        self.assertEqual(post.status_code, 400)
+        self.assertFalse(ChatMessage.objects.filter(content='inject').exists())
 
     def test_worker_cannot_be_assigned_across_companies(self):
         self.auth(self.a['owner'])

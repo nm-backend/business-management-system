@@ -1,0 +1,30 @@
+# VCS / IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Локальные секреты и окружение (env приходит из docker-compose)
+.env
+
+# Собираемое/загружаемое (это тома, а не образ)
+staticfiles/
+media/
+test_media/
+
+# Базы/логи/временное
+*.sqlite3
+*.log
+scratchpad/
+
+# Документация не нужна в образе для сборки
+*.md

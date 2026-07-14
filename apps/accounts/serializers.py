@@ -11,10 +11,40 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from .models import User
+from .models import Skill, User
 
 
-class UserSerializer(serializers.ModelSerializer):
+class SkillSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор навыка (каталог навыков компании).
+
+    company проставляется сервером (из request.user.company) и клиентом не
+    задаётся — это защищает изоляцию арендаторов.
+    """
+    employee_count = serializers.IntegerField(source='employees.count', read_only=True)
+
+    class Meta:
+        model = Skill
+        fields = ['id', 'name', 'category', 'employee_count', 'created_at']
+        read_only_fields = ['id', 'employee_count', 'created_at']
+
+
+class CompanyScopedSkillsMixin:
+    """
+    Ограничивает queryset поля skill_ids навыками компании текущего пользователя.
+
+    Так подделанный/чужой id навыка отклоняется валидацией (400) ещё до бизнес-
+    логики. View дополнительно перепроверяет принадлежность компании.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        field = self.fields.get('skill_ids')
+        if request is not None and field is not None and getattr(request.user, 'company_id', None):
+            field.child_relation.queryset = Skill.objects.filter(company_id=request.user.company_id)
+
+
+class UserSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
     """
     Полный сериализатор пользователя (только для owner).
 
@@ -34,6 +64,12 @@ class UserSerializer(serializers.ModelSerializer):
     is_worker = serializers.ReadOnlyField()
     is_superadmin = serializers.ReadOnlyField()
     company_name = serializers.CharField(source='company.name', read_only=True, default=None)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    skills = SkillSerializer(many=True, read_only=True)
+    skill_ids = serializers.PrimaryKeyRelatedField(
+        many=True, write_only=True, required=False, source='skills',
+        queryset=Skill.objects.all(),  # сужается по компании в CompanyScopedSkillsMixin
+    )
 
     class Meta:
         model = User
@@ -41,11 +77,15 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'full_name', 'phone', 'email',
             'role', 'display_role', 'is_owner', 'is_admin', 'is_worker', 'is_superadmin',
             'company', 'company_name', 'avatar', 'language',
+            'position', 'department', 'birth_date', 'hire_date', 'bio',
+            'status', 'status_display', 'last_activity',
+            'skills', 'skill_ids',
             'is_active', 'can_write_to_owner', 'can_create_workers',
             'can_see_other_workers', 'created_at', 'updated_at',
         ]
         read_only_fields = [
             'id', 'role', 'company', 'created_at', 'updated_at', 'display_role',
+            'last_activity',
         ]
 
 
@@ -64,10 +104,12 @@ class UserSelfUpdateSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = User
-        fields = ['full_name', 'phone', 'email', 'avatar', 'language']
+        # Личные поля профиля. Должность/отдел/дата найма/статус — HR-данные,
+        # их задаёт владелец/админ, поэтому сюда НЕ входят.
+        fields = ['full_name', 'phone', 'email', 'avatar', 'language', 'bio', 'birth_date']
 
 
-class UserCreateSerializer(serializers.ModelSerializer):
+class UserCreateSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
     """
     Сериализатор для создания новых пользователей.
 
@@ -86,6 +128,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
         - Поле password помечено как write_only (не возвращается в API)
     """
     password = serializers.CharField(write_only=True, min_length=8)
+    skill_ids = serializers.PrimaryKeyRelatedField(
+        many=True, write_only=True, required=False, source='skills',
+        queryset=Skill.objects.all(),  # сужается по компании в CompanyScopedSkillsMixin
+    )
 
     class Meta:
         model = User
@@ -93,6 +139,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'username', 'password', 'full_name', 'phone', 'email',
             'role', 'language', 'can_write_to_owner',
             'can_create_workers', 'can_see_other_workers',
+            'position', 'department', 'birth_date', 'hire_date', 'bio', 'status',
+            'skill_ids',
         ]
 
     def validate(self, attrs):
@@ -117,9 +165,12 @@ class UserCreateSerializer(serializers.ModelSerializer):
             User - созданный пользователь с хешированным паролем
         """
         password = validated_data.pop('password')
+        skills = validated_data.pop('skills', None)  # M2M нельзя задать в конструкторе
         user = User(**validated_data)
         user.set_password(password)
         user.save()
+        if skills is not None:
+            user.skills.set(skills)
         return user
 
 
@@ -142,12 +193,15 @@ class UserLimitedSerializer(serializers.ModelSerializer):
         - В UserViewSet для admin роли
     """
     display_role = serializers.ReadOnlyField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    skills = SkillSerializer(many=True, read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'full_name', 'phone',
             'role', 'display_role', 'avatar', 'is_active',
+            'position', 'department', 'status', 'status_display', 'skills',
         ]
 
 class LoginSerializer(serializers.Serializer):

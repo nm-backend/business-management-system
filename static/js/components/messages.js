@@ -1,115 +1,470 @@
 /**
- * Сообщения и уведомления: входящие, отправленные, уведомления.
- * Получатели ограничены правами роли (эндпоинт /messages/recipients/).
+ * Корпоративный чат + уведомления.
+ *
+ * Вкладка «Чат»: двухпанельный интерфейс (список бесед слева, беседа справа),
+ * общий чат компании + личные диалоги, поиск сотрудников, непрочитанные,
+ * real-time через WebSocket (см. ChatSocket ниже).
+ *
+ * Вкладка «Уведомления»: системные уведомления (как раньше).
  */
+
+/* ─────────────────────────── WebSocket-клиент ─────────────────────────── */
+
+class ChatSocket {
+    constructor() {
+        this.ws = null;
+        this.handler = null;         // колбэк(message) активной вкладки чата
+        this.reconnectDelay = 1000;
+        this.pingTimer = null;
+        this.shouldRun = false;
+    }
+
+    /** Устанавливает обработчик входящих сообщений (или null). */
+    setHandler(fn) { this.handler = fn; }
+
+    connect() {
+        this.shouldRun = true;
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+        const token = window.api.getTokens().access;
+        if (!token) return;
+        const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const url = `${proto}://${window.location.host}/ws/chat/?token=${encodeURIComponent(token)}`;
+        try {
+            this.ws = new WebSocket(url);
+        } catch (e) {
+            return;
+        }
+
+        this.ws.onopen = () => {
+            this.reconnectDelay = 1000;
+            clearInterval(this.pingTimer);
+            this.pingTimer = setInterval(() => this.send({ type: 'ping' }), 25000);
+        };
+        this.ws.onmessage = (event) => {
+            let data;
+            try { data = JSON.parse(event.data); } catch (e) { return; }
+            if (data.type === 'message' && this.handler) {
+                this.handler(data.message);
+            }
+        };
+        this.ws.onclose = async (event) => {
+            clearInterval(this.pingTimer);
+            if (!this.shouldRun) return;
+            // 4401 — токен протух: пробуем обновить, затем переподключаемся.
+            if (event.code === 4401) {
+                const tokens = window.api.getTokens();
+                if (tokens.refresh) await window.api.refreshToken(tokens.refresh);
+            }
+            setTimeout(() => this.connect(), this.reconnectDelay);
+            this.reconnectDelay = Math.min(this.reconnectDelay * 2, 15000);
+        };
+        this.ws.onerror = () => { try { this.ws.close(); } catch (e) { /* ignore */ } };
+    }
+
+    send(obj) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(obj));
+        }
+    }
+}
+
+window.chatSocket = window.chatSocket || new ChatSocket();
+
+
+/* ─────────────────────────── Компонент ─────────────────────────── */
+
 class MessagesComponent {
     async render(container) {
-        document.getElementById('page-title').setAttribute('data-i18n', 'messages_section.title');
+        document.getElementById('page-title').setAttribute('data-i18n', 'chat.title');
         this.container = container;
-        this.tab = window.router.query.get('tab') === 'notifications' ? 'notifications' : 'inbox';
+        this.tab = window.router.query.get('tab') === 'notifications' ? 'notifications' : 'chat';
 
         container.innerHTML = `
-            <div class="tabs">
-                <button class="tab-btn ${this.tab === 'inbox' ? 'active' : ''}" data-tab="inbox" data-i18n="messages_section.inbox"></button>
-                <button class="tab-btn ${this.tab === 'sent' ? 'active' : ''}" data-tab="sent" data-i18n="messages_section.sent"></button>
-                <button class="tab-btn ${this.tab === 'notifications' ? 'active' : ''}" data-tab="notifications" data-i18n="messages_section.notifications"></button>
-            </div>
-            <button class="btn btn-primary btn-block" id="compose-btn" style="margin-bottom:12px;" data-i18n="messages_section.new_message"></button>
-            <div id="messages-content"></div>
-        `;
+            <div class="chat-page">
+                <div class="chat-tabs">
+                    <button class="chat-tab ${this.tab === 'chat' ? 'active' : ''}" data-tab="chat" data-i18n="chat.tab_chat"></button>
+                    <button class="chat-tab ${this.tab === 'notifications' ? 'active' : ''}" data-tab="notifications">
+                        <span data-i18n="chat.tab_notifications"></span>
+                    </button>
+                </div>
+                <div class="chat-tab-body" id="chat-tab-body"></div>
+            </div>`;
 
-        container.querySelectorAll('.tab-btn').forEach((btn) => {
+        container.querySelectorAll('.chat-tab').forEach((btn) => {
             btn.addEventListener('click', () => {
-                container.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-                btn.classList.add('active');
+                if (this.tab === btn.dataset.tab) return;
                 this.tab = btn.dataset.tab;
+                container.querySelectorAll('.chat-tab').forEach((b) => b.classList.toggle('active', b === btn));
                 this.loadTab();
             });
         });
-        container.querySelector('#compose-btn').addEventListener('click', () => this.openCompose());
 
         window.i18n.applyTranslations();
         await this.loadTab();
     }
 
+    get bodyEl() { return this.container.querySelector('#chat-tab-body'); }
+
     loadTab() {
-        if (this.tab === 'notifications') return this.loadNotifications();
-        return this.loadMessages(this.tab);
+        if (this.tab === 'notifications') {
+            window.chatSocket.setHandler(null);
+            return this.loadNotifications();
+        }
+        return this.loadChat();
     }
 
-    get contentEl() {
-        return this.container.querySelector('#messages-content');
+    /* ─────────────── Чат ─────────────── */
+
+    async loadChat() {
+        this.conversations = [];
+        this.activeId = null;
+        this.seen = new Set();          // id уже показанных сообщений (антидубли)
+        // Сбрасываем инлайновые стили, которые могла выставить вкладка уведомлений.
+        this.bodyEl.style.display = '';
+        this.bodyEl.style.overflowY = '';
+        this.bodyEl.innerHTML = `
+            <div class="chat" id="chat-root">
+                <div class="chat-aside">
+                    <div class="chat-aside-head">
+                        <input type="text" class="chat-search" id="chat-search" data-i18n-attr="placeholder" data-i18n="chat.search_placeholder">
+                    </div>
+                    <div class="chat-list" id="chat-list"></div>
+                </div>
+                <div class="chat-main" id="chat-main">
+                    ${this.emptyMainHtml()}
+                </div>
+            </div>`;
+        this.applyPlaceholders();
+
+        const search = this.bodyEl.querySelector('#chat-search');
+        let searchTimer = null;
+        search.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            const q = search.value.trim();
+            searchTimer = setTimeout(() => (q ? this.searchEmployees(q) : this.renderList()), 220);
+        });
+
+        // Подключаем WebSocket и вешаем обработчик входящих сообщений.
+        window.chatSocket.setHandler((m) => this.onIncoming(m));
+        window.chatSocket.connect();
+
+        await this.loadConversations();
     }
 
-    async loadMessages(box) {
-        const el = this.contentEl;
-        window.listStates.loading(el, window.ui.t('common.loading'));
+    emptyMainHtml() {
+        return `
+            <div class="chat-empty">
+                <div class="chat-empty-icon">💬</div>
+                <div style="font-weight:600;" data-i18n="chat.select_chat"></div>
+                <div class="text-sm" data-i18n="chat.select_chat_hint"></div>
+            </div>`;
+    }
+
+    async loadConversations() {
+        const listEl = this.bodyEl.querySelector('#chat-list');
+        listEl.innerHTML = `<div class="list-state list-state-loading" style="padding:24px;"><span class="spinner"></span></div>`;
         try {
-            const response = await window.api.request(`/messaging/messages/?box=${box}`);
-            const messages = response.results || response;
-            if (!messages.length) {
-                window.listStates.empty(el, window.ui.t('messages_section.no_messages'));
+            const resp = await window.api.request('/messaging/conversations/');
+            this.conversations = (resp.results || resp).slice();
+            this.sortConversations();
+            this.renderList();
+        } catch (e) {
+            listEl.innerHTML = `<div class="chat-empty"><span data-i18n="chat.error"></span></div>`;
+            window.i18n.applyTranslations();
+        }
+    }
+
+    sortConversations() {
+        this.conversations.sort((a, b) => {
+            if (a.kind === 'general' && b.kind !== 'general') return -1;
+            if (b.kind === 'general' && a.kind !== 'general') return 1;
+            return new Date(b.updated_at) - new Date(a.updated_at);
+        });
+    }
+
+    renderList() {
+        const listEl = this.bodyEl.querySelector('#chat-list');
+        if (!this.conversations.length) {
+            listEl.innerHTML = `<div class="chat-empty" style="min-height:120px;"><span data-i18n="chat.no_conversations"></span></div>`;
+            window.i18n.applyTranslations();
+            return;
+        }
+        listEl.innerHTML = this.conversations.map((c) => this.conversationItemHtml(c)).join('');
+        listEl.querySelectorAll('[data-conv]').forEach((el) => {
+            el.addEventListener('click', () => this.openConversation(Number(el.dataset.conv)));
+        });
+        window.i18n.applyTranslations();
+    }
+
+    conversationItemHtml(c) {
+        const isGeneral = c.kind === 'general';
+        const name = isGeneral ? window.ui.t('chat.general') : (c.display_title || '—');
+        const avatarClass = isGeneral ? 'chat-avatar general' : 'chat-avatar';
+        const avatarStyle = isGeneral ? '' : `style="background:${this.avatarColor(name)}"`;
+        const avatarText = isGeneral ? '#' : this.initials(name);
+        const last = c.last_message;
+        const lastText = last
+            ? `${last.sender_name ? window.ui.escape(last.sender_name.split(' ')[0]) + ': ' : ''}${window.ui.escape(last.content)}`
+            : `<span data-i18n="chat.no_messages"></span>`;
+        const time = last ? this.shortTime(last.created_at) : '';
+        const unread = c.unread_count > 0
+            ? `<span class="chat-unread">${c.unread_count > 99 ? '99+' : c.unread_count}</span>` : '';
+        return `
+            <button class="chat-item ${c.id === this.activeId ? 'active' : ''}" data-conv="${c.id}">
+                <div class="${avatarClass}" ${avatarStyle}>${avatarText}</div>
+                <div class="chat-item-body">
+                    <div class="chat-item-top">
+                        <span class="chat-item-name">${window.ui.escape(name)}</span>
+                        <span class="chat-item-time">${time}</span>
+                    </div>
+                    <div class="chat-item-bottom">
+                        <span class="chat-item-last">${lastText}</span>
+                        ${unread}
+                    </div>
+                </div>
+            </button>`;
+    }
+
+    async searchEmployees(query) {
+        const listEl = this.bodyEl.querySelector('#chat-list');
+        try {
+            const resp = await window.api.request(`/messaging/employees/?search=${encodeURIComponent(query)}`);
+            const employees = resp.results || resp;
+            if (!employees.length) {
+                listEl.innerHTML = `<div class="chat-empty" style="min-height:120px;"><span data-i18n="chat.no_employees"></span></div>`;
+                window.i18n.applyTranslations();
                 return;
             }
-            el.innerHTML = `
-                <div class="list-group">
-                    ${messages.map((m) => `
-                        <div class="list-row" data-id="${m.id}" style="${box === 'inbox' && !m.is_read ? 'background:#eef4ff;' : ''}">
-                            <div style="min-width:0;">
-                                <div style="font-weight:600;font-size:14px;">
-                                    ${box === 'sent'
-                                        ? (m.is_group ? `<span data-i18n="messages_section.to_all"></span>` : window.ui.escape(m.recipient_name || ''))
-                                        : window.ui.escape(m.sender_name)}
-                                </div>
-                                <div class="text-sm text-muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                                    ${window.ui.escape(m.subject || m.content.slice(0, 60))}
-                                </div>
-                            </div>
-                            <span class="text-sm text-muted" style="flex-shrink:0;">${window.ui.datetime(m.created_at)}</span>
-                        </div>`).join('')}
-                </div>`;
-            el.querySelectorAll('[data-id]').forEach((row) => {
-                row.addEventListener('click', () => {
-                    const message = messages.find((m) => m.id === Number(row.dataset.id));
-                    this.openMessage(message, box);
-                });
+            listEl.innerHTML = `<div class="chat-section-label" data-i18n="chat.employees"></div>` + employees.map((u) => {
+                const name = u.full_name || u.username;
+                return `
+                    <button class="chat-item" data-user="${u.id}">
+                        <div class="chat-avatar" style="background:${this.avatarColor(name)}">${this.initials(name)}</div>
+                        <div class="chat-item-body">
+                            <div class="chat-item-top"><span class="chat-item-name">${window.ui.escape(name)}</span></div>
+                            <div class="chat-item-bottom"><span class="chat-item-last">${window.ui.escape(u.display_role || u.role)}</span></div>
+                        </div>
+                    </button>`;
+            }).join('');
+            listEl.querySelectorAll('[data-user]').forEach((el) => {
+                el.addEventListener('click', () => this.startDirect(Number(el.dataset.user)));
             });
             window.i18n.applyTranslations();
         } catch (e) {
-            window.listStates.error(el, window.ui.t('common.error'), () => this.loadMessages(box));
+            window.toast.error(window.ui.errorText ? window.ui.errorText(e) : window.ui.t('chat.error'));
         }
     }
 
-    async openMessage(m, box) {
-        const modal = window.ui.modal('messages_section.title', `
-            <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;margin-bottom:12px;">
-                <div class="list-row" style="cursor:default;">
-                    <span class="text-sm text-muted" data-i18n="messages_section.from"></span>
-                    <span class="text-sm font-bold">${window.ui.escape(m.sender_name)}</span>
+    async startDirect(userId) {
+        try {
+            const conv = await window.api.request('/messaging/conversations/start_direct/', {
+                method: 'POST', body: JSON.stringify({ user_id: userId }),
+            });
+            const existing = this.conversations.find((c) => c.id === conv.id);
+            if (!existing) this.conversations.push(conv);
+            this.sortConversations();
+            const search = this.bodyEl.querySelector('#chat-search');
+            if (search) search.value = '';
+            this.renderList();
+            this.openConversation(conv.id);
+        } catch (e) {
+            window.toast.error(window.ui.errorText ? window.ui.errorText(e) : window.ui.t('chat.error'));
+        }
+    }
+
+    async openConversation(id) {
+        this.activeId = id;
+        const conv = this.conversations.find((c) => c.id === id);
+        this.renderList();
+
+        const mainEl = this.bodyEl.querySelector('#chat-main');
+        const title = conv ? (conv.kind === 'general' ? window.ui.t('chat.general') : conv.display_title) : '';
+        const sub = conv && conv.kind === 'general' ? window.ui.t('chat.general_desc')
+            : (conv && conv.other_user ? (window.i18n.translate('roles.' + conv.other_user.role)) : '');
+        mainEl.innerHTML = `
+            <div class="chat-main-head">
+                <button class="chat-back" id="chat-back" aria-label="Back">‹</button>
+                <div class="${conv && conv.kind === 'general' ? 'chat-avatar general' : 'chat-avatar'}"
+                     ${conv && conv.kind === 'general' ? '' : `style="background:${this.avatarColor(title || '')}"`}>
+                    ${conv && conv.kind === 'general' ? '#' : this.initials(title || '?')}
                 </div>
-                <div class="list-row" style="cursor:default;">
-                    <span class="text-sm text-muted" data-i18n="messages_section.to"></span>
-                    <span class="text-sm font-bold">${m.is_group ? window.ui.t('messages_section.to_all') : window.ui.escape(m.recipient_name || '')}</span>
-                </div>
-                <div class="list-row" style="cursor:default;">
-                    <span class="text-sm text-muted" data-i18n="common.date"></span>
-                    <span class="text-sm font-bold">${window.ui.datetime(m.created_at)}</span>
+                <div style="min-width:0;">
+                    <div class="chat-main-title">${window.ui.escape(title || '')}</div>
+                    <div class="chat-main-sub">${window.ui.escape(sub || '')}</div>
                 </div>
             </div>
-            ${m.subject ? `<p style="font-weight:600;margin-bottom:8px;">${window.ui.escape(m.subject)}</p>` : ''}
-            <p style="white-space:pre-wrap;">${window.ui.escape(m.content)}</p>
-        `);
-        void modal;
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input">
+                <textarea id="chat-textarea" rows="1" data-i18n-attr="placeholder" data-i18n="chat.type_message"></textarea>
+                <button class="chat-send" id="chat-send" aria-label="Send">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>`;
+        this.applyPlaceholders();
 
-        if (box === 'inbox' && !m.is_read && !m.is_group) {
-            try {
-                await window.api.request(`/messaging/messages/${m.id}/mark_read/`, { method: 'POST' });
-                this.loadMessages('inbox');
-            } catch (e) { /* некритично */ }
+        // Мобильный режим: показать панель беседы.
+        const root = this.bodyEl.querySelector('#chat-root');
+        root.classList.add('chat--open');
+        mainEl.querySelector('#chat-back').addEventListener('click', () => {
+            root.classList.remove('chat--open');
+            this.activeId = null;
+            this.renderList();
+        });
+
+        // Ввод: Enter — отправить, Shift+Enter — перенос строки. Автовысота.
+        const textarea = mainEl.querySelector('#chat-textarea');
+        const autoGrow = () => { textarea.style.height = 'auto'; textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px'; };
+        textarea.addEventListener('input', autoGrow);
+        textarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); }
+        });
+        mainEl.querySelector('#chat-send').addEventListener('click', () => this.sendMessage());
+
+        await this.loadMessages(id);
+        textarea.focus();
+    }
+
+    async loadMessages(id) {
+        const box = this.bodyEl.querySelector('#chat-messages');
+        box.innerHTML = `<div class="list-state list-state-loading" style="margin:auto;"><span class="spinner"></span></div>`;
+        try {
+            const messages = await window.api.request(`/messaging/conversations/${id}/messages/`);
+            this.seen = new Set(messages.map((m) => m.id));
+            if (!messages.length) {
+                box.innerHTML = `<div class="chat-empty" style="margin:auto;"><span data-i18n="chat.no_messages"></span></div>`;
+                window.i18n.applyTranslations();
+            } else {
+                box.innerHTML = messages.map((m) => this.messageHtml(m)).join('');
+                this.scrollToBottom();
+            }
+            // Отмечаем прочитанным + обнуляем счётчик в списке.
+            this.markRead(id);
+        } catch (e) {
+            box.innerHTML = `<div class="chat-empty" style="margin:auto;"><span data-i18n="chat.error"></span></div>`;
+            window.i18n.applyTranslations();
         }
     }
 
-    /** Группирует уведомления по дню: Сегодня / Вчера / дата. */
+    isMine(m) {
+        // Надёжно определяем «своё» по id отправителя: WebSocket-пейлоад не
+        // содержит is_mine, а из-за гонки эхо может прийти раньше ответа POST.
+        if (typeof m.is_mine === 'boolean') return m.is_mine;
+        return !!(window.currentUser && m.sender === window.currentUser.id);
+    }
+
+    messageHtml(m) {
+        const mine = this.isMine(m);
+        const conv = this.conversations.find((c) => c.id === this.activeId);
+        const showSender = !mine && conv && conv.kind === 'general';
+        return `
+            <div class="msg ${mine ? 'mine' : 'theirs'}" data-msg="${m.id}">
+                ${showSender ? `<div class="msg-sender">${window.ui.escape(m.sender_name)}</div>` : ''}
+                <span>${window.ui.escape(m.content)}</span><span class="msg-time">${this.shortTime(m.created_at)}</span>
+            </div>`;
+    }
+
+    async sendMessage() {
+        const textarea = this.bodyEl.querySelector('#chat-textarea');
+        const content = textarea.value.trim();
+        if (!content || !this.activeId) return;
+        textarea.value = '';
+        textarea.style.height = 'auto';
+        try {
+            const msg = await window.api.request('/messaging/messages/', {
+                method: 'POST', body: JSON.stringify({ conversation: this.activeId, content }),
+            });
+            this.appendMessage(msg);
+            this.bumpConversation(this.activeId, msg, true);
+        } catch (e) {
+            window.toast.error(window.ui.errorText ? window.ui.errorText(e) : window.ui.t('chat.error'));
+            textarea.value = content; // возвращаем текст при ошибке
+        }
+    }
+
+    appendMessage(m) {
+        if (this.seen.has(m.id)) return;
+        this.seen.add(m.id);
+        const box = this.bodyEl.querySelector('#chat-messages');
+        if (!box) return;
+        const empty = box.querySelector('.chat-empty');
+        if (empty) box.innerHTML = '';
+        box.insertAdjacentHTML('beforeend', this.messageHtml(m));
+        this.scrollToBottom();
+    }
+
+    /** Входящее по WebSocket. */
+    onIncoming(m) {
+        if (m.conversation === this.activeId) {
+            this.appendMessage(m);
+            this.markRead(this.activeId);
+            this.bumpConversation(m.conversation, m, true);
+        } else {
+            const known = this.conversations.find((c) => c.id === m.conversation);
+            if (known) {
+                this.bumpConversation(m.conversation, m, false);
+            } else {
+                // Новый диалог (кто-то написал первым) — перечитываем список.
+                this.loadConversations();
+            }
+        }
+    }
+
+    bumpConversation(id, m, read) {
+        const conv = this.conversations.find((c) => c.id === id);
+        if (!conv) return;
+        conv.last_message = { content: m.content, created_at: m.created_at, sender: m.sender, sender_name: m.sender_name };
+        conv.updated_at = m.created_at;
+        if (!read && !this.isMine(m)) conv.unread_count = (conv.unread_count || 0) + 1;
+        if (read) conv.unread_count = 0;
+        this.sortConversations();
+        this.renderList();
+    }
+
+    async markRead(id) {
+        const conv = this.conversations.find((c) => c.id === id);
+        if (conv) conv.unread_count = 0;
+        this.renderList();
+        try { await window.api.request(`/messaging/conversations/${id}/read/`, { method: 'POST' }); } catch (e) { /* некритично */ }
+        if (window.refreshNotificationBadge) window.refreshNotificationBadge();
+    }
+
+    scrollToBottom() {
+        const box = this.bodyEl.querySelector('#chat-messages');
+        if (box) box.scrollTop = box.scrollHeight;
+    }
+
+    /* ─────────────── Утилиты ─────────────── */
+
+    applyPlaceholders() {
+        // Переводим data-i18n для placeholder-атрибутов.
+        this.bodyEl.querySelectorAll('[data-i18n-attr="placeholder"]').forEach((el) => {
+            const key = el.getAttribute('data-i18n');
+            if (key) el.setAttribute('placeholder', window.ui.t(key));
+        });
+        window.i18n.applyTranslations();
+    }
+
+    initials(name) {
+        const parts = String(name || '?').trim().split(/\s+/);
+        return ((parts[0] || '?')[0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+    }
+
+    avatarColor(seed) {
+        const colors = ['#e5484d', '#f76808', '#ffb224', '#30a46c', '#0091ff', '#8e4ec6', '#e93d82', '#12a594'];
+        let h = 0;
+        for (let i = 0; i < String(seed).length; i++) h = (h * 31 + seed.charCodeAt(i)) & 0xffffffff;
+        return colors[Math.abs(h) % colors.length];
+    }
+
+    shortTime(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /* ─────────────── Уведомления (как прежде) ─────────────── */
+
     groupByDay(notifications) {
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
@@ -127,7 +482,6 @@ class MessagesComponent {
         return groups;
     }
 
-    /** Иконка и цвет по типу уведомления. */
     notificationStyle(type) {
         const map = {
             new_order: ['🆕', 'blue'], new_expense: ['🧾', 'orange'],
@@ -161,7 +515,9 @@ class MessagesComponent {
     }
 
     async loadNotifications() {
-        const el = this.contentEl;
+        const el = this.bodyEl;
+        el.style.display = 'block';
+        el.style.overflowY = 'auto';
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
             const response = await window.api.request('/messaging/notifications/');
@@ -171,7 +527,6 @@ class MessagesComponent {
                 return;
             }
             const unread = notifications.filter((n) => !n.is_read).length;
-            // Группировка по дням: Сегодня / Вчера / дата.
             const groups = this.groupByDay(notifications);
             el.innerHTML = `
                 ${unread ? `<button class="btn btn-secondary btn-sm btn-block" id="mark-all-read" style="margin-bottom:12px;" data-i18n="messages_section.mark_all_read"></button>` : ''}
@@ -192,51 +547,6 @@ class MessagesComponent {
         } catch (e) {
             window.listStates.error(el, window.ui.t('common.error'), () => this.loadNotifications());
         }
-    }
-
-    async openCompose() {
-        let recipients = [];
-        try {
-            recipients = await window.api.request('/messaging/messages/recipients/');
-        } catch (e) { /* пустой список - ниже покажем только группу */ }
-        const isOwner = window.currentUser.is_owner;
-
-        const modal = window.ui.modal('messages_section.new_message', `
-            <form id="compose-form">
-                <div class="form-group"><label data-i18n="messages_section.to"></label>
-                    <select name="recipient" class="form-control" required>
-                        ${isOwner ? `<option value="__all__" data-i18n="messages_section.to_all"></option>` : ''}
-                        ${recipients.map((u) => `
-                            <option value="${u.id}">${window.ui.escape(u.full_name || u.username)} (${window.ui.t('roles.' + u.role)})</option>`).join('')}
-                    </select></div>
-                <div class="form-group"><label data-i18n="messages_section.subject"></label>
-                    <input name="subject" class="form-control"></div>
-                <div class="form-group"><label data-i18n="messages_section.content"></label>
-                    <textarea name="content" class="form-control" rows="4" required data-i18n="messages_section.type_message"></textarea></div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="messages_section.send"></button>
-            </form>
-        `);
-
-        modal.querySelector('#compose-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const data = Object.fromEntries(new FormData(e.target));
-            if (data.recipient === '__all__') {
-                data.is_group = true;
-                delete data.recipient;
-            }
-            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
-                try {
-                    await window.api.request('/messaging/messages/', { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
-                    window.toast.success(window.ui.t('common.success'));
-                    this.tab = 'sent';
-                    this.container.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === 'sent'));
-                    await this.loadMessages('sent');
-                } catch (error) {
-                    window.toast.error(window.ui.errorText(error));
-                }
-            });
-        });
     }
 }
 

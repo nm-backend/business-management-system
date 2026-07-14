@@ -494,5 +494,26 @@
     "remaining": "Остаток",
     "payment_history": "История выплат",
     "material_check": "Остатки материалов"
+  },
+  "chat": {
+    "title": "Чат",
+    "tab_chat": "Чат",
+    "tab_notifications": "Уведомления",
+    "general": "Общий чат",
+    "general_desc": "Все сотрудники компании",
+    "employees": "Сотрудники",
+    "search_placeholder": "Поиск сотрудника...",
+    "new_conversation": "Новый диалог",
+    "start_chat": "Начать диалог",
+    "type_message": "Напишите сообщение...",
+    "send": "Отправить",
+    "no_conversations": "Пока нет чатов",
+    "no_messages": "Пока нет сообщений. Начните беседу!",
+    "no_employees": "Сотрудники не найдены",
+    "select_chat": "Выберите чат",
+    "select_chat_hint": "Выберите чат из списка слева или начните новый диалог с сотрудником",
+    "you": "Вы",
+    "loading": "Загрузка...",
+    "error": "Произошла ошибка"
   }
 }

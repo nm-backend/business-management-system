@@ -26,6 +26,9 @@ SECRET_KEY = config('SECRET_KEY')
 
 # Установленные приложения Django
 INSTALLED_APPS = [
+    # Daphne должен идти первым: он подменяет runserver на ASGI (WebSocket).
+    'daphne',
+
     # Django built-in apps
     'django.contrib.admin',
     'django.contrib.auth',
@@ -40,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',  # Blacklist для refresh токенов
     'corsheaders',  # CORS заголовки для фронтенда
     'django_filters',  # Фильтрация в DRF
+    'channels',  # WebSocket (real-time чат)
 
     # Local apps
     'apps.core',  # Базовые модели и утилиты
@@ -60,6 +64,7 @@ INSTALLED_APPS = [
 # Middleware - обработчики запросов
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',  # Безопасность (HTTPS, HSTS)
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Отдача собранной статики (Docker/prod); в DEBUG инертна
     'corsheaders.middleware.CorsMiddleware',  # CORS для фронтенда
     'django.contrib.sessions.middleware.SessionMiddleware',  # Сессии
     'django.middleware.common.CommonMiddleware',  # Общие функции
@@ -91,6 +96,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'skladpro.wsgi.application'
 ASGI_APPLICATION = 'skladpro.asgi.application'
+
+# Канальный слой Channels для WebSocket.
+# Если задан REDIS_URL (например, в Docker или production) — используем Redis
+# (общий слой для нескольких воркеров). Иначе — in-memory (голый локальный
+# runserver и тесты; Redis не требуется).
+REDIS_URL = config('REDIS_URL', default='')
+if REDIS_URL:
+    # RedisPubSubChannelLayer — рекомендуемый бэкенд для pub/sub-рассылки групп:
+    # надёжнее классического RedisChannelLayer и не шумит таймаутами brpop при
+    # простое соединения.
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
+            'CONFIG': {'hosts': [REDIS_URL]},
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
 
 # Настройки базы данных PostgreSQL
 DATABASES = {
@@ -130,7 +157,8 @@ AUTH_PASSWORD_VALIDATORS = [
 REST_FRAMEWORK = {
     # Аутентификация
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',  # JWT
+        # JWT + отметка last_activity сотрудника на каждом API-запросе.
+        'apps.accounts.authentication.ActivityJWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',         # Django Admin
     ),
 
@@ -182,6 +210,14 @@ STATIC_URL = 'static/'  # URL для статических файлов
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # Директория для collectstatic
 STATICFILES_DIRS = [BASE_DIR / 'static']  # Директория с исходными статическими файлами
 
+# WhiteNoise: под ASGI-сервером (daphne в Docker/production) отдаёт собранную
+# статику, включая статику Django Admin. Сжатие без manifest-хэширования —
+# совместимо с ?v=ASSET_VERSION. В DEBUG WhiteNoise не мешает обычной раздаче.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
+
 # Настройки медиа файлов (загруженные пользователями)
 MEDIA_URL = config('MEDIA_URL', default='/media/')  # URL для медиа файлов
 MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директория для медиа файлов
@@ -190,7 +226,7 @@ MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директо
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Версия статики для cache-busting (?v=...). Бампайте при изменении CSS/JS.
-ASSET_VERSION = '20260713e'
+ASSET_VERSION = '20260714chat2'
 
 # URL для аутентификации
 LOGIN_URL = '/accounts/login/'

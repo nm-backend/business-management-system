@@ -62,6 +62,7 @@ class AuditLog(TimestampedModel):
         CREATE = 'create', 'Create'
         UPDATE = 'update', 'Update'
         ARCHIVE = 'archive', 'Archive'
+        DELETE = 'delete', 'Delete'
         ACTIVATE = 'activate', 'Activate'
         DEACTIVATE = 'deactivate', 'Deactivate'
         RESET_PASSWORD = 'reset_password', 'Reset password'

@@ -6,6 +6,8 @@
 только свои данные.
 
 - **Backend:** Django 5.1 + Django REST Framework + JWT (SimpleJWT)
+- **Real-time:** Django Channels + WebSocket (корпоративный чат). В разработке —
+  in-memory канальный слой (Redis не нужен); в production — Redis.
 - **API-документация:** drf-spectacular (Swagger UI + ReDoc)
 - **База данных:** PostgreSQL
 - **Frontend:** SPA на чистом JavaScript (без сборки, без Node.js), отдаётся
@@ -24,8 +26,13 @@
 | PostgreSQL  | **18**                  | Подойдёт 12+. `psql --version` |
 | Git         | любая свежая            | Или GitHub Desktop |
 | ОС          | Windows 10/11           | Гайд написан под Windows; на macOS/Linux меняются только пути |
+| Redis       | только для production   | Нужен для WebSocket-чата в проде. **В разработке НЕ требуется** (используется in-memory канальный слой). |
 
 **Node.js / npm НЕ требуются.** Фронтенд — статические JS-файлы, шага сборки нет.
+
+**Real-time чат работает «из коробки» в dev:** `runserver` автоматически
+поднимает ASGI-сервер (Daphne) и обслуживает WebSocket. Redis для разработки
+не нужен.
 
 ---
 
@@ -75,7 +82,8 @@ pip install -r requirements.txt
 
 Устанавливаются: Django, DRF, SimpleJWT, psycopg2-binary, python-decouple,
 django-cors-headers, Pillow, reportlab, openpyxl, django-filter, gunicorn,
-drf-spectacular. Все версии закреплены в `requirements.txt`.
+drf-spectacular, **channels + daphne** (WebSocket), **channels-redis**
+(канальный слой для production). Все версии закреплены в `requirements.txt`.
 
 ---
 
@@ -153,6 +161,7 @@ copy .env.example .env
 | `DB_PORT`       | **да**      | `5432` | Порт БД |
 | `MEDIA_URL`     | нет         | `/media/` | URL для загруженных файлов |
 | `MEDIA_ROOT`    | нет         | `media/` | Папка для загруженных файлов |
+| `REDIS_URL`     | только prod | `redis://127.0.0.1:6379/0` | Канальный слой Channels для WebSocket. В dev не нужен (in-memory). |
 
 > **Важно:** переменные окружения ОС имеют приоритет над `.env` (так работает
 > python-decouple). Если, например, в системе выставлен `DB_NAME`, он
@@ -231,6 +240,12 @@ python manage.py runserver
 
 Запуск на другом порту: `python manage.py runserver 8001`.
 
+> **WebSocket-чат:** т.к. `daphne` первым стоит в `INSTALLED_APPS`, `runserver`
+> запускается как ASGI и сам обслуживает WebSocket по адресу `/ws/chat/`.
+> Отдельная команда не нужна. Проверка: откройте чат («Хабарлар» → вкладка
+> «Чат»), в DevTools → Network → WS должно быть соединение `101 Switching
+> Protocols`.
+
 ---
 
 ## 10. Тесты
@@ -251,13 +266,14 @@ python manage.py test
 **Как выглядит успех:**
 
 ```
-Ran 135 tests in X.XXXs
+Ran 153 tests in X.XXXs
 
 OK
 ```
 
-Отдельное приложение — например изоляция компаний:
-`python manage.py test apps.companies`.
+Отдельное приложение — например изоляция компаний или чат:
+`python manage.py test apps.companies apps.messaging`.
+(Тесты чата используют in-memory канальный слой Channels — Redis для тестов не нужен.)
 
 ---
 
@@ -359,6 +375,8 @@ OK
 - [ ] ReDoc `/api/v1/redoc/` открывается
 - [ ] Django Admin `/admin/` доступен супер-админу
 - [ ] API отвечает: `GET /api/v1/accounts/setup/check/` → `200`
+- [ ] Чат работает: «Хабарлар» → «Чат», виден «Умумий чат», сообщение
+      отправляется; WebSocket `/ws/chat/` подключён (DevTools → Network → WS)
 - [ ] Тесты проходят: `python manage.py test` (с `DJANGO_SETTINGS_MODULE=skladpro.test_settings`) → `OK`
 
 ---
@@ -387,7 +405,9 @@ business-management-system/
 │   ├── orders/               # Заказы
 │   ├── finance/              # Расходы, выплаты рабочим
 │   ├── reports/              # Аналитика и отчёты
-│   ├── messaging/            # Внутренние сообщения (изолированы по компании)
+│   ├── messaging/            # Чат + уведомления (изолированы по компании):
+│   │                         #   models(Conversation/ChatMessage) · consumers.py
+│   │                         #   (WebSocket) · routing.py · ws_auth.py (JWT для WS)
 │   ├── audit/                # Журнал аудита
 │   └── core/                 # Общие permissions, mixins, утилиты
 ├── core/                      # Общий код проекта
@@ -414,11 +434,19 @@ business-management-system/
 ## 14. Развёртывание в production (кратко)
 
 1. `.env`: `DJANGO_ENV=production`, `DEBUG=False`, реальный `ALLOWED_HOSTS`,
-   сильный `SECRET_KEY`.
-2. `python manage.py collectstatic`
-3. Запуск через gunicorn (уже в зависимостях):
-   `gunicorn skladpro.wsgi:application`
-4. За reverse-proxy (nginx) с HTTPS. В `production.py` включены HSTS,
+   сильный `SECRET_KEY`, `REDIS_URL` (для WebSocket-чата).
+2. Запустить **Redis** — в проде это общий канальный слой Channels
+   (в `production.py` уже настроен `channels_redis` по `REDIS_URL`).
+3. `python manage.py collectstatic`
+4. Приложение обслуживает и HTTP, и WebSocket через **ASGI**, поэтому в проде
+   запускайте ASGI-сервер, а не только gunicorn/WSGI. Варианты:
+   - Daphne (уже в зависимостях): `daphne -b 0.0.0.0 -p 8000 skladpro.asgi:application`
+   - либо Uvicorn-воркеры под gunicorn:
+     `gunicorn skladpro.asgi:application -k uvicorn.workers.UvicornWorker`
+   > Чистый `gunicorn skladpro.wsgi:application` обслужит сайт и API, но
+   > **не** WebSocket — чат не будет обновляться в реальном времени.
+5. За reverse-proxy (nginx) с HTTPS. Для WebSocket проксируйте `/ws/` с
+   заголовками `Upgrade`/`Connection`. В `production.py` включены HSTS,
    `SECURE_SSL_REDIRECT`, secure/HttpOnly cookies.
 
 ---
