@@ -9,11 +9,57 @@ from django import forms
 from django.contrib import admin, messages
 from django.db import transaction
 from django.db.models import Count
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 
-from apps.accounts.models import AccessKey, User
-from apps.core.admin_utils import badge
+from apps.accounts.access_keys import issue_access_key
+from apps.accounts.models import AccessKey, Skill, User
+from apps.core.admin_utils import badge, choice_badge
 from .models import Company
+
+KEY_STATUS_COLORS = {'active': 'green', 'used': 'gray', 'revoked': 'red', 'expired': 'amber'}
+
+
+class AddEmployeeForm(forms.Form):
+    """Профессиональная форма создания сотрудника внутри компании."""
+    first_name = forms.CharField(label='Имя', max_length=100)
+    last_name = forms.CharField(label='Фамилия', max_length=100, required=False)
+    username = forms.CharField(label='Логин', max_length=150,
+                               help_text='Используется только внутри системы.')
+    phone = forms.CharField(label='Телефон', max_length=20, required=False)
+    role = forms.ChoiceField(label='Роль', choices=[
+        (User.Role.WORKER, 'Ishchi (работник)'),
+        (User.Role.ADMIN, 'Administrator (администратор)'),
+    ], initial=User.Role.WORKER)
+    position = forms.CharField(label='Должность', max_length=255, required=False)
+    department = forms.CharField(label='Отдел', max_length=255, required=False)
+    avatar = forms.ImageField(label='Аватар', required=False)
+    birth_date = forms.DateField(label='Дата рождения', required=False,
+                                 widget=forms.DateInput(attrs={'type': 'date'}))
+    hire_date = forms.DateField(label='Дата найма', required=False,
+                                widget=forms.DateInput(attrs={'type': 'date'}))
+    status = forms.ChoiceField(label='Статус', choices=User.Status.choices,
+                               initial=User.Status.ACTIVE)
+    skills = forms.ModelMultipleChoiceField(
+        label='Навыки', queryset=Skill.objects.none(), required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    bio = forms.CharField(label='О сотруднике', required=False,
+                          widget=forms.Textarea(attrs={'rows': 3}))
+
+    def __init__(self, *args, company=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.company = company
+        # Навыки — только каталог этой компании (изоляция).
+        if company is not None:
+            self.fields['skills'].queryset = Skill.objects.filter(company=company)
+
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        if User.objects.filter(username=username).exists():
+            raise forms.ValidationError('Пользователь с таким логином уже существует.')
+        return username
 
 
 class CompanyAdminForm(forms.ModelForm):
@@ -57,6 +103,27 @@ class CompanyUserInline(admin.TabularInline):
         return False
 
 
+class CompanyAccessKeyInline(admin.TabularInline):
+    """Access Keys компании — код, сотрудник, статус (только просмотр)."""
+    model = AccessKey
+    fk_name = 'company'
+    extra = 0
+    fields = ('key', 'user', 'status_badge', 'expires_at', 'used_at', 'created_at')
+    readonly_fields = fields
+    can_delete = False
+    verbose_name_plural = 'Access Keys (коды-приглашения)'
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user')
+
+    @admin.display(description='Статус')
+    def status_badge(self, obj):
+        return choice_badge(obj.effective_status, obj.effective_status.capitalize(), KEY_STATUS_COLORS)
+
+
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
     form = CompanyAdminForm
@@ -66,12 +133,73 @@ class CompanyAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     readonly_fields = ('created_at', 'updated_at', 'stats_panel', 'recent_activity')
     ordering = ('name',)
-    inlines = [CompanyUserInline]
+    inlines = [CompanyUserInline, CompanyAccessKeyInline]
     actions = ('block_companies', 'unblock_companies')
 
     def get_inlines(self, request, obj):
-        # На странице создания инлайна пользователей ещё нет.
-        return [CompanyUserInline] if obj else []
+        # На странице создания инлайнов ещё нет.
+        return [CompanyUserInline, CompanyAccessKeyInline] if obj else []
+
+    # ── Add Employee: весь онбординг идёт со страницы компании ──
+    def get_urls(self):
+        custom = [
+            path(
+                '<int:company_id>/add-employee/',
+                self.admin_site.admin_view(self.add_employee_view),
+                name='companies_company_add_employee',
+            ),
+        ]
+        return custom + super().get_urls()
+
+    @transaction.atomic
+    def add_employee_view(self, request, company_id):
+        """Создаёт сотрудника этой компании и сразу выдаёт Access Key."""
+        company = get_object_or_404(Company, pk=company_id)
+        created_key = created_employee = None
+
+        if request.method == 'POST':
+            form = AddEmployeeForm(request.POST, request.FILES, company=company)
+            if form.is_valid():
+                cd = form.cleaned_data
+                full_name = f"{cd['first_name']} {cd['last_name']}".strip()
+                employee = User(
+                    username=cd['username'],
+                    full_name=full_name,
+                    phone=cd.get('phone', ''),
+                    role=cd['role'],
+                    company=company,          # привязка к компании автоматически
+                    position=cd.get('position', ''),
+                    department=cd.get('department', ''),
+                    birth_date=cd.get('birth_date'),
+                    hire_date=cd.get('hire_date'),
+                    status=cd['status'],
+                    bio=cd.get('bio', ''),
+                )
+                if cd.get('avatar'):
+                    employee.avatar = cd['avatar']
+                employee.set_unusable_password()  # пароля нет — вход по Access Key
+                employee.save()
+                if cd.get('skills'):
+                    employee.skills.set(cd['skills'])
+
+                key = issue_access_key(user=employee, created_by=request.user)
+                created_key = key.key
+                created_employee = full_name or employee.username
+                messages.success(request, f'Сотрудник «{created_employee}» создан. Access Key выдан.')
+                form = AddEmployeeForm(company=company)  # чистая форма для следующего
+        else:
+            form = AddEmployeeForm(company=company)
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Новый сотрудник — {company.name}',
+            'company': company,
+            'form': form,
+            'created_key': created_key,
+            'created_employee': created_employee,
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/companies/add_employee.html', context)
 
     def get_fieldsets(self, request, obj=None):
         if obj is None:
@@ -140,7 +268,14 @@ class CompanyAdmin(admin.ModelAdmin):
             '<td style="padding:3px 0;font-weight:700;">{}</td></tr>',
             rows,
         )
-        return format_html('<table style="border-collapse:collapse;">{}</table>', rows_html)
+        add_url = reverse('admin:companies_company_add_employee', args=[obj.pk])
+        return format_html(
+            '<a href="{}" style="display:inline-block;margin-bottom:14px;padding:9px 18px;'
+            'background:#1c64d9;color:#fff;border-radius:8px;font-weight:600;'
+            'text-decoration:none;">+ Добавить сотрудника</a>'
+            '<table style="border-collapse:collapse;">{}</table>',
+            add_url, rows_html,
+        )
 
     @admin.display(description='Недавняя активность')
     def recent_activity(self, obj):
