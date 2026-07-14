@@ -68,6 +68,9 @@ class AuditLog(TimestampedModel):
         RESET_PASSWORD = 'reset_password', 'Reset password'
         CHANGE_PASSWORD = 'change_password', 'Change password'
         CHANGE_LANGUAGE = 'change_language', 'Change language'
+        ACCESS_KEY_ISSUED = 'access_key_issued', 'Access key issued'
+        ACCESS_KEY_REDEEMED = 'access_key_redeemed', 'Access key redeemed'
+        ACCESS_KEY_REVOKED = 'access_key_revoked', 'Access key revoked'
 
     company = models.ForeignKey(
         'companies.Company',

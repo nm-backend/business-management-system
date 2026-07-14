@@ -23,11 +23,14 @@ from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwner, IsOwnerOrAdmin
-from .models import Skill, User
+from .access_keys import issue_access_key, redeem_access_key, verify_access_key
+from .models import AccessKey, Skill, User
 from .serializers import (
     UserSerializer, UserSelfUpdateSerializer, UserCreateSerializer, UserLimitedSerializer,
     LoginSerializer, ChangePasswordSerializer, SetupOwnerSerializer,
     LanguageSerializer, SkillSerializer,
+    AccessKeySerializer, AccessKeyIssueSerializer,
+    AccessKeyVerifySerializer, AccessKeyRedeemSerializer,
 )
 
 
@@ -442,6 +445,77 @@ class SkillViewSet(viewsets.ModelViewSet):
         instance.delete()
 
 
+@extend_schema(tags=['Access Keys'])
+class AccessKeyVerifyView(APIView):
+    """
+    Проверка Access Key (первый экран входа сотрудника).
+
+    Endpoint: POST /api/v1/accounts/access-key/verify/
+    Публичный. Тело: {"access_key": "SKP-...."}.
+    Возвращает {valid: bool, employee?: {...}} — не раскрывая пароль/логику.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    @extend_schema(request=AccessKeyVerifySerializer, responses=None)
+    def post(self, request):
+        serializer = AccessKeyVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        key = verify_access_key(serializer.validated_data['access_key'])
+        if not key:
+            return Response({'valid': False})
+        return Response({
+            'valid': True,
+            'employee': {
+                'full_name': key.user.full_name or key.user.username,
+                'username': key.user.username,
+                'company': key.company.name,
+                'role': key.user.role,
+            },
+        })
+
+
+@extend_schema(tags=['Access Keys'])
+class AccessKeyRedeemView(APIView):
+    """
+    Активация аккаунта сотрудника по Access Key.
+
+    Endpoint: POST /api/v1/accounts/access-key/redeem/
+    Публичный. Тело: {"access_key": "SKP-....", "new_password": "..."}.
+    При успехе активирует аккаунт, задаёт пароль, помечает ключ использованным
+    и возвращает пользователя + JWT-токены (сразу вход).
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    @extend_schema(request=AccessKeyRedeemSerializer, responses=None)
+    def post(self, request):
+        serializer = AccessKeyRedeemSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user, error = redeem_access_key(
+            code=serializer.validated_data['access_key'],
+            new_password=serializer.validated_data['new_password'],
+        )
+        if error == 'company_inactive':
+            return Response({'detail': 'Company is deactivated'}, status=status.HTTP_400_BAD_REQUEST)
+        if error or user is None:
+            return Response(
+                {'detail': 'Invalid, expired or already used access key'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        write_audit_log(
+            action=AuditLog.Action.ACCESS_KEY_REDEEMED,
+            actor=user,
+            target=user,
+            request=request,
+        )
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'user': UserSerializer(user).data,
+            'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)},
+        })
+
+
 @extend_schema(tags=['Employees'])
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -537,6 +611,12 @@ class UserViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return [IsOwnerOrAdmin()]
         if self.action in ('update', 'partial_update', 'destroy'):
+            return [IsOwner()]
+        # Кастомные @action: их permission_classes не применяются автоматически,
+        # т.к. get_permissions переопределён — задаём права явно здесь.
+        if self.action == 'access_key':
+            return [IsOwnerOrAdmin()]
+        if self.action in ('toggle_active', 'reset_password'):
             return [IsOwner()]
         return [IsAuthenticated()]
 
@@ -701,3 +781,43 @@ class UserViewSet(viewsets.ModelViewSet):
             request=request,
         )
         return Response({'message': 'Password reset successfully'})
+
+    @extend_schema(request=AccessKeyIssueSerializer, responses=AccessKeySerializer)
+    @action(detail=True, methods=['get', 'post'], permission_classes=[IsOwnerOrAdmin])
+    def access_key(self, request, pk=None):
+        """
+        Access Key сотрудника.
+
+        GET  — текущий активный ключ (или null).
+        POST — выпустить/перевыпустить ключ (прежний активный отзывается).
+               Тело: {"expires_in_days": N?}. Возвращает код в поле key.
+
+        Доступно владельцу/администратору только для сотрудников своей компании
+        (get_object ограничен company через get_queryset).
+        """
+        employee = self.get_object()
+
+        if request.method == 'POST':
+            if employee.is_owner or employee.is_superadmin:
+                raise ValidationError({'detail': 'Cannot issue an access key for this account.'})
+            serializer = AccessKeyIssueSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            key = issue_access_key(
+                user=employee,
+                created_by=request.user,
+                expires_in_days=serializer.validated_data.get('expires_in_days'),
+            )
+            write_audit_log(
+                action=AuditLog.Action.ACCESS_KEY_ISSUED,
+                actor=request.user,
+                target=key,
+                metadata={'employee': employee.username},
+                request=request,
+            )
+            return Response(AccessKeySerializer(key).data, status=status.HTTP_201_CREATED)
+
+        key = (
+            employee.access_keys.filter(status=AccessKey.Status.ACTIVE)
+            .select_related('user').first()
+        )
+        return Response(AccessKeySerializer(key).data if key else None)

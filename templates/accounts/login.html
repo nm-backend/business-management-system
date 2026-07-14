@@ -8,17 +8,51 @@
 
         <div id="error-message" class="alert-box" style="display: none;"></div>
 
-        <form id="login-form">
-            <div class="form-group">
-                <label for="username" data-i18n="auth.username"></label>
-                <input type="text" id="username" class="form-control" required autocomplete="username">
+        <!-- Обычный вход -->
+        <div id="login-panel">
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username" data-i18n="auth.username"></label>
+                    <input type="text" id="username" class="form-control" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="password" data-i18n="auth.password"></label>
+                    <input type="password" id="password" class="form-control" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
+            </form>
+            <div style="margin-top: 16px; text-align: center;">
+                <a href="#" id="show-access-key" class="text-sm" data-i18n="auth.have_access_key"></a>
             </div>
-            <div class="form-group">
-                <label for="password" data-i18n="auth.password"></label>
-                <input type="password" id="password" class="form-control" required autocomplete="current-password">
+        </div>
+
+        <!-- Активация по Access Key -->
+        <div id="access-key-panel" style="display: none;">
+            <p class="text-sm text-muted" style="margin-bottom: 16px;" data-i18n="auth.access_key_hint"></p>
+
+            <form id="ak-verify-form">
+                <div class="form-group">
+                    <label data-i18n="auth.access_key"></label>
+                    <input type="text" id="ak-code" class="form-control" placeholder="SKP-XXXX-XXXX-XXXX"
+                           autocomplete="one-time-code" required style="text-transform: uppercase; letter-spacing: 1px;">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.continue"></button>
+            </form>
+
+            <form id="ak-redeem-form" style="display: none;">
+                <p id="ak-welcome" style="margin-bottom: 12px; font-weight: 600;"></p>
+                <div class="form-group">
+                    <label data-i18n="auth.set_password"></label>
+                    <input type="password" id="ak-password" class="form-control" required minlength="8"
+                           autocomplete="new-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.activate"></button>
+            </form>
+
+            <div style="margin-top: 16px; text-align: center;">
+                <a href="#" id="show-login" class="text-sm" data-i18n="auth.back_to_login"></a>
             </div>
-            <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
-        </form>
+        </div>
 
         <div style="margin-top: 24px; text-align: center;">
             <select id="lang-select" class="form-control" style="width: auto; display: inline-block;">
@@ -33,32 +67,85 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const t = (k) => window.i18n.translate(k);
     const langSelect = document.getElementById('lang-select');
     langSelect.value = window.i18n.currentLang;
-    langSelect.addEventListener('change', (e) => {
-        window.i18n.setLanguage(e.target.value);
-    });
+    langSelect.addEventListener('change', (e) => window.i18n.setLanguage(e.target.value));
 
-    const form = document.getElementById('login-form');
     const errorMsg = document.getElementById('error-message');
+    const loginPanel = document.getElementById('login-panel');
+    const akPanel = document.getElementById('access-key-panel');
+    const showError = (msg) => { errorMsg.textContent = msg; errorMsg.style.display = 'flex'; };
+    const clearError = () => { errorMsg.style.display = 'none'; };
+
     if (sessionStorage.getItem('session_expired')) {
-        errorMsg.textContent = window.i18n.translate('auth.session_expired');
-        errorMsg.style.display = 'flex';
+        showError(t('auth.session_expired'));
         sessionStorage.removeItem('session_expired');
     }
 
-    form.addEventListener('submit', async (e) => {
+    // ── Обычный вход ──
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        errorMsg.style.display = 'none';
-
+        clearError();
         try {
-            await window.api.login(username, password);
+            await window.api.login(
+                document.getElementById('username').value,
+                document.getElementById('password').value,
+            );
             window.location.href = '/';
         } catch (error) {
-            errorMsg.textContent = error.data?.detail || window.i18n.translate('auth.login_error');
-            errorMsg.style.display = 'flex';
+            showError(error.data?.detail || t('auth.login_error'));
+        }
+    });
+
+    // ── Переключение панелей ──
+    document.getElementById('show-access-key').addEventListener('click', (e) => {
+        e.preventDefault(); clearError();
+        loginPanel.style.display = 'none'; akPanel.style.display = 'block';
+    });
+    document.getElementById('show-login').addEventListener('click', (e) => {
+        e.preventDefault(); clearError();
+        akPanel.style.display = 'none'; loginPanel.style.display = 'block';
+    });
+
+    // ── Access Key: шаг 1 — проверка кода ──
+    const verifyForm = document.getElementById('ak-verify-form');
+    const redeemForm = document.getElementById('ak-redeem-form');
+    verifyForm.addEventListener('submit', async (e) => {
+        e.preventDefault(); clearError();
+        const code = document.getElementById('ak-code').value.trim().toUpperCase();
+        try {
+            const resp = await window.api.request('/accounts/access-key/verify/', {
+                method: 'POST', noAuth: true, body: JSON.stringify({ access_key: code }),
+            });
+            if (!resp.valid) { showError(t('auth.access_key_invalid')); return; }
+            document.getElementById('ak-welcome').textContent =
+                `${t('auth.welcome')}, ${resp.employee.full_name} — ${resp.employee.company}`;
+            verifyForm.style.display = 'none';
+            redeemForm.style.display = 'block';
+            document.getElementById('ak-password').focus();
+        } catch (error) {
+            showError(t('auth.access_key_invalid'));
+        }
+    });
+
+    // ── Access Key: шаг 2 — задать пароль и войти ──
+    redeemForm.addEventListener('submit', async (e) => {
+        e.preventDefault(); clearError();
+        const code = document.getElementById('ak-code').value.trim().toUpperCase();
+        const password = document.getElementById('ak-password').value;
+        try {
+            const resp = await window.api.request('/accounts/access-key/redeem/', {
+                method: 'POST', noAuth: true,
+                body: JSON.stringify({ access_key: code, new_password: password }),
+            });
+            window.api.setTokens(resp.tokens.access, resp.tokens.refresh);
+            window.location.href = '/';
+        } catch (error) {
+            const detail = error.data?.detail
+                || (error.data?.new_password && error.data.new_password[0])
+                || t('auth.access_key_invalid');
+            showError(detail);
         }
     });
 });

@@ -8,8 +8,11 @@
 from django import forms
 from django.contrib import admin, messages
 from django.db import transaction
+from django.db.models import Count
+from django.utils.html import format_html, format_html_join
 
-from apps.accounts.models import User
+from apps.accounts.models import AccessKey, User
+from apps.core.admin_utils import badge
 from .models import Company
 
 
@@ -57,11 +60,11 @@ class CompanyUserInline(admin.TabularInline):
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
     form = CompanyAdminForm
-    list_display = ('name', 'is_active', 'owner_display', 'users_count', 'created_at')
+    list_display = ('name', 'active_badge', 'owner_display', 'users_count', 'employees_summary', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('name',)
     date_hierarchy = 'created_at'
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at', 'stats_panel', 'recent_activity')
     ordering = ('name',)
     inlines = [CompanyUserInline]
     actions = ('block_companies', 'unblock_companies')
@@ -79,7 +82,14 @@ class CompanyAdmin(admin.ModelAdmin):
                     'description': 'Владелец будет создан вместе с компанией.',
                 }),
             )
-        return ((None, {'fields': ('name', 'is_active', 'created_at', 'updated_at')}),)
+        return (
+            (None, {'fields': ('name', 'is_active', 'created_at', 'updated_at')}),
+            ('Обзор', {'fields': ('stats_panel', 'recent_activity')}),
+        )
+
+    @admin.display(description='Статус')
+    def active_badge(self, obj):
+        return badge('Активна', 'green') if obj.is_active else badge('Заблокирована', 'red')
 
     @admin.display(description='Владелец')
     def owner_display(self, obj):
@@ -89,6 +99,75 @@ class CompanyAdmin(admin.ModelAdmin):
     @admin.display(description='Пользователи')
     def users_count(self, obj):
         return obj.users.count()
+
+    @admin.display(description='Состав')
+    def employees_summary(self, obj):
+        counts = {
+            row['role']: row['n']
+            for row in obj.users.values('role').annotate(n=Count('id'))
+        }
+        parts = []
+        for role, label, color in (
+            (User.Role.OWNER, 'вл', 'blue'),
+            (User.Role.ADMIN, 'адм', 'teal'),
+            (User.Role.WORKER, 'раб', 'gray'),
+        ):
+            if counts.get(role):
+                parts.append(f'{counts[role]} {label}')
+        return badge(' · '.join(parts), 'gray') if parts else '—'
+
+    @admin.display(description='Статистика')
+    def stats_panel(self, obj):
+        if obj.pk is None:
+            return '—'
+        users = obj.users.all()
+        roles = {r['role']: r['n'] for r in users.values('role').annotate(n=Count('id'))}
+        active_keys = AccessKey.objects.filter(company=obj, status=AccessKey.Status.ACTIVE).count()
+        skills = obj.skills.count()
+        rows = [
+            ('Владелец', roles.get(User.Role.OWNER, 0)),
+            ('Администраторы', roles.get(User.Role.ADMIN, 0)),
+            ('Работники', roles.get(User.Role.WORKER, 0)),
+            ('Активных сотрудников', users.filter(is_active=True).count()),
+            ('Активных Access Key', active_keys),
+            ('Навыков в каталоге', skills),
+            ('Клиентов', obj.clients.count()),
+            ('Заказов', obj.orders.count()),
+        ]
+        rows_html = format_html_join(
+            '',
+            '<tr><td style="padding:3px 16px 3px 0;color:#5a6472;">{}</td>'
+            '<td style="padding:3px 0;font-weight:700;">{}</td></tr>',
+            rows,
+        )
+        return format_html('<table style="border-collapse:collapse;">{}</table>', rows_html)
+
+    @admin.display(description='Недавняя активность')
+    def recent_activity(self, obj):
+        if obj.pk is None:
+            return '—'
+        from apps.audit.models import AuditLog
+        logs = (
+            AuditLog.objects.filter(company=obj)
+            .order_by('-created_at')[:8]
+        )
+        if not logs:
+            return format_html('<span style="color:#8a919e;">Пока нет записей</span>')
+        items = format_html_join(
+            '',
+            '<li style="margin-bottom:4px;"><span style="color:#8a919e;">{}</span> '
+            '<b>{}</b> {} <span style="color:#5a6472;">{}</span></li>',
+            (
+                (
+                    log.created_at.strftime('%d.%m %H:%M'),
+                    log.actor_username or 'system',
+                    log.action,
+                    log.object_repr or log.object_type,
+                )
+                for log in logs
+            ),
+        )
+        return format_html('<ul style="margin:0;padding-left:16px;">{}</ul>', items)
 
     @transaction.atomic
     def save_model(self, request, obj, form, change):

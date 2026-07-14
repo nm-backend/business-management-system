@@ -1,26 +1,38 @@
 from django.contrib import admin
 
+from apps.core.admin_utils import badge
+
 from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
 
 
 @admin.register(RawMaterial)
 class RawMaterialAdmin(admin.ModelAdmin):
-    list_display = ('name', 'company', 'stone_type', 'quantity', 'unit', 'min_stock', 'is_low_stock', 'is_archived')
+    list_display = ('name', 'company', 'stone_type', 'quantity', 'unit', 'min_stock', 'stock_badge', 'is_archived')
     list_filter = ('company', 'stone_type', 'unit', 'is_archived')
     search_fields = ('name', 'supplier', 'comment')
     autocomplete_fields = ('company',)
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('name',)
+    list_select_related = ('company',)
+
+    @admin.display(description='Остаток')
+    def stock_badge(self, obj):
+        return badge('Мало', 'red') if obj.is_low_stock else badge('В норме', 'green')
 
 
 @admin.register(FinishedProduct)
 class FinishedProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'company', 'category', 'quantity', 'available_quantity', 'unit', 'is_archived')
+    list_display = ('name', 'company', 'category', 'quantity', 'available_quantity', 'unit', 'stock_badge', 'is_archived')
     list_filter = ('company', 'category', 'unit', 'is_archived')
     search_fields = ('name', 'description')
     autocomplete_fields = ('company',)
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('name',)
+    list_select_related = ('company',)
+
+    @admin.display(description='Остаток')
+    def stock_badge(self, obj):
+        return badge('Мало', 'red') if obj.is_low_stock else badge('В норме', 'green')
 
 
 @admin.register(StockMovement)

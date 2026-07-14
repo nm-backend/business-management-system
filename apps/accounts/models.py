@@ -10,12 +10,24 @@ AbstractUser для поддержки ролевой системы и допо
 - admin: администратор (управление складом и работниками)
 - worker: работник (ограниченный доступ)
 """
+import secrets
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models import TimestampedModel
 
 from .managers import UserManager
+
+# Алфавит без похожих символов (0/O, 1/I) — код удобно диктовать и вводить.
+_ACCESS_KEY_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+
+
+def generate_access_key_code():
+    """Генерирует код-приглашение вида SKP-4A8F-72KD-91XQ."""
+    groups = [''.join(secrets.choice(_ACCESS_KEY_ALPHABET) for _ in range(4)) for _ in range(3)]
+    return 'SKP-' + '-'.join(groups)
 
 
 class Skill(TimestampedModel):
@@ -244,3 +256,74 @@ class User(AbstractUser):
             str - человекочитаемое название роли на текущем языке
         """
         return dict(self.Role.choices).get(self.role, self.role)
+
+
+class AccessKey(TimestampedModel):
+    """
+    Код-приглашение (Access Key) для активации аккаунта сотрудника.
+
+    Публичной регистрации нет. Владелец (или супер-администратор) создаёт
+    сотрудника, система генерирует уникальный одноразовый Access Key. Сотрудник
+    вводит его при первом входе — аккаунт активируется, сотрудник задаёт пароль
+    и входит; ключ помечается использованным.
+
+    Ключ можно перевыпустить (regenerate — старый отзывается, создаётся новый),
+    отозвать (revoke) и задать срок действия (expires_at). Одноразовость: после
+    использования статус становится USED и повторно ключ не сработает.
+
+    ИЗОЛЯЦИЯ: у ключа есть company — та же, что у сотрудника. Выборки в API и
+    админке фильтруются по компании; сотрудник одной компании не может выпустить
+    или увидеть ключи другой.
+    """
+    class Status(models.TextChoices):
+        ACTIVE = 'active', 'Active'
+        USED = 'used', 'Used'
+        REVOKED = 'revoked', 'Revoked'
+
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='access_keys',
+    )
+    user = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE, related_name='access_keys',
+    )
+    key = models.CharField(
+        max_length=32, unique=True, db_index=True, default=generate_access_key_code,
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True,
+    )
+    expires_at = models.DateTimeField(null=True, blank=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='issued_access_keys',
+    )
+
+    class Meta:
+        verbose_name = 'Access key'
+        verbose_name_plural = 'Access keys'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'status']),
+            models.Index(fields=['user', 'status']),
+        ]
+
+    def __str__(self):
+        return f'{self.key} → {self.user_id} ({self.effective_status})'
+
+    @property
+    def is_expired(self):
+        """Истёк ли срок действия ключа."""
+        return bool(self.expires_at and timezone.now() > self.expires_at)
+
+    @property
+    def is_redeemable(self):
+        """Можно ли активировать ключ прямо сейчас."""
+        return self.status == self.Status.ACTIVE and not self.is_expired
+
+    @property
+    def effective_status(self):
+        """Статус с учётом срока действия (active → expired, если срок вышел)."""
+        if self.status == self.Status.ACTIVE and self.is_expired:
+            return 'expired'
+        return self.status

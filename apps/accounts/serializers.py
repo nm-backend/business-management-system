@@ -11,7 +11,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from .models import Skill, User
+from .models import AccessKey, Skill, User
 
 
 class SkillSerializer(serializers.ModelSerializer):
@@ -127,7 +127,9 @@ class UserCreateSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer
     Безопасность:
         - Поле password помечено как write_only (не возвращается в API)
     """
-    password = serializers.CharField(write_only=True, min_length=8)
+    # Пароль необязателен: если не указан, сотрудник создаётся «приглашённым»
+    # (без рабочего пароля) и активирует аккаунт через Access Key.
+    password = serializers.CharField(write_only=True, min_length=8, required=False, allow_blank=True)
     skill_ids = serializers.PrimaryKeyRelatedField(
         many=True, write_only=True, required=False, source='skills',
         queryset=Skill.objects.all(),  # сужается по компании в CompanyScopedSkillsMixin
@@ -136,7 +138,7 @@ class UserCreateSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer
     class Meta:
         model = User
         fields = [
-            'username', 'password', 'full_name', 'phone', 'email',
+            'id', 'username', 'password', 'full_name', 'phone', 'email',
             'role', 'language', 'can_write_to_owner',
             'can_create_workers', 'can_see_other_workers',
             'position', 'department', 'birth_date', 'hire_date', 'bio', 'status',
@@ -144,30 +146,33 @@ class UserCreateSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer
         ]
 
     def validate(self, attrs):
-        candidate = User(
-            username=attrs.get('username', ''),
-            full_name=attrs.get('full_name', ''),
-        )
-        try:
-            validate_password(attrs['password'], candidate)
-        except DjangoValidationError as error:
-            raise serializers.ValidationError({'password': error.messages}) from error
+        password = attrs.get('password')
+        if password:
+            candidate = User(
+                username=attrs.get('username', ''),
+                full_name=attrs.get('full_name', ''),
+            )
+            try:
+                validate_password(password, candidate)
+            except DjangoValidationError as error:
+                raise serializers.ValidationError({'password': error.messages}) from error
         return attrs
 
     def create(self, validated_data):
         """
-        Создает пользователя с хешированием пароля.
+        Создаёт пользователя.
 
-        Аргументы:
-            validated_data: dict - валидированные данные из запроса
-
-        Возвращает:
-            User - созданный пользователь с хешированным паролем
+        С паролем — обычный аккаунт. Без пароля — «приглашённый» сотрудник
+        с непригодным паролем: он войдёт, только активировав аккаунт через
+        Access Key (см. apps.accounts.access_keys).
         """
-        password = validated_data.pop('password')
+        password = validated_data.pop('password', None)
         skills = validated_data.pop('skills', None)  # M2M нельзя задать в конструкторе
         user = User(**validated_data)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save()
         if skills is not None:
             user.skills.set(skills)
@@ -411,3 +416,48 @@ class LanguageSerializer(serializers.Serializer):
         - В ChangeLanguageView для POST /api/v1/accounts/me/language/
     """
     language = serializers.ChoiceField(choices=User.Language.choices)
+
+
+class AccessKeySerializer(serializers.ModelSerializer):
+    """Access Key сотрудника (для владельца/админа и супер-админа)."""
+    employee = serializers.SerializerMethodField()
+    effective_status = serializers.ReadOnlyField()
+
+    class Meta:
+        model = AccessKey
+        fields = [
+            'id', 'key', 'status', 'effective_status', 'employee',
+            'expires_at', 'used_at', 'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_employee(self, obj):
+        return {
+            'id': obj.user_id,
+            'username': obj.user.username,
+            'full_name': obj.user.full_name,
+            'role': obj.user.role,
+        }
+
+
+class AccessKeyIssueSerializer(serializers.Serializer):
+    """Вход для выпуска ключа: необязательный срок действия в днях."""
+    expires_in_days = serializers.IntegerField(required=False, min_value=1, max_value=365)
+
+
+class AccessKeyVerifySerializer(serializers.Serializer):
+    """Проверка кода (первый экран входа сотрудника)."""
+    access_key = serializers.CharField()
+
+
+class AccessKeyRedeemSerializer(serializers.Serializer):
+    """Активация аккаунта по коду: код + новый пароль."""
+    access_key = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_new_password(self, value):
+        try:
+            validate_password(value)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(list(error.messages)) from error
+        return value

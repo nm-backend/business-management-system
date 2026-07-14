@@ -13,6 +13,33 @@
 - **Frontend:** SPA на чистом JavaScript (без сборки, без Node.js), отдаётся
   Django-шаблонами. Роутинг через hash-router, авторизация — JWT в localStorage.
 
+---
+
+## 🐳 Быстрый старт через Docker (рекомендуется)
+
+Самый простой способ — Docker: Python, PostgreSQL и Redis ставить вручную не нужно.
+
+```bash
+git clone <URL> skladpro && cd skladpro
+docker compose up --build            # поднимет web + db + redis, применит миграции
+docker compose exec web python manage.py createsuperuser
+```
+
+Откройте **http://localhost:8000** (приложение) и
+**http://localhost:8000/admin/** (панель управления ERP).
+
+- 📘 **Новому разработчику / партнёру (с нуля, с установкой Docker):** [GETTING_STARTED.md](GETTING_STARTED.md)
+- 📗 **Краткий справочник по Docker (для тех, кто знает проект):** [DOCKER_GUIDE.md](DOCKER_GUIDE.md)
+
+### Онбординг сотрудников через Access Key (без публичной регистрации)
+Супер-админ создаёт компанию и владельца → владелец/супер-админ создаёт сотрудника →
+система генерирует **Access Key** (`SKP-XXXX-XXXX-XXXX`) → сотрудник вводит код на
+странице входа («У меня есть код доступа»), задаёт пароль и входит. Код одноразовый,
+его можно перевыпустить, отозвать и задать срок действия. Управление — в Django Admin
+(`Accounts → Access keys`) и через API `POST /api/v1/accounts/users/{id}/access_key/`.
+
+> Ниже — ручная установка без Docker (Windows). Для большинства случаев достаточно Docker выше.
+
 > Этот гайд проверен запуском проекта «с нуля» на Windows 11 (см. раздел
 > [15. Итоговая проверка](#15-итоговая-проверка-честный-отчёт)).
 
