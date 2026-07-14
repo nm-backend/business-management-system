@@ -7,6 +7,7 @@
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils import timezone
+from django.utils.html import format_html
 
 from apps.core.admin_utils import badge, choice_badge
 
@@ -127,28 +128,72 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(AccessKey)
 class AccessKeyAdmin(admin.ModelAdmin):
-    list_display = ('key_code', 'employee', 'company', 'status_badge', 'expires_at', 'used_at', 'created_at')
-    list_filter = ('company', 'status', 'created_at')
-    search_fields = ('key', 'user__username', 'user__full_name')
+    """
+    Реестр Access Key — всё, что нужно администратору для поддержки сотрудников.
+
+    БЕЗОПАСНОСТЬ: пароли здесь НЕ хранятся и НЕ показываются. Пароль остаётся
+    хешем Django. Помощь сотруднику = отозвать ключ / перевыпустить ключ /
+    сбросить пароль (действия ниже).
+    """
+    list_display = (
+        'key_code', 'employee', 'role_badge', 'company', 'status_badge',
+        'created_at', 'created_by', 'expires_at', 'used_at',
+        'last_login', 'last_activity',
+    )
+    list_filter = ('company', 'status', 'user__role', 'created_at', 'expires_at')
+    search_fields = ('key', 'user__username', 'user__full_name', 'user__phone')
     autocomplete_fields = ('company', 'user', 'created_by')
-    readonly_fields = ('key', 'used_at', 'created_at', 'updated_at')
+    readonly_fields = (
+        'key', 'status', 'used_at', 'created_at', 'updated_at',
+        'employee', 'role_badge', 'last_login', 'last_activity', 'account_state',
+    )
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    list_select_related = ('company', 'user')
-    actions = ('revoke_keys', 'regenerate_keys')
+    list_select_related = ('company', 'user', 'created_by')
+    actions = ('revoke_keys', 'regenerate_keys', 'force_password_reset')
 
-    @admin.display(description='Код (копируйте)', ordering='key')
+    fieldsets = (
+        ('Ключ', {'fields': ('key', 'status', 'expires_at', 'used_at')}),
+        ('Сотрудник', {'fields': ('user', 'employee', 'role_badge', 'company',
+                                  'account_state', 'last_login', 'last_activity')}),
+        ('Выпуск', {'fields': ('created_by', 'created_at', 'updated_at')}),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('company', 'user', 'created_by')
+
+    @admin.display(description='Access Key', ordering='key')
     def key_code(self, obj):
-        # Моноширинный, легко выделить и скопировать.
         return badge(obj.key, 'blue')
 
-    @admin.display(description='Сотрудник', ordering='user')
+    @admin.display(description='Сотрудник', ordering='user__full_name')
     def employee(self, obj):
         return obj.user.full_name or obj.user.username
 
-    @admin.display(description='Статус')
+    @admin.display(description='Роль', ordering='user__role')
+    def role_badge(self, obj):
+        return choice_badge(obj.user.role, obj.user.display_role, ROLE_COLORS)
+
+    @admin.display(description='Статус', ordering='status')
     def status_badge(self, obj):
         return choice_badge(obj.effective_status, obj.effective_status.capitalize(), KEY_STATUS_COLORS)
+
+    @admin.display(description='Последний вход', ordering='user__last_login')
+    def last_login(self, obj):
+        return obj.user.last_login or '—'
+
+    @admin.display(description='Активность', ordering='user__last_activity')
+    def last_activity(self, obj):
+        return obj.user.last_activity or '—'
+
+    @admin.display(description='Состояние аккаунта')
+    def account_state(self, obj):
+        parts = [badge('Активен', 'green') if obj.user.is_active else badge('Заблокирован', 'red')]
+        parts.append(
+            badge('Пароль задан', 'green') if obj.user.has_usable_password()
+            else badge('Ожидает активации', 'amber')
+        )
+        return format_html('{} {}', *parts)
 
     @admin.action(description='Отозвать выбранные ключи')
     def revoke_keys(self, request, queryset):
@@ -167,3 +212,24 @@ class AccessKeyAdmin(admin.ModelAdmin):
             issue_access_key(user=key.user, created_by=request.user)
             count += 1
         self.message_user(request, f'Перевыпущено ключей: {count}.')
+
+    @admin.action(description='Сбросить пароль (сотрудник войдёт по новому Access Key)')
+    def force_password_reset(self, request, queryset):
+        """
+        Безопасная помощь сотруднику: пароль делается непригодным (не раскрывается
+        и не задаётся администратором) и выпускается новый одноразовый Access Key.
+        """
+        count = 0
+        for key in queryset.select_related('user'):
+            user = key.user
+            if user.is_owner or user.is_superadmin or user.company_id is None:
+                continue
+            user.set_unusable_password()
+            user.save(update_fields=['password'])
+            issue_access_key(user=user, created_by=request.user)
+            count += 1
+        self.message_user(
+            request,
+            f'Сброшено паролей: {count}. Выпущены новые Access Key — передайте их сотрудникам.',
+            messages.SUCCESS if count else messages.WARNING,
+        )

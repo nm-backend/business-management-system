@@ -28,6 +28,7 @@ docker compose exec web python manage.py createsuperuser
 Откройте **http://localhost:8000** (приложение) и
 **http://localhost:8000/admin/** (панель управления ERP).
 
+- 🚀 **Docker Quick Start с нуля (пошагово, для новичка):** [DOCKER_QUICKSTART.md](DOCKER_QUICKSTART.md)
 - 📘 **Новому разработчику / партнёру (с нуля, с установкой Docker):** [GETTING_STARTED.md](GETTING_STARTED.md)
 - 📗 **Краткий справочник по Docker (для тех, кто знает проект):** [DOCKER_GUIDE.md](DOCKER_GUIDE.md)
 
