@@ -18,8 +18,8 @@ class Company(TimestampedModel):
     is_active = models.BooleanField(default=True, db_index=True)
 
     class Meta:
-        verbose_name = 'Company'
-        verbose_name_plural = 'Companies'
+        verbose_name = 'Компания'
+        verbose_name_plural = 'Компании'
         ordering = ['name']
 
     def __str__(self):

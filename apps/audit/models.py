@@ -98,8 +98,8 @@ class AuditLog(TimestampedModel):
     user_agent = models.TextField(blank=True)
 
     class Meta:
-        verbose_name = 'Audit log'
-        verbose_name_plural = 'Audit logs'
+        verbose_name = 'Запись журнала'
+        verbose_name_plural = 'Журнал действий'
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['action', 'created_at']),

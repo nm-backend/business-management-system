@@ -18,8 +18,8 @@ class TimestampedModel(models.Model):
         created_at: DateTimeField - время создания записи (автоматически)
         updated_at: DateTimeField - время последнего обновления (автоматически)
     """
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField('Создано', auto_now_add=True)
+    updated_at = models.DateTimeField('Обновлено', auto_now=True)
 
     class Meta:
         abstract = True
@@ -39,8 +39,8 @@ class SoftDeleteModel(models.Model):
         archive(): помечает запись как архивированную
         restore(): восстанавливает архивированную запись
     """
-    is_archived = models.BooleanField(default=False, db_index=True)
-    archived_at = models.DateTimeField(null=True, blank=True)
+    is_archived = models.BooleanField('В архиве', default=False, db_index=True)
+    archived_at = models.DateTimeField('Дата архивации', null=True, blank=True)
 
     class Meta:
         abstract = True

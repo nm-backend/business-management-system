@@ -60,8 +60,8 @@ class Skill(TimestampedModel):
     category = models.CharField(max_length=50, blank=True, default='')
 
     class Meta:
-        verbose_name = 'Skill'
-        verbose_name_plural = 'Skills'
+        verbose_name = 'Навык'
+        verbose_name_plural = 'Навыки'
         ordering = ['name']
         constraints = [
             # Имя навыка уникально в пределах компании, но не глобально.
@@ -187,8 +187,8 @@ class User(AbstractUser):
     objects = UserManager()
 
     class Meta:
-        verbose_name = 'User'
-        verbose_name_plural = 'Users'
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
         ordering = ['-created_at']
         constraints = [
             # Ровно один владелец на компанию (а не один на всю систему).
@@ -276,32 +276,35 @@ class AccessKey(TimestampedModel):
     или увидеть ключи другой.
     """
     class Status(models.TextChoices):
-        ACTIVE = 'active', 'Active'
-        USED = 'used', 'Used'
-        REVOKED = 'revoked', 'Revoked'
+        ACTIVE = 'active', 'Активен'
+        USED = 'used', 'Использован'
+        REVOKED = 'revoked', 'Отозван'
 
     company = models.ForeignKey(
         'companies.Company', on_delete=models.CASCADE, related_name='access_keys',
+        verbose_name='Компания',
     )
     user = models.ForeignKey(
         'accounts.User', on_delete=models.CASCADE, related_name='access_keys',
+        verbose_name='Сотрудник',
     )
     key = models.CharField(
-        max_length=32, unique=True, db_index=True, default=generate_access_key_code,
+        'Код доступа', max_length=32, unique=True, db_index=True,
+        default=generate_access_key_code,
     )
     status = models.CharField(
-        max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True,
+        'Статус', max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True,
     )
-    expires_at = models.DateTimeField(null=True, blank=True)
-    used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField('Действует до', null=True, blank=True)
+    used_at = models.DateTimeField('Использован', null=True, blank=True)
     created_by = models.ForeignKey(
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='issued_access_keys',
+        related_name='issued_access_keys', verbose_name='Кем выдан',
     )
 
     class Meta:
-        verbose_name = 'Access key'
-        verbose_name_plural = 'Access keys'
+        verbose_name = 'Код доступа'
+        verbose_name_plural = 'Коды доступа (Access Key)'
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['company', 'status']),
