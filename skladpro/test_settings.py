@@ -27,7 +27,7 @@ from skladpro.settings.base import *  # noqa: E402,F401,F403
 DEBUG = False
 
 # Тестовый клиент Django ходит с Host: testserver.
-ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['testserver', 'localhost', '127.0.0.1', '*']
 
 DATABASES = {
     'default': {
