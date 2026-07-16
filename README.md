@@ -1,514 +1,430 @@
-# SkladPro.Nod — Система автоматизации управления производством
+# SkladPro.Nod — ERP
 
-Многопользовательская (multi-tenant) SaaS ERP-система для производственных
-компаний: склад сырья, готовая продукция, производство, заказы, клиенты,
-финансы, аналитика, отчёты и внутренние сообщения. Каждая компания видит
-только свои данные.
+**RU:** Система управления производством: склад, заказы, производство, финансы, клиенты, сотрудники и чат в реальном времени.
+**UZ:** Ишлаб чиқаришни бошқариш тизими: омбор, буюртмалар, ишлаб чиқариш, молия, мижозлар, ходимлар ва реал вақтли чат.
 
-- **Backend:** Django 5.1 + Django REST Framework + JWT (SimpleJWT)
-- **Real-time:** Django Channels + WebSocket (корпоративный чат). В разработке —
-  in-memory канальный слой (Redis не нужен); в production — Redis.
-- **API-документация:** drf-spectacular (Swagger UI + ReDoc)
-- **База данных:** PostgreSQL
-- **Frontend:** SPA на чистом JavaScript (без сборки, без Node.js), отдаётся
-  Django-шаблонами. Роутинг через hash-router, авторизация — JWT в localStorage.
+> **RU:** Этот файл — единственная инструкция. Читай сверху вниз, ничего не пропускай.
+> **UZ:** Бу файл — ягона қўлланма. Юқоридан пастга қараб ўқинг, ҳеч нарсани ташлаб кетманг.
 
 ---
 
-## 🐳 Быстрый старт через Docker (рекомендуется)
+# ⚡ Самое быстрое / Энг тез усул
 
-Самый простой способ — Docker: Python, PostgreSQL и Redis ставить вручную не нужно.
+**RU:** Если Docker уже установлен — всего 2 команды:
+**UZ:** Агар Docker ўрнатилган бўлса — бор-йўғи 2 та буйруқ:
 
 ```bash
-git clone <URL> skladpro && cd skladpro
-docker compose up --build            # поднимет web + db + redis, применит миграции
+docker compose up --build
+```
+```bash
 docker compose exec web python manage.py createsuperuser
 ```
 
-Откройте **http://localhost:8000** (приложение) и
-**http://localhost:8000/admin/** (панель управления ERP).
+**RU:** Открой → http://127.0.0.1:8000
+**UZ:** Очинг → http://127.0.0.1:8000
 
-- 🚀 **Docker Quick Start с нуля (пошагово, для новичка):** [DOCKER_QUICKSTART.md](DOCKER_QUICKSTART.md)
-- 📘 **Новому разработчику / партнёру (с нуля, с установкой Docker):** [GETTING_STARTED.md](GETTING_STARTED.md)
-- 📗 **Краткий справочник по Docker (для тех, кто знает проект):** [DOCKER_GUIDE.md](DOCKER_GUIDE.md)
-
-### Онбординг сотрудников через Access Key (без публичной регистрации)
-Супер-админ создаёт компанию и владельца → владелец/супер-админ создаёт сотрудника →
-система генерирует **Access Key** (`SKP-XXXX-XXXX-XXXX`) → сотрудник вводит код на
-странице входа («У меня есть код доступа»), задаёт пароль и входит. Код одноразовый,
-его можно перевыпустить, отозвать и задать срок действия. Управление — в Django Admin
-(`Accounts → Access keys`) и через API `POST /api/v1/accounts/users/{id}/access_key/`.
-
-> Ниже — ручная установка без Docker (Windows). Для большинства случаев достаточно Docker выше.
-
-> Этот гайд проверен запуском проекта «с нуля» на Windows 11 (см. раздел
-> [15. Итоговая проверка](#15-итоговая-проверка-честный-отчёт)).
+**RU:** Не установлен Docker? Читай раздел для своей системы ниже.
+**UZ:** Docker йўқми? Пастдаги ўз тизимингиз учун бўлимни ўқинг.
 
 ---
 
-## 1. Требования
+# 🍎 macOS — с нуля / Ноldan бошлаб
 
-| Компонент   | Версия (проверено)      | Примечание |
-|-------------|-------------------------|------------|
-| Python      | **3.13** (3.13.13)      | Подойдёт 3.11+. `python --version` |
-| PostgreSQL  | **18**                  | Подойдёт 12+. `psql --version` |
-| Git         | любая свежая            | Или GitHub Desktop |
-| ОС          | Windows 10/11           | Гайд написан под Windows; на macOS/Linux меняются только пути |
-| Redis       | только для production   | Нужен для WebSocket-чата в проде. **В разработке НЕ требуется** (используется in-memory канальный слой). |
+**RU:** Терминал: `Cmd + Пробел` → напиши `Terminal` → Enter.
+**UZ:** Терминал: `Cmd + Пробел` → `Terminal` деб ёзинг → Enter.
 
-**Node.js / npm НЕ требуются.** Фронтенд — статические JS-файлы, шага сборки нет.
+### 1. Homebrew
 
-**Real-time чат работает «из коробки» в dev:** `runserver` автоматически
-поднимает ASGI-сервер (Daphne) и обслуживает WebSocket. Redis для разработки
-не нужен.
-
----
-
-## 2. Клонирование
-
-Через командную строку:
+**RU:** Это установщик программ для Mac. Вставь в терминал и нажми Enter:
+**UZ:** Бу Mac учун дастур ўрнатувчи. Терминалга қўйинг ва Enter босинг:
 
 ```bash
-git clone https://github.com/<owner>/business-management-system.git
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+**RU:** Попросит пароль от Mac — вводи (символы не видны, это нормально), Enter.
+**UZ:** Mac паролини сўрайди — киритинг (белгилар кўринмайди, бу нормал), Enter.
+
+**RU:** Если Mac на Apple Silicon (M1/M2/M3), выполни ещё это:
+**UZ:** Агар Mac Apple Silicon (M1/M2/M3) бўлса, буни ҳам бажаринг:
+
+```bash
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+```
+```bash
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+**RU:** Проверка / **UZ:** Текшириш:
+```bash
+brew --version
+```
+
+### 2. Git
+
+```bash
+brew install git
+```
+```bash
+git --version
+```
+
+### 3. Docker Desktop
+
+```bash
+brew install --cask docker
+```
+
+**RU:** ⚠️ Дальше ОБЯЗАТЕЛЬНО: открой Launchpad → запусти **Docker** → согласись с условиями → жди, пока кит 🐳 вверху экрана перестанет мигать.
+**UZ:** ⚠️ Кейин МАЖБУРИЙ: Launchpad → **Docker** ни ишга туширинг → шартларга розилик беринг → экран тепасидаги кит 🐳 липиллашдан тўхтагунча кутинг.
+
+**RU:** Проверка (обе команды должны показать версии):
+**UZ:** Текшириш (иккала буйруқ ҳам версия кўрсатиши керак):
+```bash
+docker --version
+```
+```bash
+docker compose version
+```
+
+### 4. VS Code (RU: необязательно / UZ: шарт эмас)
+
+```bash
+brew install --cask visual-studio-code
+```
+
+### 5. Скачать проект / Лойиҳани юклаш
+
+```bash
+cd ~/Desktop
+```
+```bash
+git clone <URL-РЕПОЗИТОРИЯ>
+```
+```bash
 cd business-management-system
 ```
 
-Через **GitHub Desktop**: `File → Clone repository…` → выбрать репозиторий →
-`Clone`. Затем `Repository → Open in Command Prompt` (или PowerShell).
+**RU:** `<URL-РЕПОЗИТОРИЯ>` — ссылка, которую даст владелец проекта.
+**UZ:** `<URL-РЕПОЗИТОРИЯ>` — лойиҳа эгаси берадиган ҳавола.
 
----
+### 6. Запуск / Ишга тушириш
 
-## 3. Виртуальное окружение (Windows)
-
-Из корня проекта:
-
-```powershell
-# Создать venv
-python -m venv venv
-
-# Активировать (PowerShell)
-venv\Scripts\Activate.ps1
-
-# либо в cmd.exe:
-venv\Scripts\activate.bat
+```bash
+docker compose up --build
 ```
 
-После активации в начале строки появится `(venv)`.
+**RU:** Первый раз — 5–10 минут. Жди строку `Listening on TCP address 0.0.0.0:8000`.
+**UZ:** Биринчи марта — 5–10 дақиқа. `Listening on TCP address 0.0.0.0:8000` қаторини кутинг.
 
-> Если PowerShell пишет «выполнение сценариев отключено», разрешите их для
-> текущего пользователя:
-> `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+**RU:** Открой браузер → http://127.0.0.1:8000
+**UZ:** Браузерни очинг → http://127.0.0.1:8000
+
+**RU:** ⚠️ Терминал НЕ закрывай — сервер работает в нём.
+**UZ:** ⚠️ Терминални ЁПМАНГ — сервер унда ишлаяпти.
+
+### 7. Создать админа / Админ яратиш
+
+**RU:** Открой **ВТОРОЙ** терминал (`Cmd + T`), в той же папке:
+**UZ:** **ИККИНЧИ** терминал очинг (`Cmd + T`), ўша папкада:
+
+```bash
+cd ~/Desktop/business-management-system
+```
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+**RU:** Введи логин, email (можно пропустить — Enter), пароль (минимум 8 символов; при вводе не видно — это нормально).
+**UZ:** Логин, email (ўтказиб юборса бўлади — Enter), парол киритинг (камида 8 белги; ёзганда кўринмайди — бу нормал).
 
 ---
 
-## 4. Установка зависимостей
+# 🪟 Windows — с нуля / Ноldan бошлаб
+
+**RU:** Терминал: кнопка «Пуск» → напиши `PowerShell` → Enter.
+**UZ:** Терминал: «Пуск» тугмаси → `PowerShell` деб ёзинг → Enter.
+
+### 1. Git
+**RU:** Скачай и установи (жми «Next» везде): https://git-scm.com/downloads
+**UZ:** Юклаб ўрнатинг (ҳамма жойда «Next»): https://git-scm.com/downloads
 
 ```powershell
-python -m pip install --upgrade pip
+git --version
+```
+
+### 2. Docker Desktop
+**RU:** Скачай: https://www.docker.com/products/docker-desktop
+При установке оставь галочку **WSL 2**. После установки — **перезагрузи компьютер**.
+**UZ:** Юклаб олинг: https://www.docker.com/products/docker-desktop
+Ўрнатишда **WSL 2** белгисини қолдиринг. Ўрнатгач — **компьютерни қайта юкланг**.
+
+**RU:** Потом запусти **Docker Desktop** и жди статус **Engine running**.
+**UZ:** Кейин **Docker Desktop** ни ишга туширинг ва **Engine running** ҳолатини кутинг.
+
+```powershell
+docker --version
+```
+```powershell
+docker compose version
+```
+
+**RU:** Ошибка про WSL? PowerShell **от имени администратора**:
+**UZ:** WSL хатоси чиқдими? PowerShell **администратор номидан**:
+```powershell
+wsl --install
+```
+```powershell
+wsl --update
+```
+**RU:** Затем перезагрузи ПК. / **UZ:** Кейин компьютерни қайта юкланг.
+
+### 3. VS Code (RU: необязательно / UZ: шарт эмас)
+https://code.visualstudio.com/download
+
+### 4. Скачать проект / Лойиҳани юклаш
+
+```powershell
+cd $HOME\Desktop
+```
+```powershell
+git clone <URL-РЕПОЗИТОРИЯ>
+```
+```powershell
+cd business-management-system
+```
+
+### 5. Запуск / Ишга тушириш
+
+```powershell
+docker compose up --build
+```
+
+**RU:** Открой → http://127.0.0.1:8000 | **UZ:** Очинг → http://127.0.0.1:8000
+
+### 6. Создать админа / Админ яратиш
+
+**RU:** Второй PowerShell, в той же папке:
+**UZ:** Иккинчи PowerShell, ўша папкада:
+
+```powershell
+cd $HOME\Desktop\business-management-system
+```
+```powershell
+docker compose exec web python manage.py createsuperuser
+```
+
+---
+
+# 🔗 Адреса / Ҳаволалар
+
+| RU | UZ | URL |
+|---|---|---|
+| Сайт | Сайт | http://127.0.0.1:8000 |
+| Админка | Админ панел | http://127.0.0.1:8000/admin/ |
+| Swagger (API) | Swagger (API) | http://127.0.0.1:8000/api/v1/swagger/ |
+| ReDoc (API) | ReDoc (API) | http://127.0.0.1:8000/api/v1/redoc/ |
+
+> **RU:** ⚠️ Swagger и ReDoc **только** с префиксом `/api/v1/`. Просто `/swagger/` даст ошибку 404 — это не поломка.
+> **UZ:** ⚠️ Swagger ва ReDoc **фақат** `/api/v1/` префикси билан. Оддий `/swagger/` 404 хато беради — бу носозлик эмас.
+
+---
+
+# 👥 Как работает система / Тизим қандай ишлайди
+
+**RU:** Обычной регистрации НЕТ. Сотрудник входит по коду доступа (Access Key).
+**UZ:** Оддий рўйхатдан ўтиш ЙЎҚ. Ходим кириш коди (Access Key) орқали киради.
+
+```
+Админ → Компании → выбрать компанию → «+ Добавить сотрудника»
+      → система выдаёт код SKP-XXXX-XXXX-XXXX → отдать сотруднику
+Сотрудник → страница входа → «У меня есть код доступа» → вводит код
+      → задаёт свой пароль → вошёл
+```
+
+**RU:** Порядок в админке:
+1. `Компании` → `Добавить` — создаётся компания + её владелец сразу.
+2. Открыть компанию → кнопка **«+ Добавить сотрудника»**.
+3. Заполнить форму → система покажет **код доступа** и кнопку «Копировать».
+4. Отдать код сотруднику.
+
+**UZ:** Админ панелдаги тартиб:
+1. `Компании` → `Добавить` — компания ва унинг эгаси бирдан яратилади.
+2. Компанияни очинг → **«+ Добавить сотрудника»** тугмаси.
+3. Формани тўлдиринг → тизим **кириш кодини** ва «Копировать» тугмасини кўрсатади.
+4. Кодни ходимга беринг.
+
+**RU:** Код одноразовый. Отозвать/перевыпустить: `Сотрудники и доступы → Коды доступа`.
+**UZ:** Код бир марталик. Бекор қилиш/қайта чиқариш: `Сотрудники и доступы → Коды доступа`.
+
+---
+
+# 🛠 Команды на каждый день / Кундалик буйруқлар
+
+```bash
+docker compose up -d          # RU: запустить в фоне    | UZ: фонда ишга тушириш
+docker compose ps             # RU: статус контейнеров  | UZ: контейнерлар ҳолати
+docker compose logs -f web    # RU: логи (ошибки)       | UZ: логлар (хатолар)
+docker compose restart web    # RU: перезапуск          | UZ: қайта ишга тушириш
+docker compose down           # RU: стоп (данные целы)  | UZ: тўхтатиш (маълумот сақланади)
+docker compose down -v        # RU: стоп + УДАЛИТЬ БД!  | UZ: тўхтатиш + БАЗАНИ ЎЧИРИШ!
+```
+
+> **RU:** ⚠️ `down -v` удаляет базу навсегда: компании, сотрудников, заказы. Без `-v` — данные сохраняются.
+> **UZ:** ⚠️ `down -v` базани бутунлай ўчиради: компаниялар, ходимлар, буюртмалар. `-v` сиз — маълумот сақланади.
+
+**RU:** Обновить проект / **UZ:** Лойиҳани янгилаш:
+```bash
+git pull
+```
+```bash
+docker compose up --build -d
+```
+
+---
+
+# 🚑 Если не работает / Ишламаса
+
+| RU: Проблема | UZ: Муаммо | RU: Решение / UZ: Ечим |
+|---|---|---|
+| `Cannot connect to the Docker daemon` | Docker уланмаяпти | RU: Docker Desktop не запущен — открой его, жди 1–2 мин. UZ: Docker Desktop ишламаяпти — очинг, 1–2 дақиқа кутинг. |
+| `port is already allocated` | Порт банд | RU: Порт 8000 занят. В `docker-compose.yml` замени `"8000:8000"` на `"8001:8000"`, открывай :8001. UZ: 8000-порт банд. `docker-compose.yml` да `"8000:8000"` ни `"8001:8000"` га алмаштиринг, :8001 ни очинг. |
+| RU: Контейнер перезапускается | UZ: Контейнер қайта ишга тушаверади | `docker compose logs web` — RU: причина видна там. UZ: сабаб ўша ерда кўринади. |
+| RU: Изменил код — нет эффекта | UZ: Код ўзгарди — натижа йўқ | `docker compose restart web` |
+| RU: Нет стилей / UZ: Стиллар йўқ | | `docker compose restart web` |
+| RU: Чат не обновляется | UZ: Чат янгиланмаяпти | RU: Проверь `docker compose ps` — `redis` должен быть healthy. UZ: `docker compose ps` — `redis` healthy бўлиши керак. |
+| RU: Забыл пароль админа | UZ: Админ паролини унутдим | `docker compose exec web python manage.py changepassword <логин>` |
+| RU: Хочу начать заново | UZ: Бошидан бошлашни хоҳлайман | `docker compose down -v` → `docker compose up --build` |
+
+**RU:** Не помогло? Скопируй вывод `docker compose logs web` и отправь разработчику — там всегда видна причина.
+**UZ:** Ёрдам бермадими? `docker compose logs web` натижасини нусхалаб дастурчига юборинг — сабаб доим ўша ерда кўринади.
+
+---
+
+# ✅ Проверка / Текшириш
+
+- [ ] `docker compose ps` → RU: 3 контейнера: `web` (Up), `db` (healthy), `redis` (healthy) | UZ: 3 та контейнер
+- [ ] http://127.0.0.1:8000 — RU: сайт открылся | UZ: сайт очилди
+- [ ] http://127.0.0.1:8000/admin/ — RU: вход работает | UZ: кириш ишлаяпти
+- [ ] http://127.0.0.1:8000/api/v1/swagger/ — RU: Swagger открылся | UZ: Swagger очилди
+- [ ] RU: Создал компанию → сотрудника → получил код `SKP-...` | UZ: Компания → ходим → `SKP-...` коди олинди
+
+---
+
+# 🧰 Технологии / Технологиялар
+
+Django 5.1 · Django REST Framework · JWT · Channels (WebSocket) · PostgreSQL 16 · Redis 7 · Daphne (ASGI) · WhiteNoise · Docker
+
+**RU:** Frontend — обычный JavaScript, сборка (Node.js/npm) НЕ нужна.
+**UZ:** Frontend — оддий JavaScript, сборка (Node.js/npm) КЕРАК ЭМАС.
+
+---
+
+# ⚙️ Переменные окружения / Муҳит ўзгарувчилари
+
+**RU:** Для локального Docker `.env` создавать НЕ нужно — значения по умолчанию уже в `docker-compose.yml`.
+**UZ:** Локал Docker учун `.env` яратиш ШАРТ ЭМАС — стандарт қийматлар `docker-compose.yml` да бор.
+
+**RU:** Нужны свои значения? Скопируй пример: / **UZ:** Ўз қийматларингиз керакми? Намунадан нусха олинг:
+```bash
+cp .env.docker.example .env      # macOS/Linux
+```
+```powershell
+copy .env.docker.example .env    # Windows
+```
+
+| RU: Переменная | RU: Назначение / UZ: Вазифаси |
+|---|---|
+| `SECRET_KEY` | RU: Ключ Django. **Для интернета — обязательно заменить!** UZ: Django калити. **Интернет учун — мажбурий алмаштиринг!** |
+| `DEBUG` | RU: `True` локально, `False` в интернете. UZ: Локал `True`, интернетда `False`. |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | RU: Данные БД. UZ: Базa маълумотлари. |
+| `ALLOWED_HOSTS` | RU: Разрешённые адреса. UZ: Рухсат этилган манзиллар. |
+
+**RU:** `DB_HOST=db` и `REDIS_URL=redis://redis:6379/0` внутри Docker менять НЕ нужно.
+**UZ:** Docker ичида `DB_HOST=db` ва `REDIS_URL=redis://redis:6379/0` ни ЎЗГАРТИРМАНГ.
+
+---
+
+# 🧪 Тесты / Тестлар
+
+```bash
+docker compose exec -e DJANGO_SETTINGS_MODULE=skladpro.test_settings web python manage.py test
+```
+**RU:** Должно быть `OK`. / **UZ:** `OK` бўлиши керак.
+
+---
+
+# 💻 Без Docker (RU: только для разработчиков / UZ: фақат дастурчилар учун)
+
+**RU:** Нужны Python 3.11+ и PostgreSQL, установленные вручную. Docker проще — используй его.
+**UZ:** Қўлда ўрнатилган Python 3.11+ ва PostgreSQL керак. Docker осонроқ — ундан фойдаланинг.
+
+```bash
+python -m venv venv
+```
+```bash
+source venv/bin/activate      # macOS/Linux
+```
+```powershell
+venv\Scripts\Activate.ps1     # Windows
+```
+```bash
 pip install -r requirements.txt
 ```
-
-Устанавливаются: Django, DRF, SimpleJWT, psycopg2-binary, python-decouple,
-django-cors-headers, Pillow, reportlab, openpyxl, django-filter, gunicorn,
-drf-spectacular, **channels + daphne** (WebSocket), **channels-redis**
-(канальный слой для production). Все версии закреплены в `requirements.txt`.
-
----
-
-## 5. Настройка PostgreSQL
-
-Проект использует PostgreSQL (в тестах — SQLite in-memory, отдельная БД не нужна).
-
-### 5.1. Открыть psql
-
-```powershell
-# Windows: обычно psql лежит здесь
-& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres
-```
-
-Введите пароль пользователя `postgres`, заданный при установке PostgreSQL.
-
-### 5.2. Создать БД и пользователя
-
-Внутри `psql` (можно использовать существующего пользователя `postgres` или
-создать отдельного — рекомендуется отдельный):
-
-```sql
--- Отдельный пользователь приложения (рекомендуется)
-CREATE USER skladpro_user WITH PASSWORD 'change_me_strong';
-
--- База данных
-CREATE DATABASE skladpro_db OWNER skladpro_user ENCODING 'UTF8';
-
--- Права
-GRANT ALL PRIVILEGES ON DATABASE skladpro_db TO skladpro_user;
-
--- (PostgreSQL 15+) права на схему public, иначе migrate упадёт с
--- "permission denied for schema public"
-\c skladpro_db
-GRANT ALL ON SCHEMA public TO skladpro_user;
-
-\q
-```
-
-**Простой вариант** (для локальной разработки): использовать встроенного
-`postgres` как владельца — тогда в `.env` укажите `DB_USER=postgres` и его пароль.
-
-Пример полного набора значений для `.env` под этот раздел:
-
-```
-DB_NAME=skladpro_db
-DB_USER=skladpro_user
-DB_PASSWORD=change_me_strong
-DB_HOST=localhost
-DB_PORT=5432
-```
-
----
-
-## 6. Файл `.env`
-
-Скопируйте шаблон и заполните значения:
-
-```powershell
-copy .env.example .env
-```
-
-Переменные (файл `.env` в корне проекта):
-
-| Переменная      | Обязательна | Значение / пример | Назначение |
-|-----------------|-------------|-------------------|------------|
-| `SECRET_KEY`    | **да**      | длинная случайная строка | Криптоключ Django. Сгенерировать: `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` |
-| `DJANGO_ENV`    | нет         | `development` (по умолч.) / `production` | Какой набор настроек грузить (`skladpro/settings/development.py` или `production.py`) |
-| `DEBUG`         | нет         | `True` для разработки, `False` в проде | Режим отладки |
-| `ALLOWED_HOSTS` | нет (в dev) | `localhost,127.0.0.1` | Разрешённые хосты, через запятую |
-| `DB_NAME`       | **да**      | `skladpro_db` | Имя базы |
-| `DB_USER`       | **да**      | `skladpro_user` / `postgres` | Пользователь БД |
-| `DB_PASSWORD`   | **да**      | ваш пароль | Пароль БД |
-| `DB_HOST`       | **да**      | `localhost` | Хост БД |
-| `DB_PORT`       | **да**      | `5432` | Порт БД |
-| `MEDIA_URL`     | нет         | `/media/` | URL для загруженных файлов |
-| `MEDIA_ROOT`    | нет         | `media/` | Папка для загруженных файлов |
-| `REDIS_URL`     | только prod | `redis://127.0.0.1:6379/0` | Канальный слой Channels для WebSocket. В dev не нужен (in-memory). |
-
-> **Важно:** переменные окружения ОС имеют приоритет над `.env` (так работает
-> python-decouple). Если, например, в системе выставлен `DB_NAME`, он
-> перекроет значение из `.env`. Проверьте `echo $env:DB_NAME` (PowerShell),
-> если БД подключается «не туда».
-
----
-
-## 7. Миграции
-
-```powershell
+**RU:** Создай `.env` (см. `.env.docker.example`), укажи `DB_HOST=localhost`, создай базу в PostgreSQL, затем:
+**UZ:** `.env` яратинг (`.env.docker.example` га қаранг), `DB_HOST=localhost` ёзинг, PostgreSQL да база яратинг, кейин:
+```bash
 python manage.py migrate
 ```
-
-Ожидаемый результат — список `Applying …  OK` без ошибок. Проверить состояние
-проекта и отсутствие незакоммиченных изменений моделей:
-
-```powershell
-python manage.py check                 # System check identified no issues
-python manage.py makemigrations --check # No changes detected
-```
-
----
-
-## 8. Первый пользователь (супер-администратор платформы)
-
-Система многопользовательская. Верхний уровень — **супер-администратор**
-(`role=superadmin`, `company=None`): он не принадлежит ни одной компании и
-создаёт компании вместе с их владельцами (через Django Admin или API).
-
-Создать супер-администратора:
-
-```powershell
+```bash
 python manage.py createsuperuser
 ```
-
-Введите username, email (можно пустой) и пароль. Команда создаёт пользователя
-с `role=superadmin`, `is_staff=True`, `is_superuser=True`, `company=None`
-(логика в `apps/accounts/managers.py`).
-
-Неинтерактивно (например, для скриптов):
-
-```powershell
-$env:DJANGO_SUPERUSER_USERNAME="admin"
-$env:DJANGO_SUPERUSER_PASSWORD="Admin12345"
-$env:DJANGO_SUPERUSER_EMAIL="admin@example.com"
-python manage.py createsuperuser --noinput
-```
-
-**Что дальше — создание компании и владельца:**
-1. Зайти в Django Admin `http://localhost:8000/admin/` под супер-админом.
-2. `Companies → Add`: указать название компании и данные владельца
-   (username / пароль / ФИО) — компания и её владелец создаются за один шаг.
-3. Владелец логинится на сайте и заводит администраторов и рабочих.
-
-(То же можно сделать через API: `POST /api/v1/companies/` под супер-админом.)
-
----
-
-## 9. Запуск сервера
-
-```powershell
+```bash
 python manage.py runserver
 ```
 
-По умолчанию — `http://127.0.0.1:8000/`. Открыть в браузере:
-
-| Адрес | Что это |
-|-------|---------|
-| http://localhost:8000/ | Приложение (SPA) |
-| http://localhost:8000/accounts/login/ | Страница входа |
-| http://localhost:8000/admin/ | Django Admin (для супер-админа) |
-| http://localhost:8000/api/v1/swagger/ | Swagger UI (интерактивная API-документация) |
-| http://localhost:8000/api/v1/redoc/ | ReDoc (читаемая API-документация) |
-| http://localhost:8000/api/v1/schema/ | OpenAPI-схема (YAML) |
-
-Запуск на другом порту: `python manage.py runserver 8001`.
-
-> **WebSocket-чат:** т.к. `daphne` первым стоит в `INSTALLED_APPS`, `runserver`
-> запускается как ASGI и сам обслуживает WebSocket по адресу `/ws/chat/`.
-> Отдельная команда не нужна. Проверка: откройте чат («Хабарлар» → вкладка
-> «Чат»), в DevTools → Network → WS должно быть соединение `101 Switching
-> Protocols`.
-
 ---
 
-## 10. Тесты
+# 🚀 Деплой в интернет / Интернетга жойлаштириш
 
-Тесты используют отдельные настройки (`skladpro.test_settings`, SQLite
-in-memory) — реальную БД PostgreSQL они не трогают.
+**RU:** Проект готов к Railway/Render. Обязательные шаги владельца:
+**UZ:** Лойиҳа Railway/Render учун тайёр. Эга бажариши шарт бўлган қадамлар:
 
-```powershell
-# PowerShell
-$env:DJANGO_SETTINGS_MODULE="skladpro.test_settings"
-python manage.py test
+1. **RU:** Создать сервисы **PostgreSQL** и **Redis** на платформе. **UZ:** Платформада **PostgreSQL** ва **Redis** сервисларини яратинг.
+2. **RU:** Задать переменные: `SECRET_KEY` (настоящий!), `DEBUG=False`, `DJANGO_ENV=production`, `ALLOWED_HOSTS=<домен>`, `REDIS_URL`, `DB_*`.
+   **UZ:** Ўзгарувчиларни киритинг: `SECRET_KEY` (ҳақиқий!), `DEBUG=False`, `DJANGO_ENV=production`, `ALLOWED_HOSTS=<домен>`, `REDIS_URL`, `DB_*`.
+3. **RU:** Команда запуска: / **UZ:** Ишга тушириш буйруғи:
+   ```
+   daphne -b 0.0.0.0 -p $PORT skladpro.asgi:application
+   ```
+   **RU:** ⚠️ Обычный gunicorn НЕ обслужит WebSocket — чат работать не будет.
+   **UZ:** ⚠️ Оддий gunicorn WebSocket ни қўллаб-қувватламайди — чат ишламайди.
 
-# cmd.exe
-set DJANGO_SETTINGS_MODULE=skladpro.test_settings
-python manage.py test
+**RU:** Сгенерировать `SECRET_KEY`: / **UZ:** `SECRET_KEY` яратиш:
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-**Как выглядит успех:**
-
-```
-Ran 153 tests in X.XXXs
-
-OK
-```
-
-Отдельное приложение — например изоляция компаний или чат:
-`python manage.py test apps.companies apps.messaging`.
-(Тесты чата используют in-memory канальный слой Channels — Redis для тестов не нужен.)
-
 ---
 
-## 11. Частые ошибки и их решение
+# ❓ FAQ
 
-### PostgreSQL не подключается
-- **Симптом:** `could not connect to server` / `connection refused` /
-  `password authentication failed`.
-- **Причина:** служба PostgreSQL не запущена, неверные `DB_USER`/`DB_PASSWORD`/
-  `DB_PORT`, либо БД не создана.
-- **Решение:** проверьте, что служба запущена (Windows: `services.msc` →
-  `postgresql-x64-18`). Проверьте вход вручную:
-  `psql -U <DB_USER> -d <DB_NAME> -h localhost`. Сверьте значения с `.env`.
+**RU: Нужно ли ставить Python/PostgreSQL/Redis отдельно?**
+Нет. Docker ставит всё сам.
+**UZ: Python/PostgreSQL/Redis ни алоҳида ўрнатиш керакми?**
+Йўқ. Docker ҳаммасини ўзи ўрнатади.
 
-### `migrate` падает
-- **Симптом:** `permission denied for schema public`.
-- **Причина:** в PostgreSQL 15+ у нового пользователя нет прав на схему `public`.
-- **Решение:** `GRANT ALL ON SCHEMA public TO <DB_USER>;` (см. раздел 5.2).
-- **Симптом:** `relation ... already exists` / конфликт миграций.
-- **Решение:** для чистого старта пересоздайте БД
-  (`DROP DATABASE skladpro_db; CREATE DATABASE …`) и выполните `migrate` заново.
+**RU: Почему первый запуск такой долгий?**
+Скачиваются образы и ставятся зависимости. Дальше — быстро.
+**UZ: Нега биринчи ишга тушириш узоқ?**
+Образлар юкланади ва кутубхоналар ўрнатилади. Кейингилари тез.
 
-### `.env` не читается
-- **Симптом:** Django берёт настройки по умолчанию, а не из `.env`.
-- **Причина:** файл называется не `.env`, лежит не в корне, либо переменная
-  задана в окружении ОС и перекрывает файл.
-- **Решение:** убедитесь, что `.env` в корне рядом с `manage.py`. Проверьте
-  окружение: `echo $env:SECRET_KEY`. Переменные ОС имеют приоритет.
+**RU: Можно закрыть терминал?**
+Только если запускал с `-d`. Иначе сервер остановится.
+**UZ: Терминални ёпса бўладими?**
+Фақат `-d` билан ишга туширган бўлсангиз. Акс ҳолда сервер тўхтайди.
 
-### Ошибки CORS
-- **Симптом:** в консоли браузера `blocked by CORS policy`.
-- **Причина:** запрос с origin, которого нет в разрешённых.
-- **Решение:** в разработке (`DEBUG=True`) CORS открыт. В проде задайте
-  разрешённые origin в настройках (`production.py`, `CORS_ALLOW_ALL_ORIGINS=False`).
-
-### Порт занят
-- **Симптом:** `Error: That port is already in use.`
-- **Решение:** запустите на другом порту (`python manage.py runserver 8001`)
-  или освободите порт: `netstat -ano | findstr :8000`, затем
-  `taskkill /PID <pid> /F`.
-
-### `ModuleNotFoundError`
-- **Симптом:** `No module named 'rest_framework'` (или другой пакет).
-- **Причина:** не активирован venv или не установлены зависимости.
-- **Решение:** активируйте venv (`venv\Scripts\Activate.ps1`), затем
-  `pip install -r requirements.txt`.
-
-### Статика не грузится (нет стилей)
-- **Симптом:** страница без CSS.
-- **Причина в dev:** `DEBUG=False` без `collectstatic`.
-- **Решение:** для разработки держите `DEBUG=True`. Для прода выполните
-  `python manage.py collectstatic`.
-
-### Старый CSS/JS в браузере
-- **Симптом:** правки не видны.
-- **Причина:** кэш браузера. В проекте есть версионирование ассетов (`?v=`),
-  но при жёстком кэше поможет **Ctrl+F5** (жёсткая перезагрузка) или режим
-  инкогнито.
-
-### JWT: 401 Unauthorized
-- **Симптом:** API отвечает `401` после входа.
-- **Причина:** истёк access-токен или он не передан.
-- **Решение:** обновите токен через `POST /api/v1/accounts/token/refresh/`
-  или войдите заново. Токен должен идти в заголовке
-  `Authorization: Bearer <token>`.
-
-### CSRF (403) при работе через Django Admin / формы
-- **Симптом:** `CSRF verification failed` в Django Admin.
-- **Причина:** отсутствует/просрочен CSRF-cookie.
-- **Решение:** обновите страницу, чтобы получить свежий CSRF-токен.
-  Публичные API-эндпоинты входа (`login`, `setup`) от CSRF освобождены —
-  они работают на JWT, не на сессиях.
-
-### Swagger не открывается
-- **Симптом:** `/api/v1/swagger/` даёт ошибку.
-- **Причина:** обычно не установлен `drf-spectacular`.
-- **Решение:** `pip install -r requirements.txt`. Проверить схему:
-  `python manage.py spectacular --file schema.yaml`.
-
-### `createsuperuser` — ошибки валидации
-- **Симптом:** команда ругается на пароль/username.
-- **Решение:** пароль не короче 8 символов и не слишком простой; username
-  уникален.
-
----
-
-## 12. Чек-лист работоспособности
-
-Пройдите после запуска — всё должно проходить:
-
-- [ ] `http://localhost:8000/` открывается (SPA грузится)
-- [ ] Страница входа `/accounts/login/` открывается
-- [ ] Логин супер-админа работает (через Django Admin `/admin/`)
-- [ ] Создание компании + владельца в Django Admin проходит
-- [ ] Владелец компании логинится на сайте
-- [ ] Администратор компании логинится и видит только свою компанию
-- [ ] Рабочий логинится с ограниченными правами
-- [ ] Swagger UI `/api/v1/swagger/` открывается
-- [ ] ReDoc `/api/v1/redoc/` открывается
-- [ ] Django Admin `/admin/` доступен супер-админу
-- [ ] API отвечает: `GET /api/v1/accounts/setup/check/` → `200`
-- [ ] Чат работает: «Хабарлар» → «Чат», виден «Умумий чат», сообщение
-      отправляется; WebSocket `/ws/chat/` подключён (DevTools → Network → WS)
-- [ ] Тесты проходят: `python manage.py test` (с `DJANGO_SETTINGS_MODULE=skladpro.test_settings`) → `OK`
-
----
-
-## 13. Структура проекта
-
-```
-business-management-system/
-├── manage.py                  # Точка входа Django
-├── requirements.txt           # Python-зависимости (версии закреплены)
-├── .env.example               # Шаблон переменных окружения
-├── skladpro/                  # Конфигурация проекта
-│   ├── settings/
-│   │   ├── base.py            # Базовые настройки
-│   │   ├── development.py     # DEBUG-настройки (по умолчанию)
-│   │   ├── production.py      # Прод: HSTS, secure cookies, SSL redirect
-│   │   └── __init__.py        # Выбор окружения по DJANGO_ENV
-│   ├── test_settings.py       # Настройки тестов (SQLite in-memory)
-│   └── urls.py                # Корневые маршруты (API, Swagger, admin)
-├── apps/                      # Бизнес-модули (Django-приложения)
-│   ├── accounts/             # Пользователи, роли, JWT-аутентификация
-│   ├── companies/            # Компании (арендаторы), SaaS-онбординг
-│   ├── clients/              # Клиенты (активные/архив)
-│   ├── warehouse/            # Склад сырья и готовой продукции
-│   ├── production/           # Производство и задачи
-│   ├── orders/               # Заказы
-│   ├── finance/              # Расходы, выплаты рабочим
-│   ├── reports/              # Аналитика и отчёты
-│   ├── messaging/            # Чат + уведомления (изолированы по компании):
-│   │                         #   models(Conversation/ChatMessage) · consumers.py
-│   │                         #   (WebSocket) · routing.py · ws_auth.py (JWT для WS)
-│   ├── audit/                # Журнал аудита
-│   └── core/                 # Общие permissions, mixins, утилиты
-├── core/                      # Общий код проекта
-├── static/                    # Frontend: CSS и vanilla-JS SPA
-│   ├── css/
-│   └── js/
-│       ├── components/       # Экраны SPA
-│       └── icons.js          # SVG-иконки навигации
-├── templates/                 # Django-шаблоны (оболочка SPA, вход)
-└── locale/                    # Переводы (Узбекский / Русский)
-```
-
-**Ключевые архитектурные принципы:**
-- **Multi-tenant:** у каждой бизнес-сущности есть FK `company`; queryset'ы
-  фильтруются по компании текущего пользователя. Компании не видят данные
-  друг друга (проверяется тестами в `apps/companies/tests.py`).
-- **Роли:** `superadmin` (платформа, `company=None`) / `owner` / `admin` /
-  `worker`. Права — через DRF permissions (`IsCompanyMember`, `IsSuperAdmin` и т.д.).
-- **Финансы:** финансовые данные не отдаются рабочим/администраторам, которым
-  они не положены (проверяется на уровне сериализаторов и permissions).
-
----
-
-## 14. Развёртывание в production (кратко)
-
-1. `.env`: `DJANGO_ENV=production`, `DEBUG=False`, реальный `ALLOWED_HOSTS`,
-   сильный `SECRET_KEY`, `REDIS_URL` (для WebSocket-чата).
-2. Запустить **Redis** — в проде это общий канальный слой Channels
-   (в `production.py` уже настроен `channels_redis` по `REDIS_URL`).
-3. `python manage.py collectstatic`
-4. Приложение обслуживает и HTTP, и WebSocket через **ASGI**, поэтому в проде
-   запускайте ASGI-сервер, а не только gunicorn/WSGI. Варианты:
-   - Daphne (уже в зависимостях): `daphne -b 0.0.0.0 -p 8000 skladpro.asgi:application`
-   - либо Uvicorn-воркеры под gunicorn:
-     `gunicorn skladpro.asgi:application -k uvicorn.workers.UvicornWorker`
-   > Чистый `gunicorn skladpro.wsgi:application` обслужит сайт и API, но
-   > **не** WebSocket — чат не будет обновляться в реальном времени.
-5. За reverse-proxy (nginx) с HTTPS. Для WebSocket проксируйте `/ws/` с
-   заголовками `Upgrade`/`Connection`. В `production.py` включены HSTS,
-   `SECURE_SSL_REDIRECT`, secure/HttpOnly cookies.
-
----
-
-## 15. Итоговая проверка (честный отчёт)
-
-**Запускался ли проект «с нуля»?** Да. Перед написанием этого гайда проект был
-поднят с нуля в изолированном окружении, как будто репозиторий открыт впервые.
-
-**Что именно было выполнено (реально исполненные команды):**
-1. Создан новый venv отдельным интерпретатором Python 3.13.13.
-2. `pip install -r requirements.txt` — все зависимости установились без ошибок.
-3. Создана чистая база PostgreSQL 18 (`CREATE DATABASE …`).
-4. `python manage.py migrate` из нуля — все миграции применились, ошибок нет.
-5. `python manage.py check` → «System check identified no issues».
-6. `python manage.py makemigrations --check` → изменений моделей нет (дрейфа нет).
-7. `createsuperuser --noinput` → создан пользователь с `role=superadmin`,
-   `is_superuser=True`, `company=None`.
-8. `runserver` → проверены эндпоинты:
-   `/` → 200, `/accounts/login/` → 200,
-   `/api/v1/accounts/setup/check/` → 200, `/api/v1/swagger/` → 200,
-   `/api/v1/redoc/` → 200, `/api/v1/schema/` → 200, `/admin/` → 302 (редирект
-   на вход — норма).
-9. Проверен вход супер-админа через API — вернулись данные пользователя и токены.
-10. `python manage.py test` (test_settings, SQLite) → **135 тестов, OK**.
-
-**Какие проблемы пришлось исправить:**
-- В `requirements.txt` зависимость `drf-spectacular` была без версии. Для
-  воспроизводимости она закреплена: `drf-spectacular==0.30.0` (версия, которую
-  подтянула чистая установка). Больше при запуске с нуля ничего чинить не
-  потребовалось.
-- Обновлены `.env.example` (добавлено пояснение по `DJANGO_ENV` и все
-  переменные) и этот `README.md` (раньше состоял из двух строк).
-
-**Известные оставшиеся проблемы:** при запуске с нуля не выявлено. Приведённые
-в разделе 11 ошибки — типовые окружения (не баги проекта), а не то, что
-проявилось во время проверки.
+**RU: Данные пропадут после `docker compose down`?**
+Нет. Пропадут только после `down -v`.
+**UZ: `docker compose down` дан кейин маълумот йўқоладими?**
+Йўқ. Фақат `down -v` дан кейин йўқолади.
