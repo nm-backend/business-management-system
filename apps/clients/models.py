@@ -32,8 +32,8 @@ class Client(TimestampedModel, SoftDeleteModel):
     debt = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
     class Meta:
-        verbose_name = 'Client'
-        verbose_name_plural = 'Clients'
+        verbose_name = 'Клиент'
+        verbose_name_plural = 'Клиенты'
         ordering = ['name']
 
     def __str__(self):
@@ -99,8 +99,8 @@ class Payment(TimestampedModel):
     payment_date = models.DateTimeField()
 
     class Meta:
-        verbose_name = 'Payment'
-        verbose_name_plural = 'Payments'
+        verbose_name = 'Оплата'
+        verbose_name_plural = 'Оплаты'
         ordering = ['-payment_date']
 
     def __str__(self):

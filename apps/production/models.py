@@ -107,8 +107,8 @@ class Task(TimestampedModel):
             ordering: сортировка по убыванию даты назначения
             indexes: индексы для оптимизации запросов
         """
-        verbose_name = 'Task'
-        verbose_name_plural = 'Tasks'
+        verbose_name = 'Задача'
+        verbose_name_plural = 'Задачи'
         ordering = ['-assigned_at']
         indexes = [
             models.Index(fields=['worker', 'status']),
@@ -230,8 +230,8 @@ class WorkRecord(TimestampedModel):
             ordering: сортировка по убыванию даты создания
             indexes: индексы для оптимизации запросов
         """
-        verbose_name = 'Work Record'
-        verbose_name_plural = 'Work Records'
+        verbose_name = 'Запись о работе'
+        verbose_name_plural = 'Записи о работе'
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['worker', 'status']),

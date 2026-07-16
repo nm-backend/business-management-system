@@ -47,8 +47,8 @@ class Conversation(TimestampedModel):
     )
 
     class Meta:
-        verbose_name = 'Conversation'
-        verbose_name_plural = 'Conversations'
+        verbose_name = 'Беседа'
+        verbose_name_plural = 'Беседы'
         ordering = ['-updated_at']
         indexes = [
             models.Index(fields=['company', 'kind']),
@@ -85,8 +85,8 @@ class ConversationParticipant(TimestampedModel):
     last_read_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        verbose_name = 'Conversation participant'
-        verbose_name_plural = 'Conversation participants'
+        verbose_name = 'Участник беседы'
+        verbose_name_plural = 'Участники беседы'
         constraints = [
             models.UniqueConstraint(
                 fields=['conversation', 'user'],
@@ -113,6 +113,7 @@ class ChatMessage(TimestampedModel):
     )
     conversation = models.ForeignKey(
         Conversation, on_delete=models.CASCADE, related_name='messages',
+        verbose_name='Беседа',
     )
     sender = models.ForeignKey(
         'accounts.User', on_delete=models.CASCADE, related_name='chat_messages',
@@ -120,8 +121,8 @@ class ChatMessage(TimestampedModel):
     content = models.TextField()
 
     class Meta:
-        verbose_name = 'Chat message'
-        verbose_name_plural = 'Chat messages'
+        verbose_name = 'Сообщение чата'
+        verbose_name_plural = 'Сообщения чата'
         ordering = ['created_at']
         indexes = [
             models.Index(fields=['conversation', 'created_at']),
@@ -214,8 +215,8 @@ class Notification(TimestampedModel):
             ordering: сортировка по убыванию даты создания
             indexes: индексы для оптимизации запросов
         """
-        verbose_name = 'Notification'
-        verbose_name_plural = 'Notifications'
+        verbose_name = 'Уведомление'
+        verbose_name_plural = 'Уведомления'
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['user', 'is_read']),

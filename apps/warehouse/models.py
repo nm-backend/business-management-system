@@ -90,8 +90,8 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
             verbose_name_plural: множественное число
             ordering: сортировка по умолчанию
         """
-        verbose_name = 'Raw Material'
-        verbose_name_plural = 'Raw Materials'
+        verbose_name = 'Сырьё (материал)'
+        verbose_name_plural = 'Склад сырья'
         ordering = ['name']
 
     def __str__(self):
@@ -161,8 +161,8 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
             verbose_name_plural: множественное число
             ordering: сортировка по умолчанию
         """
-        verbose_name = 'Finished Product'
-        verbose_name_plural = 'Finished Products'
+        verbose_name = 'Готовая продукция'
+        verbose_name_plural = 'Готовая продукция'
         ordering = ['name']
 
     def __str__(self):
@@ -262,8 +262,8 @@ class StockMovement(TimestampedModel):
             verbose_name_plural: множественное число
             ordering: сортировка по убыванию даты создания
         """
-        verbose_name = 'Stock Movement'
-        verbose_name_plural = 'Stock Movements'
+        verbose_name = 'Движение склада'
+        verbose_name_plural = 'Движения склада'
         ordering = ['-created_at']
 
     def clean(self):
@@ -314,8 +314,8 @@ class Recipe(TimestampedModel):
             verbose_name_plural: множественное число
             ordering: сортировка по названию
         """
-        verbose_name = 'Recipe'
-        verbose_name_plural = 'Recipes'
+        verbose_name = 'Рецепт'
+        verbose_name_plural = 'Рецепты'
         ordering = ['name']
 
     def __str__(self):
@@ -357,8 +357,8 @@ class RecipeItem(models.Model):
             verbose_name: человекочитаемое имя модели
             verbose_name_plural: множественное число
         """
-        verbose_name = 'Recipe Item'
-        verbose_name_plural = 'Recipe Items'
+        verbose_name = 'Компонент рецепта'
+        verbose_name_plural = 'Компоненты рецепта'
 
     def __str__(self):
         return f"{self.quantity_required} {self.get_unit_display()} of {self.material.name}"

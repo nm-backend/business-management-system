@@ -50,8 +50,8 @@ class Order(TimestampedModel, SoftDeleteModel):
     paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
     class Meta:
-        verbose_name = 'Order'
-        verbose_name_plural = 'Orders'
+        verbose_name = 'Заказ'
+        verbose_name_plural = 'Заказы'
         ordering = ['-created_at']
 
     def __str__(self):

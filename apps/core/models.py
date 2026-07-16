@@ -94,8 +94,8 @@ class Currency(TimestampedModel):
     decimal_places = models.PositiveSmallIntegerField(default=2)
 
     class Meta:
-        verbose_name = 'Currency'
-        verbose_name_plural = 'Currencies'
+        verbose_name = 'Валюта'
+        verbose_name_plural = 'Валюты'
         ordering = ['-is_default', 'code']
 
     def __str__(self):
@@ -137,8 +137,8 @@ class ExchangeRate(TimestampedModel):
     effective_date = models.DateField(db_index=True)
 
     class Meta:
-        verbose_name = 'Exchange Rate'
-        verbose_name_plural = 'Exchange Rates'
+        verbose_name = 'Курс валют'
+        verbose_name_plural = 'Курсы валют'
         ordering = ['-effective_date']
         unique_together = ['from_currency', 'to_currency', 'effective_date']
 

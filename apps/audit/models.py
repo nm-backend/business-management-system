@@ -56,21 +56,21 @@ class AuditLog(TimestampedModel):
         CHANGE_PASSWORD: смена пароля пользователем
         CHANGE_LANGUAGE: смена языка интерфейса
         """
-        SETUP_OWNER = 'setup_owner', 'Setup owner'
-        LOGIN = 'login', 'Login'
-        LOGOUT = 'logout', 'Logout'
-        CREATE = 'create', 'Create'
-        UPDATE = 'update', 'Update'
-        ARCHIVE = 'archive', 'Archive'
-        DELETE = 'delete', 'Delete'
-        ACTIVATE = 'activate', 'Activate'
-        DEACTIVATE = 'deactivate', 'Deactivate'
-        RESET_PASSWORD = 'reset_password', 'Reset password'
-        CHANGE_PASSWORD = 'change_password', 'Change password'
-        CHANGE_LANGUAGE = 'change_language', 'Change language'
-        ACCESS_KEY_ISSUED = 'access_key_issued', 'Access key issued'
-        ACCESS_KEY_REDEEMED = 'access_key_redeemed', 'Access key redeemed'
-        ACCESS_KEY_REVOKED = 'access_key_revoked', 'Access key revoked'
+        SETUP_OWNER = 'setup_owner', 'Создание супер-админа'
+        LOGIN = 'login', 'Вход'
+        LOGOUT = 'logout', 'Выход'
+        CREATE = 'create', 'Создание'
+        UPDATE = 'update', 'Изменение'
+        ARCHIVE = 'archive', 'Архивация'
+        DELETE = 'delete', 'Удаление'
+        ACTIVATE = 'activate', 'Разблокировка'
+        DEACTIVATE = 'deactivate', 'Блокировка'
+        RESET_PASSWORD = 'reset_password', 'Сброс пароля'
+        CHANGE_PASSWORD = 'change_password', 'Смена пароля'
+        CHANGE_LANGUAGE = 'change_language', 'Смена языка'
+        ACCESS_KEY_ISSUED = 'access_key_issued', 'Код доступа выдан'
+        ACCESS_KEY_REDEEMED = 'access_key_redeemed', 'Код доступа активирован'
+        ACCESS_KEY_REVOKED = 'access_key_revoked', 'Код доступа отозван'
 
     company = models.ForeignKey(
         'companies.Company',

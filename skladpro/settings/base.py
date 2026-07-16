@@ -187,6 +187,18 @@ REST_FRAMEWORK = {
         # В development.py можно добавить:
         # 'rest_framework.renderers.BrowsableAPIRenderer',
     ),
+
+    # Ограничение частоты запросов (защита от перебора кодов и паролей).
+    # ScopedRateThrottle действует только на view с заданным throttle_scope,
+    # поэтому остальные эндпоинты работают как прежде.
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '10/min',               # подбор пароля
+        'access_key_verify': '10/min',   # перебор кода доступа
+        'access_key_redeem': '5/min',    # активация по коду
+    },
 }
 
 # Настройки JWT токенов (Simple JWT)

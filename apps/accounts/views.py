@@ -157,6 +157,7 @@ class LoginView(APIView):
     """
     permission_classes = [AllowAny]
     authentication_classes = []  # публичный эндпоинт: без сессии/CSRF
+    throttle_scope = 'login'  # защита от подбора пароля
 
     def post(self, request):
         """
@@ -456,6 +457,7 @@ class AccessKeyVerifyView(APIView):
     """
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_scope = 'access_key_verify'  # защита от перебора кодов
 
     @extend_schema(request=AccessKeyVerifySerializer, responses=None)
     def post(self, request):
@@ -487,6 +489,7 @@ class AccessKeyRedeemView(APIView):
     """
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_scope = 'access_key_redeem'  # защита от перебора кодов
 
     @extend_schema(request=AccessKeyRedeemSerializer, responses=None)
     def post(self, request):

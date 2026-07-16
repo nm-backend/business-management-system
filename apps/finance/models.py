@@ -96,7 +96,7 @@ class Expense(TimestampedModel):
     date = models.DateField(db_index=True)
     comment = models.TextField(blank=True, default='')
     receipt_photo = models.ImageField(upload_to='finance/receipts/', blank=True, null=True)
-    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='expenses')
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='expenses', verbose_name='Кем добавлено')
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
 
     class Meta:
@@ -109,8 +109,8 @@ class Expense(TimestampedModel):
             ordering: сортировка по дате и созданию
             indexes: индексы для оптимизации запросов
         """
-        verbose_name = 'Expense'
-        verbose_name_plural = 'Expenses'
+        verbose_name = 'Расход'
+        verbose_name_plural = 'Расходы'
         ordering = ['-date', '-created_at']
         indexes = [
             models.Index(fields=['category', 'date']),
@@ -175,8 +175,8 @@ class LaborRate(TimestampedModel):
             ordering: сортировка по продукту и операции
             unique_together: уникальная комбинация продукта и операции
         """
-        verbose_name = 'Labor Rate'
-        verbose_name_plural = 'Labor Rates'
+        verbose_name = 'Ставка оплаты труда'
+        verbose_name_plural = 'Ставки оплаты труда'
         ordering = ['product', 'operation']
         unique_together = ['product', 'operation']
 
@@ -228,7 +228,7 @@ class WorkerPayment(TimestampedModel):
     payment_date = models.DateField(db_index=True)
     payment_type = models.CharField(max_length=20, choices=PaymentType.choices, default=PaymentType.SALARY)
     comment = models.TextField(blank=True, default='')
-    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='created_payments')
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='created_payments', verbose_name='Кем добавлено')
 
     class Meta:
         """
@@ -240,8 +240,8 @@ class WorkerPayment(TimestampedModel):
             ordering: сортировка по дате выплаты и созданию
             indexes: индексы для оптимизации запросов
         """
-        verbose_name = 'Worker Payment'
-        verbose_name_plural = 'Worker Payments'
+        verbose_name = 'Выплата работнику'
+        verbose_name_plural = 'Выплаты работникам'
         ordering = ['-payment_date', '-created_at']
         indexes = [
             models.Index(fields=['worker', 'payment_date']),
