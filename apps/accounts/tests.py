@@ -300,6 +300,39 @@ class SkillAPITests(TestCase):
         self.assertEqual(resp.status_code, 403)
 
 
+class ImageUploadValidatorTests(TestCase):
+    """Валидация загрузки изображений (размер/тип) — защита от вредоносных загрузок."""
+
+    class _Fake:
+        def __init__(self, name, size, content_type='image/png'):
+            self.name = name
+            self.size = size
+            self.content_type = content_type
+
+    def test_rejects_too_large(self):
+        from django.core.exceptions import ValidationError
+        from apps.core.validators import MAX_IMAGE_SIZE, validate_image_upload
+        with self.assertRaises(ValidationError):
+            validate_image_upload(self._Fake('a.png', MAX_IMAGE_SIZE + 1))
+
+    def test_rejects_bad_extension(self):
+        from django.core.exceptions import ValidationError
+        from apps.core.validators import validate_image_upload
+        with self.assertRaises(ValidationError):
+            validate_image_upload(self._Fake('evil.exe', 1024, 'application/x-msdownload'))
+
+    def test_rejects_bad_content_type(self):
+        from django.core.exceptions import ValidationError
+        from apps.core.validators import validate_image_upload
+        with self.assertRaises(ValidationError):
+            validate_image_upload(self._Fake('a.png', 1024, 'application/octet-stream'))
+
+    def test_accepts_valid_image(self):
+        from apps.core.validators import validate_image_upload
+        # не должно бросать исключение
+        validate_image_upload(self._Fake('photo.jpg', 500 * 1024, 'image/jpeg'))
+
+
 class AdminSmokeTests(TestCase):
     """Проверяет, что кастомные админки открываются без ошибок (500)."""
     def setUp(self):

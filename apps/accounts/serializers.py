@@ -11,6 +11,8 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from apps.core.validators import validate_image_upload
+
 from .models import AccessKey, Skill, User
 
 
@@ -70,6 +72,7 @@ class UserSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
         many=True, write_only=True, required=False, source='skills',
         queryset=Skill.objects.all(),  # сужается по компании в CompanyScopedSkillsMixin
     )
+    avatar = serializers.ImageField(required=False, allow_null=True, validators=[validate_image_upload])
 
     class Meta:
         model = User
@@ -102,6 +105,8 @@ class UserSelfUpdateSerializer(serializers.ModelSerializer):
     Используется:
         - В MeView для PATCH /api/v1/accounts/me/
     """
+    avatar = serializers.ImageField(required=False, allow_null=True, validators=[validate_image_upload])
+
     class Meta:
         model = User
         # Личные поля профиля. Должность/отдел/дата найма/статус — HR-данные,

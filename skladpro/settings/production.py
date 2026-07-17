@@ -16,6 +16,31 @@ CHANNEL_LAYERS = {
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=lambda v: [s.strip() for s in v.split(',')])
 
+# ── Защита: production не должен стартовать с небезопасными настройками ──
+# Превращаем «тихий риск» (Django лишь предупреждает) в громкий отказ запуска.
+from django.core.exceptions import ImproperlyConfigured  # noqa: E402
+
+_INSECURE_SECRETS = {
+    '', 'your-secret-key-here', 'change-me-to-a-long-random-string',
+    'dev-insecure-secret-change-me', 'test-secret-key-not-for-production',
+}
+if (
+    SECRET_KEY in _INSECURE_SECRETS
+    or len(SECRET_KEY) < 50
+    or SECRET_KEY.startswith('django-insecure-')
+):
+    raise ImproperlyConfigured(
+        'Небезопасный SECRET_KEY в production. Сгенерируйте длинный случайный ключ и '
+        'задайте его в переменной окружения SECRET_KEY (см. README → «Деплой»). '
+        'Команда: python -c "from django.core.management.utils import '
+        'get_random_secret_key; print(get_random_secret_key())"'
+    )
+
+if '*' in ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        'ALLOWED_HOSTS не должен содержать "*" в production — укажите конкретный домен.'
+    )
+
 CORS_ALLOW_ALL_ORIGINS = False
 
 # Security settings for production
