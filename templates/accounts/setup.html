@@ -44,7 +44,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', () => {
     const langSelect = document.getElementById('lang-select');
     langSelect.value = window.i18n.currentLang;

@@ -23,12 +23,19 @@ class SkillSerializer(serializers.ModelSerializer):
     company проставляется сервером (из request.user.company) и клиентом не
     задаётся — это защищает изоляцию арендаторов.
     """
-    employee_count = serializers.IntegerField(source='employees.count', read_only=True)
+    # Раньше было source='employees.count' -> отдельный COUNT на КАЖДЫЙ навык
+    # (в т.ч. вложенный в каждого сотрудника) = N+1. Теперь берём аннотацию
+    # queryset'а, а если её нет — считаем как раньше. Формат ответа не изменился.
+    employee_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Skill
         fields = ['id', 'name', 'category', 'employee_count', 'created_at']
         read_only_fields = ['id', 'employee_count', 'created_at']
+
+    def get_employee_count(self, obj):
+        annotated = getattr(obj, 'employees_total', None)
+        return annotated if annotated is not None else obj.employees.count()
 
 
 class CompanyScopedSkillsMixin:

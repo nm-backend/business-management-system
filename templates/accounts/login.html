@@ -65,7 +65,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', () => {
     const t = (k) => window.i18n.translate(k);
     const langSelect = document.getElementById('lang-select');
@@ -87,14 +87,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         clearError();
+        const btn = e.target.querySelector('button[type=submit]');
+        if (btn.disabled) return;          // защита от двойного клика
+        btn.disabled = true;
         try {
             await window.api.login(
                 document.getElementById('username').value,
                 document.getElementById('password').value,
             );
-            window.location.href = '/';
+            window.location.href = '/';    // при успехе уходим со страницы
         } catch (error) {
             showError(error.data?.detail || t('auth.login_error'));
+            btn.disabled = false;
         }
     });
 
@@ -113,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const redeemForm = document.getElementById('ak-redeem-form');
     verifyForm.addEventListener('submit', async (e) => {
         e.preventDefault(); clearError();
+        const vBtn = e.target.querySelector('button[type=submit]');
+        if (vBtn.disabled) return;         // защита от двойного клика
+        vBtn.disabled = true;
         const code = document.getElementById('ak-code').value.trim().toUpperCase();
         try {
             const resp = await window.api.request('/accounts/access-key/verify/', {
@@ -126,12 +133,18 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('ak-password').focus();
         } catch (error) {
             showError(t('auth.access_key_invalid'));
+        } finally {
+            vBtn.disabled = false;
         }
     });
 
     // ── Access Key: шаг 2 — задать пароль и войти ──
     redeemForm.addEventListener('submit', async (e) => {
         e.preventDefault(); clearError();
+        // Код одноразовый: двойной клик отправил бы его дважды и «сжёг» попытку.
+        const rBtn = e.target.querySelector('button[type=submit]');
+        if (rBtn.disabled) return;
+        rBtn.disabled = true;
         const code = document.getElementById('ak-code').value.trim().toUpperCase();
         const password = document.getElementById('ak-password').value;
         try {
@@ -146,6 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 || (error.data?.new_password && error.data.new_password[0])
                 || t('auth.access_key_invalid');
             showError(detail);
+            rBtn.disabled = false;   // при успехе не включаем — уходим на '/'
         }
     });
 });

@@ -10,6 +10,7 @@ API views for authentication and user management.
 Все действия записываются в audit log для безопасности и отслеживания.
 """
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, viewsets, status
@@ -22,6 +23,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
+from apps.core.validators import parse_int_param
 from core.permissions import IsOwner, IsOwnerOrAdmin
 from .access_keys import issue_access_key, redeem_access_key, verify_access_key
 from .models import AccessKey, Skill, User
@@ -411,7 +413,10 @@ class SkillViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Skill.objects.none()
-        return Skill.objects.filter(company_id=self.request.user.company_id)
+        # employees_total -> используется SkillSerializer вместо COUNT на каждый навык.
+        return Skill.objects.filter(
+            company_id=self.request.user.company_id,
+        ).annotate(employees_total=Count('employees', distinct=True))
 
     def perform_create(self, serializer):
         skill = serializer.save(company=self.request.user.company)
@@ -577,9 +582,17 @@ class UserViewSet(viewsets.ModelViewSet):
 
         skill_id = self.request.query_params.get('skill')
         if skill_id:
-            queryset = queryset.filter(skills__id=skill_id)
+            # Нечисловое значение раньше доходило до ORM и давало 500.
+            queryset = queryset.filter(skills__id=parse_int_param(skill_id, 'skill'))
 
-        return queryset.select_related('company').prefetch_related('skills').distinct()
+        # Навыки тянем с аннотацией employees_total, иначе SkillSerializer делал
+        # COUNT на каждый навык каждого сотрудника (N+1).
+        skills_qs = Skill.objects.annotate(employees_total=Count('employees', distinct=True))
+        return (
+            queryset.select_related('company')
+            .prefetch_related(Prefetch('skills', queryset=skills_qs))
+            .distinct()
+        )
 
     def get_serializer_class(self):
         """

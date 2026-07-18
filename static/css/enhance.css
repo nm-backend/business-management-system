@@ -1,0 +1,56 @@
+/* ============================================================
+   Полировка UX: доступность, тач-цели для планшетов, мягкие
+   микро-анимации. ТОЛЬКО дополнения — макет не переопределяется.
+   Подключается последним, поэтому усиливает существующие стили.
+   ============================================================ */
+
+/* ── Доступность: видимая рамка фокуса только при навигации с клавиатуры ── */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--primary-color, #1c64d9);
+    outline-offset: 2px;
+    border-radius: 6px;
+}
+
+/* ── Премиальные микро-анимации кнопок (спокойные, не мигающие) ── */
+.btn {
+    transition: transform .12s ease, box-shadow .15s ease,
+                background-color .15s ease, opacity .15s ease;
+}
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Мягкий hover строк списков и карточек */
+.list-row { transition: background-color .12s ease; }
+.card { transition: box-shadow .15s ease, transform .15s ease; }
+.sidebar-link, .nav-item { transition: background-color .12s ease, color .12s ease; }
+
+/* Никакого горизонтального скролла на узких экранах */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Таблицы прокручиваются внутри своего контейнера, а не всей страницей */
+.table-wrap, .responsive-table, .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ── Планшеты и сенсорные экраны: крупные удобные цели ── */
+@media (pointer: coarse), (max-width: 1024px) {
+    .btn { min-height: 44px; }               /* рекомендуемый размер тач-цели */
+    .form-control,
+    input, select, textarea { min-height: 44px; font-size: 16px; } /* 16px — iOS не зумит при фокусе */
+    .sidebar-link, .nav-item { min-height: 44px; }
+    .list-row { padding-top: 12px; padding-bottom: 12px; }
+}
+
+/* ── Уважать системную настройку «уменьшить движение» ── */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .001ms !important;
+        transition-duration: .001ms !important;
+        scroll-behavior: auto !important;
+    }
+}

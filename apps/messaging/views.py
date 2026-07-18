@@ -6,7 +6,12 @@ Views for messaging API — корпоративный чат и уведомл�
 получить беседы/сообщения другой даже прямым API-запросом (get_object вернёт
 404, т.к. объект вне queryset).
 """
-from django.db.models import Prefetch, Q
+import datetime
+
+from django.db.models import (
+    Count, DateTimeField, F, OuterRef, Prefetch, Q, Subquery, Value,
+)
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status, viewsets
@@ -51,10 +56,39 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             'participants',
             queryset=ConversationParticipant.objects.select_related('user'),
         )
+        # Раньше сериализатор на КАЖДУЮ беседу делал отдельные запросы за
+        # последним сообщением и счётчиком непрочитанных (N+1). Считаем их
+        # подзапросами в одном SQL. Формат ответа не меняется.
+        my_last_read = ConversationParticipant.objects.filter(
+            conversation=OuterRef('pk'), user=user,
+        ).values('last_read_at')[:1]
+        last_msg = ChatMessage.objects.filter(
+            conversation=OuterRef('pk'),
+        ).order_by('-created_at')
+        # Если участник ещё не читал беседу — считаем непрочитанным всё, поэтому
+        # подставляем «нулевую» дату вместо NULL.
+        epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
         return (
             Conversation.objects.filter(company_id=user.company_id)
             .filter(Q(participants__user=user) | Q(kind=Conversation.Kind.GENERAL))
             .prefetch_related(participants)
+            .annotate(
+                my_last_read=Coalesce(
+                    Subquery(my_last_read), Value(epoch, output_field=DateTimeField()),
+                ),
+                last_msg_content=Subquery(last_msg.values('content')[:1]),
+                last_msg_created=Subquery(last_msg.values('created_at')[:1]),
+                last_msg_sender=Subquery(last_msg.values('sender_id')[:1]),
+                last_msg_sender_name=Subquery(last_msg.values('sender__full_name')[:1]),
+                last_msg_sender_username=Subquery(last_msg.values('sender__username')[:1]),
+            )
+            .annotate(
+                unread_total=Count(
+                    'messages',
+                    filter=~Q(messages__sender=user) & Q(messages__created_at__gt=F('my_last_read')),
+                    distinct=True,
+                ),
+            )
             .distinct()
         )
 

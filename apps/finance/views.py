@@ -7,6 +7,7 @@ Views for finance API.
 from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied
 from apps.core.permissions import IsCompanyMember, FinancialDataPermission
+from apps.core.validators import parse_int_param
 from .models import Expense, LaborRate, WorkerPayment
 from .serializers import (
     ExpenseSerializer, ExpenseCreateSerializer,
@@ -132,7 +133,8 @@ class WorkerPaymentViewSet(viewsets.ModelViewSet):
         date_to = self.request.query_params.get('date_to')
 
         if worker_id:
-            queryset = queryset.filter(worker_id=worker_id)
+            # Нечисловое значение раньше доходило до ORM и давало 500.
+            queryset = queryset.filter(worker_id=parse_int_param(worker_id, 'worker'))
         if date_from:
             queryset = queryset.filter(payment_date__gte=date_from)
         if date_to:

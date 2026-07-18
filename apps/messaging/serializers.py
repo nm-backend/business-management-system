@@ -116,6 +116,17 @@ class ConversationSerializer(serializers.ModelSerializer):
         }
 
     def get_last_message(self, obj):
+        # Быстрый путь: значения посчитаны подзапросом в get_queryset (без N+1).
+        if hasattr(obj, 'last_msg_created'):
+            if obj.last_msg_created is None:
+                return None
+            return {
+                'content': (obj.last_msg_content or '')[:120],
+                'created_at': obj.last_msg_created.isoformat(),
+                'sender': obj.last_msg_sender,
+                'sender_name': obj.last_msg_sender_name or obj.last_msg_sender_username,
+            }
+        # Запасной путь для одиночных объектов (general/start_direct).
         last = obj.messages.order_by('-created_at').select_related('sender').first()
         if not last:
             return None
@@ -127,6 +138,8 @@ class ConversationSerializer(serializers.ModelSerializer):
         }
 
     def get_unread_count(self, obj):
+        if hasattr(obj, 'unread_total'):
+            return obj.unread_total or 0
         user = self._request_user()
         if not user:
             return 0

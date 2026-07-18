@@ -14,6 +14,23 @@ ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 ALLOWED_IMAGE_CONTENT_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
 
 
+def parse_int_param(value, field_name):
+    """
+    Приводит query-параметр к int или возвращает 400 вместо 500.
+
+    Без этого нечисловое значение (?skill=abc) доходит до ORM и выбрасывает
+    ValueError: Field 'id' expected a number → HTTP 500. Любой авторизованный
+    пользователь мог уронить обработчик одним GET-запросом (отказ в обслуживании
+    и мусор в логах). SQL-инъекции здесь нет — ORM параметризует запросы, —
+    но контракт API нарушался.
+    """
+    from rest_framework.exceptions import ValidationError as DRFValidationError
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise DRFValidationError({field_name: 'Ожидается числовой идентификатор.'})
+
+
 def validate_image_upload(f):
     """Проверяет размер, расширение и content-type загружаемого изображения."""
     if not f:

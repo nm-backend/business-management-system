@@ -29,7 +29,10 @@ class ClientViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Client.objects.none()
-        return Client.objects.filter(company=self.request.user.company_id)
+        # payments сериализуются вложенно -> без prefetch был запрос на каждого клиента.
+        return Client.objects.filter(
+            company=self.request.user.company_id,
+        ).prefetch_related('payments')
 
     def get_serializer_class(self):
         if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:

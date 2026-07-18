@@ -12,6 +12,7 @@ from django.utils import timezone
 from .models import AccessKey, User
 
 
+@transaction.atomic
 def issue_access_key(*, user, created_by=None, expires_in_days=None):
     """
     Выпускает новый Access Key для сотрудника.
@@ -21,6 +22,12 @@ def issue_access_key(*, user, created_by=None, expires_in_days=None):
     """
     if user.is_superadmin or user.company_id is None:
         raise ValueError('Access keys can be issued only to company employees.')
+
+    # ГОНКА (воспроизведена: 16 потоков -> до 3 активных ключей одновременно).
+    # Без блокировки два процесса успевали отозвать «всё активное» (каждый видел
+    # пустой набор) и затем оба вставляли новый ключ. Блокируем строку сотрудника:
+    # параллельные выдачи выстраиваются в очередь, активным остаётся ровно один ключ.
+    User.objects.select_for_update().filter(pk=user.pk).first()
 
     AccessKey.objects.filter(
         user=user, status=AccessKey.Status.ACTIVE,

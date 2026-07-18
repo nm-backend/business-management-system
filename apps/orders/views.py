@@ -37,7 +37,13 @@ class OrderViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Order.objects.none()
         user = self.request.user
-        queryset = Order.objects.filter(company=user.company_id).select_related('client', 'product', 'worker')
+        # Рецепты продукта нужны для расчёта нехватки материалов в сериализаторе —
+        # без prefetch это был отдельный запрос на каждый заказ (N+1).
+        queryset = (
+            Order.objects.filter(company=user.company_id)
+            .select_related('client', 'product', 'worker')
+            .prefetch_related('product__recipes__items__material')
+        )
         if user.is_owner or user.is_admin:
             return queryset
         return queryset.filter(worker=user)

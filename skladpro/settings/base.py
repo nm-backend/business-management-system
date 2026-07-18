@@ -72,6 +72,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',  # Аутентификация
     'django.contrib.messages.middleware.MessageMiddleware',  # Сообщения
     'django.middleware.clickjacking.XFrameOptionsMiddleware',  # Защита от clickjacking
+    'apps.core.middleware.SecurityHeadersMiddleware',  # CSP + Permissions-Policy
 ]
 
 ROOT_URLCONF = 'skladpro.urls'
@@ -238,7 +239,7 @@ MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директо
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Версия статики для cache-busting (?v=...). Бампайте при изменении CSS/JS.
-ASSET_VERSION = '20260714chat2'
+ASSET_VERSION = '20260714enhance'
 
 # URL для аутентификации
 LOGIN_URL = '/accounts/login/'
