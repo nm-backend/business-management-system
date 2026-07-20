@@ -71,6 +71,13 @@ class AuditLog(TimestampedModel):
         ACCESS_KEY_ISSUED = 'access_key_issued', 'Код доступа выдан'
         ACCESS_KEY_REDEEMED = 'access_key_redeemed', 'Код доступа активирован'
         ACCESS_KEY_REVOKED = 'access_key_revoked', 'Код доступа отозван'
+        TWO_FACTOR_ENABLED = 'two_factor_enabled', 'Двухэтапное подтверждение включено'
+        TWO_FACTOR_DISABLED = 'two_factor_disabled', 'Двухэтапное подтверждение выключено'
+        TWO_FACTOR_FAILED = 'two_factor_failed', 'Неверный код подтверждения'
+        TWO_FACTOR_RECOVERY_USED = 'two_factor_recovery_used', 'Использован резервный код'
+        TWO_FACTOR_RECOVERY_REGENERATED = (
+            'two_factor_recovery_regenerated', 'Резервные коды перевыпущены',
+        )
 
     company = models.ForeignKey(
         'companies.Company',

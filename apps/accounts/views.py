@@ -25,6 +25,7 @@ from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
 from apps.core.validators import parse_int_param
 from core.permissions import IsOwner, IsOwnerOrAdmin
+from . import two_factor
 from .access_keys import issue_access_key, redeem_access_key, verify_access_key
 from .models import AccessKey, Skill, User
 from .serializers import (
@@ -33,6 +34,8 @@ from .serializers import (
     LanguageSerializer, SkillSerializer,
     AccessKeySerializer, AccessKeyIssueSerializer,
     AccessKeyVerifySerializer, AccessKeyRedeemSerializer,
+    TwoFactorConfirmSerializer, TwoFactorDisableSerializer,
+    TwoFactorPasswordSerializer, TwoFactorStatusSerializer,
 )
 
 
@@ -165,8 +168,8 @@ class LoginView(APIView):
         """
         Аутентифицирует пользователя и генерирует JWT токены.
 
-        Валидирует username/password, создает JWT токены (access и refresh),
-        записывает действие в audit log.
+        Валидирует username/password, при включённом 2FA дополнительно
+        проверяет одноразовый код, создает JWT токены, пишет audit log.
 
         Возвращает:
             Response с данными пользователя и токенами
@@ -174,6 +177,35 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
+
+        # Второй фактор проверяется ПОСЛЕ пароля и ДО выдачи токенов: пока код
+        # не подтверждён, ни access, ни refresh не существуют, поэтому украсть
+        # промежуточный токен невозможно.
+        if two_factor.has_two_factor(user):
+            code = serializer.validated_data.get('otp_code') or ''
+            if not code:
+                return Response(
+                    {'two_factor_required': True,
+                     'detail': 'Требуется код двухэтапного подтверждения.'},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            method = two_factor.verify_code(user, code)
+            if method is None:
+                write_audit_log(
+                    action=AuditLog.Action.TWO_FACTOR_FAILED,
+                    actor=user, target=user, request=request,
+                )
+                return Response(
+                    {'two_factor_required': True, 'detail': 'Неверный код подтверждения.'},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+            if method == two_factor.VERIFY_RECOVERY:
+                write_audit_log(
+                    action=AuditLog.Action.TWO_FACTOR_RECOVERY_USED,
+                    actor=user, target=user, request=request,
+                    metadata={'codes_left': two_factor.recovery_codes_left(user)},
+                )
+
         write_audit_log(
             action=AuditLog.Action.LOGIN,
             actor=user,
@@ -837,3 +869,142 @@ class UserViewSet(viewsets.ModelViewSet):
             .select_related('user').first()
         )
         return Response(AccessKeySerializer(key).data if key else None)
+
+
+class TwoFactorStatusView(APIView):
+    """
+    Состояние двухэтапного подтверждения текущего пользователя.
+
+    Endpoint: GET /api/v1/accounts/me/2fa/
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(responses=TwoFactorStatusSerializer)
+    def get(self, request):
+        return Response({
+            'enabled': two_factor.has_two_factor(request.user),
+            'recovery_codes_left': two_factor.recovery_codes_left(request.user),
+        })
+
+
+class TwoFactorSetupView(APIView):
+    """
+    Шаг 1 подключения 2FA: выдать секрет и QR-код.
+
+    Endpoint: POST /api/v1/accounts/me/2fa/setup/
+    Тело: {"password": "текущий пароль"}
+
+    Пока код не подтверждён (шаг 2), 2FA НЕ включено — сотрудник не может
+    случайно заблокировать себе вход, отсканировав QR и закрыв страницу.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'two_factor'
+
+    @extend_schema(request=TwoFactorPasswordSerializer, responses=None)
+    def post(self, request):
+        serializer = TwoFactorPasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        try:
+            device = two_factor.begin_setup(request.user)
+        except ValueError:
+            raise ValidationError(
+                {'detail': 'Двухэтапное подтверждение уже включено. Сначала отключите его.'}
+            )
+        return Response({
+            'secret': device.config_url.split('secret=')[1].split('&')[0],
+            'otpauth_uri': two_factor.provisioning_uri(device),
+            'qr_code': two_factor.qr_code_data_uri(device),
+        })
+
+
+class TwoFactorConfirmView(APIView):
+    """
+    Шаг 2 подключения 2FA: подтвердить кодом из приложения.
+
+    Endpoint: POST /api/v1/accounts/me/2fa/confirm/
+    Тело: {"code": "123456"}
+
+    Возвращает резервные коды. Они показываются ОДИН раз и в открытом виде
+    больше нигде не доступны.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'two_factor'
+
+    @extend_schema(request=TwoFactorConfirmSerializer, responses=None)
+    def post(self, request):
+        serializer = TwoFactorConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        codes = two_factor.confirm_setup(request.user, serializer.validated_data['code'])
+        if codes is None:
+            write_audit_log(
+                action=AuditLog.Action.TWO_FACTOR_FAILED,
+                actor=request.user, target=request.user, request=request,
+            )
+            raise ValidationError({'code': 'Неверный код подтверждения.'})
+
+        write_audit_log(
+            action=AuditLog.Action.TWO_FACTOR_ENABLED,
+            actor=request.user, target=request.user, request=request,
+        )
+        return Response({'enabled': True, 'recovery_codes': codes})
+
+
+class TwoFactorDisableView(APIView):
+    """
+    Отключение 2FA.
+
+    Endpoint: POST /api/v1/accounts/me/2fa/disable/
+    Тело: {"password": "...", "code": "123456"}
+
+    Требуются оба фактора: знание пароля не должно позволять снять защиту.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'two_factor'
+
+    @extend_schema(request=TwoFactorDisableSerializer, responses=None)
+    def post(self, request):
+        serializer = TwoFactorDisableSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        if not two_factor.has_two_factor(request.user):
+            raise ValidationError({'detail': 'Двухэтапное подтверждение не включено.'})
+        if two_factor.verify_code(request.user, serializer.validated_data['code']) is None:
+            write_audit_log(
+                action=AuditLog.Action.TWO_FACTOR_FAILED,
+                actor=request.user, target=request.user, request=request,
+            )
+            raise ValidationError({'code': 'Неверный код подтверждения.'})
+
+        two_factor.disable(request.user)
+        write_audit_log(
+            action=AuditLog.Action.TWO_FACTOR_DISABLED,
+            actor=request.user, target=request.user, request=request,
+        )
+        return Response({'enabled': False})
+
+
+class TwoFactorRecoveryCodesView(APIView):
+    """
+    Перевыпуск резервных кодов.
+
+    Endpoint: POST /api/v1/accounts/me/2fa/recovery-codes/
+    Тело: {"password": "текущий пароль"}
+
+    Старые коды перестают действовать сразу — если сотрудник потерял список,
+    найденная копия уже бесполезна.
+    """
+    permission_classes = [IsAuthenticated]
+    throttle_scope = 'two_factor'
+
+    @extend_schema(request=TwoFactorPasswordSerializer, responses=None)
+    def post(self, request):
+        serializer = TwoFactorPasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        if not two_factor.has_two_factor(request.user):
+            raise ValidationError({'detail': 'Двухэтапное подтверждение не включено.'})
+
+        codes = two_factor.regenerate_recovery_codes(request.user)
+        write_audit_log(
+            action=AuditLog.Action.TWO_FACTOR_RECOVERY_REGENERATED,
+            actor=request.user, target=request.user, request=request,
+        )
+        return Response({'recovery_codes': codes})

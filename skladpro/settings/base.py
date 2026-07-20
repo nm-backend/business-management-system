@@ -44,6 +44,9 @@ INSTALLED_APPS = [
     'corsheaders',  # CORS заголовки для фронтенда
     'django_filters',  # Фильтрация в DRF
     'channels',  # WebSocket (real-time чат)
+    'django_otp',  # Двухэтапное подтверждение (2FA)
+    'django_otp.plugins.otp_totp',  # TOTP-приложения (Google Authenticator и др.)
+    'django_otp.plugins.otp_static',  # Резервные коды восстановления
 
     # Local apps
     'apps.core',  # Базовые модели и утилиты
@@ -70,6 +73,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',  # Общие функции
     'django.middleware.csrf.CsrfViewMiddleware',  # CSRF защита
     'django.contrib.auth.middleware.AuthenticationMiddleware',  # Аутентификация
+    'django_otp.middleware.OTPMiddleware',  # request.user.is_verified() для 2FA
     'django.contrib.messages.middleware.MessageMiddleware',  # Сообщения
     'django.middleware.clickjacking.XFrameOptionsMiddleware',  # Защита от clickjacking
     'apps.core.middleware.SecurityHeadersMiddleware',  # CSP + Permissions-Policy
@@ -199,8 +203,18 @@ REST_FRAMEWORK = {
         'login': '10/min',               # подбор пароля
         'access_key_verify': '10/min',   # перебор кода доступа
         'access_key_redeem': '5/min',    # активация по коду
+        'two_factor': '10/min',          # перебор 6-значного кода 2FA
     },
 }
+
+# Двухэтапное подтверждение (2FA)
+# Название издателя в приложении-аутентификаторе (Google Authenticator и др.).
+OTP_TOTP_ISSUER = 'SkladPro'
+# Окно допуска по времени: ±1 шаг (30 с) компенсирует расхождение часов телефона.
+# Больше делать нельзя — расширяет окно для перебора и повторного использования.
+OTP_TOTP_SYNC = False
+# Количество резервных кодов, выдаваемых при включении 2FA.
+TWO_FACTOR_RECOVERY_CODE_COUNT = 10
 
 # Настройки JWT токенов (Simple JWT)
 SIMPLE_JWT = {

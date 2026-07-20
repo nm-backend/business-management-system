@@ -241,6 +241,9 @@ class LoginSerializer(serializers.Serializer):
     """
     username = serializers.CharField()
     password = serializers.CharField()
+    # Второй фактор. Необязателен: у сотрудников без 2FA формат запроса и
+    # ответа не меняется. Проверяется в LoginView после пароля.
+    otp_code = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
         """
@@ -473,3 +476,41 @@ class AccessKeyRedeemSerializer(serializers.Serializer):
         except DjangoValidationError as error:
             raise serializers.ValidationError(list(error.messages)) from error
         return value
+
+
+class TwoFactorPasswordSerializer(serializers.Serializer):
+    """
+    Подтверждение паролем для операций с 2FA.
+
+    Повторный ввод пароля нужен там, где меняется сам второй фактор
+    (подключение, перевыпуск резервных кодов): угнанная сессия не должна
+    позволять перепривязать 2FA на устройство злоумышленника.
+    """
+    password = serializers.CharField(required=True, write_only=True)
+
+    def validate_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError('Пароль неверный.')
+        return value
+
+
+class TwoFactorConfirmSerializer(serializers.Serializer):
+    """Подтверждение подключения 2FA кодом из приложения-аутентификатора."""
+    code = serializers.CharField(required=True, write_only=True)
+
+
+class TwoFactorDisableSerializer(TwoFactorPasswordSerializer):
+    """
+    Отключение 2FA: пароль И действующий код.
+
+    Только пароля недостаточно — иначе тот, кто узнал пароль, снял бы
+    второй фактор и обошёл всю защиту. Код можно ввести резервный.
+    """
+    code = serializers.CharField(required=True, write_only=True)
+
+
+class TwoFactorStatusSerializer(serializers.Serializer):
+    """Состояние 2FA у текущего пользователя (только чтение)."""
+    enabled = serializers.BooleanField(read_only=True)
+    recovery_codes_left = serializers.IntegerField(read_only=True)
