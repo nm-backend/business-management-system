@@ -41,7 +41,13 @@ class TaskSerializer(serializers.ModelSerializer):
             'confirmed_at', 'confirmed_by', 'confirmed_by_name',
             'rejection_comment', 'is_self_assigned'
         ]
-        read_only_fields = ['assigned_at', 'accepted_at', 'completed_at', 'confirmed_at']
+        # status/worker/order и т.п. меняются только через действия
+        # (accept/refuse/cancel/confirm) и perform_create, а не прямым PATCH.
+        read_only_fields = [
+            'status', 'worker', 'order', 'assigned_by', 'confirmed_by',
+            'is_self_assigned',
+            'assigned_at', 'accepted_at', 'completed_at', 'confirmed_at',
+        ]
 
 
 class TaskCreateSerializer(serializers.ModelSerializer):
@@ -76,7 +82,11 @@ class WorkRecordSerializer(serializers.ModelSerializer):
             'rejection_reason', 'labor_cost',
             'is_confirmed', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'confirmed_at']
+        # status/labor_cost/worker меняются ТОЛЬКО через confirm/reject, а не PATCH.
+        read_only_fields = [
+            'status', 'labor_cost', 'worker', 'task', 'confirmed_by',
+            'rejection_reason', 'created_at', 'updated_at', 'confirmed_at',
+        ]
 
 
 class WorkRecordLimitedSerializer(serializers.ModelSerializer):
@@ -100,7 +110,11 @@ class WorkRecordLimitedSerializer(serializers.ModelSerializer):
             'rejection_reason',
             'is_confirmed', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'confirmed_at']
+        # Админ видит работы без денег и не может менять статус прямым PATCH.
+        read_only_fields = [
+            'status', 'worker', 'task', 'confirmed_by',
+            'rejection_reason', 'created_at', 'updated_at', 'confirmed_at',
+        ]
 
 
 class WorkRecordCreateSerializer(serializers.ModelSerializer):
@@ -116,3 +130,12 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
             'photo', 'comment'
         ]
         extra_kwargs = {'worker': {'required': False}}
+
+    def validate_quantity(self, value):
+        # Отрицательное/нулевое количество портит склад при подтверждении:
+        # требования по рецепту становятся отрицательными, проверка нехватки
+        # сырья не срабатывает, остаток «дорисовывается», а labor_cost уходит
+        # в минус. Отсекаем на входе.
+        if value is None or value <= 0:
+            raise serializers.ValidationError('Количество работы должно быть больше нуля.')
+        return value

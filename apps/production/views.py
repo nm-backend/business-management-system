@@ -12,10 +12,10 @@ from django.db.models import Sum
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.mixins import CreateModelMixin
 
-from apps.core.permissions import IsCompanyMember
+from apps.core.permissions import IsCompanyMember, IsOwnerOrAdmin
 from apps.messaging.models import Notification
 from apps.messaging.services import notify, notify_staff
 from .models import RefusalReason, Task, TaskStatus, WorkRecord
@@ -46,6 +46,20 @@ class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
     queryset = Task.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember]
     read_serializer_class = TaskSerializer
+
+    def get_permissions(self):
+        # Конечный автомат задачи двигается ТОЛЬКО через действия
+        # accept/refuse/cancel/confirm. Прямой update/destroy разрешён лишь
+        # owner/admin — иначе работник PATCH'ем поставил бы своей задаче
+        # status='confirmed' в обход confirm_work или переназначил бы её на
+        # заказ другой компании (поле order на update раньше не проверялось).
+        if self.action in ('update', 'partial_update'):
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
+        return [IsCompanyMember()]
+
+    def destroy(self, request, *args, **kwargs):
+        # Задачи не удаляются — история назначений неизменна (ТЗ: только архив).
+        raise MethodNotAllowed('DELETE')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -159,6 +173,22 @@ class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
     queryset = WorkRecord.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember]
 
+    def get_permissions(self):
+        # КРИТИЧНО: статус и оплата работы меняются ТОЛЬКО через confirm/reject
+        # (owner/admin). Раньше WorkRecordViewSet был открытым ModelViewSet, и
+        # работник мог PATCH'ем поставить своей записи status='confirmed' и любой
+        # labor_cost, минуя confirm_work — без проверки склада, без списания
+        # сырья и без audit (раздувая свой заработок). Прямой update разрешаем
+        # лишь owner/admin, а чувствительные поля закрыты в сериализаторе.
+        if self.action in ('update', 'partial_update'):
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
+        return [IsCompanyMember()]
+
+    def destroy(self, request, *args, **kwargs):
+        # Записи о работе не удаляются: подтверждённая работа уже двигала склад
+        # и начисление. Отмена — только через reject (ТЗ: удаление запрещено).
+        raise MethodNotAllowed('DELETE')
+
     def get_serializer_class(self):
         if self.action == 'create':
             return WorkRecordCreateSerializer
@@ -228,6 +258,12 @@ class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
         work = self.get_object()
         if work.status != WorkRecord.WorkStatus.AWAITING_CONFIRMATION:
             return Response({'detail': 'Work is not awaiting confirmation'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        # Защита склада: при quantity <= 0 требования по рецепту стали бы
+        # отрицательными, проверка нехватки сырья не сработала бы, и склад бы
+        # «дорисовался». Отсекаем до расчётов (создание уже валидирует > 0).
+        if work.quantity is None or work.quantity <= 0:
+            return Response({'detail': 'Некорректное количество работы (должно быть больше нуля)'},
                             status=status.HTTP_400_BAD_REQUEST)
 
         labor_cost = None
