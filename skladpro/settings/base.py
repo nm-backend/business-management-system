@@ -196,10 +196,12 @@ REST_FRAMEWORK = {
     # Ограничение частоты запросов (защита от перебора кодов и паролей).
     # ScopedRateThrottle действует только на view с заданным throttle_scope,
     # поэтому остальные эндпоинты работают как прежде.
-    'DEFAULT_THROTTLE_CLASSES': (
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
         'rest_framework.throttling.ScopedRateThrottle',
-    ),
+    ],
     'DEFAULT_THROTTLE_RATES': {
+        'user': '300/minute',
         'login': '10/min',               # подбор пароля
         'access_key_verify': '10/min',   # перебор кода доступа
         'access_key_redeem': '5/min',    # активация по коду
@@ -249,6 +251,10 @@ STORAGES = {
 MEDIA_URL = config('MEDIA_URL', default='/media/')  # URL для медиа файлов
 MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директория для медиа файлов
 
+# Максимальный размер загружаемого файла: 10 МБ
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
+
 # Тип авто-поля по умолчанию
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -272,3 +278,5 @@ SPECTACULAR_SETTINGS = {
         'persistAuthorization': True,
     },
 }
+
+USE_X_FORWARDED_FOR = False

@@ -233,6 +233,31 @@ class ChatPermissionTests(TestCase):
     def test_anonymous_blocked(self):
         self.assertEqual(self.api.get('/api/v1/messaging/conversations/').status_code, 401)
 
+    def test_worker_cannot_start_direct_with_owner_without_permission(self):
+        """Работник без can_write_to_owner не может начать диалог с хозяином."""
+        self.worker.can_write_to_owner = False
+        self.worker.save()
+        self.api.force_authenticate(user=self.worker)
+        resp = self.api.post('/api/v1/messaging/conversations/start_direct/',
+                             {'user_id': self.owner.id}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_worker_can_start_direct_with_owner_with_permission(self):
+        """Работник с can_write_to_owner может начать диалог с хозяином."""
+        self.worker.can_write_to_owner = True
+        self.worker.save()
+        self.api.force_authenticate(user=self.worker)
+        resp = self.api.post('/api/v1/messaging/conversations/start_direct/',
+                             {'user_id': self.owner.id}, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_admin_can_always_message_owner(self):
+        """Админ всегда может писать хозяину."""
+        self.api.force_authenticate(user=self.admin)
+        resp = self.api.post('/api/v1/messaging/conversations/start_direct/',
+                             {'user_id': self.owner.id}, format='json')
+        self.assertEqual(resp.status_code, 200)
+
 
 # ─────────────────────────── WebSocket ───────────────────────────
 

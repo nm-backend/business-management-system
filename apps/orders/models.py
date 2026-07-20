@@ -10,6 +10,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.core.models import TimestampedModel, SoftDeleteModel
+from apps.core.validators import validate_file_size
 from apps.clients.models import Client
 from apps.warehouse.models import FinishedProduct
 
@@ -41,7 +42,7 @@ class Order(TimestampedModel, SoftDeleteModel):
     deadline = models.DateTimeField(null=True, blank=True)
     worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
     comment = models.TextField(blank=True)
-    photo = models.ImageField(upload_to='orders/', blank=True, null=True)
+    photo = models.ImageField(upload_to='orders/', blank=True, null=True, validators=[validate_file_size])
     status = models.CharField(max_length=50, choices=Status.choices, default=Status.NEW, db_index=True)
     payment_status = models.CharField(max_length=50, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
 

@@ -70,3 +70,12 @@ def validate_image_upload(f):
         raise ValidationError('Недопустимый тип содержимого файла.')
 
     return f
+
+
+def validate_file_size(value):
+    """Ограничение размера загружаемого файла до 10 МБ."""
+    limit = 10 * 1024 * 1024  # 10 MB
+    if value.size > limit:
+        raise ValidationError(
+            f'Файл хажми {limit // (1024 * 1024)} МБ дан ошмаслиги керак.'
+        )

@@ -12,6 +12,7 @@ Warehouse models - управление складом сырья и готов�
 from django.db import models
 from django.core.exceptions import ValidationError
 from apps.core.models import TimestampedModel, SoftDeleteModel
+from apps.core.validators import validate_file_size
 
 
 class UnitChoices(models.TextChoices):
@@ -73,7 +74,7 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT)
     quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
     storage_location = models.CharField(max_length=255, blank=True)
-    photo = models.ImageField(upload_to='materials/', blank=True, null=True)
+    photo = models.ImageField(upload_to='materials/', blank=True, null=True, validators=[validate_file_size])
     min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0)
     supplier = models.CharField(max_length=255, blank=True)
     arrival_date = models.DateField(null=True, blank=True)
@@ -145,7 +146,7 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     category = models.CharField(max_length=100, blank=True)
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.IZDELIE)
     quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    photo = models.ImageField(upload_to='products/', blank=True, null=True)
+    photo = models.ImageField(upload_to='products/', blank=True, null=True, validators=[validate_file_size])
     description = models.TextField(blank=True)
     min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0)
     reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0)

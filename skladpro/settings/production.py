@@ -2,6 +2,7 @@ from .base import *
 from decouple import config
 
 DEBUG = False
+USE_X_FORWARDED_FOR = True
 
 # Channels: в production канальный слой должен быть общим для всех воркеров —
 # используем Redis (pub/sub-бэкенд). Задайте REDIS_URL в окружении.

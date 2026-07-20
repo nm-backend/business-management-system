@@ -6,6 +6,7 @@ Production models - управление производством и зада�
 """
 from django.db import models
 from apps.core.models import TimestampedModel
+from apps.core.validators import validate_file_size
 from apps.warehouse.models import UnitChoices
 
 
@@ -212,7 +213,7 @@ class WorkRecord(TimestampedModel):
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records')
     quantity = models.DecimalField(max_digits=15, decimal_places=3)
     unit = models.CharField(max_length=20, choices=UnitChoices.choices)
-    photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True)
+    photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True, validators=[validate_file_size])
     comment = models.TextField(blank=True, default='')
     status = models.CharField(max_length=30, choices=WorkStatus.choices, default=WorkStatus.AWAITING_CONFIRMATION, db_index=True)
     confirmed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_works')

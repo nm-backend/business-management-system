@@ -17,6 +17,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.core.models import TimestampedModel
+from apps.core.validators import validate_file_size
 
 from .managers import UserManager
 
@@ -157,7 +158,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=12, choices=Role.choices, default=Role.WORKER, db_index=True)
     phone = models.CharField(max_length=20, blank=True, default='')
     full_name = models.CharField(max_length=255, blank=True, default='')
-    avatar = models.ImageField(upload_to='avatars/', blank=True, default='')
+    avatar = models.ImageField(upload_to='avatars/', blank=True, default='', validators=[validate_file_size])
     language = models.CharField(max_length=10, choices=Language.choices, default=Language.UZBEK)
 
     # Расширенный профиль сотрудника

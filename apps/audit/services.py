@@ -29,11 +29,6 @@ def get_client_ip(request):
 
     Возвращает:
         str или None - IP адрес клиента или None если request=None
-
-    Логика:
-        1. Проверяет X-Forwarded-For (для прокси)
-        2. Если нет, использует REMOTE_ADDR
-        3. Если несколько IP в X-Forwarded-For, берет первый
     """
     if request is None:
         return None

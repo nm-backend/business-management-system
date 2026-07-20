@@ -8,6 +8,7 @@ Finance models - управление финансами.
 """
 from django.db import models
 from apps.core.models import TimestampedModel
+from apps.core.validators import validate_file_size
 from apps.warehouse.models import UnitChoices
 
 
@@ -95,7 +96,7 @@ class Expense(TimestampedModel):
     amount = models.DecimalField(max_digits=15, decimal_places=2)
     date = models.DateField(db_index=True)
     comment = models.TextField(blank=True, default='')
-    receipt_photo = models.ImageField(upload_to='finance/receipts/', blank=True, null=True)
+    receipt_photo = models.ImageField(upload_to='finance/receipts/', blank=True, null=True, validators=[validate_file_size])
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='expenses', verbose_name='Кем добавлено')
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
 

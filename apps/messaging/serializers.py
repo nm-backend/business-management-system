@@ -161,6 +161,9 @@ class StartDirectSerializer(serializers.Serializer):
             raise serializers.ValidationError('Сотрудник не найден.')
         if other.company_id != me.company_id or other.is_superadmin:
             raise serializers.ValidationError('Сотрудник не найден.')
+        # Работник не может писать хозяину без разрешения.
+        if me.role == User.Role.WORKER and other.role == User.Role.OWNER and not me.can_write_to_owner:
+            raise serializers.ValidationError('Эгасига ёзиш учун рухсат йўқ.')
         self.context['other_user'] = other
         return value
 
