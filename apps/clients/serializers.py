@@ -24,7 +24,10 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 class ClientAdminSerializer(serializers.ModelSerializer):
     has_debt = serializers.BooleanField(read_only=True)
-    has_active_orders = serializers.BooleanField(read_only=True)
+    # Читаем аннотацию active_orders_exists (см. ClientViewSet.get_queryset) вместо
+    # свойства has_active_orders, которое делало .exists() на каждого клиента (N+1).
+    # Формат ответа не меняется: ключ в JSON остаётся has_active_orders.
+    has_active_orders = serializers.SerializerMethodField()
 
     class Meta:
         model = Client
@@ -32,6 +35,10 @@ class ClientAdminSerializer(serializers.ModelSerializer):
             'id', 'name', 'phone', 'address', 'comment', 'is_archived',
             'has_debt', 'has_active_orders', 'created_at', 'updated_at',
         ]
+
+    def get_has_active_orders(self, obj):
+        annotated = getattr(obj, 'active_orders_exists', None)
+        return annotated if annotated is not None else obj.has_active_orders
 
 
 class ClientOwnerSerializer(ClientAdminSerializer):

@@ -4,6 +4,7 @@ Views for clients API.
 Клиенты доступны владельцу и администратору (работник клиентов не видит).
 Оплаты - только владельцу; создание оплаты обновляет заказ и долг клиента.
 """
+from django.db.models import Exists, OuterRef
 from rest_framework import filters, viewsets
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
@@ -12,9 +13,10 @@ from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.messaging.models import Notification
 from apps.messaging.services import notify
+from apps.orders.models import Order
 from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwner, IsOwnerOrAdmin
-from .models import Client, Payment
+from .models import ACTIVE_ORDER_STATUSES, Client, Payment
 from .serializers import ClientAdminSerializer, ClientOwnerSerializer, PaymentSerializer
 
 
@@ -30,9 +32,20 @@ class ClientViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Client.objects.none()
         # payments сериализуются вложенно -> без prefetch был запрос на каждого клиента.
+        # active_orders_exists: раньше свойство has_active_orders делало .exists()
+        # по заказам на КАЖДОГО клиента (N+1). Считаем одним подзапросом Exists.
+        # Имя annotation отличается от property has_active_orders (иначе property
+        # затеняет его на инстансе), сериализатор читает именно annotation.
+        active_orders = Order.objects.filter(
+            client=OuterRef('pk'),
+            status__in=ACTIVE_ORDER_STATUSES,
+            is_archived=False,
+        )
         return Client.objects.filter(
             company=self.request.user.company_id,
-        ).prefetch_related('payments')
+        ).prefetch_related('payments').annotate(
+            active_orders_exists=Exists(active_orders),
+        )
 
     def get_serializer_class(self):
         if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:

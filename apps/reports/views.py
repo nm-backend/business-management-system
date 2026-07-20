@@ -13,6 +13,8 @@ Reports views - аналитика и экспорт отчётов.
     Касса           = все оплаты - все расходы - выплаты работникам.
 """
 import datetime
+
+from apps.core.validators import parse_date_param
 import io
 
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum
@@ -46,9 +48,9 @@ def parse_period(request):
     }
     date_from, date_to = presets.get(period, presets['month'])
     if request.query_params.get('date_from'):
-        date_from = datetime.date.fromisoformat(request.query_params['date_from'])
+        date_from = parse_date_param(request.query_params['date_from'], 'date_from')
     if request.query_params.get('date_to'):
-        date_to = datetime.date.fromisoformat(request.query_params['date_to'])
+        date_to = parse_date_param(request.query_params['date_to'], 'date_to')
     return date_from, date_to
 
 

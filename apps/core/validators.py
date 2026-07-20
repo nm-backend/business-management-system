@@ -31,6 +31,25 @@ def parse_int_param(value, field_name):
         raise DRFValidationError({field_name: 'Ожидается числовой идентификатор.'})
 
 
+def parse_date_param(value, field_name):
+    """
+    Приводит query-параметр к date или возвращает 400 вместо 500.
+
+    Без этого нечисловая/кривая дата (?date_from=abc) доходила до ORM и роняла
+    обработчик: Django бросал ValidationError, а reports — ValueError
+    (Invalid isoformat string) -> HTTP 500. Любой авторизованный пользователь мог
+    вызвать 500 одним GET. SQL-инъекции здесь нет (ORM параметризует запросы),
+    но контракт API нарушался.
+    """
+    import datetime
+
+    from rest_framework.exceptions import ValidationError as DRFValidationError
+    try:
+        return datetime.date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        raise DRFValidationError({field_name: 'Ожидается дата в формате ГГГГ-ММ-ДД.'})
+
+
 def validate_image_upload(f):
     """Проверяет размер, расширение и content-type загружаемого изображения."""
     if not f:

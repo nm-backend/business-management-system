@@ -39,7 +39,11 @@ def get_recipe_requirements(product, quantity):
     """Возвращает [(material, required_qty), ...] по активному рецепту товара."""
     if not product:
         return []
-    recipe = product.recipes.filter(is_active=True).prefetch_related('items__material').first()
+    # Итерируем .all() (использует prefetch-кэш product.recipes, если он есть,
+    # см. OrderViewSet.prefetch_related), а активный рецепт отбираем в Python.
+    # Раньше .filter(is_active=True) шёл в обход prefetch -> 3 запроса на КАЖДЫЙ
+    # заказ (recipe + recipeitem + rawmaterial) = N+1.
+    recipe = next((r for r in product.recipes.all() if r.is_active), None)
     if not recipe:
         return []
     return [
