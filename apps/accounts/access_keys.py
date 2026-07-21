@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import AccessKey, User
+from .token_utils import blacklist_all_tokens
 
 
 @transaction.atomic
@@ -22,6 +23,12 @@ def issue_access_key(*, user, created_by=None, expires_in_days=None):
     """
     if user.is_superadmin or user.company_id is None:
         raise ValueError('Access keys can be issued only to company employees.')
+    # Заблокированному АДМИНИСТРАТОРОМ сотруднику ключ не выдаём (иначе обход
+    # блокировки через публичный redeem). Внимание: is_active=False сам по себе
+    # НЕ означает блокировку — так же выглядит приглашённый, ещё не активированный
+    # сотрудник. Дискриминатор — blocked_by_owner.
+    if user.blocked_by_owner:
+        raise ValueError('Cannot issue an access key to a blocked account.')
 
     # ГОНКА (воспроизведена: 16 потоков -> до 3 активных ключей одновременно).
     # Без блокировки два процесса успевали отозвать «всё активное» (каждый видел
@@ -79,11 +86,19 @@ def redeem_access_key(*, code, new_password):
         return None, 'company_inactive'
 
     user = key.user
+    # Заблокированного АДМИНИСТРАТОРОМ сотрудника redeem НЕ восстанавливает.
+    # Только blocked_by_owner отличает блокировку от приглашённого-неактивного
+    # (у последнего is_active=False — это нормальный до-активационный статус).
+    if user.blocked_by_owner:
+        return None, 'blocked'
+
     user.set_password(new_password)
-    user.is_active = True
+    user.is_active = True  # активируем приглашённого сотрудника
     if user.status != User.Status.ACTIVE:
         user.status = User.Status.ACTIVE
     user.save()
+    # Новый пароль → прежние refresh-токены недействительны.
+    blacklist_all_tokens(user)
 
     key.status = AccessKey.Status.USED
     key.used_at = timezone.now()

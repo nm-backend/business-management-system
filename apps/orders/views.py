@@ -54,15 +54,19 @@ class OrderViewSet(viewsets.ModelViewSet):
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         return [IsCompanyMember()]
 
+    def _assert_related_own_company(self, validated_data):
+        # client/product/worker — все строго своей компании, и на create, и на
+        # update. Раньше worker вообще не проверялся, а update не проверял ничего:
+        # можно было привязать заказ к сотруднику/клиенту/товару чужой компании.
+        company_id = self.request.user.company_id
+        for field in ('client', 'product', 'worker'):
+            obj = validated_data.get(field)
+            if obj is not None and obj.company_id != company_id:
+                raise PermissionDenied(f'{field.capitalize()} must belong to your company')
+
     def perform_create(self, serializer):
-        # Заказ можно создать только на клиента/товар своей компании.
         company = self.request.user.company
-        client = serializer.validated_data.get('client')
-        product = serializer.validated_data.get('product')
-        if client and client.company_id != company.id:
-            raise PermissionDenied('Client must belong to your company')
-        if product and product.company_id != company.id:
-            raise PermissionDenied('Product must belong to your company')
+        self._assert_related_own_company(serializer.validated_data)
         order = serializer.save(company=company)
         order.client.recalculate_financials()
         notify_staff(
@@ -81,6 +85,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        self._assert_related_own_company(serializer.validated_data)
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
         order = serializer.save()
         if 'total_amount' in changes:

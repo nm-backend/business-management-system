@@ -28,11 +28,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Только рантайм-зависимости: netcat для ожидания БД, libpq5 для psycopg2.
+# Только рантайм-зависимости: netcat для ожидания БД, libpq5 для psycopg2,
+# fonts-dejavu-core — кириллический TTF для PDF-экспорта (иначе кириллица в
+# отчётах не рендерится на Linux; см. reports/views.register_report_font).
 # build-essential/gcc намеренно НЕ ставим — их не должно быть в проде.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         netcat-openbsd \
         libpq5 \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local

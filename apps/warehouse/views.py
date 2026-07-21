@@ -154,7 +154,11 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return StockMovement.objects.none()
-        return StockMovement.objects.filter(company=self.request.user.company_id)
+        # created_by_name дергал created_by.full_name на КАЖДУЮ запись (N+1).
+        # select_related сводит к константе; material/product — на будущее.
+        return StockMovement.objects.filter(
+            company=self.request.user.company_id,
+        ).select_related('created_by', 'material', 'product')
 
     def get_serializer_class(self):
         if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
@@ -178,9 +182,19 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Recipe.objects.none()
-        return Recipe.objects.filter(company=self.request.user.company_id)
+        # Вложенный RecipeItemSerializer дергал items (N+1) и material в каждой
+        # строке (ещё N+1). prefetch сводит всё к нескольким запросам.
+        return Recipe.objects.filter(
+            company=self.request.user.company_id,
+        ).prefetch_related('items__material')
+
+    def _check_product_company(self, serializer):
+        product = serializer.validated_data.get('product')
+        if product and product.company_id != self.request.user.company_id:
+            raise PermissionDenied('Product must belong to your company')
 
     def perform_create(self, serializer):
+        self._check_product_company(serializer)
         recipe = serializer.save(company=self.request.user.company)
         write_audit_log(
             action=AuditLog.Action.CREATE,
@@ -190,6 +204,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        self._check_product_company(serializer)
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
         recipe = serializer.save()
         if changes:
@@ -219,8 +234,13 @@ class RecipeItemViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return RecipeItem.objects.none()
+        # material_name дергал material.name на каждую строку (N+1).
         # У строки рецепта нет прямого company - изолируем через рецепт.
-        return RecipeItem.objects.filter(recipe__company=self.request.user.company_id)
+        # order_by('id') — детерминированная пагинация (без него пагинатор
+        # предупреждал о возможных пропусках/дублях между страницами).
+        return RecipeItem.objects.filter(
+            recipe__company=self.request.user.company_id,
+        ).select_related('material', 'recipe').order_by('id')
 
     def perform_create(self, serializer):
         # Нельзя добавить строку в чужой рецепт/материал.
@@ -238,6 +258,13 @@ class RecipeItemViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
+        # На update проверяем принадлежность так же, как на create — иначе строку
+        # можно было перепривязать к рецепту/материалу чужой компании.
+        company_id = self.request.user.company_id
+        recipe = serializer.validated_data.get('recipe')
+        material = serializer.validated_data.get('material')
+        if (recipe and recipe.company_id != company_id) or (material and material.company_id != company_id):
+            raise PermissionDenied('Recipe and material must belong to your company')
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
         recipe_item = serializer.save()
         if changes:

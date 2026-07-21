@@ -103,8 +103,17 @@ class PaymentViewSet(viewsets.ModelViewSet):
         # Оплату можно завести только на клиента своей компании.
         company = self.request.user.company
         client = serializer.validated_data.get('client')
+        order = serializer.validated_data.get('order')
         if client and client.company_id != company.id:
             raise PermissionDenied('Client must belong to your company')
+        # Заказ (если указан) — тоже строго своей компании и именно этого клиента.
+        # Иначе владелец компании A мог передать order компании B и изменить его
+        # paid_amount/payment_status (межтенантная запись в чужие финансы).
+        if order is not None:
+            if order.company_id != company.id:
+                raise PermissionDenied('Order must belong to your company')
+            if client is not None and order.client_id != client.id:
+                raise PermissionDenied('Order does not belong to this client')
         payment = serializer.save(received_by=self.request.user, company=company)
         if payment.order:
             order = payment.order

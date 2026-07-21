@@ -180,6 +180,12 @@ class User(AbstractUser):
     can_create_workers = models.BooleanField(default=False)
     can_see_other_workers = models.BooleanField(default=False)
 
+    # True, если аккаунт заблокирован ИНДИВИДУАЛЬНО владельцем (toggle_active),
+    # а не каскадом от блокировки компании. При разблокировке компании такие
+    # сотрудники НЕ должны молча восстанавливаться. Не путать с is_active
+    # (общий флаг «вход разрешён»).
+    blocked_by_owner = models.BooleanField(default=False)
+
     # Временные метки
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

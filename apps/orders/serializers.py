@@ -26,6 +26,10 @@ class OrderSerializer(serializers.ModelSerializer):
             'status', 'payment_status', 'has_material_shortage', 'material_shortages',
             'is_overdue', 'created_at', 'updated_at',
         ]
+        # status/payment_status меняются ТОЛЬКО через действия (deliver/cancel) и
+        # производственный поток, а не прямым PATCH — иначе обходится конечный
+        # автомат заказа и его side-эффекты (пересчёт финансов, авто-архив, уведомления).
+        read_only_fields = ['status', 'payment_status']
 
     def get_worker_name(self, obj):
         if not obj.worker:

@@ -226,10 +226,14 @@ class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
         # Товар/задача должны быть из своей компании.
         product = serializer.validated_data.get('product')
         task = serializer.validated_data.get('task')
+        worker = serializer.validated_data.get('worker')
         if product and product.company_id != user.company_id:
             raise PermissionDenied('Product must belong to your company')
         if task and task.company_id != user.company_id:
             raise PermissionDenied('Task must belong to your company')
+        # Owner/admin не может записать работу на сотрудника чужой компании.
+        if worker and worker.company_id != user.company_id:
+            raise PermissionDenied('Worker must belong to your company')
         if user.is_worker:
             work = serializer.save(company=user.company, worker=user)
         else:

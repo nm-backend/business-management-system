@@ -67,3 +67,6 @@ class RecipeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recipe
         fields = '__all__'
+        # company проставляет сервер (из request.user), клиент не задаёт — иначе
+        # владелец мог PATCH-ем перекинуть рецепт в чужую компанию (mass assignment).
+        read_only_fields = ['company']

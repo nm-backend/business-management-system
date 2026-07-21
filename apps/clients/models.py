@@ -96,7 +96,9 @@ class Payment(TimestampedModel):
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
     comment = models.TextField(blank=True)
     received_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='received_payments')
-    payment_date = models.DateTimeField()
+    # db_index: Meta.ordering сортирует ВСЕ выборки платежей по payment_date,
+    # поэтому индекс убирает полную сортировку на больших объёмах.
+    payment_date = models.DateTimeField(db_index=True)
 
     class Meta:
         verbose_name = 'Оплата'

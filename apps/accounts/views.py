@@ -27,6 +27,7 @@ from apps.core.validators import parse_int_param
 from core.permissions import IsOwner, IsOwnerOrAdmin
 from . import two_factor
 from .access_keys import issue_access_key, redeem_access_key, verify_access_key
+from .token_utils import blacklist_all_tokens
 from .models import AccessKey, Skill, User
 from .serializers import (
     UserSerializer, UserSelfUpdateSerializer, UserCreateSerializer, UserLimitedSerializer,
@@ -362,6 +363,8 @@ class ChangePasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         request.user.set_password(serializer.validated_data['new_password'])
         request.user.save()
+        # Смена пароля обесценивает все прежние refresh-токены.
+        blacklist_all_tokens(request.user)
         write_audit_log(
             action=AuditLog.Action.CHANGE_PASSWORD,
             actor=request.user,
@@ -787,7 +790,13 @@ class UserViewSet(viewsets.ModelViewSet):
         if user.role == 'owner':
             return Response({'error': 'Cannot deactivate owner account'}, status=status.HTTP_400_BAD_REQUEST)
         user.is_active = not user.is_active
-        user.save(update_fields=['is_active'])
+        # Помечаем индивидуальную блокировку, чтобы разблокировка КОМПАНИИ её
+        # не сняла молча (blocked_by_owner=True сохраняется через company-каскад).
+        user.blocked_by_owner = not user.is_active
+        user.save(update_fields=['is_active', 'blocked_by_owner'])
+        if not user.is_active:
+            # Блокировка — немедленно обрываем активные сессии (refresh-токены).
+            blacklist_all_tokens(user)
         write_audit_log(
             action=AuditLog.Action.ACTIVATE if user.is_active else AuditLog.Action.DEACTIVATE,
             actor=request.user,
@@ -822,6 +831,8 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Password must be at least 8 characters'}, status=status.HTTP_400_BAD_REQUEST)
         user.set_password(new_password)
         user.save()
+        # Принудительный сброс пароля выгоняет все активные сессии сотрудника.
+        blacklist_all_tokens(user)
         write_audit_log(
             action=AuditLog.Action.RESET_PASSWORD,
             actor=request.user,

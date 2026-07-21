@@ -258,6 +258,20 @@ class AdminAnalyticsView(APIView):
         return Response(admin_analytics_data(request.user.company_id))
 
 
+def _sanitize_xlsx_cell(value):
+    """
+    Защита от Formula Injection (CSV/Excel injection).
+
+    Значение-строка, начинающееся с = + - @ (или tab/CR/LF), в Excel/LibreOffice
+    трактуется как формула: например имя клиента '=HYPERLINK(...)' или
+    '=1+2' исполнилось бы при открытии отчёта. Префиксуем апострофом — тогда
+    ячейка показывается как обычный текст. Числа (Decimal/int) не трогаем.
+    """
+    if isinstance(value, str) and value[:1] in ('=', '+', '-', '@', '\t', '\r', '\n'):
+        return "'" + value
+    return value
+
+
 def xlsx_response(rows, filename, sheet_title):
     """Собирает xlsx из списка строк и возвращает как HTTP ответ."""
     from openpyxl import Workbook
@@ -266,7 +280,7 @@ def xlsx_response(rows, filename, sheet_title):
     sheet = workbook.active
     sheet.title = sheet_title
     for row in rows:
-        sheet.append(row)
+        sheet.append([_sanitize_xlsx_cell(cell) for cell in row])
     buffer = io.BytesIO()
     workbook.save(buffer)
     response = HttpResponse(
@@ -277,23 +291,66 @@ def xlsx_response(rows, filename, sheet_title):
     return response
 
 
+def register_report_font():
+    """
+    Регистрирует Unicode-шрифт с кириллицей кроссплатформенно и возвращает его имя.
+
+    Раньше путь был жёстко задан как 'C:/Windows/Fonts/arial.ttf' — на Linux/Docker
+    его нет, reportlab молча падал в Helvetica, и кириллица в PDF не рендерилась.
+    Теперь ищем шрифт по списку типичных путей (Linux/Windows/macOS) + переменная
+    окружения PDF_FONT_PATH. В Docker-образ ставится fonts-dejavu-core, поэтому на
+    Linux берётся DejaVuSans (полная кириллица). Если ничего не нашли — Helvetica
+    (без кириллицы, но генерация PDF не падает).
+    """
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    if 'ReportFont' in pdfmetrics.getRegisteredFontNames():
+        return 'ReportFont'
+
+    path = resolve_report_font_path()
+    if path:
+        try:
+            pdfmetrics.registerFont(TTFont('ReportFont', path))
+            return 'ReportFont'
+        except Exception:
+            pass
+    return 'Helvetica'
+
+
+def resolve_report_font_path():
+    """
+    Возвращает путь к первому найденному Unicode-шрифту (с кириллицей) или None.
+
+    Порядок: PDF_FONT_PATH -> DejaVu (Linux) -> Liberation -> Arial (Win) -> macOS.
+    Все перечисленные шрифты содержат кириллицу; в Docker-образ ставится
+    fonts-dejavu-core, поэтому на Linux путь DejaVu существует.
+    """
+    import os
+
+    candidates = [os.environ.get('PDF_FONT_PATH')]
+    candidates += [
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',   # Debian/Ubuntu (fonts-dejavu-core)
+        '/usr/share/fonts/dejavu/DejaVuSans.ttf',            # Fedora/RHEL
+        '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+        'C:/Windows/Fonts/arial.ttf',                        # Windows
+        '/Library/Fonts/Arial.ttf',                          # macOS
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            return path
+    return None
+
+
 def pdf_response(title, rows, filename):
     """Простой табличный PDF отчёт (reportlab)."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     from reportlab.lib.styles import getSampleStyleSheet
 
-    # Arial поддерживает кириллицу; стандартный Helvetica - нет.
-    font_name = 'Helvetica'
-    try:
-        pdfmetrics.registerFont(TTFont('Arial', 'C:/Windows/Fonts/arial.ttf'))
-        font_name = 'Arial'
-    except Exception:
-        pass
+    font_name = register_report_font()
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5 * cm)

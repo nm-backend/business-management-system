@@ -96,6 +96,10 @@ class UserSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
         read_only_fields = [
             'id', 'role', 'company', 'created_at', 'updated_at', 'display_role',
             'last_activity',
+            # is_active меняется ТОЛЬКО через action toggle_active (с проверкой
+            # «нельзя деактивировать владельца» и блэклистом токенов), а не
+            # обычным PATCH /users/{id}/.
+            'is_active',
         ]
 
 

@@ -1,0 +1,79 @@
+# ── SkladPro.Nod — PRODUCTION-профиль ────────────────────────────────────────
+# Отличия от docker-compose.yml (dev):
+#   • DJANGO_ENV=production, DEBUG=False — включаются fail-closed-гарды settings.
+#   • Секреты ОБЯЗАТЕЛЬНЫ: ${VAR:?...} — compose откажется стартовать без них
+#     (никаких «dev-insecure» ключей по умолчанию, в отличие от dev-стека).
+#   • Код НЕ монтируется с хоста — образ самодостаточен (COPY . . в Dockerfile).
+#   • ALLOWED_HOSTS задаёте вы; '*' в проде запрещён гардом production.py.
+#
+# Запуск:  docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# .env.prod ДОЛЖЕН задавать: SECRET_KEY, ALLOWED_HOSTS, DB_PASSWORD, REDIS_PASSWORD.
+# HTTPS/SSL терминируйте reverse-proxy (nginx/Caddy/Traefik) перед web:8000.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-skladpro_db}
+      POSTGRES_USER: ${DB_USER:-skladpro}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in production}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-skladpro} -d ${DB_NAME:-skladpro_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  web:
+    build: .
+    command: daphne -b 0.0.0.0 -p 8000 skladpro.asgi:application
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required in production (generate a long random one)}
+      DJANGO_ENV: production
+      DEBUG: "False"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?ALLOWED_HOSTS is required in production (comma-separated, no '*')}
+      DB_NAME: ${DB_NAME:-skladpro_db}
+      DB_USER: ${DB_USER:-skladpro}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in production}
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}@redis:6379/0
+      # Django за reverse-proxy: доверяем X-Forwarded-Proto для HTTPS-редиректа.
+      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-True}
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/core/health/', timeout=4).status==200 else 1)\""]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 40s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  redis_data:
+  media_data:
+  static_data:

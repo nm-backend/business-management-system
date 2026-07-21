@@ -279,4 +279,36 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-USE_X_FORWARDED_FOR = False
+USE_X_FORWARDED_FOR = False
+
+# Логирование: пишем в stdout (12-factor: удобно для Docker/облака, где логи
+# собираются из потока вывода). Уровень настраивается через LOG_LEVEL.
+# disable_existing_loggers=False, чтобы не глушить логгеры Django/сторонних.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '{asctime} {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': config('LOG_LEVEL', default='INFO'),
+    },
+    'loggers': {
+        # Ошибки обработки запросов (5xx) — всегда видны.
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}

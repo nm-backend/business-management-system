@@ -10,6 +10,7 @@ from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.response import Response
 
 from apps.accounts.models import User
+from apps.accounts.token_utils import blacklist_all_tokens
 from apps.audit.models import AuditLog
 from apps.audit.services import write_audit_log
 from apps.core.permissions import IsSuperAdmin
@@ -48,8 +49,17 @@ class CompanyViewSet(viewsets.ModelViewSet):
         company = self.get_object()
         company.is_active = not company.is_active
         company.save(update_fields=['is_active'])
-        # Блокировка/разблокировка каскадом на пользователей компании.
-        User.objects.filter(company=company).update(is_active=company.is_active)
+        company_users = User.objects.filter(company=company)
+        if company.is_active:
+            # Разблокировка: восстанавливаем только тех, кого НЕ блокировал
+            # владелец индивидуально (иначе снятая компания-блокировка молча
+            # вернула бы доступ уволенному/отстранённому сотруднику).
+            company_users.filter(blocked_by_owner=False).update(is_active=True)
+        else:
+            # Блокировка: гасим всех и обрываем их активные сессии.
+            company_users.update(is_active=False)
+            for u in company_users:
+                blacklist_all_tokens(u)
         write_audit_log(
             action=AuditLog.Action.ACTIVATE if company.is_active else AuditLog.Action.DEACTIVATE,
             actor=request.user,
