@@ -4,6 +4,7 @@ API управления компаниями - только для платфо
 Супер-админ создаёт компании (вместе с владельцем), блокирует/разблокирует их.
 Блокировка компании деактивирует всех её пользователей (вход становится невозможен).
 """
+from django.db.models import Count, Prefetch
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed
@@ -25,6 +26,20 @@ class CompanyViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name']
     ordering_fields = ['name', 'created_at']
+
+    def get_queryset(self):
+        # Убираем N+1 в списке: users_count через annotate, а владелец —
+        # через prefetch в obj._owner_list (1 запрос на всю страницу вместо
+        # 3 на каждую компанию: count + owner дважды).
+        return (
+            Company.objects.all()
+            .annotate(users_count=Count('users'))
+            .prefetch_related(Prefetch(
+                'users',
+                queryset=User.objects.filter(role=User.Role.OWNER),
+                to_attr='_owner_list',
+            ))
+        )
 
     def get_serializer_class(self):
         if self.action == 'create':

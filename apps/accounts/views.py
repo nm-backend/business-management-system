@@ -861,11 +861,15 @@ class UserViewSet(viewsets.ModelViewSet):
                 raise ValidationError({'detail': 'Cannot issue an access key for this account.'})
             serializer = AccessKeyIssueSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            key = issue_access_key(
-                user=employee,
-                created_by=request.user,
-                expires_in_days=serializer.validated_data.get('expires_in_days'),
-            )
+            try:
+                key = issue_access_key(
+                    user=employee,
+                    created_by=request.user,
+                    expires_in_days=serializer.validated_data.get('expires_in_days'),
+                )
+            except ValueError as exc:
+                # blocked_by_owner / включённое 2FA и т.п. -> 400, а не 500.
+                raise ValidationError({'detail': str(exc)})
             write_audit_log(
                 action=AuditLog.Action.ACCESS_KEY_ISSUED,
                 actor=request.user,

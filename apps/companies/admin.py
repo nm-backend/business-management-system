@@ -324,7 +324,14 @@ class CompanyAdmin(admin.ModelAdmin):
         for company in queryset:
             company.is_active = active
             company.save(update_fields=['is_active'])
-            User.objects.filter(company=company).update(is_active=active)
+            users = User.objects.filter(company=company)
+            if active:
+                # Разблокировка компании НЕ должна воскрешать сотрудников,
+                # которых владелец заблокировал индивидуально (blocked_by_owner) —
+                # так же, как в API-пути companies.views.toggle_active.
+                users.filter(blocked_by_owner=False).update(is_active=True)
+            else:
+                users.update(is_active=False)
         verb = 'разблокированы' if active else 'заблокированы'
         self.message_user(request, f'{queryset.count()} компаний {verb} (вместе с пользователями).')
 

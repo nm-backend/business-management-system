@@ -59,8 +59,11 @@ services:
       - static_data:/app/staticfiles
     ports:
       - "8000:8000"
+    # Probe шлёт Host из ALLOWED_HOSTS и X-Forwarded-Proto=https, иначе под
+    # production настройками loopback-запрос падает на DisallowedHost/SSL-redirect
+    # и контейнер навсегда 'unhealthy'. Логика — в docker/healthcheck.py.
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/core/health/', timeout=4).status==200 else 1)\""]
+      test: ["CMD", "python", "/app/docker/healthcheck.py"]
       interval: 15s
       timeout: 6s
       retries: 5

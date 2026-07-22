@@ -13,6 +13,7 @@ queryset.update(), чтобы не трогать auto_now-поле updated_at �
 from datetime import timedelta
 
 from django.utils import timezone
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 ACTIVITY_THROTTLE = timedelta(minutes=5)
@@ -37,3 +38,19 @@ class ActivityJWTAuthentication(JWTAuthentication):
         # update() минует auto_now (updated_at) и хеширование — дёшево.
         type(user).objects.filter(pk=user.pk).update(last_activity=now)
         user.last_activity = now  # чтобы значение было актуальным в этом запросе
+
+
+class ActivityJWTScheme(OpenApiAuthenticationExtension):
+    """
+    Описывает ActivityJWTAuthentication для OpenAPI (Bearer JWT).
+
+    Без этого расширения drf_spectacular не знает, как задокументировать наш
+    кастомный класс аутентификации, и на КАЖДЫЙ view сыплет W001
+    «could not resolve authenticator». Регистрация убирает эти предупреждения и
+    показывает в Swagger корректную схему Authorization: Bearer <token>.
+    """
+    target_class = 'apps.accounts.authentication.ActivityJWTAuthentication'
+    name = 'jwtAuth'
+
+    def get_security_definition(self, auto_schema):
+        return {'type': 'http', 'scheme': 'bearer', 'bearerFormat': 'JWT'}

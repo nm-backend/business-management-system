@@ -34,6 +34,9 @@ class HealthView(APIView):
     """
     permission_classes = [AllowAny]
     authentication_classes = []
+    # Health не троттлим: оркестратор/LB (Render healthCheckPath, k8s probe) бьют
+    # его часто; троттлинг вернул бы 429 и пометил живой сервис как unhealthy.
+    throttle_classes = []
 
     def get(self, request):
         try:
@@ -53,7 +56,8 @@ class CurrencyViewSet(GlobalReferenceWriteMixin, viewsets.ModelViewSet):
     serializer_class = CurrencySerializer
 
 class ExchangeRateViewSet(GlobalReferenceWriteMixin, viewsets.ModelViewSet):
-    queryset = ExchangeRate.objects.all()
+    # select_related убирает N+1: сериализатор отдаёт from/to_currency.code.
+    queryset = ExchangeRate.objects.select_related('from_currency', 'to_currency')
     serializer_class = ExchangeRateSerializer
 
 class LocaleView(APIView):

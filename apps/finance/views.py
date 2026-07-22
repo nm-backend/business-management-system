@@ -99,6 +99,14 @@ class LaborRateViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Product must belong to your company')
         serializer.save(company=self.request.user.company)
 
+    def perform_update(self, serializer):
+        # Без этой проверки PATCH мог перепривязать ставку к product ЧУЖОЙ
+        # компании (IDOR-запись + утечка чужого product_name в ответе).
+        product = serializer.validated_data.get('product')
+        if product and product.company_id != self.request.user.company_id:
+            raise PermissionDenied('Product must belong to your company')
+        serializer.save()
+
 
 class WorkerPaymentViewSet(viewsets.ModelViewSet):
     """
@@ -147,3 +155,12 @@ class WorkerPaymentViewSet(viewsets.ModelViewSet):
         if worker and worker.company_id != self.request.user.company_id:
             raise PermissionDenied('Worker must belong to your company')
         serializer.save(created_by=self.request.user, company=self.request.user.company)
+
+    def perform_update(self, serializer):
+        # Без этой проверки PATCH мог перепривязать выплату к worker ЧУЖОЙ
+        # компании (IDOR-запись + утечка чужого worker_name; чужой работник
+        # начинал видеть выплату в своих my_earnings).
+        worker = serializer.validated_data.get('worker')
+        if worker and worker.company_id != self.request.user.company_id:
+            raise PermissionDenied('Worker must belong to your company')
+        serializer.save()

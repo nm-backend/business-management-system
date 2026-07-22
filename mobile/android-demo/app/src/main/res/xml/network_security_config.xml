@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Демо-режим: разрешаем cleartext (http), чтобы обёртка могла открывать локальный
+  сервер (http://10.0.2.2:8000 или http://IP:8000) без TLS.
+  ДЛЯ ПРОДАКШЕНА: замените site_url на https://… и уберите cleartextTrafficPermitted
+  (или ограничьте конкретным доменом), чтобы трафик шёл только по TLS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -53,6 +53,12 @@ class Order(TimestampedModel, SoftDeleteModel):
                                        validators=[MinValueValidator(Decimal('0'))])
     paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
+    # Момент первой выдачи клиенту (status -> DELIVERED). Отдельно от updated_at:
+    # любая поздняя правка/оплата бампит updated_at, а себестоимость проданного
+    # (COGS в reports) должна оставаться в периоде фактической выдачи, иначе
+    # поздний платёж задним числом переносил прибыль между месяцами.
+    delivered_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
     class Meta:
         verbose_name = 'Заказ'
         verbose_name_plural = 'Заказы'
@@ -60,6 +66,16 @@ class Order(TimestampedModel, SoftDeleteModel):
 
     def __str__(self):
         return f"Order #{self.id} - {self.client.name}"
+
+    def save(self, *args, **kwargs):
+        # delivered_at проставляется один раз — при первом переходе в DELIVERED,
+        # независимо от пути изменения статуса (deliver-action, админка и т.п.).
+        if self.status == self.Status.DELIVERED and self.delivered_at is None:
+            self.delivered_at = timezone.now()
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None and 'delivered_at' not in update_fields:
+                kwargs['update_fields'] = list(update_fields) + ['delivered_at']
+        super().save(*args, **kwargs)
 
     @property
     def is_paid(self):

@@ -30,6 +30,12 @@ def issue_access_key(*, user, created_by=None, expires_in_days=None):
     if user.blocked_by_owner:
         raise ValueError('Cannot issue an access key to a blocked account.')
 
+    # Access Key заменяет пароль без второго фактора. Для аккаунта с включённым
+    # 2FA выдача ключа = обход второго фактора (у приглашённых 2FA ещё нет).
+    from .two_factor import has_two_factor
+    if has_two_factor(user):
+        raise ValueError('Cannot issue an access key to an account with two-factor enabled.')
+
     # ГОНКА (воспроизведена: 16 потоков -> до 3 активных ключей одновременно).
     # Без блокировки два процесса успевали отозвать «всё активное» (каждый видел
     # пустой набор) и затем оба вставляли новый ключ. Блокируем строку сотрудника:
@@ -91,6 +97,12 @@ def redeem_access_key(*, code, new_password):
     # (у последнего is_active=False — это нормальный до-активационный статус).
     if user.blocked_by_owner:
         return None, 'blocked'
+
+    # Защита в глубину: если ключ выдали ДО включения 2FA, redeem всё равно не
+    # должен обходить второй фактор (смена пароля минула бы 2FA).
+    from .two_factor import has_two_factor
+    if has_two_factor(user):
+        return None, 'two_factor_enabled'
 
     user.set_password(new_password)
     user.is_active = True  # активируем приглашённого сотрудника

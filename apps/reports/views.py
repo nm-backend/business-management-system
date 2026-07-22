@@ -75,7 +75,7 @@ def _period_financials(company_id, date_from, date_to):
     )
     cost_of_goods = money(
         Order.objects.filter(company_id=company_id, status=Order.Status.DELIVERED,
-                             updated_at__date__range=(date_from, date_to))
+                             delivered_at__date__range=(date_from, date_to))
         .aggregate(s=Sum(ExpressionWrapper(F('quantity') * F('product__cost_price'), output_field=MONEY)))['s']
     )
     expenses_total = money(
@@ -98,7 +98,7 @@ def owner_analytics_data(company_id, date_from, date_to):
     delivered = Order.objects.filter(
         company_id=company_id,
         status=Order.Status.DELIVERED,
-        updated_at__date__range=(date_from, date_to),
+        delivered_at__date__range=(date_from, date_to),
     ).select_related('product')
     cost_of_goods = money(delivered.aggregate(
         s=Sum(ExpressionWrapper(F('quantity') * F('product__cost_price'), output_field=MONEY)),
@@ -138,7 +138,7 @@ def owner_analytics_data(company_id, date_from, date_to):
 
     top_products = list(
         Order.objects.filter(company_id=company_id, status=Order.Status.DELIVERED, product__isnull=False,
-                             updated_at__date__range=(date_from, date_to))
+                             delivered_at__date__range=(date_from, date_to))
         .values(name=F('product__name'))
         .annotate(total_quantity=Sum('quantity'), orders=Count('id'))
         .order_by('-total_quantity')[:5]

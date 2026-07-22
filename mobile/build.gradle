@@ -1,0 +1,4 @@
+// Корневой build-файл. Плагин AGP объявляется здесь и применяется в :app.
+plugins {
+    id 'com.android.application' version '8.7.2' apply false
+}

@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Корпус ящика (белый) -->
+    <path android:fillColor="#FFFFFF" android:pathData="M32,38 L76,38 L76,74 L32,74 Z" />
+    <!-- Полка (бренд) -->
+    <path android:fillColor="#1C64D9" android:pathData="M32,54 L76,54 L76,58 L32,58 Z" />
+    <!-- Коробки на верхней полке -->
+    <path android:fillColor="#1C64D9" android:pathData="M38,44 L48,44 L48,52 L38,52 Z" />
+    <path android:fillColor="#1C64D9" android:pathData="M54,44 L70,44 L70,52 L54,52 Z" />
+    <!-- Коробка на нижней полке -->
+    <path android:fillColor="#1C64D9" android:pathData="M38,60 L62,60 L62,70 L38,70 Z" />
+</vector>

@@ -18,7 +18,8 @@ class CompanySerializer(serializers.ModelSerializer):
     """Компания с краткой сводкой по владельцу и числу пользователей."""
     owner_username = serializers.SerializerMethodField()
     owner_full_name = serializers.SerializerMethodField()
-    users_count = serializers.IntegerField(source='users.count', read_only=True)
+    # Значение приходит из annotate(users_count=Count('users')) в CompanyViewSet.
+    users_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Company
@@ -29,6 +30,11 @@ class CompanySerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
     def _owner(self, obj):
+        # CompanyViewSet префетчит владельцев в obj._owner_list (без доп. запросов).
+        # Фоллбэк на запрос — для контекстов без префетча (retrieve по прямому qs).
+        owners = getattr(obj, '_owner_list', None)
+        if owners is not None:
+            return owners[0] if owners else None
         return obj.users.filter(role=User.Role.OWNER).first()
 
     @extend_schema_field(serializers.CharField(allow_null=True))

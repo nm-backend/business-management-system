@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SkladPro</string>
+    <!-- 10.0.2.2 = хост-машина из Android-эмулятора (dev-сервер :8000).
+         Для продакшена заменить на https://ваш-домен/ -->
+    <string name="app_url">http://10.0.2.2:8000/</string>
+    <string name="offline_title">Интернетга уланиш йўқ</string>
+    <string name="offline_message">Уланишни текширинг ва қайта уриниб кўринг.</string>
+    <string name="retry">Қайта уриниш</string>
+</resources>

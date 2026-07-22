@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Стилизованный склад/коробка (белый на бренд-фоне splash). -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2L3,7v10l9,5 9,-5V7L12,2zM12,4.3l6.5,3.6L12,11.5 5.5,7.9 12,4.3zM5,9.6l6,3.3v6.9l-6,-3.3V9.6zM13,19.8v-6.9l6,-3.3v6.9l-6,3.3z" />
+</vector>

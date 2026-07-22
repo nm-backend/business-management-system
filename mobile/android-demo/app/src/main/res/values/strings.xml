@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SkladPro</string>
+
+    <!-- ⚠️ УКАЖИТЕ АДРЕС ВАШЕГО САЙТА.
+         Продакшен:            https://ваш-домен
+         Локальный сервер:     http://ВАШ-IP:8000   (телефон в той же сети)
+         Эмулятор Android:     http://10.0.2.2:8000  (алиас localhost хоста)
+         Для http (не https) cleartext уже разрешён в network_security_config.xml. -->
+    <string name="site_url">https://your-domain.example</string>
+
+    <string name="offline_title">Нет подключения</string>
+    <string name="offline_message">Проверьте интернет-соединение и попробуйте снова.</string>
+    <string name="retry">Повторить</string>
+</resources>
