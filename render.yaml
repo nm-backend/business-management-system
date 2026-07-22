@@ -1,0 +1,49 @@
+# Render Blueprint — деплой SkladPro одним нажатием (Render → New → Blueprint).
+# Поднимает: web (Django+Channels/Daphne из Dockerfile) + PostgreSQL + Redis.
+# SECRET_KEY генерируется автоматически; ALLOWED_HOSTS = домен сервиса.
+services:
+  - type: web
+    name: skladpro
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/v1/core/health/
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true          # Render сгенерирует длинный случайный ключ
+      - key: SECURE_SSL_REDIRECT
+        value: "True"
+      - key: ALLOWED_HOSTS
+        fromService:
+          type: web
+          name: skladpro
+          property: host             # автоматически = <name>.onrender.com
+      - key: DB_HOST
+        fromDatabase: { name: skladpro-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: skladpro-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: skladpro-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: skladpro-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: skladpro-db, property: password }
+      - key: REDIS_URL
+        fromService: { type: redis, name: skladpro-redis, property: connectionString }
+
+  # Redis (Key Value) для Django Channels / WebSocket.
+  - type: redis
+    name: skladpro-redis
+    plan: free
+    ipAllowList: []                  # только внутренняя сеть Render
+
+databases:
+  - name: skladpro-db
+    plan: free
+    databaseName: skladpro
+    postgresMajorVersion: "16"
