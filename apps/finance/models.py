@@ -6,6 +6,9 @@ Finance models - управление финансами.
 
 ВАЖНО: Все финансовые данные доступны только владельцу (owner).
 """
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 from apps.core.models import TimestampedModel
 from apps.core.validators import validate_file_size
@@ -93,7 +96,8 @@ class Expense(TimestampedModel):
     """
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='expenses', null=True)
     category = models.CharField(max_length=30, choices=ExpenseCategory.choices, db_index=True)
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    amount = models.DecimalField(max_digits=15, decimal_places=2,
+                                 validators=[MinValueValidator(Decimal('0.01'))])
     date = models.DateField(db_index=True)
     comment = models.TextField(blank=True, default='')
     receipt_photo = models.ImageField(upload_to='finance/receipts/', blank=True, null=True, validators=[validate_file_size])
@@ -163,7 +167,8 @@ class LaborRate(TimestampedModel):
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='labor_rates', null=True)
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.CASCADE, related_name='labor_rates')
     operation = models.CharField(max_length=20, choices=OperationType.choices)
-    rate_per_unit = models.DecimalField(max_digits=15, decimal_places=2)
+    rate_per_unit = models.DecimalField(max_digits=15, decimal_places=2,
+                                        validators=[MinValueValidator(Decimal('0'))])
     unit = models.CharField(max_length=20, choices=UnitChoices.choices)
 
     class Meta:
@@ -225,7 +230,8 @@ class WorkerPayment(TimestampedModel):
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='worker_payments', null=True)
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='payments')
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    amount = models.DecimalField(max_digits=15, decimal_places=2,
+                                 validators=[MinValueValidator(Decimal('0.01'))])
     payment_date = models.DateField(db_index=True)
     payment_type = models.CharField(max_length=20, choices=PaymentType.choices, default=PaymentType.SALARY)
     comment = models.TextField(blank=True, default='')

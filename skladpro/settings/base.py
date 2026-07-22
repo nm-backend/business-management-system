@@ -13,7 +13,6 @@ Base Django settings for SkladPro project.
 - Настройки статических файлов и медиа
 - Локализация и часовой пояс
 """
-import os
 from datetime import timedelta
 from pathlib import Path
 from decouple import config

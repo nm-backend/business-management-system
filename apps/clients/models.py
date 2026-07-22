@@ -6,6 +6,7 @@ Clients models - клиенты и их оплаты.
 """
 from decimal import Decimal
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Sum
 
@@ -92,7 +93,8 @@ class Payment(TimestampedModel):
     order = models.ForeignKey(
         'orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='payments',
     )
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    amount = models.DecimalField(max_digits=15, decimal_places=2,
+                                 validators=[MinValueValidator(Decimal('0.01'))])
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
     comment = models.TextField(blank=True)
     received_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='received_payments')

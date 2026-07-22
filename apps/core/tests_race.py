@@ -115,3 +115,39 @@ class WarehouseRaceTests(TransactionTestCase):
         run_parallel(lambda i: ensure_general_conversation(self.company).pk, n=8)
         self.assertEqual(
             Conversation.objects.filter(company=self.company, kind='general').count(), 1)
+
+
+@skipUnlessDBFeature('has_select_for_update')
+class PaymentRaceTests(TransactionTestCase):
+    """Гонка потери обновления при одновременных оплатах одного заказа."""
+    reset_sequences = True
+
+    def setUp(self):
+        if not IS_POSTGRES:
+            self.skipTest('Конкуренция проверяется только на PostgreSQL')
+        import datetime
+        from apps.clients.models import Client
+        from apps.orders.models import Order
+        from apps.warehouse.models import FinishedProduct
+
+        self.company = Company.objects.create(name='RacePay')
+        self.owner = User.objects.create_user(username='rp_o', password='p',
+                                              role=User.Role.OWNER, company=self.company)
+        client = Client.objects.create(company=self.company, name='C')
+        product = FinishedProduct.objects.create(company=self.company, name='P',
+                                                 quantity=Decimal('1'))
+        self.order = Order.objects.create(
+            company=self.company, client=client, product=product, quantity=Decimal('1'),
+            unit='sht', total_amount=Decimal('100'), deadline=datetime.date(2026, 1, 1))
+
+    def test_concurrent_payments_are_not_lost(self):
+        """16 одновременных оплат по 1 -> paid_amount ровно 16 (без потери)."""
+        from apps.orders.models import Order
+        pk = self.order.pk
+        run_parallel(
+            lambda i: (Order.objects.get(pk=pk).apply_payment_amount(Decimal('1')), True)[1],
+            n=16,
+        )
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.paid_amount, Decimal('16.00'),
+                         f'ПОТЕРЯ ОБНОВЛЕНИЯ: paid_amount={self.order.paid_amount}, ожидалось 16')

@@ -52,3 +52,7 @@ class OrderSerializer(serializers.ModelSerializer):
 class OrderOwnerSerializer(OrderSerializer):
     class Meta(OrderSerializer.Meta):
         fields = OrderSerializer.Meta.fields + ['total_amount', 'paid_amount']
+        # paid_amount — вычисляемое поле (Order.apply_payment_amount из платежей),
+        # прямой записи быть не должно: иначе заказ помечался бы «оплачен» без
+        # реального платежа. total_amount — вход владельца, остаётся записываемым.
+        read_only_fields = OrderSerializer.Meta.read_only_fields + ['paid_amount']

@@ -6,6 +6,7 @@ Orders models - заказы клиентов.
 """
 from decimal import Decimal
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -37,7 +38,8 @@ class Order(TimestampedModel, SoftDeleteModel):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='orders')
     product = models.ForeignKey(FinishedProduct, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     custom_product_name = models.CharField(max_length=255, blank=True)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2,
+                                   validators=[MinValueValidator(Decimal('0.01'))])
     unit = models.CharField(max_length=20)
     deadline = models.DateTimeField(null=True, blank=True)
     worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
@@ -47,7 +49,8 @@ class Order(TimestampedModel, SoftDeleteModel):
     payment_status = models.CharField(max_length=50, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
 
     # Финансовые поля (только owner через API).
-    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                       validators=[MinValueValidator(Decimal('0'))])
     paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
 
     class Meta:
@@ -83,3 +86,21 @@ class Order(TimestampedModel, SoftDeleteModel):
         else:
             self.payment_status = self.PaymentStatus.PARTIAL
         self.save(update_fields=['payment_status', 'updated_at'])
+
+    def apply_payment_amount(self, amount):
+        """
+        Атомарно прибавляет сумму оплаты к paid_amount и обновляет payment_status.
+
+        ГОНКА (lost update): раньше оплата шла как read-modify-write
+        (paid_amount = paid_amount + amount) без блокировки. Две одновременные
+        оплаты одного заказа читали одинаковый paid_amount, и одна перезаписывала
+        другую — итог занижался, заказ ошибочно оставался «частично оплачен».
+        select_for_update сериализует параллельные оплаты одного заказа.
+        """
+        from django.db import transaction
+        with transaction.atomic():
+            locked = Order.objects.select_for_update().get(pk=self.pk)
+            locked.paid_amount = (locked.paid_amount or Decimal('0')) + amount
+            locked.save(update_fields=['paid_amount'])
+            locked.update_payment_status()
+        self.refresh_from_db()

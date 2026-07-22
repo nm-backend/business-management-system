@@ -6,7 +6,6 @@
 """
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.utils import timezone
 from django.utils.html import format_html
 
 from apps.core.admin_utils import badge, choice_badge

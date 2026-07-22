@@ -5,10 +5,11 @@
 через multipart PATCH /me/ не-изображение отклоняется (400), а валидный PNG
 проходит (200) — то есть валидатор реально подключён к боевому пути.
 """
+import tempfile
 from io import BytesIO
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from PIL import Image
 from rest_framework.test import APIClient
 
@@ -22,6 +23,8 @@ def _png_bytes(px=10):
     return buf.getvalue()
 
 
+# Пишем аватары во временный каталог, чтобы тесты не засоряли реальный media/.
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
 class AvatarUploadTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name='UpCo')

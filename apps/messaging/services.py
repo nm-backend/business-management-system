@@ -6,7 +6,7 @@ Messaging services — уведомления и операции корпора
 права, изоляция), а затем broadcast_message() доставляет его онлайн-
 участникам мгновенно.
 """
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.utils import timezone
 
 from .models import ChatMessage, Conversation, ConversationParticipant, Notification

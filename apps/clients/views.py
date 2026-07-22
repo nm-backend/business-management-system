@@ -116,10 +116,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied('Order does not belong to this client')
         payment = serializer.save(received_by=self.request.user, company=company)
         if payment.order:
-            order = payment.order
-            order.paid_amount = (order.paid_amount or 0) + payment.amount
-            order.save(update_fields=['paid_amount'])
-            order.update_payment_status()
+            # Атомарно (select_for_update) — защита от потери обновления при
+            # одновременных оплатах одного заказа.
+            payment.order.apply_payment_amount(payment.amount)
         payment.client.recalculate_financials()
         payment.client.auto_archive()
         notify(

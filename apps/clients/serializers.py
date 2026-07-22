@@ -48,3 +48,7 @@ class ClientOwnerSerializer(ClientAdminSerializer):
         fields = ClientAdminSerializer.Meta.fields + [
             'total_orders_amount', 'total_paid', 'debt', 'payments',
         ]
+        # Производные финполя считает recalculate_financials из заказов/платежей.
+        # Прямой записи через API быть не должно — иначе owner PATCH-ем подменял
+        # бы долг клиента (искажение отчётов) до следующего пересчёта.
+        read_only_fields = ['total_orders_amount', 'total_paid', 'debt']

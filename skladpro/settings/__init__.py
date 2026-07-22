@@ -1,4 +1,3 @@
-import os
 from decouple import config
 
 environment = config('DJANGO_ENV', default='development')
