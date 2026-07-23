@@ -11,11 +11,15 @@ while ! nc -z "$DB_HOST" "$DB_PORT"; do
 done
 echo "✅ PostgreSQL доступен."
 
-echo "▶ Применение миграций..."
-python manage.py migrate --noinput
+# SKIP_INIT=1 — пропустить миграции/статику (для разовых задач и cron-джоб,
+# которым init не нужен; web-сервис флаг не задаёт и работает как прежде).
+if [ "${SKIP_INIT:-0}" != "1" ]; then
+  echo "▶ Применение миграций..."
+  python manage.py migrate --noinput
 
-echo "▶ Сборка статики..."
-python manage.py collectstatic --noinput
+  echo "▶ Сборка статики..."
+  python manage.py collectstatic --noinput
+fi
 
 echo "🚀 Запуск: $*"
 exec "$@"

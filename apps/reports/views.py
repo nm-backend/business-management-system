@@ -14,12 +14,13 @@ Reports views - аналитика и экспорт отчётов.
 """
 import datetime
 
-from apps.core.validators import parse_date_param
+from apps.core.validators import parse_date_param, parse_int_param
 import io
 
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum
 from django.http import HttpResponse
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -34,18 +35,49 @@ from core.permissions import IsOwner, IsOwnerOrAdmin
 MONEY = DecimalField(max_digits=15, decimal_places=2)
 
 
+def _quarter_bounds(year, quarter):
+    """Границы КАЛЕНДАРНОГО квартала: Q1=янв–мар, Q2=апр–июн, Q3=июл–сен, Q4=окт–дек."""
+    start_month = 3 * (quarter - 1) + 1
+    start = datetime.date(year, start_month, 1)
+    if start_month + 2 >= 12:
+        end = datetime.date(year, 12, 31)
+    else:
+        end = datetime.date(year, start_month + 3, 1) - datetime.timedelta(days=1)
+    return start, end
+
+
 def parse_period(request):
-    """Читает ?period= или ?date_from/?date_to; по умолчанию текущий месяц."""
+    """
+    Читает период отчёта. Приоритет:
+      1) ?quarter=1..4 [&year=YYYY] — КАЛЕНДАРНЫЙ квартал Q1–Q4;
+      2) ?date_from / ?date_to — явные границы (переопределяют пресет);
+      3) ?period= (today|yesterday|week|month|quarter|year), по умолчанию month.
+    Пресет 'quarter' = ТЕКУЩИЙ календарный квартал (его начало → сегодня),
+    раньше это было «последние 91 день» (скользящее окно, не совпадало с ТЗ).
+    """
     today = timezone.localdate()
-    period = request.query_params.get('period', 'month')
+
+    # (1) Явный календарный квартал имеет приоритет над всем остальным.
+    if request.query_params.get('quarter'):
+        quarter = parse_int_param(request.query_params['quarter'], 'quarter')
+        if quarter < 1 or quarter > 4:
+            raise ValidationError({'quarter': 'Квартал должен быть в диапазоне 1..4.'})
+        year = today.year
+        if request.query_params.get('year'):
+            year = parse_int_param(request.query_params['year'], 'year')
+        return _quarter_bounds(year, quarter)
+
+    current_quarter = (today.month - 1) // 3 + 1
+    quarter_start, _ = _quarter_bounds(today.year, current_quarter)
     presets = {
         'today': (today, today),
         'yesterday': (today - datetime.timedelta(days=1), today - datetime.timedelta(days=1)),
         'week': (today - datetime.timedelta(days=7), today),
         'month': (today.replace(day=1), today),
-        'quarter': (today - datetime.timedelta(days=91), today),
+        'quarter': (quarter_start, today),
         'year': (today.replace(month=1, day=1), today),
     }
+    period = request.query_params.get('period', 'month')
     date_from, date_to = presets.get(period, presets['month'])
     if request.query_params.get('date_from'):
         date_from = parse_date_param(request.query_params['date_from'], 'date_from')
