@@ -78,6 +78,7 @@ class AuditLog(TimestampedModel):
         TWO_FACTOR_RECOVERY_REGENERATED = (
             'two_factor_recovery_regenerated', 'Резервные коды перевыпущены',
         )
+        TOKEN_THEFT_DETECTED = 'token_theft_detected', 'Обнаружена кража токена'
 
     company = models.ForeignKey(
         'companies.Company',

@@ -27,7 +27,8 @@
     "activate": "Активлаштириш ва кириш",
     "back_to_login": "Кириш саҳифасига қайтиш",
     "access_key_invalid": "Код нотўғри, муддати ўтган ёки аллақачон ишлатилган",
-    "welcome": "Хуш келибсиз"
+    "welcome": "Хуш келибсиз",
+    "access_key_admin_hint": "Кириш кодини администратор ёки раҳбарингиздан олинг"
   },
   "setup": {
     "title": "Тизимни созлаш",
@@ -43,6 +44,21 @@
     "owner": "Egasi",
     "admin": "Administrator",
     "worker": "Ishchi"
+  },
+  "audit": {
+    "login": "Кириш",
+    "logout": "Чиқиш",
+    "create": "Яратиш",
+    "update": "Ўзгартириш",
+    "archive": "Архивлаш",
+    "activate": "Фаоллаштириш",
+    "deactivate": "Блоклаш",
+    "access_key_issued": "Калит берилди",
+    "reset_password": "Паролни тиклаш",
+    "change_password": "Паролни ўзгартириш",
+    "delete": "Ўчириш",
+    "token_theft_detected": "Токен ўғирлиги",
+    "access_key_redeemed": "Калит ишлатилди"
   },
   "nav": {
     "dashboard": "Бош панел",
@@ -102,6 +118,9 @@
     "worker_feedback": "Ишчилар мулоҳазалари",
     "worker_greeting": "Ассалому алайкум!",
     "hours_today": "Бугунги соат",
+    "active_employees": "Фаол ходимлар",
+    "overdue_percentage": "Муддати ўтган буюртмалар",
+    "low_stock_count": "Кам запасли товарлар",
     "tasks_label": "Вазифалар"
   },
   "warehouse": {
@@ -416,7 +435,15 @@
     "reset_password": "Паролни тиклаш",
     "can_write_to_owner": "Эгасига ёза олади",
     "can_create_workers": "Ишчи ярата олади",
-    "can_see_other_workers": "Бошқа ишчиларни кўра олади"
+    "can_see_other_workers": "Бошқа ишчиларни кўра олади",
+    "appearance": "Кўриниш",
+    "dark_mode": "Тунги режим",
+    "notifications": "Билдиришномалар",
+    "push_notifications": "Push-билдиришномалар",
+    "enable": "Ёқиш",
+    "notifications_on": "Билдиришномалар ёқилди!",
+    "notifications_blocked": "Браузер билдиришномалари блокланган",
+    "audit_log": "Ҳаракатлар журнали"
   },
   "export": {
     "title": "Ҳисоботни экспорт қилиш",
@@ -480,6 +507,8 @@
     "receipt_photo": "Чек расми",
     "view_all": "Барчасини кўриш",
     "per_page": "Саҳифадаги",
+    "enabled": "Ёқилган",
+    "disabled": "Ўчирилган",
     "currency": "сўм",
     "page_not_found": "Саҳифа топилмади",
     "page_load_error": "Саҳифани юклаб бўлмади"

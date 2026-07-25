@@ -15,7 +15,7 @@ class ClientsComponent {
             </div>
             <div class="search-box">
                 <span class="search-icon">🔍</span>
-                <input type="text" id="client-search" class="form-control" data-i18n="common.search">
+                <input type="text" id="client-search" class="form-control" data-i18n="common.search" placeholder="${window.ui.escape(window.ui.t('clients.search_hint') || '')}">
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-client-btn" style="margin-bottom:12px;" data-i18n="clients.add_client"></button>` : ''}
             <div id="clients-list" class="card-grid"></div>

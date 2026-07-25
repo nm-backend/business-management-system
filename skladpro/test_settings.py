@@ -22,6 +22,10 @@ os.environ.setdefault('DB_PASSWORD', 'test')
 os.environ.setdefault('DB_HOST', 'localhost')
 os.environ.setdefault('DB_PORT', '5432')
 
+# Применить патч совместимости Django 5.1 + Python 3.14 ДО загрузки Django.
+from skladpro.test_patch import apply as _apply_django_patch
+_apply_django_patch()
+
 from skladpro.settings.base import *  # noqa: E402,F401,F403
 
 DEBUG = False

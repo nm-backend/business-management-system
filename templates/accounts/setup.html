@@ -1,42 +1,54 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div style="display: flex; justify-content: center; align-items: center; min-height: 90vh;">
-    <div class="card" style="width: 100%; max-width: 400px; padding: 28px 24px;">
-        <h2 style="text-align: center; margin-bottom: 4px;" data-i18n="setup.title"></h2>
-        <p class="text-sm text-muted" style="text-align: center; margin-bottom: 24px;" data-i18n="setup.description"></p>
+    <div class="card" style="width: 100%; max-width: 400px; padding: 32px 28px; text-align: center;">
+        <!-- Brand mark -->
+        <svg width="40" height="40" viewBox="0 0 26 26" fill="none" style="margin: 0 auto 12px;" aria-hidden="true">
+            <path d="M13 2L5 9v8l8 7 8-7V9l-8-7z" stroke="var(--accent, #d67a4b)" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+            <path d="M13 2v23M5 9l8 7m0-7l8 7" stroke="var(--accent, #d67a4b)" stroke-width="1.5" stroke-linejoin="round" opacity=".35"/>
+        </svg>
+        <h2 style="font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variation-settings: 'SOFT' 60; margin-bottom: 4px;" data-i18n="app.name">SkladPro.Nod</h2>
+        <p class="text-sm text-muted" style="margin-bottom: 24px;">
+            <span data-i18n="auth.access_key_hint"></span>
+        </p>
 
         <div id="error-message" class="alert-box" style="display: none;"></div>
-        <div id="success-message" class="alert-box alert-success" style="display: none;" data-i18n="setup.setup_complete"></div>
+        <div id="success-message" class="alert-box alert-success" style="display: none;" data-i18n="auth.activate"></div>
 
-        <form id="setup-form">
-            <div class="form-group">
-                <label for="full_name" data-i18n="setup.full_name"></label>
-                <input type="text" id="full_name" class="form-control" required>
-            </div>
-            <div class="form-group">
-                <label for="phone" data-i18n="setup.phone"></label>
-                <input type="text" id="phone" class="form-control">
-            </div>
-            <div class="form-group">
-                <label for="username" data-i18n="auth.username"></label>
-                <input type="text" id="username" class="form-control" required minlength="3" autocomplete="username">
-            </div>
-            <div class="form-group">
-                <label for="password" data-i18n="auth.password"></label>
-                <input type="password" id="password" class="form-control" required minlength="8" autocomplete="new-password">
-            </div>
-            <div class="form-group">
-                <label for="password_confirm" data-i18n="auth.password_confirm"></label>
-                <input type="password" id="password_confirm" class="form-control" required minlength="8" autocomplete="new-password">
-            </div>
-            <button type="submit" class="btn btn-primary btn-block" data-i18n="setup.create_owner"></button>
-        </form>
+        <!-- Access Key: step 1 -- verify -->
+        <div id="ak-panel">
+            <form id="ak-verify-form">
+                <div class="form-group" style="text-align: left;">
+                    <label data-i18n="auth.access_key"></label>
+                    <input type="text" id="ak-code" class="form-control" placeholder="SKP-XXXX-XXXX-XXXX"
+                           autocomplete="one-time-code" required style="text-transform: uppercase; letter-spacing: 1px;">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.continue"></button>
+            </form>
 
-        <div style="margin-top: 24px; text-align: center;">
-            <select id="lang-select" class="form-control" style="width: auto; display: inline-block;">
+            <!-- Access Key: step 2 -- set password -->
+            <form id="ak-redeem-form" style="display: none;">
+                <p id="ak-welcome" style="margin-bottom: 12px; font-weight: 600; color: var(--primary);"></p>
+                <div class="form-group" style="text-align: left;">
+                    <label data-i18n="auth.set_password"></label>
+                    <input type="password" id="ak-password" class="form-control" required minlength="8"
+                           autocomplete="new-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.activate"></button>
+            </form>
+        </div>
+
+        <p class="text-xs text-muted" style="margin-top: 16px;">
+            <span data-i18n="auth.access_key_admin_hint"></span>
+        </p>
+
+        <div style="margin-top: 24px;">
+            <select id="lang-select" class="form-control" style="width: auto;">
                 <option value="uz_cyrl">Ўзбекча</option>
                 <option value="ru">Русский</option>
+                <option value="ky">Кыргызча</option>
             </select>
         </div>
     </div>
@@ -46,55 +58,68 @@
 {% block extra_js %}
 <script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', () => {
+    const t = (k) => window.i18n.translate(k);
     const langSelect = document.getElementById('lang-select');
     langSelect.value = window.i18n.currentLang;
-    langSelect.addEventListener('change', (e) => {
-        window.i18n.setLanguage(e.target.value);
-    });
+    langSelect.addEventListener('change', (e) => window.i18n.setLanguage(e.target.value));
 
-    const form = document.getElementById('setup-form');
     const errorMsg = document.getElementById('error-message');
     const successMsg = document.getElementById('success-message');
-    const getErrorMessage = (error) => {
-        const payload = error?.data || {};
-        if (payload.detail) return payload.detail;
-        for (const value of Object.values(payload)) {
-            if (Array.isArray(value) && value.length) return value[0];
-            if (typeof value === 'string' && value) return value;
-        }
-        return window.i18n.translate('common.error');
-    };
+    const verifyForm = document.getElementById('ak-verify-form');
+    const redeemForm = document.getElementById('ak-redeem-form');
+    const showError = (msg) => { errorMsg.textContent = msg; errorMsg.style.display = 'flex'; };
+    const clearError = () => { errorMsg.style.display = 'none'; successMsg.style.display = 'none'; };
 
-    form.addEventListener('submit', async (e) => {
+    // Step 1: Verify access key
+    verifyForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const full_name = document.getElementById('full_name').value;
-        const phone = document.getElementById('phone').value;
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        const password_confirm = document.getElementById('password_confirm').value;
-
-        errorMsg.style.display = 'none';
+        clearError();
         successMsg.style.display = 'none';
-
-        if (password !== password_confirm) {
-            errorMsg.textContent = window.i18n.translate('auth.password_mismatch');
-            errorMsg.style.display = 'flex';
-            return;
-        }
-
+        const vBtn = e.target.querySelector('button[type=submit]');
+        if (vBtn.disabled) return;
+        vBtn.disabled = true;
+        const code = document.getElementById('ak-code').value.trim().toUpperCase();
         try {
-            const data = await window.api.request('/accounts/setup/owner/', {
-                method: 'POST',
-                body: JSON.stringify({ full_name, phone, username, password, password_confirm }),
-                noAuth: true
+            const resp = await window.api.request('/accounts/access-key/verify/', {
+                method: 'POST', noAuth: true, body: JSON.stringify({ access_key: code }),
             });
-            // Владелец сразу входит в систему с полученными токенами.
-            window.api.setTokens(data.tokens.access, data.tokens.refresh);
+            if (!resp.valid) { showError(t('auth.access_key_invalid')); return; }
+            document.getElementById('ak-welcome').textContent =
+                `${t('auth.welcome')}, ${resp.employee.full_name} — ${resp.employee.company}`;
+            verifyForm.style.display = 'none';
+            redeemForm.style.display = 'block';
+            document.getElementById('ak-password').focus();
+        } catch (error) {
+            showError(t('auth.access_key_invalid'));
+        } finally {
+            vBtn.disabled = false;
+        }
+    });
+
+    // Step 2: Set password and activate
+    redeemForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        clearError();
+        const rBtn = e.target.querySelector('button[type=submit]');
+        if (rBtn.disabled) return;
+        rBtn.disabled = true;
+        const code = document.getElementById('ak-code').value.trim().toUpperCase();
+        const password = document.getElementById('ak-password').value;
+        try {
+            const fpr = window.api.getFingerprint();
+            const resp = await window.api.request('/accounts/access-key/redeem/', {
+                method: 'POST', noAuth: true,
+                body: JSON.stringify({ access_key: code, new_password: password, fingerprint: fpr }),
+            });
+            window.api.setTokens(resp.tokens.access, resp.tokens.refresh);
             successMsg.style.display = 'flex';
             setTimeout(() => { window.location.href = '/'; }, 800);
         } catch (error) {
-            errorMsg.textContent = getErrorMessage(error);
-            errorMsg.style.display = 'flex';
+            const detail = error.data?.detail
+                || (error.data?.new_password && error.data.new_password[0])
+                || t('auth.access_key_invalid');
+            showError(detail);
+            rBtn.disabled = false;
         }
     });
 });

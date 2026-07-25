@@ -128,9 +128,11 @@ class User(AbstractUser):
 
         UZBEK: узбекский (кириллица) - основной язык
         RUSSIAN: русский - дополнительный язык
+        KYRGYZ: кыргызский - дополнительный язык
         """
         UZBEK = 'uz_cyrl', 'Ўзбекча'
         RUSSIAN = 'ru', 'Русский'
+        KYRGYZ = 'ky', 'Кыргызча'
 
     class Status(models.TextChoices):
         """
@@ -263,6 +265,35 @@ class User(AbstractUser):
             str - человекочитаемое название роли на текущем языке
         """
         return dict(self.Role.choices).get(self.role, self.role)
+
+
+class PushSubscription(TimestampedModel):
+    """
+    Web Push subscription для VAPID push-уведомлений.
+
+    Хранит подписку браузера, полученную через Push API.
+    Привязана к пользователю и компании для изоляции.
+    """
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='push_subscriptions',
+        null=True, blank=True,
+    )
+    user = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE, related_name='push_subscriptions',
+    )
+    endpoint = models.URLField(max_length=500)
+    p256dh_key = models.CharField('P256DH ключ', max_length=255)
+    auth_key = models.CharField('Auth ключ', max_length=255)
+    user_agent = models.CharField(max_length=500, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = 'Push подписка'
+        verbose_name_plural = 'Push подписки'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Push sub {self.user_id} ({self.company_id})'
 
 
 class AccessKey(TimestampedModel):

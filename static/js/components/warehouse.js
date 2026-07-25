@@ -54,7 +54,7 @@ class WarehouseComponent {
     openBarcodeScanner() {
         const modal = window.ui.modal('warehouse.scan_barcode', `
             <div class="scanner-modal" style="text-align:center;padding:10px 0;">
-                <div class="scanner-box" style="position:relative;width:100%;max-width:280px;height:200px;margin:0 auto 15px;background:#0f172a;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid var(--primary-color);">
+                <div class="scanner-box" style="position:relative;width:100%;max-width:280px;height:200px;margin:0 auto 15px;background:#0f172a;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid var(--primary);">
                     <div style="position:absolute;top:0;left:0;right:0;bottom:0;border:2px dashed rgba(255,255,255,0.4);margin:20px;border-radius:8px;"></div>
                     <div style="position:absolute;width:80%;height:2px;background:#e5484d;box-shadow:0 0 8px #e5484d;animation:scan 2s infinite;"></div>
                     <span style="font-size:32px;">📷</span>

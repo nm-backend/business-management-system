@@ -63,3 +63,12 @@ SECURE_REFERRER_POLICY = 'same-origin'
 # HttpOnly-cookie, чтобы session/CSRF не читались из JavaScript.
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
+
+# VAPID keys for Web Push (push-уведомления)
+# Сгенерируйте ключи: python manage.py generate_vapid_keys
+# И задайте в переменных окружения:
+#   VAPID_PUBLIC_KEY=...
+#   VAPID_PRIVATE_KEY=...
+VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
+VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
+VAPID_SUBJECT = config('VAPID_SUBJECT', default='mailto:admin@skladpro.nod')

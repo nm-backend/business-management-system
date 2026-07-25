@@ -119,9 +119,8 @@ window.ui = {
     },
 
     /**
-     * Карточка показателя в стиле референса: цветной icon-badge, заголовок,
-     * значение и (опционально) % изменения со стрелкой.
-     * opts: { icon, color, titleKey, value, delta (число или null), id, href }
+     * Карточка показателя: SVG-иконка, заголовок, значение и (опционально) %.
+     * opts: { icon (SVG string or emoji), color, titleKey, value, delta, id, href }
      */
     statCard(opts) {
         let deltaHtml = '';
@@ -134,8 +133,11 @@ window.ui = {
         const idAttr = opts.id ? ` id="${opts.id}"` : '';
         const tag = opts.href ? 'a' : 'div';
         const hrefAttr = opts.href ? ` href="${opts.href}" style="text-decoration:none;color:inherit;"` : '';
+        const iconHtml = opts.icon && opts.icon.startsWith('<svg')
+            ? opts.icon
+            : (opts.icon || window.icon('activity', 18));
         return `<${tag} class="${cls}"${idAttr}${hrefAttr}>
-            <div class="stat-icon ${opts.color || 'blue'}">${opts.icon || '📊'}</div>
+            <div class="stat-icon ${opts.color || 'blue'}">${iconHtml}</div>
             <div class="stat-body">
                 <div class="stat-title" data-i18n="${opts.titleKey}"></div>
                 <div class="stat-value ${opts.valueClass || ''}">${opts.value}</div>

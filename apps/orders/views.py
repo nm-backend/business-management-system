@@ -114,6 +114,60 @@ class OrderViewSet(CompanyScopedViewSet):
             request=self.request,
         )
 
+    @action(detail=True, methods=['patch'])
+    def transition(self, request, pk=None):
+        """
+        Переводит заказ в указанный статус (только разрешённые переходы).
+
+        POST /api/v1/orders/orders/{id}/transition/
+        Тело: {"status": "new_status"}
+
+        Разрешённые переходы (конечный автомат заказа):
+          new ↔ awaiting_material
+          new → sent_to_worker
+          awaiting_material → sent_to_worker
+          sent_to_worker → accepted, worker_refused
+          accepted → in_progress, worker_refused
+          worker_refused → new, sent_to_worker
+          in_progress → awaiting_confirmation
+          awaiting_confirmation → ready
+          ready → delivered (через deliver action)
+          * → cancelled (через cancel action)
+        """
+        order = self.get_object()
+        new_status = request.data.get('status')
+        if not new_status:
+            return Response({'error': 'status is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_transitions = {
+            Order.Status.NEW: [Order.Status.AWAITING_MATERIAL, Order.Status.SENT_TO_WORKER],
+            Order.Status.AWAITING_MATERIAL: [Order.Status.NEW, Order.Status.SENT_TO_WORKER],
+            Order.Status.SENT_TO_WORKER: [Order.Status.ACCEPTED, Order.Status.WORKER_REFUSED],
+            Order.Status.ACCEPTED: [Order.Status.IN_PROGRESS, Order.Status.WORKER_REFUSED],
+            Order.Status.WORKER_REFUSED: [Order.Status.NEW, Order.Status.SENT_TO_WORKER],
+            Order.Status.IN_PROGRESS: [Order.Status.AWAITING_CONFIRMATION],
+            Order.Status.AWAITING_CONFIRMATION: [Order.Status.READY],
+        }
+
+        allowed = allowed_transitions.get(order.status, [])
+        if new_status not in allowed:
+            return Response(
+                {'error': f'Cannot transition from {order.status} to {new_status}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        old_status = order.status
+        order.status = new_status
+        order.save(update_fields=['status', 'updated_at'])
+        write_audit_log(
+            action=AuditLog.Action.UPDATE,
+            actor=request.user,
+            target=order,
+            changes={'status': {'old': old_status, 'new': new_status}},
+            request=request,
+        )
+        return Response(self.get_serializer(order).data)
+
     @action(detail=True, methods=['post'])
     def deliver(self, request, pk=None):
         """Выдаёт заказ клиенту; при полной оплате клиент уходит в архив."""

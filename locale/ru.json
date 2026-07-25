@@ -27,7 +27,8 @@
     "activate": "Активировать и войти",
     "back_to_login": "Вернуться ко входу",
     "access_key_invalid": "Код неверный, истёк или уже использован",
-    "welcome": "Добро пожаловать"
+    "welcome": "Добро пожаловать",
+    "access_key_admin_hint": "Получите код доступа у администратора или руководителя"
   },
   "setup": {
     "title": "Настройка системы",
@@ -43,6 +44,21 @@
     "owner": "Хозяин",
     "admin": "Администратор",
     "worker": "Работник"
+  },
+  "audit": {
+    "login": "Вход",
+    "logout": "Выход",
+    "create": "Создание",
+    "update": "Изменение",
+    "archive": "Архивация",
+    "activate": "Разблокировка",
+    "deactivate": "Блокировка",
+    "access_key_issued": "Выдача ключа",
+    "reset_password": "Сброс пароля",
+    "change_password": "Смена пароля",
+    "delete": "Удаление",
+    "token_theft_detected": "Кража токена",
+    "access_key_redeemed": "Ключ активирован"
   },
   "nav": {
     "dashboard": "Главная панель",
@@ -102,6 +118,9 @@
     "worker_feedback": "Отзывы работников",
     "worker_greeting": "Здравствуйте!",
     "hours_today": "Часы сегодня",
+    "active_employees": "Активные сотрудники",
+    "overdue_percentage": "Просроченные заказы",
+    "low_stock_count": "Товары с низким остатком",
     "tasks_label": "Задачи"
   },
   "warehouse": {
@@ -416,7 +435,15 @@
     "reset_password": "Сбросить пароль",
     "can_write_to_owner": "Может писать хозяину",
     "can_create_workers": "Может создавать работников",
-    "can_see_other_workers": "Видит других работников"
+    "can_see_other_workers": "Видит других работников",
+    "appearance": "Внешний вид",
+    "dark_mode": "Тёмная тема",
+    "notifications": "Уведомления",
+    "push_notifications": "Push-уведомления",
+    "enable": "Включить",
+    "notifications_on": "Уведомления включены!",
+    "notifications_blocked": "Уведомления браузера заблокированы",
+    "audit_log": "Журнал действий"
   },
   "export": {
     "title": "Экспорт отчётов",
@@ -480,6 +507,8 @@
     "receipt_photo": "Фото чека",
     "view_all": "Смотреть все",
     "per_page": "На странице",
+    "enabled": "Включено",
+    "disabled": "Отключено",
     "currency": "сум",
     "page_not_found": "Страница не найдена",
     "page_load_error": "Не удалось загрузить страницу"

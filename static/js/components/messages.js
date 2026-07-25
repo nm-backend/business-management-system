@@ -509,7 +509,7 @@ class MessagesComponent {
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
                     <span class="text-sm text-muted">${window.ui.datetime(n.created_at)}</span>
-                    ${n.is_read ? '' : '<span style="width:8px;height:8px;border-radius:50%;background:var(--primary-color);display:inline-block;"></span>'}
+                    ${n.is_read ? '' : '<span style="width:8px;height:8px;border-radius:50%;background:var(--primary);display:inline-block;"></span>'}
                 </div>
             </div>`;
     }

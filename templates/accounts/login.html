@@ -1,63 +1,70 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div style="display: flex; justify-content: center; align-items: center; min-height: 90vh;">
-    <div class="card" style="width: 100%; max-width: 400px; padding: 28px 24px;">
-        <h2 style="text-align: center; margin-bottom: 4px;" data-i18n="app.name">SkladPro.Nod</h2>
-        <p class="text-sm text-muted" style="text-align: center; margin-bottom: 24px;" data-i18n="app.tagline"></p>
+    <div class="card" style="width: 100%; max-width: 400px; padding: 32px 28px; text-align: center;">
+        <!-- Brand mark -->
+        <svg width="40" height="40" viewBox="0 0 26 26" fill="none" style="margin: 0 auto 12px;" aria-hidden="true">
+            <path d="M13 2L5 9v8l8 7 8-7V9l-8-7z" stroke="var(--accent, #d67a4b)" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+            <path d="M13 2v23M5 9l8 7m0-7l8 7" stroke="var(--accent, #d67a4b)" stroke-width="1.5" stroke-linejoin="round" opacity=".35"/>
+        </svg>
+        <h2 style="font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variation-settings: 'SOFT' 60; margin-bottom: 4px;" data-i18n="app.name">SkladPro.Nod</h2>
+        <p class="text-sm text-muted" style="margin-bottom: 24px;" data-i18n="app.tagline"></p>
 
         <div id="error-message" class="alert-box" style="display: none;"></div>
 
-        <!-- Обычный вход -->
+        <!-- Login panel -->
         <div id="login-panel">
             <form id="login-form">
-                <div style="margin-bottom: var(--space-4);">
+                <div class="form-group" style="text-align: left;">
                     <label for="username" data-i18n="auth.username"></label>
-                    <input type="text" id="username" class="input" required autocomplete="username">
+                    <input type="text" id="username" class="form-control" required autocomplete="username">
                 </div>
-                <div style="margin-bottom: var(--space-4);">
+                <div class="form-group" style="text-align: left;">
                     <label for="password" data-i18n="auth.password"></label>
-                    <input type="password" id="password" class="input" required autocomplete="current-password">
+                    <input type="password" id="password" class="form-control" required autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
             </form>
-            <div style="margin-top: 16px; text-align: center;">
-                <a href="#" id="show-access-key" class="text-sm" data-i18n="auth.have_access_key"></a>
+            <div style="margin-top: 16px;">
+                <a href="#" id="show-access-key" class="text-sm" style="font-weight: 500;" data-i18n="auth.have_access_key"></a>
             </div>
         </div>
 
-        <!-- Активация по Access Key -->
+        <!-- Access Key panel -->
         <div id="access-key-panel" style="display: none;">
             <p class="text-sm text-muted" style="margin-bottom: 16px;" data-i18n="auth.access_key_hint"></p>
 
             <form id="ak-verify-form">
-                <div style="margin-bottom: var(--space-4);">
+                <div class="form-group" style="text-align: left;">
                     <label data-i18n="auth.access_key"></label>
-                    <input type="text" id="ak-code" class="input" placeholder="SKP-XXXX-XXXX-XXXX"
+                    <input type="text" id="ak-code" class="form-control" placeholder="SKP-XXXX-XXXX-XXXX"
                            autocomplete="one-time-code" required style="text-transform: uppercase; letter-spacing: 1px;">
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.continue"></button>
             </form>
 
             <form id="ak-redeem-form" style="display: none;">
-                <p id="ak-welcome" style="margin-bottom: 12px; font-weight: 600;"></p>
-                <div style="margin-bottom: var(--space-4);">
+                <p id="ak-welcome" style="margin-bottom: 12px; font-weight: 600; color: var(--primary);"></p>
+                <div class="form-group" style="text-align: left;">
                     <label data-i18n="auth.set_password"></label>
-                    <input type="password" id="ak-password" class="input" required minlength="8"
+                    <input type="password" id="ak-password" class="form-control" required minlength="8"
                            autocomplete="new-password">
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.activate"></button>
             </form>
 
-            <div style="margin-top: 16px; text-align: center;">
-                <a href="#" id="show-login" class="text-sm" data-i18n="auth.back_to_login"></a>
+            <div style="margin-top: 16px;">
+                <a href="#" id="show-login" class="text-sm" style="font-weight: 500;" data-i18n="auth.back_to_login"></a>
             </div>
         </div>
 
-        <div style="margin-top: 24px; text-align: center;">
-            <select id="lang-select" class="select" style="width: auto; display: inline-block;">
+        <div style="margin-top: 24px;">
+            <select id="lang-select" class="form-control" style="width: auto;">
                 <option value="uz_cyrl">Ўзбекча</option>
                 <option value="ru">Русский</option>
+                <option value="ky">Кыргызча</option>
             </select>
         </div>
     </div>
@@ -83,26 +90,26 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionStorage.removeItem('session_expired');
     }
 
-    // ── Обычный вход ──
+    // ── Login ──
     document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         clearError();
         const btn = e.target.querySelector('button[type=submit]');
-        if (btn.disabled) return;          // защита от двойного клика
+        if (btn.disabled) return;
         btn.disabled = true;
         try {
             await window.api.login(
                 document.getElementById('username').value,
                 document.getElementById('password').value,
             );
-            window.location.href = '/';    // при успехе уходим со страницы
+            window.location.href = '/';
         } catch (error) {
             showError(error.data?.detail || t('auth.login_error'));
             btn.disabled = false;
         }
     });
 
-    // ── Переключение панелей ──
+    // ── Toggle panels ──
     document.getElementById('show-access-key').addEventListener('click', (e) => {
         e.preventDefault(); clearError();
         loginPanel.style.display = 'none'; akPanel.style.display = 'block';
@@ -112,13 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
         akPanel.style.display = 'none'; loginPanel.style.display = 'block';
     });
 
-    // ── Access Key: шаг 1 — проверка кода ──
+    // ── Access Key: step 1 ──
     const verifyForm = document.getElementById('ak-verify-form');
     const redeemForm = document.getElementById('ak-redeem-form');
     verifyForm.addEventListener('submit', async (e) => {
         e.preventDefault(); clearError();
         const vBtn = e.target.querySelector('button[type=submit]');
-        if (vBtn.disabled) return;         // защита от двойного клика
+        if (vBtn.disabled) return;
         vBtn.disabled = true;
         const code = document.getElementById('ak-code').value.trim().toUpperCase();
         try {
@@ -138,19 +145,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ── Access Key: шаг 2 — задать пароль и войти ──
+    // ── Access Key: step 2 ──
     redeemForm.addEventListener('submit', async (e) => {
         e.preventDefault(); clearError();
-        // Код одноразовый: двойной клик отправил бы его дважды и «сжёг» попытку.
         const rBtn = e.target.querySelector('button[type=submit]');
         if (rBtn.disabled) return;
         rBtn.disabled = true;
         const code = document.getElementById('ak-code').value.trim().toUpperCase();
         const password = document.getElementById('ak-password').value;
         try {
+            const fpr = window.api.getFingerprint();
             const resp = await window.api.request('/accounts/access-key/redeem/', {
                 method: 'POST', noAuth: true,
-                body: JSON.stringify({ access_key: code, new_password: password }),
+                body: JSON.stringify({ access_key: code, new_password: password, fingerprint: fpr }),
             });
             window.api.setTokens(resp.tokens.access, resp.tokens.refresh);
             window.location.href = '/';
@@ -159,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 || (error.data?.new_password && error.data.new_password[0])
                 || t('auth.access_key_invalid');
             showError(detail);
-            rBtn.disabled = false;   // при успехе не включаем — уходим на '/'
+            rBtn.disabled = false;
         }
     });
 });

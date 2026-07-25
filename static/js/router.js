@@ -27,6 +27,7 @@ class Router {
         // Подсветка активного пункта в обоих меню (сайдбар + нижнее) по data-nav.
         let navKey = 'dashboard';
         if (path.startsWith('/orders')) navKey = 'orders';
+        if (path.startsWith('/orders/kanban')) navKey = 'kanban';
         if (path.startsWith('/warehouse')) navKey = 'warehouse';
         if (path.startsWith('/finished-products')) navKey = 'warehouse';
         if (path.startsWith('/clients')) navKey = 'clients';
@@ -34,6 +35,7 @@ class Router {
         if (path.startsWith('/finance')) navKey = 'finance';
         if (path.startsWith('/messages')) navKey = 'messages';
         if (path.startsWith('/companies')) navKey = 'companies';
+        if (path.startsWith('/audit')) navKey = 'audit';
         if (path.startsWith('/settings')) navKey = 'settings';
         // На мобильном отдельного пункта нет — часть страниц подсвечивают «Кўпроқ».
         const bottomKey = ['finance', 'messages', 'companies'].includes(navKey) ? 'settings' : navKey;

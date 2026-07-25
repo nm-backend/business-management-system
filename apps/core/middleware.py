@@ -42,6 +42,9 @@ class SecurityHeadersMiddleware:
         # Permissions-Policy безопасен для любых ответов.
         response.headers.setdefault('Permissions-Policy', PERMISSIONS_POLICY)
 
+        # NOTE: Service-Worker-Allowed больше не ставится через middleware.
+        # SW обслуживается по URL /sw.js через отдельный URL-паттерн (root scope).
+
         if request.path.startswith(CSP_EXEMPT_PREFIXES):
             return response
 

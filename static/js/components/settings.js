@@ -9,6 +9,12 @@ class SettingsComponent {
         const user = window.currentUser;
         const currentLang = window.i18n.currentLang;
 
+        // Статус push-уведомлений
+        const notifStatus = 'Notification' in window ? Notification.permission : 'unsupported';
+        const notifLabel = notifStatus === 'granted' ? window.ui.t('common.enabled')
+            : notifStatus === 'denied' ? window.ui.t('common.disabled')
+            : window.ui.t('settings.enable');
+
         container.innerHTML = `
             <div class="card" style="display:flex;align-items:center;gap:12px;">
                 <div class="thumb" style="width:52px;height:52px;border-radius:50%;">👤</div>
@@ -45,6 +51,29 @@ class SettingsComponent {
                 <div class="list-row lang-option" data-lang="ru">
                     <span>Русский</span>
                     <span class="text-success font-bold" style="${currentLang === 'ru' ? '' : 'visibility:hidden;'}">✓</span>
+                </div>
+                <div class="list-row lang-option" data-lang="ky">
+                    <span>Кыргызча</span>
+                    <span class="text-success font-bold" style="${currentLang === 'ky' ? '' : 'visibility:hidden;'}">✓</span>
+                </div>
+            </div>
+
+            <div class="section-title" data-i18n="settings.appearance"></div>
+            <div class="list-group">
+                <div class="list-row" style="cursor:pointer;">
+                    <span>🌙 <span data-i18n="settings.dark_mode"></span></span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="dark-mode-toggle" ${document.body.classList.contains('theme-dark') ? 'checked' : ''}>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="section-title" data-i18n="settings.notifications"></div>
+            <div class="list-group">
+                <div class="list-row" id="notif-permission-row" style="cursor:pointer;">
+                    <span>🔔 <span data-i18n="settings.push_notifications"></span></span>
+                    <span class="badge ${notifStatus === 'granted' ? 'badge-ready' : notifStatus === 'denied' ? 'badge-cancel' : 'badge-progress'}" id="notif-status-badge">${notifLabel}</span>
                 </div>
             </div>
 
@@ -86,6 +115,38 @@ class SettingsComponent {
                 </div>
             </div>
         `;
+
+        // Dark mode toggle
+        const darkToggle = container.querySelector('#dark-mode-toggle');
+        if (darkToggle) {
+            darkToggle.addEventListener('change', () => {
+                if (darkToggle.checked) {
+                    document.body.classList.add('theme-dark');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    document.body.classList.remove('theme-dark');
+                    localStorage.setItem('theme', 'light');
+                }
+            });
+        }
+
+        // Push notifications permission
+        const notifRow = container.querySelector('#notif-permission-row');
+        if (notifRow) {
+            notifRow.addEventListener('click', async () => {
+                const result = await window.requestNotificationPermission();
+                const badge = container.querySelector('#notif-status-badge');
+                if (result === 'granted') {
+                    badge.textContent = window.ui.t('common.enabled');
+                    badge.className = 'badge badge-ready';
+                    window.toast.success('🔔 ' + window.ui.t('settings.notifications_on'));
+                } else if (result === 'denied') {
+                    badge.textContent = window.ui.t('common.disabled');
+                    badge.className = 'badge badge-cancel';
+                    window.toast.info(window.ui.t('settings.notifications_blocked'));
+                }
+            });
+        }
 
         container.querySelectorAll('.lang-option').forEach((el) => {
             el.addEventListener('click', () => this.changeLanguage(el.dataset.lang));
@@ -172,7 +233,7 @@ class SettingsComponent {
                 ${row('about.license', 'MIT License')}
                 <a class="list-row" href="https://github.com/nm-backend" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">
                     <span class="text-sm text-muted">GitHub</span>
-                    <span class="text-sm font-bold" style="color:var(--primary-color);">github.com/nm-backend ›</span>
+                    <span class="text-sm font-bold" style="color:var(--primary);">github.com/nm-backend ›</span>
                 </a>
             </div>
         `);

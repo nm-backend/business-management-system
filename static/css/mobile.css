@@ -1,0 +1,141 @@
+/* ============================================================
+   mobile.css — мобильная адаптация
+   Улучшения для touch-устройств, безопасные зоны, анимации.
+   ============================================================ */
+
+/* ── Safe area для iPhone X+ ── */
+.bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+}
+.main-content {
+    padding-bottom: calc(var(--bottom-nav-height) + 16px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── Pull-to-refresh жесты не блокируем ── */
+html, body {
+    overscroll-behavior: contain;
+}
+
+/* ── Bottom nav: активный индикатор ── */
+.nav-item {
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+}
+.nav-item.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 2.5px;
+    background: var(--primary);
+    border-radius: 0 0 3px 3px;
+}
+.nav-item:active {
+    transform: scale(0.92);
+    transition: transform 0.08s;
+}
+
+/* ── Touch ripple на кнопках ── */
+.btn {
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    overflow: hidden;
+}
+.btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.25) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+.btn:active::after {
+    opacity: 1;
+    transition: opacity 0s;
+}
+
+/* ── Swipeable list rows ── */
+.list-row {
+    position: relative;
+    overflow: hidden;
+}
+
+/* ── Full-width модальные листы на телефоне ── */
+@media (max-width: 519px) {
+    .modal-content {
+        border-radius: 20px 20px 0 0;
+        max-height: 92dvh;
+    }
+    .modal {
+        align-items: flex-end;
+    }
+}
+
+/* ── Горизонтальный скролл для вкладок ── */
+.tabs {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.tab-btn {
+    scroll-snap-align: start;
+}
+
+/* ── Адаптивная stat-grid для телефонов ── */
+@media (max-width: 400px) {
+    .stat-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .stat-card {
+        padding: 12px 14px;
+    }
+    .stat-value {
+        font-size: 18px;
+    }
+    .metrics-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    .metric-value {
+        font-size: 18px;
+    }
+    .section-title {
+        font-size: 11px;
+    }
+}
+
+/* ── Планшетная версия bottom nav ── */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .bottom-nav {
+        max-width: 600px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-radius: 16px 16px 0 0;
+    }
+}
+
+/* ── Таблицы с горизонтальным скроллом ── */
+.table-scroll {
+    margin: 0 -16px;
+    padding: 0 16px;
+    width: calc(100% + 32px);
+}
+.data-table th,
+.data-table td {
+    white-space: nowrap;
+    padding: 8px 6px;
+}
+
+/* ── Уведомление о новой задаче ── */
+.notif-flash {
+    animation: notif-flash 0.5s ease-in-out 3;
+}
+@keyframes notif-flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}

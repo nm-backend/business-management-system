@@ -38,18 +38,22 @@ class DashboardComponent {
             </div>
 
             <div class="stat-grid">
-                ${window.ui.statCard({ icon: '📈', color: 'green', titleKey: 'dashboard.revenue', value: window.ui.money(data.revenue), delta: data.deltas?.revenue })}
-                ${window.ui.statCard({ icon: '💚', color: 'green', titleKey: 'dashboard.net_profit', value: window.ui.money(data.net_profit), delta: data.deltas?.net_profit, valueClass: data.net_profit < 0 ? 'text-danger' : '' })}
-                ${window.ui.statCard({ icon: '💼', color: 'blue', titleKey: 'dashboard.cash_balance', value: window.ui.money(data.cash), id: 'cash-card' })}
-                ${window.ui.statCard({ icon: '📊', color: 'purple', titleKey: 'finance.gross_profit', value: window.ui.money(data.gross_profit) })}
-                ${window.ui.statCard({ icon: '🧾', color: 'orange', titleKey: 'finance.expenses', value: window.ui.money(data.expenses_total), delta: data.deltas?.expenses_total })}
-                ${window.ui.statCard({ icon: '👥', color: 'red', titleKey: 'finance.client_debts', value: window.ui.money(data.client_debts), valueClass: data.client_debts > 0 ? 'text-danger' : '' })}
-                ${window.ui.statCard({ icon: '🔧', color: 'blue', titleKey: 'finance.worker_debts', value: window.ui.money(data.worker_debts) })}
+                ${window.ui.statCard({ icon: window.icon('trending-up', 18), color: 'green', titleKey: 'dashboard.revenue', value: window.ui.money(data.revenue), delta: data.deltas?.revenue })}
+                ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'green', titleKey: 'dashboard.net_profit', value: window.ui.money(data.net_profit), delta: data.deltas?.net_profit, valueClass: data.net_profit < 0 ? 'text-danger' : '' })}
+                ${window.ui.statCard({ icon: window.icon('wallet', 18), color: 'blue', titleKey: 'dashboard.cash_balance', value: window.ui.money(data.cash), id: 'cash-card' })}
+                ${window.ui.statCard({ icon: window.icon('pie-chart', 18), color: 'purple', titleKey: 'finance.gross_profit', value: window.ui.money(data.gross_profit) })}
+                ${window.ui.statCard({ icon: window.icon('receipt', 18), color: 'orange', titleKey: 'finance.expenses', value: window.ui.money(data.expenses_total), delta: data.deltas?.expenses_total })}
+                ${window.ui.statCard({ icon: window.icon('users', 18), color: 'red', titleKey: 'finance.client_debts', value: window.ui.money(data.client_debts), valueClass: data.client_debts > 0 ? 'text-danger' : '' })}
+                ${window.ui.statCard({ icon: window.icon('wrench', 18), color: 'blue', titleKey: 'finance.worker_debts', value: window.ui.money(data.worker_debts) })}
+
+                ${window.ui.statCard({ icon: window.icon('users', 18), color: 'blue', titleKey: 'dashboard.active_employees', value: data.active_employees_count || 0 })}
+                ${window.ui.statCard({ icon: window.icon('clock', 18), color: 'red', titleKey: 'dashboard.overdue_percentage', value: (data.overdue_percentage || 0) + '%' })}
+                ${window.ui.statCard({ icon: window.icon('alert-triangle', 18), color: 'orange', titleKey: 'dashboard.low_stock_count', value: data.low_stock_count || 0 })}
             </div>
 
             ${data.stock.low_stock_materials > 0 ? `
                 <a class="alert-box" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
-                    <span>⚠️ <span data-i18n="warehouse.low_stock_warning"></span> (${data.stock.low_stock_materials})</span>
+                    <span>${window.icon('alert-triangle', 16)} <span data-i18n="warehouse.low_stock_warning"></span> (${data.stock.low_stock_materials})</span>
                     <span>›</span>
                 </a>` : ''}
 
@@ -90,6 +94,110 @@ class DashboardComponent {
         });
         const cashCard = container.querySelector('#cash-card');
         if (cashCard) cashCard.addEventListener('click', () => window.router.navigate('/finance'));
+
+        // График выручки
+        this.renderRevenueChart(container, data);
+    }
+
+    async renderRevenueChart(container, data) {
+        // Пробуем получить данные за 6 месяцев
+        let chartData;
+        try {
+            chartData = await window.api.request('/reports/analytics/revenue-timeline/');
+        } catch (e) {
+            return; // не критично
+        }
+        if (!chartData || !chartData.labels || !chartData.labels.length) return;
+
+        // Удаляем старый canvas если был
+        const oldWrap = container.querySelector('.revenue-chart-wrap');
+        if (oldWrap) oldWrap.remove();
+
+        const wrap = document.createElement('div');
+        wrap.className = 'revenue-chart-wrap';
+        wrap.innerHTML = `
+            <div class="section-title" data-i18n="dashboard.revenue_by_period"></div>
+            <div class="card" style="padding:12px;">
+                <canvas id="revenue-chart-canvas" height="200"></canvas>
+            </div>
+        `;
+        container.appendChild(wrap);
+        window.i18n.applyTranslations();
+
+        const canvas = wrap.querySelector('#revenue-chart-canvas');
+        if (!canvas) return;
+
+        try {
+            const ctx = canvas.getContext('2d');
+            if (window._revenueChart) {
+                window._revenueChart.destroy();
+            }
+            window._revenueChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: window.ui.t('dashboard.revenue'),
+                        data: chartData.revenues,
+                        borderColor: '#197387',
+                        backgroundColor: 'rgba(25, 115, 135, 0.08)',
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#197387',
+                    }, {
+                        label: window.ui.t('finance.net_profit'),
+                        data: chartData.net_profits,
+                        borderColor: '#3d8662',
+                        backgroundColor: 'rgba(61, 134, 98, 0.06)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#3d8662',
+                        borderDash: [5, 3],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: { boxWidth: 12, padding: 12, font: { size: 11 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const val = Number(ctx.raw || 0).toLocaleString('ru-RU');
+                                    return ` ${ctx.dataset.label}: ${val} ${window.ui.t('common.currency')}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: (v) => Number(v).toLocaleString('ru-RU'),
+                                font: { size: 10 }
+                            },
+                            grid: { color: 'rgba(0,0,0,0.04)' }
+                        },
+                        x: {
+                            ticks: { font: { size: 10 } },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            // Chart.js not loaded
+        }
     }
 
     async renderAdmin(container) {
@@ -104,20 +212,20 @@ class DashboardComponent {
                 <span class="text-sm text-muted" data-i18n="dashboard.today_indicators"></span>
             </div>
             <div class="stat-grid">
-                ${window.ui.statCard({ icon: '🆕', color: 'green', titleKey: 'dashboard.new_orders', value: data.orders_new })}
-                ${window.ui.statCard({ icon: '⏳', color: 'orange', titleKey: 'dashboard.in_progress', value: data.orders_in_progress })}
-                ${window.ui.statCard({ icon: '✅', color: 'blue', titleKey: 'statuses.ready', value: data.orders_ready })}
-                ${window.ui.statCard({ icon: '📋', color: 'purple', titleKey: 'dashboard.pending_confirmations', value: data.awaiting_confirmation })}
+                ${window.ui.statCard({ icon: window.icon('inbox', 18), color: 'green', titleKey: 'dashboard.new_orders', value: data.orders_new })}
+                ${window.ui.statCard({ icon: window.icon('clock', 18), color: 'orange', titleKey: 'dashboard.in_progress', value: data.orders_in_progress })}
+                ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'blue', titleKey: 'statuses.ready', value: data.orders_ready })}
+                ${window.ui.statCard({ icon: window.icon('clipboard-list', 18), color: 'purple', titleKey: 'dashboard.pending_confirmations', value: data.awaiting_confirmation })}
             </div>
 
             ${data.orders_overdue > 0 ? `
                 <a class="alert-box" href="#/orders" style="text-decoration:none;justify-content:space-between;">
-                    <span>⏰ <span data-i18n="dashboard.deadline_passed"></span>: ${data.orders_overdue}</span><span>›</span>
+                    <span>${window.icon('clock', 16)} <span data-i18n="dashboard.deadline_passed"></span>: ${data.orders_overdue}</span><span>›</span>
                 </a>` : ''}
 
             ${data.low_stock_materials.length ? `
                 <a class="alert-box" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
-                    <span>⚠️ <span data-i18n="warehouse.low_stock_warning"></span> (${data.low_stock_materials.length})</span>
+                    <span>${window.icon('alert-triangle', 16)} <span data-i18n="warehouse.low_stock_warning"></span> (${data.low_stock_materials.length})</span>
                     <span>›</span>
                 </a>` : ''}
 
@@ -161,10 +269,10 @@ class DashboardComponent {
                 <span class="text-sm text-muted" data-i18n="nav.my_tasks"></span>
             </div>
             <div class="stat-grid">
-                ${window.ui.statCard({ icon: '📥', color: 'orange', titleKey: 'production.pending_tasks', value: pending.length })}
-                ${window.ui.statCard({ icon: '🛠️', color: 'blue', titleKey: 'production.in_progress_tasks', value: active.length })}
-                ${window.ui.statCard({ icon: '💰', color: 'green', titleKey: 'worker_section.total_earned', value: window.ui.money(earnings.total_earned) })}
-                ${window.ui.statCard({ icon: '👛', color: 'purple', titleKey: 'worker_section.remaining', value: window.ui.money(earnings.remaining) })}
+                ${window.ui.statCard({ icon: window.icon('inbox', 18), color: 'orange', titleKey: 'production.pending_tasks', value: pending.length })}
+                ${window.ui.statCard({ icon: window.icon('layers', 18), color: 'blue', titleKey: 'production.in_progress_tasks', value: active.length })}
+                ${window.ui.statCard({ icon: window.icon('coins', 18), color: 'green', titleKey: 'worker_section.total_earned', value: window.ui.money(earnings.total_earned) })}
+                ${window.ui.statCard({ icon: window.icon('banknote', 18), color: 'purple', titleKey: 'worker_section.remaining', value: window.ui.money(earnings.remaining) })}
             </div>
 
             ${pending.length ? `

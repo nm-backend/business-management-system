@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import FileResponse
+from pathlib import Path
 
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -9,7 +11,18 @@ from drf_spectacular.views import (
     SpectacularRedocView,
 )
 
+
+def service_worker(request):
+    """Serve sw.js from root so it has natural scope '/' for push notifications."""
+    sw_path = Path(settings.STATICFILES_DIRS[0]) / 'sw.js'
+    response = FileResponse(open(sw_path, 'rb'), content_type='application/javascript')
+    # SW должен всегда проверять обновления
+    response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    return response
+
+
 urlpatterns = [
+    path("sw.js", service_worker, name='service-worker'),
     path("admin/", admin.site.urls),
 
     # API
@@ -24,6 +37,7 @@ urlpatterns = [
     path("api/v1/finance/", include("apps.finance.urls")),
     path("api/v1/messaging/", include("apps.messaging.urls")),
     path("api/v1/reports/", include("apps.reports.urls")),
+    path("api/v1/backup/", include("apps.backup.urls")),
 
     # OpenAPI
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),

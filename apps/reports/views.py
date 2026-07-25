@@ -24,6 +24,9 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.db.models.functions import TruncMonth
+
+from apps.accounts.models import User
 from apps.clients.models import Client, Payment
 from apps.core.permissions import IsCompanyMember
 from apps.finance.models import Expense, ExpenseCategory, WorkerPayment
@@ -194,6 +197,35 @@ def owner_analytics_data(company_id, date_from, date_to):
     prev = _period_financials(company_id, prev_from, prev_to)
     net_profit = revenue - cost_of_goods - expenses_total
 
+    # Активные сотрудники (админы + работники, не заблокированы, не в архиве)
+    active_employees = User.objects.filter(
+        company_id=company_id,
+        role__in=(User.Role.ADMIN, User.Role.WORKER),
+        is_active=True,
+        status=User.Status.ACTIVE,
+    ).count()
+
+    # Процент просроченных заказов
+    total_active_orders = orders_qs.exclude(
+        status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED)
+    ).count()
+    overdue_orders = orders_qs.filter(
+        deadline__lt=timezone.now(),
+    ).exclude(
+        status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED)
+    ).count()
+    overdue_percentage = round(
+        (overdue_orders / total_active_orders) * 100, 1
+    ) if total_active_orders > 0 else 0
+
+    # Товары с низким остатком (сырьё + готовая продукция)
+    low_stock_materials_count = sum(1 for m in raw_qs if m.is_low_stock)
+    low_stock_products_count = sum(
+        1 for p in FinishedProduct.objects.filter(
+            company_id=company_id, is_archived=False
+        ) if p.is_low_stock
+    )
+
     return {
         'date_from': date_from,
         'date_to': date_to,
@@ -223,9 +255,12 @@ def owner_analytics_data(company_id, date_from, date_to):
         'orders_delivered': orders_qs.filter(status=Order.Status.DELIVERED).count(),
         'top_products': top_products,
         'most_active_worker': top_worker,
+        'active_employees_count': active_employees,
+        'overdue_percentage': overdue_percentage,
+        'low_stock_count': low_stock_materials_count + low_stock_products_count,
         'stock': {
             'raw_materials': raw_qs.count(),
-            'low_stock_materials': sum(1 for m in raw_qs if m.is_low_stock),
+            'low_stock_materials': low_stock_materials_count,
             'finished_products': FinishedProduct.objects.filter(
                 company_id=company_id, is_archived=False).count(),
         },
@@ -280,6 +315,105 @@ class OwnerAnalyticsView(APIView):
     def get(self, request):
         date_from, date_to = parse_period(request)
         return Response(owner_analytics_data(request.user.company_id, date_from, date_to))
+
+
+class RevenueTimelineView(APIView):
+    """
+    GET /api/v1/reports/analytics/revenue-timeline/
+    Возвращает помесячную выручку и чистую прибыль за последние 6 месяцев.
+    Только для владельца.
+    """
+    permission_classes = [IsCompanyMember, IsOwner]
+
+    def get(self, request):
+        company_id = request.user.company_id
+        today = timezone.localdate()
+        six_months_ago = today - datetime.timedelta(days=180)
+
+        payments = (
+            Payment.objects.filter(
+                company_id=company_id,
+                payment_date__date__gte=six_months_ago,
+            )
+            .annotate(month=TruncMonth('payment_date'))
+            .values('month')
+            .annotate(total=Sum('amount'))
+            .order_by('month')
+        )
+
+        expenses = (
+            Expense.objects.filter(
+                company_id=company_id,
+                date__gte=six_months_ago,
+            )
+            .annotate(month=TruncMonth('date'))
+            .values('month')
+            .annotate(total=Sum('amount'))
+            .order_by('month')
+        )
+
+        delivered = (
+            Order.objects.filter(
+                company_id=company_id,
+                status=Order.Status.DELIVERED,
+                delivered_at__gte=six_months_ago,
+                product__isnull=False,
+            )
+            .annotate(month=TruncMonth('delivered_at'))
+            .values('month')
+            .annotate(
+                cogs=Sum(ExpressionWrapper(
+                    F('quantity') * F('product__cost_price'), output_field=MONEY
+                ))
+            )
+            .order_by('month')
+        )
+
+        # Собираем все месяцы
+        months_set = set()
+        rev_map = {}
+        for p in payments:
+            m = p['month']
+            months_set.add(m)
+            rev_map[m] = money(p['total'])
+
+        exp_map = {}
+        for e in expenses:
+            m = e['month']
+            months_set.add(m)
+            exp_map[m] = money(e['total'])
+
+        cogs_map = {}
+        for d in delivered:
+            m = d['month']
+            months_set.add(m)
+            cogs_map[m] = money(d['cogs'])
+
+        months = sorted(months_set, reverse=True)[:6]
+        months.reverse()
+
+        month_names = {
+            1: 'Янв', 2: 'Фев', 3: 'Мар', 4: 'Апр', 5: 'Май', 6: 'Июн',
+            7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек',
+        }
+
+        labels = []
+        revenues = []
+        net_profits = []
+        for m in months:
+            label = f"{month_names.get(m.month, m.month)}'{str(m.year)[2:]}"
+            labels.append(label)
+            rev = rev_map.get(m, 0)
+            exp = exp_map.get(m, 0)
+            cogs = cogs_map.get(m, 0)
+            revenues.append(rev)
+            net_profits.append(rev - cogs - exp)
+
+        return Response({
+            'labels': labels,
+            'revenues': revenues,
+            'net_profits': net_profits,
+        })
 
 
 class AdminAnalyticsView(APIView):

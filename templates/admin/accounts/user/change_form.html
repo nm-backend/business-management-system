@@ -1,0 +1,91 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+  {% if can_generate_key and original.pk %}
+  <li>
+    <form method="post" action="{% url 'admin:accounts_user_generate_access_key' original.pk|admin_urlquote %}"
+          style="display:inline;" id="generate-key-form">
+      {% csrf_token %}
+      <button type="submit" class="button"
+              style="background:#1c64d9;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
+              title="Сгенерировать новый Access Key для сотрудника"
+              onclick="return confirm('Выпустить новый Access Key для {{ original.full_name|default:original.username }}?\\n\\nПрежний активный ключ будет отозван.');">
+        🔑 Сгенерировать ключ доступа
+      </button>
+    </form>
+  </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+
+{% block after_field_sets %}
+  {% if original.pk %}
+  <div class="inline-group" style="margin-bottom:20px;">
+    <h2>🔑 Access Key (код доступа)</h2>
+    <div class="inline-related tabular" style="padding:12px 14px;background:var(--body-bg);border:1px solid var(--border-color);border-radius:4px;">
+      {% with active_keys=original.access_keys.all %}
+        {% if active_keys %}
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border-color);">
+              <th style="padding:8px 10px;text-align:left;font-size:12px;font-weight:600;">Код</th>
+              <th style="padding:8px 10px;text-align:left;font-size:12px;font-weight:600;">Статус</th>
+              <th style="padding:8px 10px;text-align:left;font-size:12px;font-weight:600;">Выдан</th>
+              <th style="padding:8px 10px;text-align:left;font-size:12px;font-weight:600;">Действует до</th>
+              <th style="padding:8px 10px;text-align:left;font-size:12px;font-weight:600;">Кем выдан</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for ak in active_keys %}
+            <tr style="border-bottom:1px solid var(--border-color);">
+              <td style="padding:8px 10px;font-family:monospace;font-size:13px;letter-spacing:0.5px;">
+                <strong>{{ ak.key }}</strong>
+              </td>
+              <td style="padding:8px 10px;">
+                {% if ak.effective_status == 'active' %}
+                  <span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#e7f6ec;color:#1a7f37;">Активен</span>
+                {% elif ak.effective_status == 'used' %}
+                  <span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#eef0f2;color:#5a6472;">Использован</span>
+                {% elif ak.effective_status == 'revoked' %}
+                  <span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#fbe9e9;color:#c9372c;">Отозван</span>
+                {% elif ak.effective_status == 'expired' %}
+                  <span style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#fff4e5;color:#9a5b00;">Просрочен</span>
+                {% endif %}
+              </td>
+              <td style="padding:8px 10px;font-size:12px;">{{ ak.created_at|date:"d.m.Y H:i" }}</td>
+              <td style="padding:8px 10px;font-size:12px;">{{ ak.expires_at|date:"d.m.Y H:i"|default:"—" }}</td>
+              <td style="padding:8px 10px;font-size:12px;">{{ ak.created_by.full_name|default:ak.created_by.username|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--body-quiet-color);font-size:13px;margin:8px 0;">
+          У сотрудника пока нет Access Key. Нажмите «Сгенерировать ключ доступа» сверху.
+        </p>
+        {% endif %}
+      {% endwith %}
+
+      {% if can_generate_key %}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color);">
+        <form method="post" action="{% url 'admin:accounts_user_generate_access_key' original.pk|admin_urlquote %}"
+              style="display:inline;">
+          {% csrf_token %}
+          <button type="submit" class="default"
+                  style="background:#1c64d9;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;"
+                  onclick="return confirm('Выпустить новый Access Key для {{ original.full_name|default:original.username }}?\\n\\nПрежний активный ключ будет отозван.');">
+            🔑 Сгенерировать новый ключ доступа
+          </button>
+        </form>
+        <p style="color:var(--body-quiet-color);font-size:11px;margin:6px 0 0;">
+          При генерации нового ключа прежний активный ключ автоматически отзывается.
+          Код появится в зелёном уведомлении сверху после генерации.
+        </p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

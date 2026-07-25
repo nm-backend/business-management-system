@@ -59,8 +59,10 @@ INSTALLED_APPS = [
     'apps.messaging',  # Сообщения и уведомления
     'apps.reports',  # Аналитика и экспорт отчетов
     'apps.audit',  # Система аудита действий
+    'apps.backup',  # Резервное копирование (Celery Beat)
     
     'drf_spectacular',  # Автоматическая генерация OpenAPI схемы
+    'django_celery_beat',  # Celery Beat scheduler
 ]
 
 # Middleware - обработчики запросов
@@ -279,6 +281,19 @@ SPECTACULAR_SETTINGS = {
 }
 
 USE_X_FORWARDED_FOR = False
+
+# ── Celery Configuration ──
+# Брокер сообщений (Redis)
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
+# Хранилище результатов (необязательно)
+CELERY_RESULT_BACKEND = 'django-db'
+# Сериализация
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+# Часовой пояс для Beat
+CELERY_TIMEZONE = 'Asia/Bishkek'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # Логирование: пишем в stdout (12-factor: удобно для Docker/облака, где логи
 # собираются из потока вывода). Уровень настраивается через LOG_LEVEL.

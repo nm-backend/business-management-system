@@ -13,7 +13,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.core.validators import validate_image_upload
 
-from .models import AccessKey, Skill, User
+from .models import AccessKey, PushSubscription, Skill, User
 
 
 class SkillSerializer(serializers.ModelSerializer):
@@ -518,3 +518,12 @@ class TwoFactorStatusSerializer(serializers.Serializer):
     """Состояние 2FA у текущего пользователя (только чтение)."""
     enabled = serializers.BooleanField(read_only=True)
     recovery_codes_left = serializers.IntegerField(read_only=True)
+
+
+class PushSubscriptionSerializer(serializers.ModelSerializer):
+    """Сериализатор для подписки на Web Push уведомления."""
+
+    class Meta:
+        model = PushSubscription
+        fields = ['id', 'endpoint', 'p256dh_key', 'auth_key', 'user_agent', 'is_active', 'created_at']
+        read_only_fields = ['id', 'is_active', 'created_at', 'user_agent']

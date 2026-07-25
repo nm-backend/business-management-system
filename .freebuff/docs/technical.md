@@ -1,0 +1,12 @@
+SkladPro.Nod project architecture:
+- 12 Django apps, 62 migrations, 3 locale files, 11 templates, 19 JS files
+- RBAC: superadmin, owner (Egasi), admin (Administrator), worker (Ishchi)
+- Financial data isolation: paired serializers (*Serializer/*OwnerSerializer), FinancialDataPermission, IsOwner on payment endpoints
+- Multi-tenant: CompanyScopedViewSet filters all queries by company_id
+- Soft delete: SoftDeleteModel, archive() instead of DELETE
+- i18n: uz_cyrl (primary), ru, ky — 471 keys each, fallback chain
+- Audit: AuditLog on all CRUD operations
+- Access Key flow: SKP-XXXX-XXXX-XXXX codes, verify+redeem endpoints
+- Production: confirmation-only workflow with material consumption, stock movements, labor cost calculation
+- Deploy: Docker Compose + Render Blueprint
+- Tests: 366 total, 15 errors (Python 3.14 Django bug, not code)

@@ -9,6 +9,7 @@ API views for authentication and user management.
 
 Все действия записываются в audit log для безопасности и отслеживания.
 """
+from django.conf import settings as django_settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
@@ -19,7 +20,8 @@ from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, Valida
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
+from .fingerprint_jwt import RefreshToken as FingerprintRefreshToken
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
@@ -27,8 +29,9 @@ from apps.core.validators import parse_int_param
 from core.permissions import IsOwner, IsOwnerOrAdmin
 from . import two_factor
 from .access_keys import issue_access_key, redeem_access_key, verify_access_key
+from .push_service import send_push_to_company
 from .token_utils import blacklist_all_tokens
-from .models import AccessKey, Skill, User
+from .models import AccessKey, PushSubscription, Skill, User
 from .serializers import (
     UserSerializer, UserSelfUpdateSerializer, UserCreateSerializer, UserLimitedSerializer,
     LoginSerializer, ChangePasswordSerializer, SetupOwnerSerializer,
@@ -37,6 +40,7 @@ from .serializers import (
     AccessKeyVerifySerializer, AccessKeyRedeemSerializer,
     TwoFactorConfirmSerializer, TwoFactorDisableSerializer,
     TwoFactorPasswordSerializer, TwoFactorStatusSerializer,
+    PushSubscriptionSerializer,
 )
 from apps.core.views import CompanyScopedViewSet
 
@@ -127,13 +131,17 @@ class SetupOwnerView(APIView):
                 {'error': 'Setup is already complete.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        fingerprint = request.data.get('fingerprint', '')
+        refresh = FingerprintRefreshToken.for_user(user)
+        if fingerprint:
+            refresh.set_fingerprint(fingerprint)
+
         write_audit_log(
             action=AuditLog.Action.SETUP_OWNER,
             actor=user,
             target=user,
             request=request,
         )
-        refresh = RefreshToken.for_user(user)
         return Response({
             'user': UserSerializer(user).data,
             'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)}
@@ -208,16 +216,21 @@ class LoginView(APIView):
                     metadata={'codes_left': two_factor.recovery_codes_left(user)},
                 )
 
+        fingerprint = request.data.get('fingerprint', '')
+        refresh = FingerprintRefreshToken.for_user(user)
+        if fingerprint:
+            refresh.set_fingerprint(fingerprint)
+
         write_audit_log(
             action=AuditLog.Action.LOGIN,
             actor=user,
             target=user,
             request=request,
         )
-        refresh = RefreshToken.for_user(user)
         return Response({
             'user': UserSerializer(user).data,
-            'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)}
+            'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)},
+            'fingerprint_required': bool(fingerprint),
         })
 
 
@@ -301,7 +314,9 @@ class MeView(APIView):
             Response с UserSerializer data
         """
         serializer = UserSerializer(request.user)
-        return Response(serializer.data)
+        data = serializer.data
+        data['vapid_public_key'] = getattr(django_settings, 'VAPID_PUBLIC_KEY', '')
+        return Response(data)
 
     def patch(self, request):
         """
@@ -545,13 +560,17 @@ class AccessKeyRedeemView(APIView):
                 {'detail': 'Invalid, expired or already used access key'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        fingerprint = request.data.get('fingerprint', '')
+        refresh = FingerprintRefreshToken.for_user(user)
+        if fingerprint:
+            refresh.set_fingerprint(fingerprint)
+
         write_audit_log(
             action=AuditLog.Action.ACCESS_KEY_REDEEMED,
             actor=user,
             target=user,
             request=request,
         )
-        refresh = RefreshToken.for_user(user)
         return Response({
             'user': UserSerializer(user).data,
             'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)},
@@ -883,6 +902,53 @@ class UserViewSet(CompanyScopedViewSet):
             .select_related('user').first()
         )
         return Response(AccessKeySerializer(key).data if key else None)
+
+
+@extend_schema(tags=['Push'])
+class PushSubscriptionView(APIView):
+    """
+    Управление Web Push подпиской.
+
+    POST /api/v1/accounts/push/subscribe/
+      Сохраняет push-подписку браузера. Тело:
+      {"endpoint": "...", "keys": {"p256dh": "...", "auth": "..."}}
+
+    DELETE /api/v1/accounts/push/unsubscribe/
+      Удаляет подписку по endpoint.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        endpoint = request.data.get('endpoint')
+        keys = request.data.get('keys', {})
+        if not endpoint or not keys.get('p256dh') or not keys.get('auth'):
+            return Response(
+                {'error': 'endpoint, keys.p256dh and keys.auth are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sub, created = PushSubscription.objects.update_or_create(
+            user=request.user,
+            endpoint=endpoint,
+            defaults={
+                'company': request.user.company,
+                'p256dh_key': keys['p256dh'],
+                'auth_key': keys['auth'],
+                'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
+                'is_active': True,
+            },
+        )
+        return Response(PushSubscriptionSerializer(sub).data,
+                        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    def delete(self, request):
+        endpoint = request.data.get('endpoint')
+        if not endpoint:
+            return Response({'error': 'endpoint is required'}, status=status.HTTP_400_BAD_REQUEST)
+        deleted, _ = PushSubscription.objects.filter(
+            user=request.user, endpoint=endpoint
+        ).delete()
+        return Response({'deleted': deleted > 0}, status=status.HTTP_200_OK)
 
 
 class TwoFactorStatusView(APIView):

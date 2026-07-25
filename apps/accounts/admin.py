@@ -5,7 +5,10 @@
 управление Access Key (генерация/отзыв/статус), оптимизированные запросы.
 """
 from django.contrib import admin, messages
+from django.contrib.admin import helpers
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.http import HttpResponseRedirect
+from django.urls import path, reverse
 from django.utils.html import format_html
 
 from apps.core.admin_utils import badge, choice_badge
@@ -57,6 +60,7 @@ class AccessKeyInline(admin.TabularInline):
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
+    change_form_template = 'admin/accounts/user/change_form.html'
     list_display = (
         'username', 'full_name', 'company', 'role_badge', 'status_badge',
         'department', 'is_active', 'last_activity',
@@ -123,6 +127,81 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('company', 'role', 'full_name', 'phone'),
         }),
     )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<path:object_id>/generate-access-key/',
+                self.admin_site.admin_view(self.generate_access_key_view),
+                name='accounts_user_generate_access_key',
+            ),
+        ]
+        return custom_urls + urls
+
+    def generate_access_key_view(self, request, object_id, *args, **kwargs):
+        """
+        Кастомная вьюха: генерирует Access Key для сотрудника и показывает код.
+        Доступна по кнопке на странице изменения пользователя в админке.
+        """
+        user = self.get_object(request, object_id)
+        if user is None:
+            self.message_user(request, 'Пользователь не найден.', messages.ERROR)
+            return HttpResponseRedirect(reverse('admin:accounts_user_changelist'))
+
+        if request.method != 'POST':
+            self.message_user(request, 'Метод не поддерживается.', messages.ERROR)
+            return HttpResponseRedirect(
+                reverse('admin:accounts_user_change', args=[object_id])
+            )
+
+        if user.is_superadmin or user.is_owner or user.company_id is None:
+            self.message_user(
+                request,
+                'Нельзя выпустить ключ для владельца, супер-админа или пользователя без компании.',
+                messages.ERROR,
+            )
+            return HttpResponseRedirect(
+                reverse('admin:accounts_user_change', args=[object_id])
+            )
+
+        if user.blocked_by_owner:
+            self.message_user(
+                request,
+                'Нельзя выпустить ключ для заблокированного аккаунта. Сначала разблокируйте его.',
+                messages.ERROR,
+            )
+            return HttpResponseRedirect(
+                reverse('admin:accounts_user_change', args=[object_id])
+            )
+
+        try:
+            key = issue_access_key(user=user, created_by=request.user)
+            self.message_user(
+                request,
+                f'✅ Access Key выпущен! Код сотрудника {user.full_name or user.username}: {key.key}',
+                messages.SUCCESS,
+            )
+        except ValueError as exc:
+            self.message_user(request, f'Ошибка: {exc}', messages.ERROR)
+
+        return HttpResponseRedirect(
+            reverse('admin:accounts_user_change', args=[object_id])
+        )
+
+    def render_change_form(self, request, context, *args, **kwargs):
+        """Добавляем в контекст флаг can_generate_key для кнопки на странице пользователя."""
+        obj = context.get('original')
+        if obj is not None:
+            context['can_generate_key'] = (
+                not obj.is_superadmin
+                and not obj.is_owner
+                and obj.company_id is not None
+                and not obj.blocked_by_owner
+            )
+        else:
+            context['can_generate_key'] = False
+        return super().render_change_form(request, context, *args, **kwargs)
 
 
 @admin.register(AccessKey)

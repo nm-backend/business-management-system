@@ -9,27 +9,32 @@
     />
     <title>SkladPro.Nod</title>
     <link rel="manifest" href="{% static 'manifest.json' %}" />
-    <meta name="theme-color" content="#1c64d9" />
+    <meta name="theme-color" content="#197387" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght,SOFT@9..144,300..800,0..100&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="{% static 'css/base.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/ux.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/chat.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/enhance.css' %}?v={{ ASSET_VERSION }}" />
+    <link rel="stylesheet" href="{% static 'css/mobile.css' %}?v={{ ASSET_VERSION }}" />
     {% block extra_css %}{% endblock %}
+    {% block chart_css %}{% endblock %}
   </head>
   <body>
     <div class="app-container">
       <!-- Desktop Sidebar -->
       <aside class="app-sidebar" id="app-sidebar">
         <a href="#/" class="sidebar-brand">
-          <span class="sidebar-brand-mark">🧊</span>
+          <svg class="sidebar-brand-mark" width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+            <path d="M13 2L5 9v8l8 7 8-7V9l-8-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
+            <path d="M13 2v23M5 9l8 7m0-7l8 7" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" opacity=".4"/>
+          </svg>
           <span>SkladPro</span>
         </a>
         <nav class="sidebar-nav">
@@ -38,6 +43,9 @@
           </a>
           <a href="#/orders" class="sidebar-link" data-nav="orders">
             <span class="nav-icon">📋</span><span data-i18n="nav.orders">Буюртмалар</span>
+          </a>
+          <a href="#/orders/kanban" class="sidebar-link" data-nav="kanban" data-role="staff">
+            <span class="nav-icon">🔄</span><span>Kanban</span>
           </a>
           <a href="#/warehouse" class="sidebar-link" data-nav="warehouse">
             <span class="nav-icon">📦</span><span data-i18n="nav.raw_materials">Хом ашё омбори</span>
@@ -59,6 +67,9 @@
           </a>
           <a href="#/companies" class="sidebar-link" data-nav="companies" data-role="superadmin">
             <span class="nav-icon">🏢</span><span data-i18n="companies.title">Компаниялар</span>
+          </a>
+          <a href="#/audit" class="sidebar-link" data-nav="audit" data-role="owner">
+            <span class="nav-icon">📋</span><span data-i18n="settings.audit_log">Аудит</span>
           </a>
           <a href="#/settings" class="sidebar-link" data-nav="settings">
             <span class="nav-icon">⚙️</span><span data-i18n="settings.title">Созламалар</span>
@@ -143,11 +154,15 @@
       </nav>
     </div>
 
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" nonce="{{ request.csp_nonce }}"></script>
+
     <!-- Core JS -->
     <script src="{% static 'js/api.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/i18n.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/toast.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/dialogs.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/icons.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/list-states.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/ui.js' %}?v={{ ASSET_VERSION }}"></script>
 
@@ -157,11 +172,13 @@
     <script src="{% static 'js/components/warehouse.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/finished_products.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/orders.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/kanban.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/clients.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/production.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/finance.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/messages.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/settings.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/audit.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/companies.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/app.js' %}?v={{ ASSET_VERSION }}"></script>
     {% endblock %}
