@@ -14,11 +14,14 @@ class WarehouseComponent {
                 <button class="tab-btn active" data-i18n="warehouse.title"></button>
                 <button class="tab-btn" id="tab-products" data-i18n="warehouse.finished_title"></button>
             </div>
-            <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="material-search" class="form-control" data-i18n="warehouse.search">
+            <div class="search-box" style="display:flex;gap:8px;align-items:center;">
+                <div style="position:relative;flex:1;">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="material-search" class="form-control" data-i18n="warehouse.search">
+                </div>
+                <button class="btn btn-secondary" id="scan-barcode-btn" type="button" title="Scan Barcode" style="padding:8px 12px;font-size:18px;">📷</button>
             </div>
-            ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;" data-i18n="warehouse.add_material"></button>` : ''}
+            ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;margin-top:10px;" data-i18n="warehouse.add_material"></button>` : ''}
             <div class="list-group" id="materials-list"></div>
         `;
 
@@ -38,8 +41,34 @@ class WarehouseComponent {
             container.querySelector('#add-material-btn').addEventListener('click', () => this.openForm());
         }
 
+        const scanBtn = container.querySelector('#scan-barcode-btn');
+        if (scanBtn) {
+            scanBtn.addEventListener('click', () => this.openBarcodeScanner());
+        }
+
         window.i18n.applyTranslations();
         await this.loadMaterials();
+    }
+
+    /** Модальное окно сканера штрихкодов / QR-кодов (по макетам) */
+    openBarcodeScanner() {
+        const modal = window.ui.modal('warehouse.scan_barcode', `
+            <div class="scanner-modal" style="text-align:center;padding:10px 0;">
+                <div class="scanner-box" style="position:relative;width:100%;max-width:280px;height:200px;margin:0 auto 15px;background:#0f172a;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid var(--primary-color);">
+                    <div style="position:absolute;top:0;left:0;right:0;bottom:0;border:2px dashed rgba(255,255,255,0.4);margin:20px;border-radius:8px;"></div>
+                    <div style="position:absolute;width:80%;height:2px;background:#e5484d;box-shadow:0 0 8px #e5484d;animation:scan 2s infinite;"></div>
+                    <span style="font-size:32px;">📷</span>
+                </div>
+                <p class="text-sm text-muted" data-i18n="warehouse.scan_hint"></p>
+                <div style="display:flex;gap:10px;justify-content:center;margin-top:15px;">
+                    <button class="btn btn-secondary text-sm" type="button">🔦 <span data-i18n="warehouse.flashlight"></span></button>
+                    <button class="btn btn-secondary text-sm" type="button">🖼️ <span data-i18n="warehouse.gallery"></span></button>
+                </div>
+            </div>
+            <style>
+                @keyframes scan { 0%{top:20%;} 50%{top:80%;} 100%{top:20%;} }
+            </style>
+        `);
     }
 
     async loadMaterials() {

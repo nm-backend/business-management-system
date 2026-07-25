@@ -183,4 +183,50 @@ window.ui = {
             <div class="donut-legend">${legend}</div>
         </div>`;
     },
+
+    /** Дебаунс для оптимизации обработчиков ввода (поиск и т.д.) */
+    debounce(fn, wait = 300) {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => fn.apply(this, args), wait);
+        };
+    },
+
+    /** Сжатие изображений на стороне клиента перед отправкой (для работы в цеху при плохом 3G/4G). */
+    async compressImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.8) {
+        if (!file || !file.type.startsWith('image/')) return file;
+        return new Promise((resolve) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                let { width, height } = img;
+                if (width > maxWidth || height > maxHeight) {
+                    if (width > height) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    } else {
+                        width = Math.round((width * maxHeight) / height);
+                        height = maxHeight;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    if (!blob) return resolve(file);
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    resolve(compressedFile);
+                }, 'image/jpeg', quality);
+            };
+            img.onerror = () => resolve(file);
+            img.src = url;
+        });
+    },
 };

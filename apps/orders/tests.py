@@ -2,7 +2,7 @@
 Unit-тесты для приложения orders: свойства и методы модели Order
 (is_paid, has_debt, update_payment_status, check_overdue).
 """
-import datetime
+from django.utils import timezone
 from decimal import Decimal
 
 from django.test import TestCase
@@ -15,7 +15,7 @@ def make_order(client, **kwargs):
     defaults = dict(
         quantity=Decimal('1'),
         unit='sht',
-        deadline=datetime.date(2024, 1, 1),
+        deadline=timezone.now(),
     )
     defaults.update(kwargs)
     return Order.objects.create(client=client, **defaults)

@@ -24,6 +24,7 @@ from .serializers import (
     WorkRecordSerializer, WorkRecordLimitedSerializer, WorkRecordCreateSerializer,
 )
 from . import services
+from apps.core.views import CompanyScopedViewSet
 
 
 class ReadAfterCreateMixin(CreateModelMixin):
@@ -41,7 +42,7 @@ class ReadAfterCreateMixin(CreateModelMixin):
         return Response(read_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
-class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
+class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
     """Задачи работников: назначение, принятие, отказ."""
     queryset = Task.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember]
@@ -69,9 +70,7 @@ class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Task.objects.none()
-        queryset = Task.objects.filter(
-            company=self.request.user.company_id,
-        ).select_related('worker', 'assigned_by', 'order', 'order__client', 'order__product')
+        queryset = super().get_queryset().select_related('worker', 'assigned_by', 'order', 'order__client', 'order__product')
         if self.request.user.is_worker:
             queryset = queryset.filter(worker=self.request.user)
         status_filter = self.request.query_params.get('status')
@@ -168,7 +167,7 @@ class TaskViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
         return Response(TaskSerializer(task).data)
 
 
-class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
+class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
     """Работы: сдача на подтверждение, подтверждение (меняет склад), отклонение."""
     queryset = WorkRecord.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember]
@@ -211,9 +210,7 @@ class WorkRecordViewSet(ReadAfterCreateMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return WorkRecord.objects.none()
-        queryset = WorkRecord.objects.filter(
-            company=self.request.user.company_id,
-        ).select_related('worker', 'product', 'confirmed_by', 'task')
+        queryset = super().get_queryset().select_related('worker', 'product', 'confirmed_by', 'task')
         if self.request.user.is_worker:
             queryset = queryset.filter(worker=self.request.user)
         status_filter = self.request.query_params.get('status')

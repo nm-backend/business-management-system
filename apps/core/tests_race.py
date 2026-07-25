@@ -46,7 +46,7 @@ def run_parallel(fn, n=8):
 
 @skipUnlessDBFeature('has_select_for_update')
 class AccessKeyRaceTests(TransactionTestCase):
-    reset_sequences = True
+    reset_sequences = False
 
     def setUp(self):
         if not IS_POSTGRES:
@@ -76,7 +76,7 @@ class AccessKeyRaceTests(TransactionTestCase):
 
 @skipUnlessDBFeature('has_select_for_update')
 class WarehouseRaceTests(TransactionTestCase):
-    reset_sequences = True
+    reset_sequences = False
 
     def setUp(self):
         if not IS_POSTGRES:
@@ -120,7 +120,7 @@ class WarehouseRaceTests(TransactionTestCase):
 @skipUnlessDBFeature('has_select_for_update')
 class PaymentRaceTests(TransactionTestCase):
     """Гонка потери обновления при одновременных оплатах одного заказа."""
-    reset_sequences = True
+    reset_sequences = False
 
     def setUp(self):
         if not IS_POSTGRES:

@@ -491,3 +491,26 @@ class AdminWorkExportView(APIView):
         if request.query_params.get('format') == 'pdf':
             return pdf_response('SkladPro.Nod - Ишчилар иши', rows, 'work-report.pdf')
         return xlsx_response(rows, 'work-report.xlsx', 'Work')
+
+
+class ExportReportAPIView(APIView):
+    """GET /api/v1/reports/export/?report_type=material_shortage&format_type=pdf"""
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
+
+    def get(self, request):
+        report_type = request.query_params.get('report_type')
+        if report_type == 'material_shortage':
+            company_id = request.user.company_id
+            rows = [['Номи', 'Тури', 'Миқдор', 'Бирлик', 'Мин. қолдиқ', 'Камомад']]
+            for m in RawMaterial.objects.filter(
+                company_id=company_id, is_archived=False, quantity__lt=F('min_stock')
+            ).order_by('name'):
+                rows.append([
+                    m.name, m.stone_type, m.quantity, m.get_unit_display(),
+                    m.min_stock, m.min_stock - m.quantity
+                ])
+            format_type = request.query_params.get('format_type', 'xlsx')
+            if format_type == 'pdf':
+                return pdf_response('SkladPro.Nod - Материал етишмовчилиги', rows, 'shortage-report.pdf')
+            return xlsx_response(rows, 'shortage-report.xlsx', 'Shortage')
+        return Response({"error": "Unsupported report type"}, status=400)

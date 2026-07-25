@@ -224,18 +224,29 @@ class ProductionComponent {
                 </div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
                     <textarea name="comment" class="form-control" rows="2"></textarea></div>
+                <div class="form-group"><label data-i18n="production.photo"></label>
+                    <input name="photo" type="file" accept="image/*" class="form-control"></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="production.send_for_confirmation"></button>
             </form>
         `);
 
         modal.querySelector('#work-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const data = Object.fromEntries(new FormData(e.target));
-            if (task) data.task = task.id;
-            if (!user.is_worker) data.worker = user.id;
-            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+            const form = e.target;
+            const photoInput = form.querySelector('input[type=file]');
+            const formData = new FormData(form);
+
+            if (task) formData.set('task', task.id);
+            if (!user.is_worker) formData.set('worker', user.id);
+
+            if (photoInput && photoInput.files[0]) {
+                const compressed = await window.ui.compressImage(photoInput.files[0]);
+                formData.set('photo', compressed);
+            }
+
+            await window.ui.submitGuard(form.querySelector('button[type=submit]'), async () => {
                 try {
-                    await window.api.request('/production/works/', { method: 'POST', body: JSON.stringify(data) });
+                    await window.api.request('/production/works/', { method: 'POST', body: formData });
                     modal.remove();
                     window.toast.success(window.ui.t('production.work_submitted'));
                     this.tab = 'works';

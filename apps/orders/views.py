@@ -18,9 +18,10 @@ from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin
 from .models import Order
 from .serializers import OrderSerializer, OrderOwnerSerializer
+from apps.core.views import CompanyScopedViewSet
 
 
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(CompanyScopedViewSet):
     queryset = Order.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -40,7 +41,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         # Рецепты продукта нужны для расчёта нехватки материалов в сериализаторе —
         # без prefetch это был отдельный запрос на каждый заказ (N+1).
         queryset = (
-            Order.objects.filter(company=user.company_id)
+            super().get_queryset()
             .select_related('client', 'product', 'worker')
             .prefetch_related('product__recipes__items__material')
         )

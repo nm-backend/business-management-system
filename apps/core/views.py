@@ -23,6 +23,15 @@ class GlobalReferenceWriteMixin:
         return [IsAuthenticated(), IsSuperAdmin()]
 
 
+class CompanyScopedViewSet(viewsets.ModelViewSet):
+    """
+    Базовый ViewSet для моделей, зависящих от компании (Company).
+    Автоматически фильтрует queryset по company_id текущего пользователя.
+    """
+    def get_queryset(self):
+        return self.queryset.filter(company_id=self.request.user.company_id)
+
+
 class HealthView(APIView):
     """
     Health-check для мониторинга/оркестратора: живо ли приложение и доступна ли БД.

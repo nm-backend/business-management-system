@@ -12,4 +12,5 @@ urlpatterns = [
     path('export/stock/', views.AdminStockExportView.as_view(), name='export-stock'),
     path('export/orders/', views.AdminOrdersExportView.as_view(), name='export-orders'),
     path('export/work/', views.AdminWorkExportView.as_view(), name='export-work'),
+    path('export/', views.ExportReportAPIView.as_view(), name='export-general'),
 ]

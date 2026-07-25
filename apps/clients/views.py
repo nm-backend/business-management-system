@@ -18,9 +18,10 @@ from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwner, IsOwnerOrAdmin
 from .models import ACTIVE_ORDER_STATUSES, Client, Payment
 from .serializers import ClientAdminSerializer, ClientOwnerSerializer, PaymentSerializer
+from apps.core.views import CompanyScopedViewSet
 
 
-class ClientViewSet(viewsets.ModelViewSet):
+class ClientViewSet(CompanyScopedViewSet):
     queryset = Client.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember, IsOwnerOrAdmin]  # Работник клиентов не видит
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -41,9 +42,7 @@ class ClientViewSet(viewsets.ModelViewSet):
             status__in=ACTIVE_ORDER_STATUSES,
             is_archived=False,
         )
-        return Client.objects.filter(
-            company=self.request.user.company_id,
-        ).prefetch_related('payments').annotate(
+        return super().get_queryset().prefetch_related('payments').annotate(
             active_orders_exists=Exists(active_orders),
         )
 
@@ -84,7 +83,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         )
 
 
-class PaymentViewSet(viewsets.ModelViewSet):
+class PaymentViewSet(CompanyScopedViewSet):
     queryset = Payment.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     serializer_class = PaymentSerializer
     permission_classes = [IsCompanyMember, IsOwner]  # Суммы оплат видит только владелец
@@ -95,9 +94,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Payment.objects.none()
-        return Payment.objects.filter(
-            company=self.request.user.company_id,
-        ).select_related('client', 'order', 'received_by')
+        return super().get_queryset().select_related('client', 'order', 'received_by')
 
     def perform_create(self, serializer):
         # Оплату можно завести только на клиента своей компании.

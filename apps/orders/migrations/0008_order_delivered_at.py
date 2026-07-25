@@ -23,6 +23,7 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ('orders', '0007_alter_order_quantity_alter_order_total_amount'),
@@ -34,5 +35,4 @@ class Migration(migrations.Migration):
             name='delivered_at',
             field=models.DateTimeField(blank=True, db_index=True, null=True),
         ),
-        migrations.RunPython(backfill_delivered_at, noop_reverse),
     ]

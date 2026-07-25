@@ -29,6 +29,7 @@ from apps.messaging.services import (
     notify_staff,
     unread_count,
 )
+import uuid
 from apps.messaging.ws_auth import JWTAuthMiddleware
 
 
@@ -36,30 +37,39 @@ class WebSocketRoleTests(TransactionTestCase):
     """Тестирование WebSocket чата между всеми ролями."""
 
     def setUp(self):
-        self.company = Company.objects.create(name='TestCompany')
+        uid = uuid.uuid4().hex[:8]
+        self.company = Company.objects.create(name=f'TestCompany_{uid}')
         self.owner = User.objects.create_user(
-            username='owner', password='owner1234',
+            username=f'owner_{uid}', password='owner1234',
             role=User.Role.OWNER, company=self.company,
             full_name='Хозяин Тестов',
         )
         self.admin = User.objects.create_user(
-            username='admin', password='admin1234',
+            username=f'admin_{uid}', password='admin1234',
             role=User.Role.ADMIN, company=self.company,
             full_name='Администратор Тестов',
         )
         self.worker = User.objects.create_user(
-            username='worker', password='worker1234',
+            username=f'worker_{uid}', password='worker1234',
             role=User.Role.WORKER, company=self.company,
             full_name='Работник Тестов',
             can_write_to_owner=True,
         )
         self.restricted_worker = User.objects.create_user(
-            username='restricted', password='pw12345678',
+            username=f'restricted_{uid}', password='pw12345678',
             role=User.Role.WORKER, company=self.company,
             can_write_to_owner=False,
         )
         self.rest = APIClient()
         self.ws_app = JWTAuthMiddleware(URLRouter(websocket_urlpatterns))
+
+    def tearDown(self):
+        ChatMessage.objects.filter(company=self.company).delete()
+        Notification.objects.filter(company=self.company).delete()
+        Conversation.objects.filter(company=self.company).delete()
+        User.objects.filter(company=self.company).delete()
+        Company.objects.filter(pk=self.company.pk).delete()
+        super().tearDown()
 
     def _token(self, user):
         return str(AccessToken.for_user(user))

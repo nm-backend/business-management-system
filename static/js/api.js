@@ -39,10 +39,10 @@ class APIClient {
 
     async request(endpoint, options = {}) {
         const url = `${this.baseUrl}${endpoint}`;
-        const headers = {
-            'Content-Type': 'application/json',
-            ...options.headers
-        };
+        const headers = { ...options.headers };
+        if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+            headers['Content-Type'] = 'application/json';
+        }
 
         const tokens = this.getTokens();
         if (tokens.access && !options.noAuth) {

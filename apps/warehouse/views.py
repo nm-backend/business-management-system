@@ -11,8 +11,9 @@ from .serializers import (
     FinishedProductSerializer, FinishedProductOwnerSerializer,
     StockMovementSerializer, StockMovementLimitedSerializer, RecipeSerializer, RecipeItemSerializer
 )
+from apps.core.views import CompanyScopedViewSet
 
-class RawMaterialViewSet(viewsets.ModelViewSet):
+class RawMaterialViewSet(CompanyScopedViewSet):
     """
     API склада сырья с разделением финансовых полей по роли.
 
@@ -34,7 +35,7 @@ class RawMaterialViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return RawMaterial.objects.none()
-        qs = RawMaterial.objects.filter(company=self.request.user.company_id)
+        qs = super().get_queryset()
         if not self.request.user.is_owner:
             qs = qs.filter(is_archived=False)
         return qs
@@ -74,7 +75,7 @@ class RawMaterialViewSet(viewsets.ModelViewSet):
             request=self.request,
         )
 
-class FinishedProductViewSet(viewsets.ModelViewSet):
+class FinishedProductViewSet(CompanyScopedViewSet):
     """
     API готовой продукции с тем же правилом RBAC, что и склад сырья.
 
@@ -96,7 +97,7 @@ class FinishedProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return FinishedProduct.objects.none()
-        qs = FinishedProduct.objects.filter(company=self.request.user.company_id)
+        qs = super().get_queryset()
         if not self.request.user.is_owner:
             qs = qs.filter(is_archived=False)
         return qs
@@ -165,7 +166,7 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
             return StockMovementSerializer
         return StockMovementLimitedSerializer
 
-class RecipeViewSet(viewsets.ModelViewSet):
+class RecipeViewSet(CompanyScopedViewSet):
     """
     Рецепт описывает, сколько сырья нужно для готового товара.
 
@@ -182,11 +183,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Recipe.objects.none()
-        # Вложенный RecipeItemSerializer дергал items (N+1) и material в каждой
-        # строке (ещё N+1). prefetch сводит всё к нескольким запросам.
-        return Recipe.objects.filter(
-            company=self.request.user.company_id,
-        ).prefetch_related('items__material')
+        return super().get_queryset().prefetch_related('items__material')
 
     def _check_product_company(self, serializer):
         product = serializer.validated_data.get('product')
@@ -219,7 +216,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         raise MethodNotAllowed('DELETE', detail='Recipe deletion is prohibited. Mark the recipe inactive instead.')
 
-class RecipeItemViewSet(viewsets.ModelViewSet):
+class RecipeItemViewSet(CompanyScopedViewSet):
     """
     Строка рецепта связывает конкретный материал и нужное количество.
 
@@ -235,7 +232,6 @@ class RecipeItemViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return RecipeItem.objects.none()
         # material_name дергал material.name на каждую строку (N+1).
-        # У строки рецепта нет прямого company - изолируем через рецепт.
         # order_by('id') — детерминированная пагинация (без него пагинатор
         # предупреждал о возможных пропусках/дублях между страницами).
         return RecipeItem.objects.filter(

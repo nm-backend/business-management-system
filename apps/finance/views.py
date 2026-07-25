@@ -14,9 +14,10 @@ from .serializers import (
     LaborRateSerializer, LaborRateCreateSerializer,
     WorkerPaymentSerializer, WorkerPaymentCreateSerializer
 )
+from apps.core.views import CompanyScopedViewSet
 
 
-class ExpenseViewSet(viewsets.ModelViewSet):
+class ExpenseViewSet(CompanyScopedViewSet):
     """
     ViewSet для управления расходами.
 
@@ -41,7 +42,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         """
         if getattr(self, 'swagger_fake_view', False):
             return Expense.objects.none()
-        queryset = Expense.objects.filter(company=self.request.user.company_id).select_related('created_by')
+        queryset = super().get_queryset().select_related('created_by')
         category = self.request.query_params.get('category')
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')
@@ -68,7 +69,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         )
 
 
-class LaborRateViewSet(viewsets.ModelViewSet):
+class LaborRateViewSet(CompanyScopedViewSet):
     """
     ViewSet для управления ставками оплаты труда.
 
@@ -91,7 +92,7 @@ class LaborRateViewSet(viewsets.ModelViewSet):
         """
         if getattr(self, 'swagger_fake_view', False):
             return LaborRate.objects.none()
-        return LaborRate.objects.filter(company=self.request.user.company_id).select_related('product')
+        return super().get_queryset().select_related('product')
 
     def perform_create(self, serializer):
         product = serializer.validated_data.get('product')
@@ -108,7 +109,7 @@ class LaborRateViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
-class WorkerPaymentViewSet(viewsets.ModelViewSet):
+class WorkerPaymentViewSet(CompanyScopedViewSet):
     """
     ViewSet для управления выплатами работникам.
 
@@ -133,9 +134,7 @@ class WorkerPaymentViewSet(viewsets.ModelViewSet):
         """
         if getattr(self, 'swagger_fake_view', False):
             return WorkerPayment.objects.none()
-        queryset = WorkerPayment.objects.filter(
-            company=self.request.user.company_id,
-        ).select_related('worker', 'created_by')
+        queryset = super().get_queryset().select_related('worker', 'created_by')
         worker_id = self.request.query_params.get('worker')
         date_from = self.request.query_params.get('date_from')
         date_to = self.request.query_params.get('date_to')

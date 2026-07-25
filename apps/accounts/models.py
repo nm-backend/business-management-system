@@ -61,8 +61,8 @@ class Skill(TimestampedModel):
     category = models.CharField(max_length=50, blank=True, default='')
 
     class Meta:
-        verbose_name = 'Навык'
-        verbose_name_plural = 'Навыки'
+        verbose_name = 'Навык (специализация)'
+        verbose_name_plural = 'Навыки (специализации)'
         ordering = ['name']
         constraints = [
             # Имя навыка уникально в пределах компании, но не глобально.

@@ -268,12 +268,19 @@ class ChatConsumerTests(TransactionTestCase):
     настройки), поэтому Redis не требуется.
     """
     def setUp(self):
-        self.company = Company.objects.create(name='WsCo')
+        import uuid
+        uid = uuid.uuid4().hex[:8]
+        self.company = Company.objects.create(name=f'WsCo_{uid}')
         self.user = User.objects.create_user(
-            username='ws_user', password='pw', role=User.Role.OWNER, company=self.company,
+            username=f'ws_user_{uid}', password='pw', role=User.Role.OWNER, company=self.company,
         )
         # JWTAuthMiddleware поверх маршрутов чата (без origin-валидатора для теста).
         self.application = JWTAuthMiddleware(URLRouter(websocket_urlpatterns))
+
+    def tearDown(self):
+        User.objects.filter(company=self.company).delete()
+        Company.objects.filter(pk=self.company.pk).delete()
+        super().tearDown()
 
     def _token(self, user):
         return str(AccessToken.for_user(user))

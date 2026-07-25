@@ -38,6 +38,7 @@ from .serializers import (
     TwoFactorConfirmSerializer, TwoFactorDisableSerializer,
     TwoFactorPasswordSerializer, TwoFactorStatusSerializer,
 )
+from apps.core.views import CompanyScopedViewSet
 
 
 class SetupCheckView(APIView):
@@ -424,7 +425,7 @@ class ChangeLanguageView(APIView):
         return Response({'language': request.user.language, 'message': 'Language updated'})
 
 @extend_schema(tags=['Employees'])
-class SkillViewSet(viewsets.ModelViewSet):
+class SkillViewSet(CompanyScopedViewSet):
     """
     ViewSet каталога навыков компании (Skill).
 
@@ -449,9 +450,7 @@ class SkillViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Skill.objects.none()
         # employees_total -> используется SkillSerializer вместо COUNT на каждый навык.
-        return Skill.objects.filter(
-            company_id=self.request.user.company_id,
-        ).annotate(employees_total=Count('employees', distinct=True))
+        return super().get_queryset().annotate(employees_total=Count('employees', distinct=True))
 
     def perform_create(self, serializer):
         skill = serializer.save(company=self.request.user.company)
@@ -560,7 +559,7 @@ class AccessKeyRedeemView(APIView):
 
 
 @extend_schema(tags=['Employees'])
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(CompanyScopedViewSet):
     """
     ViewSet для управления аккаунтами пользователей через RBAC.
 
@@ -609,9 +608,9 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.request.user
         # Пользователи всегда ограничены своей компанией.
         if user.is_owner:
-            queryset = User.objects.filter(company_id=user.company_id)
+            queryset = super().get_queryset()
         elif user.is_admin:
-            queryset = User.objects.filter(company_id=user.company_id, role='worker')
+            queryset = super().get_queryset().filter(role='worker')
         else:
             return User.objects.none()
 

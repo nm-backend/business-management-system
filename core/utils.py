@@ -7,6 +7,7 @@ Core utility functions.
 """
 import json
 from pathlib import Path
+from functools import lru_cache
 from django.conf import settings
 
 
@@ -38,6 +39,7 @@ def deep_merge(base, override):
     return result
 
 
+@lru_cache(maxsize=10)
 def get_locale(lang_code='uz_cyrl'):
     """
     Загружает файл локализации и возвращает как словарь.
