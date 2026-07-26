@@ -55,6 +55,14 @@ X_FRAME_OPTIONS = 'DENY'
 # X-Forwarded-Proto используется, чтобы Django понимал, что запрос пришёл по HTTPS.
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Health-эндпоинт исключён из HTTPS-редиректа. Оркестратор (Railway, k8s, ELB)
+# опрашивает контейнер изнутри по обычному HTTP и без X-Forwarded-Proto, поэтому
+# получал 301 вместо 200 и считал ЖИВОЙ контейнер нездоровым.
+# Воспроизведено на Railway: "1/1 replicas never became healthy!", в логах
+# приложения — "GET /api/v1/core/health/ 301" при работающем daphne.
+# Весь остальной трафик по-прежнему принудительно уходит на HTTPS.
+SECURE_REDIRECT_EXEMPT = [r'^api/v1/core/health/$']
 SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)  # 1 год
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
