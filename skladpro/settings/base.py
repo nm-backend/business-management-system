@@ -63,6 +63,10 @@ INSTALLED_APPS = [
     
     'drf_spectacular',  # Автоматическая генерация OpenAPI схемы
     'django_celery_beat',  # Celery Beat scheduler
+    # Бэкенд результатов задач в БД. Без этого приложения CELERY_RESULT_BACKEND
+    # = 'django-db' не резолвится и воркер падает на старте
+    # (ModuleNotFoundError: No module named 'django-db').
+    'django_celery_results',
 ]
 
 # Middleware - обработчики запросов

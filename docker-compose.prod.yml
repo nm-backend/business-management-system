@@ -10,6 +10,22 @@
 # .env.prod ДОЛЖЕН задавать: SECRET_KEY, ALLOWED_HOSTS, DB_PASSWORD, REDIS_PASSWORD.
 # HTTPS/SSL терминируйте reverse-proxy (nginx/Caddy/Traefik) перед web:8000.
 
+# Общее окружение приложения для web/worker/beat (YAML-якорь: переменные не
+# расходятся между сервисами — иначе воркер молча работает с другой БД/брокером).
+x-app-env: &app-env
+  SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required in production (generate a long random one)}
+  DJANGO_ENV: production
+  DEBUG: "False"
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:?ALLOWED_HOSTS is required in production (comma-separated, no '*')}
+  DB_NAME: ${DB_NAME:-skladpro_db}
+  DB_USER: ${DB_USER:-skladpro}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in production}
+  DB_HOST: db
+  DB_PORT: 5432
+  REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}@redis:6379/0
+  # Django за reverse-proxy: доверяем X-Forwarded-Proto для HTTPS-редиректа.
+  SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-True}
+
 services:
   db:
     image: postgres:16-alpine
@@ -40,20 +56,11 @@ services:
 
   web:
     build: .
+    # Единый тег для web/worker/beat: без него compose собирает три отдельных
+    # образа и пересборка одного оставляет остальные на старом коде.
+    image: skladpro-app:latest
     command: daphne -b 0.0.0.0 -p 8000 skladpro.asgi:application
-    environment:
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required in production (generate a long random one)}
-      DJANGO_ENV: production
-      DEBUG: "False"
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?ALLOWED_HOSTS is required in production (comma-separated, no '*')}
-      DB_NAME: ${DB_NAME:-skladpro_db}
-      DB_USER: ${DB_USER:-skladpro}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in production}
-      DB_HOST: db
-      DB_PORT: 5432
-      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}@redis:6379/0
-      # Django за reverse-proxy: доверяем X-Forwarded-Proto для HTTPS-редиректа.
-      SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-True}
+    environment: *app-env
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles
@@ -72,6 +79,50 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Celery worker: выполняет фоновые задачи (авто-бэкап БД в S3/Telegram) ──
+  # Без этого сервиса расписания в БД создаются, но задачи НЕ выполняются.
+  # Ждём web healthy: миграции применяет entrypoint web (у worker SKIP_INIT=1).
+  worker:
+    build: .
+    image: skladpro-app:latest
+    command: celery -A skladpro worker -l info --concurrency=2
+    environment:
+      <<: *app-env
+      SKIP_INIT: "1"
+    volumes:
+      - media_data:/app/media
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A skladpro inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Celery beat: планировщик (расписания хранятся в БД: django-celery-beat) ──
+  beat:
+    build: .
+    image: skladpro-app:latest
+    command: celery -A skladpro beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      <<: *app-env
+      SKIP_INIT: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
         condition: service_healthy
     restart: unless-stopped
 
