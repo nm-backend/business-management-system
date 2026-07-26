@@ -4,17 +4,21 @@ Views for finance API.
 Этот модуль содержит API views для управления финансами.
 Все финансовые данные доступны только владельцу (owner).
 """
+import logging
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, FinancialDataPermission
+from core.permissions import IsOwner, FinancialDataPermission
 from .models import Expense, LaborRate, WorkerPayment
 from .serializers import (
     ExpenseSerializer, ExpenseCreateSerializer,
     LaborRateSerializer, LaborRateCreateSerializer,
     WorkerPaymentSerializer, WorkerPaymentCreateSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
@@ -130,3 +134,44 @@ class WorkerPaymentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(payment_date__lte=date_to)
 
         return queryset
+
+
+class AnalyticsView(APIView):
+    """
+    API для получения финансовой аналитики за период.
+
+    GET /api/v1/finance/analytics/?period=month
+
+    Параметры:
+        period: str - 'today', 'yesterday', 'week', 'month', 'quarter', 'year', 'custom'
+        date_from: str - дата начала (для custom периода)
+        date_to: str - дата конца (для custom периода)
+
+    Права доступа:
+        FinancialDataPermission - только владелец
+
+    Возвращает:
+        dict со всеми финансовыми показателями
+    """
+    permission_classes = [IsAuthenticated, FinancialDataPermission]
+
+    def get(self, request):
+        period = request.query_params.get('period', 'month')
+        custom_start = request.query_params.get('date_from')
+        custom_end = request.query_params.get('date_to')
+
+        from .analytics import calculate_analytics
+        try:
+            data = calculate_analytics(
+                period=period,
+                custom_start=custom_start,
+                custom_end=custom_end,
+                user=request.user,
+            )
+            return Response(data)
+        except Exception as e:
+            logger.exception(f"Analytics calculation failed for period={period}")
+            return Response(
+                {'error': 'Analytics calculation failed', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

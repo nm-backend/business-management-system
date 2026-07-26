@@ -19,6 +19,17 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from core.permissions import IsOwner, IsOwnerOrAdmin
+from rest_framework.throttling import ScopedRateThrottle
+
+
+class PasswordResetThrottle(ScopedRateThrottle):
+    """
+    Throttle для сброса/смены пароля.
+    3 попытки в час.
+    """
+    scope = 'password_reset'
+
+
 from .models import User
 from .serializers import (
     UserSerializer, UserSelfUpdateSerializer, UserCreateSerializer, UserLimitedSerializer,
@@ -84,6 +95,8 @@ class SetupOwnerView(APIView):
         }
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'setup'
 
     def post(self, request):
         """
@@ -118,6 +131,7 @@ class LoginView(APIView):
     API для аутентификации пользователя.
 
     Проверяет учетные данные и возвращает JWT токены для доступа к API.
+    Защищен rate limiting: не более 10 попыток в минуту.
 
     Endpoint: POST /api/v1/accounts/login/
 
@@ -137,6 +151,8 @@ class LoginView(APIView):
         }
     """
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
 
     def post(self, request):
         """
@@ -200,8 +216,9 @@ class LogoutView(APIView):
             if refresh_token:
                 token = RefreshToken(refresh_token)
                 token.blacklist()
-        except Exception:
-            pass
+        except Exception as e:
+            # Token may already be blacklisted or expired — that's OK
+            logger.debug(f"Logout token blacklist ignored: {e}")
         write_audit_log(
             action=AuditLog.Action.LOGOUT,
             actor=request.user,
@@ -276,6 +293,7 @@ class ChangePasswordView(APIView):
     API для изменения пароля текущего пользователя.
 
     Позволяет пользователю изменить свой пароль после проверки текущего.
+    Защищён rate limiting: не более 3 попыток в час.
 
     Endpoint: POST /api/v1/accounts/me/password/
 
@@ -292,6 +310,8 @@ class ChangePasswordView(APIView):
         {"message": "Password changed successfully"}
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'password_reset'
 
     def post(self, request):
         """
@@ -561,13 +581,14 @@ class UserViewSet(viewsets.ModelViewSet):
         )
         return Response({'is_active': user.is_active})
 
-    @action(detail=True, methods=['post'], permission_classes=[IsOwner])
+    @action(detail=True, methods=['post'], permission_classes=[IsOwner], throttle_classes=[PasswordResetThrottle])
     def reset_password(self, request, pk=None):
         """
         Сбрасывает пароль пользователя на новый.
 
         Позволяет владельцу установить новый пароль для любого пользователя.
         Используется когда пользователь забыл пароль или нужно сменить его принудительно.
+        Защищён rate limiting: не более 3 попыток в час.
 
         Endpoint: POST /api/v1/accounts/users/{id}/reset_password/
 

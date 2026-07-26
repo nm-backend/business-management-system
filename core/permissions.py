@@ -14,6 +14,17 @@ Custom permission classes for role-based access control (RBAC).
 from rest_framework.permissions import BasePermission
 
 
+class IsAuthenticated(BasePermission):
+    """
+    Кастомная проверка аутентификации — проверяет наличие user и is_authenticated.
+
+    Отличается от DRF-шного IsAuthenticated тем, что дополнительно
+    проверяет наличие объекта user (не только флаг is_authenticated).
+    """
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+
+
 class IsOwner(BasePermission):
     """
     Разрешает доступ только пользователям с ролью 'owner'.
@@ -137,3 +148,80 @@ class FinancialDataPermission(BasePermission):
             and request.user.is_authenticated
             and request.user.role == 'owner'
         )
+
+
+class CanCreateWorkers(BasePermission):
+    """
+    Permission - может создавать работников.
+
+    Разрешает создание работников только:
+    - Владельцу
+    - Администратору с разрешением can_create_workers
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_owner:
+            return True
+        if request.user.is_admin and request.user.can_create_workers:
+            return True
+        return False
+
+
+class CanWriteToOwner(BasePermission):
+    """
+    Permission - может писать владельцу.
+
+    Разрешает отправку сообщений владельцу только:
+    - Администратору с разрешением can_write_to_owner
+    - Работнику с разрешением can_write_to_owner
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return request.user.can_write_to_owner
+
+
+class CanSeeOtherWorkers(BasePermission):
+    """
+    Permission - может видеть других работников.
+
+    Разрешает просмотр других работников только:
+    - Владельцу
+    - Администратору с разрешением can_see_other_workers
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_owner:
+            return True
+        if request.user.is_admin and request.user.can_see_other_workers:
+            return True
+        return False
+
+
+class IsOwnerOrAssignedWorker(BasePermission):
+    """
+    Permission - владелец или назначенный работник.
+
+    Разрешает доступ владельцу или работнику, которому назначена задача.
+    Используется для задач и работ.
+    """
+    def has_object_permission(self, request, view, obj):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_owner:
+            return True
+        if hasattr(obj, 'worker') and obj.worker == request.user:
+            return True
+        return False
+
+
+class IsOwnerOrAssignedAdmin(BasePermission):
+    """
+    Permission - владелец или администратор.
+
+    Разрешает доступ владельцу или администратору.
+    """
+    def has_permission(self, request, view):
+        return request.user and (request.user.is_owner or request.user.is_admin)

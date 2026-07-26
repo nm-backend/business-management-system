@@ -8,7 +8,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, IsOwnerOrAdmin
+from core.permissions import IsOwner, IsOwnerOrAdmin
 from .models import Order, OrderStatus, PaymentStatus
 from .serializers import (
     OrderSerializer, OrderLimitedSerializer, OrderCreateSerializer
@@ -69,7 +69,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         return queryset
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsOwnerOrAdmin])
     def assign_worker(self, request, pk=None):
         """
         Назначает работника на заказ.
@@ -78,12 +78,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         Body: {"worker_id": 1}
         """
         order = self.get_object()
-        if not (request.user.is_owner or request.user.is_admin):
-            return Response(
-                {'detail': 'Only owner or admin can assign workers'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         worker_id = request.data.get('worker_id')
         if not worker_id:
             return Response(
@@ -107,7 +101,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(order)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsOwner])
     def update_payment(self, request, pk=None):
         """
         Обновляет статус оплаты заказа.
@@ -115,15 +109,13 @@ class OrderViewSet(viewsets.ModelViewSet):
         POST /api/v1/orders/{id}/update_payment/
         Body: {"payment_status": "paid", "amount": 1000}
         """
+        from decimal import Decimal
         order = self.get_object()
-        if not request.user.is_owner:
-            return Response(
-                {'detail': 'Only owner can update payment'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         payment_status = request.data.get('payment_status')
-        amount = request.data.get('amount', 0)
+        raw_amount = request.data.get('amount', 0)
+
+        # Convert to Decimal safely — DRF APIClient sends multipart str by default
+        amount = Decimal(str(raw_amount))
 
         if payment_status:
             order.payment_status = payment_status

@@ -5,8 +5,10 @@ Template views для склада.
 страниц склада сырья и готовой продукции.
 """
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 
 
+@login_required
 def warehouse_view(request):
     """
     View для страницы склада сырья.
@@ -16,6 +18,7 @@ def warehouse_view(request):
     return render(request, 'warehouse.html')
 
 
+@login_required
 def finished_products_view(request):
     """
     View для страницы готовой продукции.
@@ -25,6 +28,7 @@ def finished_products_view(request):
     return render(request, 'finished_products.html')
 
 
+@login_required
 def settings_view(request):
     """
     View для страницы настроек.

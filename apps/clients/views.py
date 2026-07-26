@@ -8,7 +8,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, IsOwnerOrAdmin, FinancialDataPermission
+from core.permissions import IsOwner, IsOwnerOrAdmin, FinancialDataPermission
 from .models import Client
 from .serializers import (
     ClientSerializer, ClientLimitedSerializer, ClientCreateSerializer
@@ -53,11 +53,12 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        Возвращает queryset клиентов.
+        Возвращает queryset клиентов с prefetch для производительности.
 
         Фильтрация по активным/архивным клиентам.
+        Использует select_related для оптимизации N+1 запросов.
         """
-        queryset = Client.objects.all()
+        queryset = Client.objects.prefetch_related('orders')
         is_archived = self.request.query_params.get('is_archived')
 
         if is_archived is not None:
@@ -66,9 +67,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        """
-        Создает клиента с текущим пользователем.
-        """
+        """Создает клиента с текущим пользователем."""
         serializer.save()
 
     @action(detail=False, methods=['get'])
@@ -78,7 +77,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 
         GET /api/v1/clients/active/
         """
-        active_clients = self.get_queryset().filter(is_active=True, is_archived=False)
+        active_clients = self.get_queryset().filter(is_active=True, is_archived=False)[:100]
         serializer = self.get_serializer(active_clients, many=True)
         return Response(serializer.data)
 
@@ -89,7 +88,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 
         GET /api/v1/clients/archived/
         """
-        archived_clients = self.get_queryset().filter(is_archived=True)
+        archived_clients = self.get_queryset().filter(is_archived=True)[:100]
         serializer = self.get_serializer(archived_clients, many=True)
         return Response(serializer.data)
 

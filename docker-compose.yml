@@ -1,0 +1,222 @@
+# =============================================================================
+# SkladPro — Production Docker Compose
+# Services:  PostgreSQL 16 | Redis 7 | Django/Daphne | Nginx | Certbot
+# =============================================================================
+
+x-app-defaults: &app-defaults
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env
+  restart: unless-stopped
+  volumes:
+    - static_volume:/app/staticfiles
+    - media_volume:/app/media
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - skladpro-net
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  # ==================== PostgreSQL 16 ====================
+  db:
+    image: postgres:16-alpine
+    container_name: skladpro-db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file: .env
+    expose:
+      - "5432"
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-skladpro} -d ${DB_NAME:-skladpro}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - skladpro-net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==================== Redis 7 ====================
+  redis:
+    image: redis:7-alpine
+    container_name: skladpro-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - skladpro-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==================== Django / Daphne ====================
+  web:
+    <<: *app-defaults
+    container_name: skladpro-web
+    expose:
+      - "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health/\", timeout=3)'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # ==================== Nginx ====================
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: skladpro-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - dhparam_volume:/etc/nginx/ssl:ro
+      - static_volume:/app/staticfiles:ro
+      - media_volume:/app/media:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+    networks:
+      - skladpro-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==================== Certbot (Let's Encrypt) ====================
+  certbot:
+    image: certbot/certbot:v2.9.0
+    container_name: skladpro-certbot
+    restart: unless-stopped
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    depends_on:
+      - nginx
+    networks:
+      - skladpro-net
+    # Renew certs daily at 03:00 (randomized)
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      trap exit TERM; while :; do
+        certbot renew --webroot -w /var/www/certbot --quiet --no-self-upgrade
+        sleep 86400 & wait $!
+      done
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==================== DH Parameters generator (one-shot) ====================
+  # Generate DH params at first deploy; skip on subsequent runs
+  dhparam:
+    image: alpine:3.20
+    container_name: skladpro-dhparam
+    volumes:
+      - dhparam_volume:/dhparam
+    entrypoint: |
+      sh -c "
+        if [ ! -f /dhparam/dhparam.pem ]; then
+          echo '⏳ Generating DH parameters (2048 bit) — this takes a few minutes...'
+          apk add --no-cache openssl
+          openssl dhparam -out /dhparam/dhparam.pem 2048
+          echo '✓ DH parameters generated.'
+        else
+          echo '✓ DH parameters already exist — skipping.'
+        fi
+      "
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+# ==================== Volumes ====================
+volumes:
+  postgres_data:
+    name: skladpro_postgres_data
+  redis_data:
+    name: skladpro_redis_data
+  static_volume:
+    name: skladpro_static
+  media_volume:
+    name: skladpro_media
+  certbot_www:
+    name: skladpro_certbot_www
+  certbot_certs:
+    name: skladpro_certbot_certs
+  dhparam_volume:
+    name: skladpro_dhparam
+
+# ==================== Networks ====================
+networks:
+  skladpro-net:
+    name: skladpro-network
+    driver: bridge

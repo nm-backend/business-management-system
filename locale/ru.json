@@ -77,7 +77,14 @@
     "revenue_by_period": "Выручка по месяцам",
     "material_usage": "Продажи товаров",
     "top_products": "Самые продаваемые",
-    "deadline_passed": "Просрочено"
+    "deadline_passed": "Просрочено",
+    "overdue_orders": "Просрочено",
+    "low_stock": "Мало осталось",
+    "total_materials": "Материалы",
+    "total_clients": "Клиенты",
+    "clients_with_debt": "Должники",
+    "unread_notifications": "Сообщения",
+    "most_active_worker": "Самый активный работник"
   },
   "warehouse": {
     "title": "Склад сырья",
@@ -313,6 +320,41 @@
     "select_format": "Выберите формат",
     "select_period": "Выберите период",
     "export_button": "Экспортировать"
+  },
+  "payment_types": {
+    "salary": "Зарплата",
+    "advance": "Аванс",
+    "bonus": "Премия",
+    "other": "Другое"
+  },
+  "operations": {
+    "cutting": "Резка",
+    "polishing": "Полировка",
+    "mounting": "Монтаж",
+    "packing": "Упаковка",
+    "other": "Другое"
+  },
+  "clients": {
+    "title": "Клиенты",
+    "active": "Активные клиенты",
+    "archived": "Архив",
+    "all": "Все",
+    "active_label": "Активный",
+    "archived_label": "В архиве",
+    "inactive_label": "Неактивный",
+    "has_debt_label": "Есть долг",
+    "archive_btn": "В архив",
+    "add_client": "Добавить клиента",
+    "name": "Имя",
+    "phone": "Телефон",
+    "address": "Адрес",
+    "orders": "Заказы",
+    "total_amount": "Общая сумма",
+    "paid": "Оплачено",
+    "debt": "Долг",
+    "profit": "Прибыль",
+    "payment_history": "История оплат",
+    "not_paid_warning": "Не оплачено!"
   },
   "common": {
     "save": "Сохранить",

@@ -4,17 +4,20 @@ Views for production API.
 Этот модуль содержит API views для управления задачами и работами
 с защитой финансовых данных для non-owner пользователей.
 """
+import logging
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from apps.core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAssignedWorker
+from core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAssignedWorker
 from .models import Task, WorkRecord, TaskStatus
 from .serializers import (
     TaskSerializer, TaskCreateSerializer,
     WorkRecordSerializer, WorkRecordLimitedSerializer, WorkRecordCreateSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -164,10 +167,18 @@ class WorkRecordViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
         """
-        Подтверждает выполненную работу.
+        Подтверждает выполненную работу (через production pipeline).
 
         POST /api/v1/production/works/{id}/confirm/
         Body: {"labor_cost": 1000}
+
+        Вызывает work.confirm() который запускает полный production pipeline:
+        - Списание сырья по рецепту
+        - Добавление готовой продукции
+        - Начисление оплаты работнику
+        - Создание истории движения склада
+        - Обновление статуса заказа
+        - Создание уведомлений
         """
         work = self.get_object()
         if not (request.user.is_owner or request.user.is_admin):
@@ -176,17 +187,18 @@ class WorkRecordViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        work.status = WorkRecord.WorkStatus.CONFIRMED
-        work.confirmed_by = request.user
-        work.confirmed_at = timezone.now()
+        labor_cost = request.data.get('labor_cost') if request.user.is_owner else None
 
-        if request.user.is_owner:
-            labor_cost = request.data.get('labor_cost', 0)
-            work.labor_cost = labor_cost
-
-        work.save()
-        serializer = self.get_serializer(work)
-        return Response(serializer.data)
+        try:
+            work.confirm(confirmed_by=request.user, labor_cost=labor_cost)
+            serializer = self.get_serializer(work)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.exception(f"Work confirmation failed for work #{work.id}")
+            return Response(
+                {'detail': str(e) if request.user.is_owner else 'Work confirmation failed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):

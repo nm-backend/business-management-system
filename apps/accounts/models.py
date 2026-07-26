@@ -12,6 +12,7 @@ AbstractUser для поддержки ролевой системы и допо
 """
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from apps.core.validators import validate_image_upload
 from .managers import UserManager
 
 
@@ -69,7 +70,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.WORKER, db_index=True)
     phone = models.CharField(max_length=20, blank=True, default='')
     full_name = models.CharField(max_length=255, blank=True, default='')
-    avatar = models.ImageField(upload_to='avatars/', blank=True, default='')
+    avatar = models.ImageField(upload_to='avatars/', blank=True, default='', validators=[validate_image_upload])
     language = models.CharField(max_length=10, choices=Language.choices, default=Language.UZBEK)
 
     # Дополнительные права для администраторов

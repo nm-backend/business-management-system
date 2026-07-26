@@ -32,6 +32,11 @@ class APIClient {
     }
 
     async request(endpoint, options = {}) {
+        // Add fetch timeout (30s default)
+        const timeout = options.timeout || 30000;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
         const url = `${this.baseUrl}${endpoint}`;
         const headers = {
             'Content-Type': 'application/json',
@@ -45,10 +50,25 @@ class APIClient {
 
         const config = {
             ...options,
-            headers
+            headers,
+            signal: controller.signal
         };
 
-        let response = await fetch(url, config);
+        // Remove timeout from options so it doesn't get sent to fetch
+        delete config.timeout;
+
+        let response;
+        try {
+            response = await fetch(url, config);
+        } catch (e) {
+            clearTimeout(timeoutId);
+            if (e.name === 'AbortError') {
+                if (window.toast) window.toast.error('Request timed out');
+                throw { status: 0, data: { detail: 'Request timed out' } };
+            }
+            throw e;
+        }
+        clearTimeout(timeoutId);
 
         // Автоматическое обновление токена при 401
         if (response.status === 401 && tokens.refresh && !options.isRetry) {
@@ -80,11 +100,15 @@ class APIClient {
 
     async refreshToken(refresh) {
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
             const response = await fetch(`${this.baseUrl}/accounts/token/refresh/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh })
+                body: JSON.stringify({ refresh }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             if (response.ok) {
                 const data = await response.json();
                 this.setTokens(data.access, data.refresh || refresh);
@@ -130,6 +154,39 @@ class APIClient {
         return this.request('/accounts/me/');
     }
 }
+
+/**
+ * Экранирует HTML-опасные символы для защиты от XSS.
+ * Используйте это при вставке данных из API в innerHTML.
+ *
+ * @param {string} str - Пользовательский ввод или данные из API
+ * @returns {string} - Безопасная строка
+ */
+function escapeHtml(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
+/**
+ * Экранирует все строковые поля в объекте для безопасного рендеринга.
+ *
+ * @param {Object} obj - Объект с данными
+ * @returns {Object} - Новый объект с экранированными строками
+ */
+function escapeObject(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(escapeObject);
+    const result = {};
+    for (const [key, value] of Object.entries(obj)) {
+        result[key] = typeof value === 'string' ? escapeHtml(value) : escapeObject(value);
+    }
+    return result;
+}
+
+window.escapeHtml = escapeHtml;
+window.escapeObject = escapeObject;
 
 const api = new APIClient();
 window.api = api;

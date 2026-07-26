@@ -134,6 +134,11 @@ class OrdersComponent {
      * @returns {string} Отображаемое название
      */
     getStatusDisplay(status) {
+        if (window.i18n && window.i18n.translate) {
+            const key = 'statuses.' + status;
+            const translated = window.i18n.translate(key);
+            if (translated !== key) return translated;
+        }
         const displays = {
             'new': 'Янги',
             'awaiting_material': 'Материал кутилмоқда',
@@ -171,6 +176,11 @@ class OrdersComponent {
      * @returns {string} Отображаемое название
      */
     getPaymentDisplay(paymentStatus) {
+        if (window.i18n && window.i18n.translate) {
+            const key = 'payment_statuses.' + paymentStatus;
+            const translated = window.i18n.translate(key);
+            if (translated !== key) return translated;
+        }
         const displays = {
             'unpaid': 'Тўланмаган',
             'partial': 'Қисман',

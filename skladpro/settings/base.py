@@ -22,7 +22,27 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Секретный ключ Django для криптографии (берется из .env)
+# ВАЖНО: ключ должен быть длиннее 50 символов и не начинаться с 'django-insecure-'
 SECRET_KEY = config('SECRET_KEY')
+
+# Проверка SECRET_KEY при старте (production)
+import os as _os
+if not _os.environ.get('DJANGO_ENV') in ('test', 'development'):
+    _sk = config('SECRET_KEY', default='')
+    if len(_sk) < 50:
+        import warnings
+        warnings.warn(
+            f'SECRET_KEY is too short ({len(_sk)} chars). Generate a key with at least 50 characters.',
+            RuntimeWarning,
+        )
+    if _sk.startswith('django-insecure-'):
+        import warnings
+        warnings.warn(
+            'SECRET_KEY was auto-generated (starts with django-insecure-). '
+            'Generate a proper secret key for production.',
+            RuntimeWarning,
+        )
+del _os
 
 # Установленные приложения Django
 INSTALLED_APPS = [
@@ -45,18 +65,19 @@ INSTALLED_APPS = [
     'apps.core',  # Базовые модели и утилиты
     'apps.accounts',  # Управление пользователями и аутентификация
     'apps.warehouse',  # Управление складом (сырье и готовая продукция)
-    'apps.orders',  # Управление заказами (заглушка)
-    'apps.production',  # Управление производством (заглушка)
-    'apps.clients',  # Управление клиентами (заглушка)
-    'apps.finance',  # Финансовые отчеты (заглушка)
-    'apps.messaging',  # Сообщения (заглушка)
-    'apps.reports',  # Отчеты (заглушка)
+    'apps.orders',  # Управление заказами
+    'apps.production',  # Управление производством
+    'apps.clients',  # Управление клиентами
+    'apps.finance',  # Финансовые отчеты
+    'apps.messaging',  # Сообщения
+    'apps.reports',  # Отчеты
     'apps.audit',  # Система аудита действий
 ]
 
 # Middleware - обработчики запросов
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',  # Безопасность (HTTPS, HSTS)
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Статика в production
     'corsheaders.middleware.CorsMiddleware',  # CORS для фронтенда
     'django.contrib.sessions.middleware.SessionMiddleware',  # Сессии
     'django.middleware.common.CommonMiddleware',  # Общие функции
@@ -128,6 +149,17 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',  # Требовать аутентификацию по умолчанию
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '30/hour',
+        'user': '1000/hour',
+        'login': '10/minute',
+        'setup': '5/hour',
+        'password_reset': '3/hour',
+    },
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardPagination',  # Кастомная пагинация
     'PAGE_SIZE': 20,
     'DEFAULT_FILTER_BACKENDS': (
@@ -137,9 +169,8 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',  # JSON ответ
-        # BrowsableAPIRenderer включается только в development (см. development.py),
-        # чтобы не выставлять интерактивный интерфейс API в production.
-    )
+    ),
+    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
 }
 
 # Настройки JWT токенов (Simple JWT)
@@ -163,6 +194,9 @@ STATIC_URL = 'static/'  # URL для статических файлов
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # Директория для collectstatic
 STATICFILES_DIRS = [BASE_DIR / 'static']  # Директория с исходными статическими файлами
 
+# Whitenoise для сжатия и кэширования статики
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 # Настройки медиа файлов (загруженные пользователями)
 MEDIA_URL = config('MEDIA_URL', default='/media/')  # URL для медиа файлов
 MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директория для медиа файлов
@@ -174,3 +208,53 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}
+
+# Security: SameSite cookies
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+

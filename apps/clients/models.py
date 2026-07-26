@@ -45,8 +45,7 @@ class Client(TimestampedModel, SoftDeleteModel):
     total_paid = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
     debt = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
     profit = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    is_active = models.BooleanField(default=True)
-    is_archived = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True, db_index=True)
     notes = models.TextField(blank=True, default='')
 
     class Meta:

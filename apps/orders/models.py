@@ -8,6 +8,7 @@ Orders models - управление заказами.
 """
 from django.db import models
 from apps.core.models import TimestampedModel
+from apps.core.validators import validate_image_upload
 from apps.warehouse.models import UnitChoices
 
 
@@ -95,7 +96,7 @@ class Order(TimestampedModel):
     material = models.CharField(max_length=100, blank=True, default='')
     worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
     comment = models.TextField(blank=True, default='')
-    drawing = models.ImageField(upload_to='orders/drawings/', blank=True, null=True)
+    drawing = models.ImageField(upload_to='orders/drawings/', blank=True, null=True, validators=[validate_image_upload])
     status = models.CharField(max_length=30, choices=OrderStatus.choices, default=OrderStatus.NEW, db_index=True)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID, db_index=True)
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
@@ -160,11 +161,11 @@ class Order(TimestampedModel):
         - Если paid_amount >= total_amount: PAID
         """
         if self.paid_amount == 0:
-            self.payment_status = self.PaymentStatus.UNPAID
+            self.payment_status = PaymentStatus.UNPAID
         elif self.paid_amount < self.total_amount:
-            self.payment_status = self.PaymentStatus.PARTIAL
+            self.payment_status = PaymentStatus.PARTIAL
         else:
-            self.payment_status = self.PaymentStatus.PAID
+            self.payment_status = PaymentStatus.PAID
         self.save(update_fields=['payment_status'])
 
     def check_overdue(self):
@@ -177,7 +178,7 @@ class Order(TimestampedModel):
         """
         from django.utils import timezone
         today = timezone.now().date()
-        completed_statuses = [self.OrderStatus.READY, self.OrderStatus.DELIVERED, self.OrderStatus.CANCELLED]
+        completed_statuses = [OrderStatus.READY, OrderStatus.DELIVERED, OrderStatus.CANCELLED]
         
         if self.deadline < today and self.status not in completed_statuses:
             self.is_overdue = True

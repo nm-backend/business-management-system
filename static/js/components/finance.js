@@ -251,6 +251,11 @@ class FinanceComponent {
      * @returns {string} Отображаемое название
      */
     getCategoryDisplay(category) {
+        if (window.i18n && window.i18n.translate) {
+            const key = 'expense_categories.' + category;
+            const translated = window.i18n.translate(key);
+            if (translated !== key) return translated;
+        }
         const displays = {
             'rent': 'Ижара',
             'electricity': 'Электр энергия',
@@ -281,6 +286,11 @@ class FinanceComponent {
      * @returns {string} Отображаемое название
      */
     getPaymentTypeDisplay(paymentType) {
+        if (window.i18n && window.i18n.translate) {
+            const key = 'payment_types.' + paymentType;
+            const translated = window.i18n.translate(key);
+            if (translated !== key) return translated;
+        }
         const displays = {
             'salary': 'Иш ҳақи',
             'advance': 'Аванс',
@@ -297,6 +307,11 @@ class FinanceComponent {
      * @returns {string} Отображаемое название
      */
     getOperationDisplay(operation) {
+        if (window.i18n && window.i18n.translate) {
+            const key = 'operations.' + operation;
+            const translated = window.i18n.translate(key);
+            if (translated !== key) return translated;
+        }
         const displays = {
             'cutting': 'Кесиш',
             'polishing': 'Сийлаш',

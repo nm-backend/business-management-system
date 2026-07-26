@@ -77,7 +77,14 @@
     "revenue_by_period": "Ойлар бўйича даромад",
     "material_usage": "Маҳсулот сотилиши",
     "top_products": "Энг кўп сотилган",
-    "deadline_passed": "Муддати ўтган"
+    "deadline_passed": "Муддати ўтган",
+    "overdue_orders": "Муддати ўтган",
+    "low_stock": "Кам қолдиқ",
+    "total_materials": "Материаллар",
+    "total_clients": "Мижозлар",
+    "clients_with_debt": "Қарздорлар",
+    "unread_notifications": "Хабарлар",
+    "most_active_worker": "Энг фаол ишчи"
   },
   "warehouse": {
     "title": "Хом ашё омбори",
@@ -313,6 +320,41 @@
     "select_format": "Формат танланг",
     "select_period": "Давр танланг",
     "export_button": "Экспорт қилиш"
+  },
+  "payment_types": {
+    "salary": "Иш ҳақи",
+    "advance": "Аванс",
+    "bonus": "Мукофот",
+    "other": "Бошқа"
+  },
+  "operations": {
+    "cutting": "Кесиш",
+    "polishing": "Сийлаш",
+    "mounting": "Монтаж",
+    "packing": "Қутлаш",
+    "other": "Бошқа"
+  },
+  "clients": {
+    "title": "Мижозлар",
+    "active": "Фаол мижозлар",
+    "archived": "Архив",
+    "all": "Барча",
+    "active_label": "Актив",
+    "archived_label": "Архив",
+    "inactive_label": "Фаол эмас",
+    "has_debt_label": "Қарз бор",
+    "archive_btn": "Архив",
+    "add_client": "Мижоз қўшиш",
+    "name": "Исм",
+    "phone": "Телефон",
+    "address": "Манзил",
+    "orders": "Буюртмалар",
+    "total_amount": "Умумий сумма",
+    "paid": "Тўланган",
+    "debt": "Қарз",
+    "profit": "Фойда",
+    "payment_history": "Тўловлар тарихи",
+    "not_paid_warning": "Тўлов қилинмаган!"
   },
   "common": {
     "save": "Сақлаш",

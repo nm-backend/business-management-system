@@ -184,6 +184,11 @@ class ProductionComponent {
      * @returns {string} Отображаемое название
      */
     getTaskStatusDisplay(status) {
+        if (window.i18n && window.i18n.translate) {
+            const key = 'work_statuses.' + status;
+            const translated = window.i18n.translate(key);
+            if (translated !== key) return translated;
+        }
         const displays = {
             'pending': 'Кутилмоқда',
             'accepted': 'Қабул қилинди',
@@ -219,6 +224,11 @@ class ProductionComponent {
      * @returns {string} Отображаемое название
      */
     getWorkStatusDisplay(status) {
+        if (window.i18n && window.i18n.translate) {
+            const key = 'work_statuses.' + status;
+            const translated = window.i18n.translate(key);
+            if (translated !== key) return translated;
+        }
         const displays = {
             'awaiting_confirmation': 'Тасдиқлаш кутилмоқда',
             'confirmed': 'Тасдиқланди',

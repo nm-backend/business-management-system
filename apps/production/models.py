@@ -4,9 +4,16 @@ Production models - управление производством и зада�
 Этот модуль содержит модели для управления производственными задачами,
 работами работников и подтверждением выполненной работы.
 """
-from django.db import models
+import logging
+from decimal import Decimal
+
+from django.db import models, transaction
 from apps.core.models import TimestampedModel
+from apps.core.validators import validate_image_upload
 from apps.warehouse.models import UnitChoices
+from apps.orders.models import OrderStatus
+
+logger = logging.getLogger(__name__)
 
 
 class TaskStatus(models.TextChoices):
@@ -132,14 +139,13 @@ class Task(TimestampedModel):
         - Связанный заказ переводит в ACCEPTED_BY_WORKER
         """
         from django.utils import timezone
-        self.status = self.TaskStatus.ACCEPTED
-        self.accepted_at = timezone.now()
-        self.save(update_fields=['status', 'accepted_at'])
-        
-        # Обновляем статус заказа если есть
-        if self.order:
-            self.order.status = self.order.OrderStatus.ACCEPTED_BY_WORKER
-            self.order.save(update_fields=['status'])
+        with transaction.atomic():
+            self.status = TaskStatus.ACCEPTED
+            self.accepted_at = timezone.now()
+            self.save(update_fields=['status', 'accepted_at'])
+            if self.order:
+                self.order.status = OrderStatus.ACCEPTED_BY_WORKER
+                self.order.save(update_fields=['status'])
 
     def refuse(self, reason):
         """
@@ -151,14 +157,13 @@ class Task(TimestampedModel):
         - Связанный заказ переводит в WORKER_REFUSED
         """
         from django.utils import timezone
-        self.status = self.TaskStatus.REFUSED
-        self.refusal_comment = reason
-        self.save(update_fields=['status', 'refusal_comment'])
-        
-        # Обновляем статус заказа если есть
-        if self.order:
-            self.order.status = self.order.OrderStatus.WORKER_REFUSED
-            self.order.save(update_fields=['status'])
+        with transaction.atomic():
+            self.status = TaskStatus.REFUSED
+            self.refusal_comment = reason
+            self.save(update_fields=['status', 'refusal_comment'])
+            if self.order:
+                self.order.status = OrderStatus.WORKER_REFUSED
+                self.order.save(update_fields=['status'])
 
     def complete(self):
         """
@@ -169,9 +174,10 @@ class Task(TimestampedModel):
         - Устанавливает completed_at = текущее время
         """
         from django.utils import timezone
-        self.status = self.TaskStatus.COMPLETED
-        self.completed_at = timezone.now()
-        self.save(update_fields=['status', 'completed_at'])
+        with transaction.atomic():
+            self.status = TaskStatus.COMPLETED
+            self.completed_at = timezone.now()
+            self.save(update_fields=['status', 'completed_at'])
 
     def confirm(self, confirmed_by):
         """
@@ -183,15 +189,14 @@ class Task(TimestampedModel):
         - Связанный заказ переводит в IN_PROGRESS (если есть)
         """
         from django.utils import timezone
-        self.status = self.TaskStatus.CONFIRMED
-        self.confirmed_at = timezone.now()
-        self.confirmed_by = confirmed_by
-        self.save(update_fields=['status', 'confirmed_at', 'confirmed_by'])
-        
-        # Обновляем статус заказа если есть
-        if self.order:
-            self.order.status = self.order.OrderStatus.IN_PROGRESS
-            self.order.save(update_fields=['status'])
+        with transaction.atomic():
+            self.status = TaskStatus.CONFIRMED
+            self.confirmed_at = timezone.now()
+            self.confirmed_by = confirmed_by
+            self.save(update_fields=['status', 'confirmed_at', 'confirmed_by'])
+            if self.order:
+                self.order.status = OrderStatus.IN_PROGRESS
+                self.order.save(update_fields=['status'])
 
 
 class WorkRecord(TimestampedModel):
@@ -240,7 +245,7 @@ class WorkRecord(TimestampedModel):
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records')
     quantity = models.DecimalField(max_digits=15, decimal_places=3)
     unit = models.CharField(max_length=20, choices=UnitChoices.choices)
-    photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True)
+    photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True, validators=[validate_image_upload])
     comment = models.TextField(blank=True, default='')
     status = models.CharField(max_length=30, choices=WorkStatus.choices, default=WorkStatus.AWAITING_CONFIRMATION, db_index=True)
     confirmed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_works')
@@ -288,23 +293,50 @@ class WorkRecord(TimestampedModel):
         """
         Подтверждает выполненную работу администратором/владельцем.
 
+        Использует ProductionPipeline для полной обработки:
+        - Списание сырья по рецепту
+        - Добавление готовой продукции
+        - Создание истории движения склада
+        - Начисление оплаты работнику
+        - Обновление статуса заказа
+        - Создание уведомлений
+
+        ВНИМАНИЕ: Не вызывает self.task.confirm(), т.к. pipeline
+        уже обрабатывает обновление статуса заказа. Вызов task.confirm()
+        привёл бы к перезаписи статуса (READY → IN_PROGRESS).
+
         Логическая цепочка:
         - Устанавливает status = CONFIRMED
         - Устанавливает confirmed_at и confirmed_by
         - Устанавливает labor_cost если передан
-        - Обновляет связанную задачу если есть
+        - Запускает production pipeline через services.process_work_confirmation
+        - Подтверждает задачу (без изменения статуса заказа)
         """
         from django.utils import timezone
-        self.status = self.WorkStatus.CONFIRMED
-        self.confirmed_at = timezone.now()
-        self.confirmed_by = confirmed_by
-        if labor_cost is not None:
-            self.labor_cost = labor_cost
-        self.save(update_fields=['status', 'confirmed_at', 'confirmed_by', 'labor_cost'])
-        
-        # Обновляем связанную задачу если есть
-        if self.task:
-            self.task.confirm(confirmed_by)
+        with transaction.atomic():
+            self.status = self.WorkStatus.CONFIRMED
+            self.confirmed_at = timezone.now()
+            self.confirmed_by = confirmed_by
+            if labor_cost is not None:
+                self.labor_cost = labor_cost
+            self.save(update_fields=['status', 'confirmed_at', 'confirmed_by', 'labor_cost'])
+
+            # Запускаем production pipeline (обновляет заказ, склад, платежи)
+            from .services import process_work_confirmation
+            try:
+                process_work_confirmation(self, confirmed_by, labor_cost)
+            except Exception:
+                logger.exception(
+                    f"Production pipeline failed for work #{self.id}"
+                )
+                raise
+
+            # Подтверждаем задачу (только статус, без order.status — pipeline уже сделал это)
+            if self.task:
+                self.task.status = TaskStatus.CONFIRMED
+                self.task.confirmed_at = timezone.now()
+                self.task.confirmed_by = confirmed_by
+                self.task.save(update_fields=['status', 'confirmed_at', 'confirmed_by'])
 
     def reject(self, reason):
         """
@@ -326,22 +358,23 @@ class WorkRecord(TimestampedModel):
         - Ищет соответствующую ставку для продукта и операции
         - Умножает ставку на количество
         - Возвращает рассчитанную стоимость
+
+        Возвращает:
+            Decimal - рассчитанная стоимость труда или 0
         """
         from apps.finance.models import LaborRate
-        
+
         if not self.product:
-            return 0
-        
-        # Ищем ставку для продукта (по умолчанию - резка)
+            return Decimal('0')
+
         try:
             rate = LaborRate.objects.filter(
                 product=self.product,
                 operation=LaborRate.OperationType.CUTTING
             ).first()
-            
             if rate:
                 return rate.rate_per_unit * self.quantity
-        except:
-            pass
-        
-        return 0
+        except Exception as e:
+            logger.error(f"Failed to calculate labor cost for work #{self.id}: {e}")
+
+        return Decimal('0')

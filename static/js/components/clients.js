@@ -75,17 +75,17 @@ class ClientsComponent {
                         <td style="padding: 10px;">${c.address || '-'}</td>
                         <td style="padding: 10px;">
                             <span class="badge ${c.is_active ? 'badge-success' : 'badge-secondary'}">
-                                ${c.is_active ? (c.is_archived ? 'Архив' : 'Актив') : 'Неактив'}
+                                ${(window.i18n && window.i18n.translate) ? (c.is_active ? (c.is_archived ? window.i18n.translate('clients.archived_label') : window.i18n.translate('clients.active_label')) : window.i18n.translate('clients.inactive_label')) : (c.is_active ? (c.is_archived ? 'Архив' : 'Актив') : 'Неактив')}
                             </span>
                         </td>
                         <td style="padding: 10px;">
-                            ${c.has_debt ? '<span style="color: red;">Қарз бор</span>' : '-'}
+                            ${c.has_debt ? '<span style="color: red;">' + ((window.i18n && window.i18n.translate) ? window.i18n.translate('clients.has_debt_label') : 'Қарз бор') + '</span>' : '-'}
                         </td>
                         <td style="padding: 10px;">
                             <button class="btn btn-sm btn-info" onclick="window.router.navigate('#clients/${c.id}')">
                                 <span data-i18n="common.view">Кўриш</span>
                             </button>
-                            ${!c.is_archived ? `<button class="btn btn-sm btn-danger archive-client" data-id="${c.id}">Archive</button>` : ''}
+                            ${!c.is_archived ? `<button class="btn btn-sm btn-danger archive-client" data-id="${c.id}">${(window.i18n && window.i18n.translate) ? window.i18n.translate('clients.archive_btn') : 'Archive'}</button>` : ''}
                         </td>
                     </tr>
                 `).join('');
@@ -110,7 +110,27 @@ class ClientsComponent {
         filter.addEventListener('change', () => this.loadClients(container));
 
         const addBtn = container.querySelector('#add-client-btn');
-        addBtn.addEventListener('click', () => this.showAddClientModal(container));
+        if (addBtn) {
+            addBtn.addEventListener('click', () => this.showAddClientModal(container));
+        }
+
+        // Используем делегирование для archive кнопок и удаляем старый listener
+        if (this._archiveHandler) {
+            container.removeEventListener('click', this._archiveHandler);
+        }
+        this._archiveHandler = async (event) => {
+            const button = event.target.closest('.archive-client');
+            if (!button) return;
+            if (!await window.confirmation.confirm('Архивга юбориш?')) return;
+            try {
+                await window.api.request(`/clients/${button.dataset.id}/archive/`, { method: 'POST' });
+                window.toast.success('Мижоз архивланди');
+                await this.loadClients(container);
+            } catch (error) {
+                window.toast.error(error.data?.detail || 'Архивлаш хатоси');
+            }
+        };
+        container.addEventListener('click', this._archiveHandler);
     }
 
     /**
@@ -171,22 +191,10 @@ class ClientsComponent {
                     body: JSON.stringify(data)
                 });
                 modal.remove();
-                window.toast.success('Client created successfully');
+                window.toast.success('Мижоз яратилди');
                 await this.loadClients(container);
             } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to add client');
-            }
-        });
-        container.addEventListener('click', async (event) => {
-            const button = event.target.closest('.archive-client');
-            if (!button) return;
-            if (!await window.confirmation.confirm('Archive this client?')) return;
-            try {
-                await window.api.request(`/clients/${button.dataset.id}/archive/`, { method: 'POST' });
-                window.toast.success('Client archived');
-                await this.loadClients(container);
-            } catch (error) {
-                window.toast.error(error.data?.detail || 'Failed to archive client');
+                window.toast.error(error.data?.detail || 'Мижоз қўшиш хатоси');
             }
         });
     }

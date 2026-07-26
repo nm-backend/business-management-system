@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from django.test import SimpleTestCase, TestCase
 
-from apps.core import permissions as perms
+from core import permissions as perms
 from apps.core.models import Currency, ExchangeRate
 
 

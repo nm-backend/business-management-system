@@ -5,7 +5,7 @@ URL configuration for finance API.
 """
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ExpenseViewSet, LaborRateViewSet, WorkerPaymentViewSet
+from .views import ExpenseViewSet, LaborRateViewSet, WorkerPaymentViewSet, AnalyticsView
 
 router = DefaultRouter()
 router.register(r'expenses', ExpenseViewSet, basename='expense')
@@ -14,4 +14,5 @@ router.register(r'worker-payments', WorkerPaymentViewSet, basename='workerpaymen
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('analytics/', AnalyticsView.as_view(), name='finance-analytics'),
 ]
