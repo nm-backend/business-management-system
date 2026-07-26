@@ -109,6 +109,23 @@ def _send_to_telegram(filepath, filename, config, company_name):
     return str(data['result']['message_id'])
 
 
+def _redact_secrets(message, config):
+    """
+    Вырезает секреты из текста ошибки перед сохранением в БД.
+
+    error_message отдаётся через API (/api/v1/backup/logs/), а исключения
+    requests/boto3 могут содержать токен бота или ключи S3.
+    """
+    for secret in (
+        getattr(config, 'telegram_bot_token', ''),
+        getattr(config, 's3_secret_key', ''),
+        getattr(config, 's3_access_key', ''),
+    ):
+        if secret:
+            message = message.replace(secret, '***')
+    return message
+
+
 def _cleanup_old_backups(config):
     """Удаляет старые backup-файлы (keep_last = 7 по умолчанию)."""
     from .models import BackupLog
@@ -193,7 +210,10 @@ def run_backup_task(self, company_id, user_id=None):
     except Exception as e:
         logger.error(f'Backup failed for company {company_id}: {e}')
         log.status = BackupLog.Status.FAILED
-        log.error_message = str(e)
+        # Сообщения об ошибках сохраняются в БД и отдаются через API. Ошибки
+        # requests включают полный URL, а он содержит токен Telegram-бота
+        # (https://api.telegram.org/bot<TOKEN>/...) — вырезаем его.
+        log.error_message = _redact_secrets(str(e), config)
 
     finally:
         log.duration_seconds = round(time.time() - start_time, 1)

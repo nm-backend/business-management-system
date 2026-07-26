@@ -1,15 +1,20 @@
 """
 API views for backup management.
-Доступны только владельцу компании.
+
+ТОЛЬКО супер-администратор платформы: pg_dump выгружает базу ЦЕЛИКОМ (данные
+всех компаний), поэтому доступ владельца компании означал бы утечку данных
+других арендаторов в его S3/Telegram. Конфигурация одна на платформу
+(company=None).
 """
+import json
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django_celery_beat.models import PeriodicTask, IntervalSchedule
 
-from apps.core.permissions import IsCompanyMember
-from core.permissions import IsOwner
+from apps.core.permissions import IsSuperAdmin
 from .models import BackupConfig, BackupLog
 from .tasks import run_backup_task
 
@@ -21,10 +26,10 @@ class BackupConfigView(APIView):
     GET — возвращает текущую конфигурацию (или дефолтную, если ещё не создана)
     PATCH — обновляет настройки
     """
-    permission_classes = [IsCompanyMember, IsOwner]
+    permission_classes = [IsSuperAdmin]
 
     def get(self, request):
-        config, _ = BackupConfig.objects.get_or_create(company=request.user.company)
+        config, _ = BackupConfig.objects.get_or_create(company=None)
         return Response({
             'is_enabled': config.is_enabled,
             'schedule': config.schedule,
@@ -40,7 +45,7 @@ class BackupConfigView(APIView):
         })
 
     def patch(self, request):
-        config, _ = BackupConfig.objects.get_or_create(company=request.user.company)
+        config, _ = BackupConfig.objects.get_or_create(company=None)
         allowed_fields = [
             'is_enabled', 'schedule', 'storage', 'keep_last',
             's3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix',
@@ -67,7 +72,7 @@ class BackupConfigView(APIView):
 
     def _sync_beat_schedule(self, config):
         """Создаёт/обновляет/удаляет PeriodicTask в Celery Beat."""
-        task_name = f'backup-company-{config.company_id}'
+        task_name = 'backup-platform'
         if not config.is_enabled:
             PeriodicTask.objects.filter(name=task_name).delete()
             return
@@ -91,7 +96,9 @@ class BackupConfigView(APIView):
             defaults={
                 'task': 'apps.backup.tasks.run_backup_task',
                 'interval': schedule,
-                'args': f'[{config.company_id}, null]',
+                # json.dumps, а не f-string: при company_id=None f-string давал
+                # '[None, null]' — невалидный JSON, и beat не смог бы запустить задачу.
+                'args': json.dumps([config.company_id, None]),
                 'enabled': True,
             },
         )
@@ -101,16 +108,16 @@ class BackupTriggerView(APIView):
     """
     POST /api/v1/backup/trigger/ — ручной запуск backup.
     """
-    permission_classes = [IsCompanyMember, IsOwner]
+    permission_classes = [IsSuperAdmin]
 
     def post(self, request):
-        config, _ = BackupConfig.objects.get_or_create(company=request.user.company)
+        config, _ = BackupConfig.objects.get_or_create(company=None)
         if not config.is_enabled:
             return Response({'error': 'Backup is not enabled'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Запускаем Celery задачу асинхронно
         run_backup_task.delay(
-            company_id=request.user.company_id,
+            company_id=None,          # платформенный бэкап: дамп всей БД
             user_id=request.user.id,
         )
         return Response({'status': 'started', 'message': 'Backup запущен'})
@@ -120,10 +127,10 @@ class BackupLogsView(APIView):
     """
     GET /api/v1/backup/logs/ — история backup'ов.
     """
-    permission_classes = [IsCompanyMember, IsOwner]
+    permission_classes = [IsSuperAdmin]
 
     def get(self, request):
-        logs = BackupLog.objects.filter(company=request.user.company)[:20]
+        logs = BackupLog.objects.filter(company=None)[:20]
         return Response([{
             'id': log.id,
             'status': log.status,

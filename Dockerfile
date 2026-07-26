@@ -35,6 +35,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
         netcat-openbsd \
         libpq5 \
+        postgresql-client \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 

@@ -12,10 +12,16 @@ from apps.core.models import TimestampedModel
 
 class BackupConfig(TimestampedModel):
     """
-    Настройки автоматического резервного копирования.
+    Настройки автоматического резервного копирования ПЛАТФОРМЫ.
 
-    Создаётся автоматически для каждой компании при первом обращении.
-    Доступна только владельцу компании.
+    ВАЖНО (безопасность мультитенантности): pg_dump выгружает БАЗУ ЦЕЛИКОМ —
+    данные ВСЕХ компаний в одном файле. Поэтому настройка и запуск бэкапа —
+    операция супер-администратора платформы (company=None), а НЕ владельца
+    компании: иначе владелец компании A получал бы в своё S3/Telegram данные
+    компании B (клиенты, заказы, финансы, хеши паролей).
+
+    company остаётся nullable для совместимости со старыми записями;
+    платформенная конфигурация — единственная строка с company=None.
     """
     class Schedule(models.TextChoices):
         DAILY = 'daily', 'Ежедневно'
@@ -29,7 +35,7 @@ class BackupConfig(TimestampedModel):
 
     company = models.ForeignKey(
         'companies.Company', on_delete=models.CASCADE, related_name='backup_configs',
-        verbose_name='Компания',
+        null=True, blank=True, verbose_name='Компания (null = платформа)',
     )
     is_enabled = models.BooleanField('Авто-бэкап включён', default=False)
     schedule = models.CharField(
@@ -77,7 +83,7 @@ class BackupLog(TimestampedModel):
 
     company = models.ForeignKey(
         'companies.Company', on_delete=models.CASCADE, related_name='backup_logs',
-        verbose_name='Компания',
+        null=True, blank=True, verbose_name='Компания (null = платформа)',
     )
     status = models.CharField('Статус', max_length=10, choices=Status.choices, default=Status.RUNNING)
     file_name = models.CharField('Имя файла', max_length=255, blank=True)
