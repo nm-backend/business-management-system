@@ -1,0 +1,20 @@
+- main [ref=e4]:
+  - generic [ref=e7]:
+    - img "SkladPro" [ref=e8]
+    - heading "SkladPro.Nod" [level=2] [ref=e9]
+    - paragraph [ref=e10]: Бизнесни бошқариш тизими
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - generic [ref=e14]: Фойдаланувчи номи
+          - textbox "Фойдаланувчи номи" [ref=e15]
+        - generic [ref=e16]:
+          - generic [ref=e17]: Парол
+          - textbox "Парол" [ref=e18]
+        - button "Тизимга кириш" [ref=e19] [cursor=pointer]
+      - link "Менда кириш коди бор" [ref=e21] [cursor=pointer]:
+        - /url: "#"
+    - combobox [ref=e23]:
+      - option "Ўзбекча" [selected]
+      - option "Русский"
+      - option "Кыргызча"
