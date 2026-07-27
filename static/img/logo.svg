@@ -1,24 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="SkladPro">
   <defs>
-    <linearGradient id="skp-steel" x1="18" y1="8" x2="46" y2="42" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#A7AEB8"/>
-      <stop offset="1" stop-color="#5A626D"/>
+    <linearGradient id="skp-steel" x1="14" y1="8" x2="50" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B6BDC7"/>
+      <stop offset=".55" stop-color="#7C848F"/>
+      <stop offset="1" stop-color="#4E555F"/>
     </linearGradient>
-    <linearGradient id="skp-gold" x1="9" y1="30" x2="55" y2="54" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#F5C24A"/>
-      <stop offset="1" stop-color="#E09B25"/>
+    <linearGradient id="skp-gold" x1="10" y1="30" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7CB55"/>
+      <stop offset="1" stop-color="#DE9A1F"/>
+    </linearGradient>
+    <linearGradient id="skp-cube-top" x1="36" y1="18" x2="50" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8B939E"/>
+      <stop offset="1" stop-color="#646C77"/>
     </linearGradient>
   </defs>
 
-  <!-- Золотая опора («ковш» склада): нижняя половина шестигранника -->
-  <path d="M9 29v10.2a3 3 0 0 0 1.5 2.6L30.5 54.4a3 3 0 0 0 3 0L53.5 41.8a3 3 0 0 0 1.5-2.6V29L32 43.4Z"
+  <!-- Золотая опора: нижние грани шестигранника, «ковш» склада -->
+  <path d="M7 27.5 18.2 34v9.4L32 51.4l13.8-8V34L57 27.5v19.8L32 61.8 7 47.3Z"
         fill="url(#skp-gold)"/>
 
-  <!-- Серая «S», вписанная в грани шестигранника -->
-  <path d="M45 12H27.5a6.75 6.75 0 0 0 0 13.5h9a6.75 6.75 0 0 1 0 13.5H19"
-        fill="none" stroke="url(#skp-steel)" stroke-width="7" stroke-linecap="square"/>
+  <!-- Серая «S» из угловых сегментов, вписанная в грани шестигранника -->
+  <path d="M49 9.5 25.5 9.5 13 22l8.5 8.5H36l3 3-3 3H15v9h23.5L51 33 42.5 24.5H28l-3-3 3-3h21Z"
+        fill="url(#skp-steel)"/>
 
-  <!-- Кубик-груз: связывает знак со складской темой -->
-  <path d="M38.5 22.5l5.5-3.2 5.5 3.2v6.4l-5.5 3.2-5.5-3.2Z" fill="#4B525C"/>
-  <path d="M38.5 22.5l5.5 3.2 5.5-3.2-5.5-3.2Z" fill="#6E7681"/>
+  <!-- Кубик-груз: складская тема -->
+  <path d="M38.6 21.6 45 18l6.4 3.6v7.2L45 32.4l-6.4-3.6Z" fill="#454C56"/>
+  <path d="M38.6 21.6 45 25.2l6.4-3.6L45 18Z" fill="url(#skp-cube-top)"/>
+  <path d="M45 25.2v7.2l6.4-3.6v-7.2Z" fill="#5C646F"/>
 </svg>
