@@ -511,7 +511,8 @@
     "disabled": "Өчүрүлгөн",
     "currency": "сом",
     "page_not_found": "Баракча табылган жок",
-    "page_load_error": "Баракчаны жүктөө мүмкүн эмес"
+    "page_load_error": "Баракчаны жүктөө мүмкүн эмес",
+    "select": "— Тандаңыз —"
   },
   "admin_analytics": {
     "title": "Операциялык аналитика",

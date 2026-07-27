@@ -511,7 +511,8 @@
     "disabled": "Ўчирилган",
     "currency": "сўм",
     "page_not_found": "Саҳифа топилмади",
-    "page_load_error": "Саҳифани юклаб бўлмади"
+    "page_load_error": "Саҳифани юклаб бўлмади",
+    "select": "— Танланг —"
   },
   "admin_analytics": {
     "title": "Операцион таҳлил",

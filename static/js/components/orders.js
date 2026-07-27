@@ -71,7 +71,7 @@ class OrdersComponent {
                     ${window.ui.orderBadge(o.status)}
                 </div>
                 <div class="text-sm text-muted">
-                    ${window.ui.escape(o.product_name || o.custom_product_name || '-')} — ${window.ui.qty(o.quantity)} ${window.ui.escape(o.unit)}
+                    ${window.ui.escape(o.product_name || o.custom_product_name || '-')} — ${window.ui.qty(o.quantity)} <span data-i18n="units.${o.unit}"></span>
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
                     <div>
@@ -110,7 +110,7 @@ class OrdersComponent {
             ${shortages}
             <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">
                 ${row('orders.product', window.ui.escape(o.product_name || o.custom_product_name || '-'))}
-                ${row('orders.quantity', `${window.ui.qty(o.quantity)} ${window.ui.escape(o.unit)}`)}
+                ${row('orders.quantity', `${window.ui.qty(o.quantity)} <span data-i18n="units.${o.unit}"></span>`)}
                 ${row('orders.deadline', o.deadline ? window.ui.datetime(o.deadline) : '')}
                 ${row('orders.worker', window.ui.escape(o.worker_name || ''))}
                 ${row('orders.payment_status', window.ui.paymentBadge(o.payment_status))}
@@ -128,9 +128,16 @@ class OrdersComponent {
                     ${user.is_owner && o.payment_status !== 'paid' ? `
                         <button class="btn btn-success btn-sm" id="add-payment" data-i18n="orders.add_payment"></button>` : ''}
                     ${!['delivered', 'cancelled'].includes(o.status) ? `
-                        <button class="btn btn-secondary btn-sm" id="edit-order" data-i18n="common.edit"></button>
+                        <button class="btn btn-secondary btn-sm" id="edit-order" data-i18n="common.edit"></button>` : ''}
+                    <!-- Отмена скрыта для оплаченных заказов: API её отклоняет
+                         (деньги уже приняты, отмена их не возвращает). -->
+                    ${!['delivered', 'cancelled'].includes(o.status) && Number(o.paid_amount || 0) <= 0 ? `
                         <button class="btn btn-danger btn-sm" id="cancel-order" data-i18n="common.cancel"></button>` : ''}
-                </div>` : ''}
+                </div>
+                ${!['delivered', 'cancelled'].includes(o.status) && Number(o.paid_amount || 0) > 0 ? `
+                    <p class="text-xs text-muted" style="margin-top:8px;">
+                        По заказу есть оплата — отмена недоступна. Возврат оформите расходом «Возврат клиенту».
+                    </p>` : ''}` : ''}
         `);
 
         const bind = (id, handler) => {
@@ -275,7 +282,10 @@ class OrdersComponent {
             </p>
             <form id="payment-form">
                 <div class="form-group"><label data-i18n="common.amount"></label>
-                    <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required value="${debt || ''}"></div>
+                    <!-- max=долг: API отклоняет переплату (Order.apply_payment_amount),
+                         поэтому форма не должна её даже предлагать. -->
+                    <input name="amount" type="number" step="0.01" min="0.01" max="${debt}"
+                           class="form-control" required value="${debt || ''}"></div>
                 <div class="form-group"><label data-i18n="common.payment_method"></label>
                     <select name="payment_method" class="form-control">
                         <option value="cash" data-i18n="common.cash"></option>

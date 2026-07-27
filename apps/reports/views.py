@@ -117,10 +117,20 @@ def _period_financials(company_id, date_from, date_to):
         Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
         .aggregate(s=Sum('amount'))['s']
     )
+    # Выплаты работникам — отдельный отток денег, они НЕ попадают в Expense
+    # (это разные журналы: Expense заполняют вручную, WorkerPayment создаётся
+    # при выплате). Касса ниже уже вычитает их отдельной строкой, а чистая
+    # прибыль — не вычитала, и на сумму всех выплат была завышена.
+    worker_payments = money(
+        WorkerPayment.objects.filter(company_id=company_id,
+                                     payment_date__range=(date_from, date_to))
+        .aggregate(s=Sum('amount'))['s']
+    )
     return {
         'revenue': revenue,
         'expenses_total': expenses_total,
-        'net_profit': revenue - cost_of_goods - expenses_total,
+        'worker_payments': worker_payments,
+        'net_profit': revenue - cost_of_goods - expenses_total - worker_payments,
     }
 
 
@@ -195,7 +205,9 @@ def owner_analytics_data(company_id, date_from, date_to):
     prev_to = date_from - datetime.timedelta(days=1)
     prev_from = prev_to - datetime.timedelta(days=span - 1)
     prev = _period_financials(company_id, prev_from, prev_to)
-    net_profit = revenue - cost_of_goods - expenses_total
+    # Выплаты работникам вычитаются наравне с расходами: это реальные деньги,
+    # ушедшие из кассы за период (см. worker_payments выше и расчёт cash).
+    net_profit = revenue - cost_of_goods - expenses_total - worker_payments
 
     # Активные сотрудники (админы + работники, не заблокированы, не в архиве)
     active_employees = User.objects.filter(
@@ -247,7 +259,7 @@ def owner_analytics_data(company_id, date_from, date_to):
         'losses': losses,
         'owner_withdrawal': owner_withdrawal,
         'worker_payments': worker_payments,
-        'net_profit': revenue - cost_of_goods - expenses_total,
+        'net_profit': net_profit,
         'cash': cash,
         'client_debts': client_debts,
         'worker_debts': worker_debts,

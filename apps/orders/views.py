@@ -198,8 +198,20 @@ class OrderViewSet(CompanyScopedViewSet):
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
-        """Отменяет заказ."""
+        """
+        Отменяет заказ.
+
+        Оплаченный заказ отменить нельзя: отмена не возвращает деньги, долг
+        клиента пересчитывается — и уже принятая оплата просто повисала бы
+        ни на чём. Возврат оформляется расходом категории «Возврат клиенту».
+        """
         order = self.get_object()
+        if (order.paid_amount or 0) > 0:
+            return Response(
+                {'detail': 'По заказу есть оплата — отменить нельзя. '
+                           'Оформите возврат расходом «Возврат клиенту».'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         order.status = Order.Status.CANCELLED
         order.save(update_fields=['status'])
         order.client.recalculate_financials()

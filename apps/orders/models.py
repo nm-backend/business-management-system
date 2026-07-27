@@ -112,11 +112,26 @@ class Order(TimestampedModel, SoftDeleteModel):
         оплаты одного заказа читали одинаковый paid_amount, и одна перезаписывала
         другую — итог занижался, заказ ошибочно оставался «частично оплачен».
         select_for_update сериализует параллельные оплаты одного заказа.
+
+        ПЕРЕПЛАТА: сумма сверх долга по заказу отклоняется. Проверка стоит ПОД
+        блокировкой строки — иначе две одновременные оплаты, каждая в пределах
+        долга, вместе могли бы его превысить. Отменённый заказ оплатить нельзя.
         """
         from django.db import transaction
+
+        from rest_framework.exceptions import ValidationError
+
         with transaction.atomic():
             locked = Order.objects.select_for_update().get(pk=self.pk)
-            locked.paid_amount = (locked.paid_amount or Decimal('0')) + amount
+            if locked.status == Order.Status.CANCELLED:
+                raise ValidationError({'amount': 'Заказ отменён — оплату принять нельзя.'})
+            already_paid = locked.paid_amount or Decimal('0')
+            debt = (locked.total_amount or Decimal('0')) - already_paid
+            if amount > debt:
+                raise ValidationError({
+                    'amount': f'Сумма больше долга по заказу. Осталось оплатить: {debt}.'
+                })
+            locked.paid_amount = already_paid + amount
             locked.save(update_fields=['paid_amount'])
             locked.update_payment_status()
         self.refresh_from_db()

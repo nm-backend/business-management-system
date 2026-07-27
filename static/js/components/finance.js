@@ -243,7 +243,7 @@ class FinanceComponent {
             <form id="worker-payment-form">
                 <div class="form-group"><label data-i18n="finance.worker"></label>
                     <select name="worker" class="form-control" required>
-                        <option value=""></option>
+                        <option value="" data-i18n="common.select"></option>
                         ${workers.map((w) => `<option value="${w.id}">${window.ui.escape(w.full_name || w.username)}</option>`).join('')}
                     </select></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -315,7 +315,7 @@ class FinanceComponent {
             <form id="rate-form">
                 <div class="form-group"><label data-i18n="finance.product"></label>
                     <select name="product" class="form-control" required>
-                        <option value=""></option>
+                        <option value="" data-i18n="common.select"></option>
                         ${products.map((p) => `<option value="${p.id}">${window.ui.escape(p.name)}</option>`).join('')}
                     </select></div>
                 <div class="form-group"><label data-i18n="finance.operation"></label>
