@@ -19,6 +19,12 @@ if [ "${SKIP_INIT:-0}" != "1" ]; then
 
   echo "▶ Сборка статики..."
   python manage.py collectstatic --noinput
+
+  # Первый супер-администратор для входа в /admin/ (откуда выдаются коды
+  # доступа сотрудникам). Создаётся только если его ещё нет И заданы
+  # DJANGO_SUPERUSER_USERNAME/PASSWORD — на PaaS интерактивной консоли нет.
+  echo "▶ Проверка супер-администратора..."
+  python manage.py ensure_superuser
 fi
 
 echo "🚀 Запуск: $*"
