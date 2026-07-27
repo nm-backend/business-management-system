@@ -123,7 +123,7 @@ class OrdersComponent {
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
                     ${['new', 'awaiting_material', 'worker_refused'].includes(o.status) ? `
                         <button class="btn btn-primary btn-sm" id="send-worker" data-i18n="orders.send_to_worker"></button>` : ''}
-                    ${o.status === 'ready' ? `
+                    ${!['delivered', 'cancelled'].includes(o.status) ? `
                         <button class="btn btn-success btn-sm" id="deliver-order" data-i18n="orders.deliver"></button>` : ''}
                     ${user.is_owner && o.payment_status !== 'paid' ? `
                         <button class="btn btn-success btn-sm" id="add-payment" data-i18n="orders.add_payment"></button>` : ''}
