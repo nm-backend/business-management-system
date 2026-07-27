@@ -85,25 +85,25 @@ class AuditLog(TimestampedModel):
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='audit_logs',
+        related_name='audit_logs', verbose_name='Компания'
     )
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='audit_logs',
+        related_name='audit_logs', verbose_name='Кто выполнил'
     )
-    actor_username = models.CharField(max_length=150, blank=True)
-    actor_role = models.CharField(max_length=20, blank=True)
-    action = models.CharField(max_length=50, choices=Action.choices, db_index=True)
-    object_type = models.CharField(max_length=100, db_index=True)
-    object_id = models.CharField(max_length=64, blank=True, db_index=True)
-    object_repr = models.CharField(max_length=255, blank=True)
-    changes = models.JSONField(default=dict, blank=True)
-    metadata = models.JSONField(default=dict, blank=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True)
+    actor_username = models.CharField(max_length=150, blank=True, verbose_name='Логин исполнителя')
+    actor_role = models.CharField(max_length=20, blank=True, verbose_name='Роль исполнителя')
+    action = models.CharField(max_length=50, choices=Action.choices, db_index=True, verbose_name='Действие')
+    object_type = models.CharField(max_length=100, db_index=True, verbose_name='Тип объекта')
+    object_id = models.CharField(max_length=64, blank=True, db_index=True, verbose_name='ID объекта')
+    object_repr = models.CharField(max_length=255, blank=True, verbose_name='Объект')
+    changes = models.JSONField(default=dict, blank=True, verbose_name='Изменения')
+    metadata = models.JSONField(default=dict, blank=True, verbose_name='Дополнительные данные')
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name='IP-адрес')
+    user_agent = models.TextField(blank=True, verbose_name='Устройство')
 
     class Meta:
         verbose_name = 'Запись журнала'

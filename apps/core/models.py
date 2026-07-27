@@ -86,12 +86,12 @@ class Currency(TimestampedModel):
         - При сохранении автоматически снимает флаг is_default с других валют
         - Используется для конвертации цен и отображения в разных валютах
     """
-    code = models.CharField(max_length=3, unique=True, help_text='ISO 4217 code (e.g. KGS, USD)')
-    name = models.CharField(max_length=100, help_text='Currency name')
-    symbol = models.CharField(max_length=10, help_text='Currency symbol')
-    is_default = models.BooleanField(default=False, db_index=True)
-    is_active = models.BooleanField(default=True, db_index=True)
-    decimal_places = models.PositiveSmallIntegerField(default=2)
+    code = models.CharField(max_length=3, unique=True, help_text='ISO 4217 code (e.g. KGS, USD)', verbose_name='Код')
+    name = models.CharField(max_length=100, help_text='Currency name', verbose_name='Название')
+    symbol = models.CharField(max_length=10, help_text='Currency symbol', verbose_name='Символ')
+    is_default = models.BooleanField(default=False, db_index=True, verbose_name='Валюта по умолчанию')
+    is_active = models.BooleanField(default=True, db_index=True, verbose_name='Активен')
+    decimal_places = models.PositiveSmallIntegerField(default=2, verbose_name='Знаков после запятой')
 
     class Meta:
         verbose_name = 'Валюта'
@@ -131,10 +131,10 @@ class ExchangeRate(TimestampedModel):
         - Сортировка по дате убывания для получения последнего курса
         - Метод get_rate() для получения актуального курса на дату
     """
-    from_currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name='rates_from')
-    to_currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name='rates_to')
-    rate = models.DecimalField(max_digits=12, decimal_places=6, help_text='Exchange rate')
-    effective_date = models.DateField(db_index=True)
+    from_currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name='rates_from', verbose_name='Из валюты')
+    to_currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name='rates_to', verbose_name='В валюту')
+    rate = models.DecimalField(max_digits=12, decimal_places=6, help_text='Exchange rate', verbose_name='Курс')
+    effective_date = models.DateField(db_index=True, verbose_name='Действует с')
 
     class Meta:
         verbose_name = 'Курс валют'

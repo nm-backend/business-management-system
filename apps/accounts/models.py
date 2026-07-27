@@ -155,45 +155,45 @@ class User(AbstractUser):
         on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name='users',
+        related_name='users', verbose_name='Компания'
     )
 
     # Основные поля профиля
-    email = models.EmailField(blank=True, default='')
-    role = models.CharField(max_length=12, choices=Role.choices, default=Role.WORKER, db_index=True)
-    phone = models.CharField(max_length=20, blank=True, default='')
-    full_name = models.CharField(max_length=255, blank=True, default='')
-    avatar = models.ImageField(upload_to='avatars/', blank=True, default='', validators=[validate_file_size])
-    language = models.CharField(max_length=10, choices=Language.choices, default=Language.UZBEK)
+    email = models.EmailField(blank=True, default='', verbose_name='Эл. почта')
+    role = models.CharField(max_length=12, choices=Role.choices, default=Role.WORKER, db_index=True, verbose_name='Роль')
+    phone = models.CharField(max_length=20, blank=True, default='', verbose_name='Телефон')
+    full_name = models.CharField(max_length=255, blank=True, default='', verbose_name='Полное имя')
+    avatar = models.ImageField(upload_to='avatars/', blank=True, default='', validators=[validate_file_size], verbose_name='Фотография')
+    language = models.CharField(max_length=10, choices=Language.choices, default=Language.UZBEK, verbose_name='Язык интерфейса')
 
     # Расширенный профиль сотрудника
-    position = models.CharField(max_length=255, blank=True, default='')      # должность
-    department = models.CharField(max_length=255, blank=True, default='')    # отдел
-    birth_date = models.DateField(null=True, blank=True)                     # дата рождения (опц.)
-    hire_date = models.DateField(null=True, blank=True)                      # дата найма
-    bio = models.TextField(blank=True, default='')                          # о себе
+    position = models.CharField(max_length=255, blank=True, default='', verbose_name='Должность')      # должность
+    department = models.CharField(max_length=255, blank=True, default='', verbose_name='Отдел')    # отдел
+    birth_date = models.DateField(null=True, blank=True, verbose_name='Дата рождения')                     # дата рождения (опц.)
+    hire_date = models.DateField(null=True, blank=True, verbose_name='Дата приёма')                      # дата найма
+    bio = models.TextField(blank=True, default='', verbose_name='О сотруднике')                          # о себе
     status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True,
+        max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True, verbose_name='Статус'
     )
-    last_activity = models.DateTimeField(null=True, blank=True)              # последняя активность
+    last_activity = models.DateTimeField(null=True, blank=True, verbose_name='Последняя активность')              # последняя активность
 
     # Профессиональные навыки (каталог навыков компании)
-    skills = models.ManyToManyField('Skill', blank=True, related_name='employees')
+    skills = models.ManyToManyField('Skill', blank=True, related_name='employees', verbose_name='Навыки')
 
     # Дополнительные права для администраторов
-    can_write_to_owner = models.BooleanField(default=False)
-    can_create_workers = models.BooleanField(default=False)
-    can_see_other_workers = models.BooleanField(default=False)
+    can_write_to_owner = models.BooleanField(default=False, verbose_name='Может писать владельцу')
+    can_create_workers = models.BooleanField(default=False, verbose_name='Может создавать работников')
+    can_see_other_workers = models.BooleanField(default=False, verbose_name='Видит других работников')
 
     # True, если аккаунт заблокирован ИНДИВИДУАЛЬНО владельцем (toggle_active),
     # а не каскадом от блокировки компании. При разблокировке компании такие
     # сотрудники НЕ должны молча восстанавливаться. Не путать с is_active
     # (общий флаг «вход разрешён»).
-    blocked_by_owner = models.BooleanField(default=False)
+    blocked_by_owner = models.BooleanField(default=False, verbose_name='Заблокирован владельцем')
 
     # Временные метки
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Обновлено')
 
     # Кастомный менеджер
     objects = UserManager()
@@ -279,16 +279,16 @@ class PushSubscription(TimestampedModel):
     """
     company = models.ForeignKey(
         'companies.Company', on_delete=models.CASCADE, related_name='push_subscriptions',
-        null=True, blank=True,
+        null=True, blank=True, verbose_name='Компания'
     )
     user = models.ForeignKey(
-        'accounts.User', on_delete=models.CASCADE, related_name='push_subscriptions',
+        'accounts.User', on_delete=models.CASCADE, related_name='push_subscriptions', verbose_name='Пользователь'
     )
-    endpoint = models.URLField(max_length=500)
+    endpoint = models.URLField(max_length=500, verbose_name='Адрес подписки')
     p256dh_key = models.CharField('P256DH ключ', max_length=255)
     auth_key = models.CharField('Auth ключ', max_length=255)
-    user_agent = models.CharField(max_length=500, blank=True, default='')
-    is_active = models.BooleanField(default=True)
+    user_agent = models.CharField(max_length=500, blank=True, default='', verbose_name='Устройство')
+    is_active = models.BooleanField(default=True, verbose_name='Активен')
 
     class Meta:
         verbose_name = 'Push подписка'

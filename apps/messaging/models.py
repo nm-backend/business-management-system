@@ -37,13 +37,13 @@ class Conversation(TimestampedModel):
         GROUP = 'group', 'Групповой чат'
 
     company = models.ForeignKey(
-        'companies.Company', on_delete=models.CASCADE, related_name='conversations',
+        'companies.Company', on_delete=models.CASCADE, related_name='conversations', verbose_name='Компания'
     )
-    kind = models.CharField(max_length=10, choices=Kind.choices, db_index=True)
-    title = models.CharField(max_length=255, blank=True, default='')
+    kind = models.CharField(max_length=10, choices=Kind.choices, db_index=True, verbose_name='Вид')
+    title = models.CharField(max_length=255, blank=True, default='', verbose_name='Заголовок')
     created_by = models.ForeignKey(
         'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='created_conversations',
+        related_name='created_conversations', verbose_name='Кем создано'
     )
 
     class Meta:
@@ -77,12 +77,12 @@ class ConversationParticipant(TimestampedModel):
     и отправленные не самим пользователем.
     """
     conversation = models.ForeignKey(
-        Conversation, on_delete=models.CASCADE, related_name='participants',
+        Conversation, on_delete=models.CASCADE, related_name='participants', verbose_name='Беседа'
     )
     user = models.ForeignKey(
-        'accounts.User', on_delete=models.CASCADE, related_name='chat_participations',
+        'accounts.User', on_delete=models.CASCADE, related_name='chat_participations', verbose_name='Пользователь'
     )
-    last_read_at = models.DateTimeField(null=True, blank=True)
+    last_read_at = models.DateTimeField(null=True, blank=True, verbose_name='Прочитано до')
 
     class Meta:
         verbose_name = 'Участник беседы'
@@ -109,16 +109,16 @@ class ChatMessage(TimestampedModel):
     изоляции (и фильтров в админке).
     """
     company = models.ForeignKey(
-        'companies.Company', on_delete=models.CASCADE, related_name='chat_messages',
+        'companies.Company', on_delete=models.CASCADE, related_name='chat_messages', verbose_name='Компания'
     )
     conversation = models.ForeignKey(
         Conversation, on_delete=models.CASCADE, related_name='messages',
         verbose_name='Беседа',
     )
     sender = models.ForeignKey(
-        'accounts.User', on_delete=models.CASCADE, related_name='chat_messages',
+        'accounts.User', on_delete=models.CASCADE, related_name='chat_messages', verbose_name='Отправитель'
     )
-    content = models.TextField()
+    content = models.TextField(verbose_name='Текст сообщения')
 
     class Meta:
         verbose_name = 'Сообщение чата'
@@ -195,15 +195,15 @@ class Notification(TimestampedModel):
         WORK_ACCRUED = 'work_accrued', 'Шахсий иш ҳисобланди'
         MATERIAL_SHORTAGE = 'material_shortage', 'Материал етишмовчилиги'
 
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='notifications', null=True)
-    user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='notifications')
-    type = models.CharField(max_length=30, choices=NotificationType.choices, db_index=True)
-    title = models.CharField(max_length=255)
-    message = models.TextField()
-    is_read = models.BooleanField(default=False)
-    read_at = models.DateTimeField(null=True, blank=True)
-    related_order = models.ForeignKey('orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
-    related_task = models.ForeignKey('production.Task', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='notifications', null=True, verbose_name='Компания')
+    user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='notifications', verbose_name='Пользователь')
+    type = models.CharField(max_length=30, choices=NotificationType.choices, db_index=True, verbose_name='Тип')
+    title = models.CharField(max_length=255, verbose_name='Заголовок')
+    message = models.TextField(verbose_name='Сообщение')
+    is_read = models.BooleanField(default=False, verbose_name='Прочитано')
+    read_at = models.DateTimeField(null=True, blank=True, verbose_name='Когда прочитано')
+    related_order = models.ForeignKey('orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications', verbose_name='Связанный заказ')
+    related_task = models.ForeignKey('production.Task', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications', verbose_name='Связанная задача')
 
     class Meta:
         """

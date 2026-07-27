@@ -94,15 +94,15 @@ class Expense(TimestampedModel):
         - Фото чека для подтверждения
         - Категоризация расходов
     """
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='expenses', null=True)
-    category = models.CharField(max_length=30, choices=ExpenseCategory.choices, db_index=True)
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='expenses', null=True, verbose_name='Компания')
+    category = models.CharField(max_length=30, choices=ExpenseCategory.choices, db_index=True, verbose_name='Категория')
     amount = models.DecimalField(max_digits=15, decimal_places=2,
-                                 validators=[MinValueValidator(Decimal('0.01'))])
-    date = models.DateField(db_index=True)
-    comment = models.TextField(blank=True, default='')
-    receipt_photo = models.ImageField(upload_to='finance/receipts/', blank=True, null=True, validators=[validate_file_size])
+                                 validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Сумма')
+    date = models.DateField(db_index=True, verbose_name='Дата')
+    comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
+    receipt_photo = models.ImageField(upload_to='finance/receipts/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото чека')
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='expenses', verbose_name='Кем добавлено')
-    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
+    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH, verbose_name='Способ оплаты')
 
     class Meta:
         """
@@ -164,12 +164,12 @@ class LaborRate(TimestampedModel):
         PACKING = 'packing', 'Қутлаш'
         OTHER = 'other', 'Бошқа'
 
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='labor_rates', null=True)
-    product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.CASCADE, related_name='labor_rates')
-    operation = models.CharField(max_length=20, choices=OperationType.choices)
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='labor_rates', null=True, verbose_name='Компания')
+    product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.CASCADE, related_name='labor_rates', verbose_name='Товар')
+    operation = models.CharField(max_length=20, choices=OperationType.choices, verbose_name='Операция')
     rate_per_unit = models.DecimalField(max_digits=15, decimal_places=2,
-                                        validators=[MinValueValidator(Decimal('0'))])
-    unit = models.CharField(max_length=20, choices=UnitChoices.choices)
+                                        validators=[MinValueValidator(Decimal('0'))], verbose_name='Ставка за единицу')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices, verbose_name='Единица измерения')
 
     class Meta:
         """
@@ -228,13 +228,13 @@ class WorkerPayment(TimestampedModel):
         BONUS = 'bonus', 'Мукофот'
         OTHER = 'other', 'Бошқа'
 
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='worker_payments', null=True)
-    worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='payments')
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='worker_payments', null=True, verbose_name='Компания')
+    worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='payments', verbose_name='Работник')
     amount = models.DecimalField(max_digits=15, decimal_places=2,
-                                 validators=[MinValueValidator(Decimal('0.01'))])
-    payment_date = models.DateField(db_index=True)
-    payment_type = models.CharField(max_length=20, choices=PaymentType.choices, default=PaymentType.SALARY)
-    comment = models.TextField(blank=True, default='')
+                                 validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Сумма')
+    payment_date = models.DateField(db_index=True, verbose_name='Дата оплаты')
+    payment_type = models.CharField(max_length=20, choices=PaymentType.choices, default=PaymentType.SALARY, verbose_name='Вид выплаты')
+    comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='created_payments', verbose_name='Кем добавлено')
 
     class Meta:

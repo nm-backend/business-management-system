@@ -20,17 +20,17 @@ ACTIVE_ORDER_STATUSES = (
 
 
 class Client(TimestampedModel, SoftDeleteModel):
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='clients', null=True)
-    name = models.CharField(max_length=255)
-    phone = models.CharField(max_length=50, blank=True)
-    address = models.TextField(blank=True)
-    comment = models.TextField(blank=True)
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='clients', null=True, verbose_name='Компания')
+    name = models.CharField(max_length=255, verbose_name='Название')
+    phone = models.CharField(max_length=50, blank=True, verbose_name='Телефон')
+    address = models.TextField(blank=True, verbose_name='Адрес')
+    comment = models.TextField(blank=True, verbose_name='Комментарий')
 
     # Финансовые агрегаты (ФИНАНСОВЫЕ ПОЛЯ - только owner).
     # Пересчитываются в recalculate_financials() из заказов и оплат.
-    total_orders_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    total_paid = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    debt = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_orders_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Сумма всех заказов')
+    total_paid = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Всего оплачено')
+    debt = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Долг')
 
     class Meta:
         verbose_name = 'Клиент'
@@ -88,19 +88,19 @@ class Payment(TimestampedModel):
         TRANSFER = 'transfer', 'Перевод'
         OTHER = 'other', 'Другое'
 
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='payments', null=True)
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='payments')
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='payments', null=True, verbose_name='Компания')
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='payments', verbose_name='Клиент')
     order = models.ForeignKey(
-        'orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='payments',
+        'orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='payments', verbose_name='Заказ'
     )
     amount = models.DecimalField(max_digits=15, decimal_places=2,
-                                 validators=[MinValueValidator(Decimal('0.01'))])
-    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH)
-    comment = models.TextField(blank=True)
-    received_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='received_payments')
+                                 validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Сумма')
+    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CASH, verbose_name='Способ оплаты')
+    comment = models.TextField(blank=True, verbose_name='Комментарий')
+    received_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='received_payments', verbose_name='Кем принято')
     # db_index: Meta.ordering сортирует ВСЕ выборки платежей по payment_date,
     # поэтому индекс убирает полную сортировку на больших объёмах.
-    payment_date = models.DateTimeField(db_index=True)
+    payment_date = models.DateTimeField(db_index=True, verbose_name='Дата оплаты')
 
     class Meta:
         verbose_name = 'Оплата'

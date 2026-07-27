@@ -65,22 +65,22 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
         - Поддерживает мягкое удаление (SoftDeleteModel)
         - Автоматические временные метки (TimestampedModel)
     """
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='raw_materials', null=True)
-    name = models.CharField(max_length=255)
-    stone_type = models.CharField(max_length=100, blank=True)
-    color = models.CharField(max_length=100, blank=True)
-    size = models.CharField(max_length=100, blank=True)
-    thickness = models.CharField(max_length=50, blank=True)
-    unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT)
-    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    storage_location = models.CharField(max_length=255, blank=True)
-    photo = models.ImageField(upload_to='materials/', blank=True, null=True, validators=[validate_file_size])
-    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    supplier = models.CharField(max_length=255, blank=True)
-    arrival_date = models.DateField(null=True, blank=True)
-    comment = models.TextField(blank=True)
-    purchase_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    avg_cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='raw_materials', null=True, verbose_name='Компания')
+    name = models.CharField(max_length=255, verbose_name='Название')
+    stone_type = models.CharField(max_length=100, blank=True, verbose_name='Вид камня')
+    color = models.CharField(max_length=100, blank=True, verbose_name='Цвет')
+    size = models.CharField(max_length=100, blank=True, verbose_name='Размер')
+    thickness = models.CharField(max_length=50, blank=True, verbose_name='Толщина')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT, verbose_name='Единица измерения')
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Количество')
+    storage_location = models.CharField(max_length=255, blank=True, verbose_name='Место хранения')
+    photo = models.ImageField(upload_to='materials/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
+    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Минимальный остаток')
+    supplier = models.CharField(max_length=255, blank=True, verbose_name='Поставщик')
+    arrival_date = models.DateField(null=True, blank=True, verbose_name='Дата поступления')
+    comment = models.TextField(blank=True, verbose_name='Комментарий')
+    purchase_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Цена закупки')  # ФИНАНСОВОЕ ПОЛЕ
+    avg_cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Средняя себестоимость')  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         """
@@ -141,17 +141,17 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         - Автоматические временные метки (TimestampedModel)
         - Резервирование под заказы для точного учета
     """
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='finished_products', null=True)
-    name = models.CharField(max_length=255)
-    category = models.CharField(max_length=100, blank=True)
-    unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.IZDELIE)
-    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    photo = models.ImageField(upload_to='products/', blank=True, null=True, validators=[validate_file_size])
-    description = models.TextField(blank=True)
-    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0)
-    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
-    sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='finished_products', null=True, verbose_name='Компания')
+    name = models.CharField(max_length=255, verbose_name='Название')
+    category = models.CharField(max_length=100, blank=True, verbose_name='Категория')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.IZDELIE, verbose_name='Единица измерения')
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Количество')
+    photo = models.ImageField(upload_to='products/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
+    description = models.TextField(blank=True, verbose_name='Описание')
+    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Минимальный остаток')
+    reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Зарезервировано под заказы')
+    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Себестоимость')  # ФИНАНСОВОЕ ПОЛЕ
+    sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Цена продажи')  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         """
@@ -243,16 +243,16 @@ class StockMovement(TimestampedModel):
         ADJUSTMENT = 'adjustment', 'Корректировка'
         LOSS = 'loss', 'Потеря/Брак'
 
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='stock_movements', null=True)
-    movement_type = models.CharField(max_length=20, choices=MovementType.choices, db_index=True)
-    material = models.ForeignKey(RawMaterial, on_delete=models.CASCADE, null=True, blank=True, related_name='movements')
-    product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, null=True, blank=True, related_name='movements')
-    quantity = models.DecimalField(max_digits=15, decimal_places=3)
-    price_per_unit = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-    reason = models.CharField(max_length=255, blank=True)
-    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='stock_movements')
-    related_order_id = models.IntegerField(null=True, blank=True)
-    related_production_id = models.IntegerField(null=True, blank=True)
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='stock_movements', null=True, verbose_name='Компания')
+    movement_type = models.CharField(max_length=20, choices=MovementType.choices, db_index=True, verbose_name='Тип движения')
+    material = models.ForeignKey(RawMaterial, on_delete=models.CASCADE, null=True, blank=True, related_name='movements', verbose_name='Материал')
+    product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, null=True, blank=True, related_name='movements', verbose_name='Товар')
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Количество')
+    price_per_unit = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Цена за единицу')
+    reason = models.CharField(max_length=255, blank=True, verbose_name='Причина')
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='stock_movements', verbose_name='Кем создано')
+    related_order_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного заказа')
+    related_production_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного производства')
 
     class Meta:
         """
@@ -300,11 +300,11 @@ class Recipe(TimestampedModel):
         - Одна продукция может иметь несколько рецептов
         - Можно деактивировать старые рецепты вместо удаления
     """
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='recipes', null=True)
-    product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, related_name='recipes')
-    name = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    is_active = models.BooleanField(default=True)
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='recipes', null=True, verbose_name='Компания')
+    product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, related_name='recipes', verbose_name='Товар')
+    name = models.CharField(max_length=255, verbose_name='Название')
+    description = models.TextField(blank=True, verbose_name='Описание')
+    is_active = models.BooleanField(default=True, verbose_name='Активен')
 
     class Meta:
         """
@@ -345,10 +345,10 @@ class RecipeItem(models.Model):
         - RESTRICT при удалении материала (нельзя удалить материал, используемый в рецептах)
         - Не имеет временных меток (ингредиент является частью рецепта)
     """
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='items')
-    material = models.ForeignKey(RawMaterial, on_delete=models.RESTRICT)
-    quantity_required = models.DecimalField(max_digits=15, decimal_places=3)
-    unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT)
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='items', verbose_name='Рецепт')
+    material = models.ForeignKey(RawMaterial, on_delete=models.RESTRICT, verbose_name='Материал')
+    quantity_required = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Требуемое количество')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT, verbose_name='Единица измерения')
 
     class Meta:
         """

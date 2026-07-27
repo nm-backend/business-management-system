@@ -83,20 +83,20 @@ class Task(TimestampedModel):
         - Отслеживание всего жизненного цикла задачи
         - Связь с заказами и работниками
     """
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='tasks', null=True)
-    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='tasks', null=True, blank=True)
-    worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='tasks')
-    assigned_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='assigned_tasks')
-    status = models.CharField(max_length=20, choices=TaskStatus.choices, default=TaskStatus.PENDING, db_index=True)
-    refusal_reason = models.CharField(max_length=30, choices=RefusalReason.choices, blank=True, default='')
-    refusal_comment = models.TextField(blank=True, default='')
-    assigned_at = models.DateTimeField(auto_now_add=True)
-    accepted_at = models.DateTimeField(null=True, blank=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    confirmed_at = models.DateTimeField(null=True, blank=True)
-    confirmed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_tasks')
-    rejection_comment = models.TextField(blank=True, default='')
-    is_self_assigned = models.BooleanField(default=False)
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='tasks', null=True, verbose_name='Компания')
+    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='tasks', null=True, blank=True, verbose_name='Заказ')
+    worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='tasks', verbose_name='Работник')
+    assigned_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='assigned_tasks', verbose_name='Кем назначено')
+    status = models.CharField(max_length=20, choices=TaskStatus.choices, default=TaskStatus.PENDING, db_index=True, verbose_name='Статус')
+    refusal_reason = models.CharField(max_length=30, choices=RefusalReason.choices, blank=True, default='', verbose_name='Причина отказа')
+    refusal_comment = models.TextField(blank=True, default='', verbose_name='Комментарий к отказу')
+    assigned_at = models.DateTimeField(auto_now_add=True, verbose_name='Назначено')
+    accepted_at = models.DateTimeField(null=True, blank=True, verbose_name='Принято в работу')
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name='Завершено')
+    confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name='Подтверждено')
+    confirmed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_tasks', verbose_name='Кем подтверждено')
+    rejection_comment = models.TextField(blank=True, default='', verbose_name='Комментарий к отклонению')
+    is_self_assigned = models.BooleanField(default=False, verbose_name='Взято работником самостоятельно')
 
     class Meta:
         """
@@ -207,19 +207,19 @@ class WorkRecord(TimestampedModel):
         CONFIRMED = 'confirmed', 'Тасдиқланди'
         REJECTED = 'rejected', 'Рад этилди'
 
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='work_records', null=True)
-    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='work_records', null=True, blank=True)
-    worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='work_records')
-    product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records')
-    quantity = models.DecimalField(max_digits=15, decimal_places=3)
-    unit = models.CharField(max_length=20, choices=UnitChoices.choices)
-    photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True, validators=[validate_file_size])
-    comment = models.TextField(blank=True, default='')
-    status = models.CharField(max_length=30, choices=WorkStatus.choices, default=WorkStatus.AWAITING_CONFIRMATION, db_index=True)
-    confirmed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_works')
-    confirmed_at = models.DateTimeField(null=True, blank=True)
-    rejection_reason = models.TextField(blank=True, default='')
-    labor_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0)  # ФИНАНСОВОЕ ПОЛЕ
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='work_records', null=True, verbose_name='Компания')
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='work_records', null=True, blank=True, verbose_name='Задача')
+    worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='work_records', verbose_name='Работник')
+    product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records', verbose_name='Товар')
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Количество')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices, verbose_name='Единица измерения')
+    photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
+    comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
+    status = models.CharField(max_length=30, choices=WorkStatus.choices, default=WorkStatus.AWAITING_CONFIRMATION, db_index=True, verbose_name='Статус')
+    confirmed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_works', verbose_name='Кем подтверждено')
+    confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name='Подтверждено')
+    rejection_reason = models.TextField(blank=True, default='', verbose_name='Причина отклонения')
+    labor_cost = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Стоимость работы')  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         """

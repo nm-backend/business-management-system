@@ -14,8 +14,8 @@ from apps.core.models import TimestampedModel
 
 
 class Company(TimestampedModel):
-    name = models.CharField(max_length=255, unique=True)
-    is_active = models.BooleanField(default=True, db_index=True)
+    name = models.CharField(max_length=255, unique=True, verbose_name='Название')
+    is_active = models.BooleanField(default=True, db_index=True, verbose_name='Активен')
 
     class Meta:
         verbose_name = 'Компания'

@@ -34,30 +34,30 @@ class Order(TimestampedModel, SoftDeleteModel):
         PARTIAL = 'partial', 'Частичная оплата'
         PAID = 'paid', 'Оплачено'
 
-    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='orders', null=True)
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='orders')
-    product = models.ForeignKey(FinishedProduct, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
-    custom_product_name = models.CharField(max_length=255, blank=True)
+    company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='orders', null=True, verbose_name='Компания')
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='orders', verbose_name='Клиент')
+    product = models.ForeignKey(FinishedProduct, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders', verbose_name='Товар')
+    custom_product_name = models.CharField(max_length=255, blank=True, verbose_name='Название товара (вручную)')
     quantity = models.DecimalField(max_digits=10, decimal_places=2,
-                                   validators=[MinValueValidator(Decimal('0.01'))])
-    unit = models.CharField(max_length=20)
-    deadline = models.DateTimeField(null=True, blank=True)
-    worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders')
-    comment = models.TextField(blank=True)
-    photo = models.ImageField(upload_to='orders/', blank=True, null=True, validators=[validate_file_size])
-    status = models.CharField(max_length=50, choices=Status.choices, default=Status.NEW, db_index=True)
-    payment_status = models.CharField(max_length=50, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
+                                   validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Количество')
+    unit = models.CharField(max_length=20, verbose_name='Единица измерения')
+    deadline = models.DateTimeField(null=True, blank=True, verbose_name='Срок выполнения')
+    worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders', verbose_name='Работник')
+    comment = models.TextField(blank=True, verbose_name='Комментарий')
+    photo = models.ImageField(upload_to='orders/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
+    status = models.CharField(max_length=50, choices=Status.choices, default=Status.NEW, db_index=True, verbose_name='Статус')
+    payment_status = models.CharField(max_length=50, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID, verbose_name='Статус оплаты')
 
     # Финансовые поля (только owner через API).
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0,
-                                       validators=[MinValueValidator(Decimal('0'))])
-    paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+                                       validators=[MinValueValidator(Decimal('0'))], verbose_name='Сумма заказа')
+    paid_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Оплачено')
 
     # Момент первой выдачи клиенту (status -> DELIVERED). Отдельно от updated_at:
     # любая поздняя правка/оплата бампит updated_at, а себестоимость проданного
     # (COGS в reports) должна оставаться в периоде фактической выдачи, иначе
     # поздний платёж задним числом переносил прибыль между месяцами.
-    delivered_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    delivered_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name='Выдан клиенту')
 
     class Meta:
         verbose_name = 'Заказ'
