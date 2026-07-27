@@ -56,9 +56,12 @@ class Skill(TimestampedModel):
         on_delete=models.CASCADE,
         null=True,
         related_name='skills',
+        verbose_name='Компания',
     )
-    name = models.CharField(max_length=100)
-    category = models.CharField(max_length=50, blank=True, default='')
+    name = models.CharField(max_length=100, verbose_name='Название навыка')
+    category = models.CharField(
+        max_length=50, blank=True, default='', verbose_name='Категория',
+    )
 
     class Meta:
         verbose_name = 'Навык (специализация)'

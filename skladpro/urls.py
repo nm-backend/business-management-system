@@ -12,6 +12,12 @@ from drf_spectacular.views import (
 )
 
 
+# Шапка админки: по умолчанию Django показывает «Django administration».
+admin.site.site_header = 'SkladPro.Nod — панель управления'
+admin.site.site_title = 'SkladPro.Nod'
+admin.site.index_title = 'Управление системой'
+
+
 def service_worker(request):
     """Serve sw.js from root so it has natural scope '/' for push notifications."""
     sw_path = Path(settings.STATICFILES_DIRS[0]) / 'sw.js'
