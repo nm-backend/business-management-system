@@ -8,6 +8,9 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>SkladPro.Nod</title>
+    <!-- Favicon: без него вкладка показывала стандартную иконку браузера. -->
+    <link rel="icon" type="image/svg+xml" href="{% static 'img/logo.svg' %}" />
+    <link rel="apple-touch-icon" href="{% static 'img/logo.svg' %}" />
     <link rel="manifest" href="{% static 'manifest.json' %}" />
     <meta name="theme-color" content="#197387" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -31,10 +34,8 @@
       <!-- Desktop Sidebar -->
       <aside class="app-sidebar" id="app-sidebar">
         <a href="#/" class="sidebar-brand">
-          <svg class="sidebar-brand-mark" width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-            <path d="M13 2L5 9v8l8 7 8-7V9l-8-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
-            <path d="M13 2v23M5 9l8 7m0-7l8 7" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" opacity=".4"/>
-          </svg>
+          <img class="sidebar-brand-mark" src="{% static 'img/logo.svg' %}" width="26" height="26"
+               alt="" aria-hidden="true">
           <span>SkladPro</span>
         </a>
         <nav class="sidebar-nav">

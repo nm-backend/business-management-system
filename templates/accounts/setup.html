@@ -1,48 +1,57 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% comment %}
+Первичная настройка платформы: создание СУПЕР-АДМИНИСТРАТОРА.
+
+Эта страница показывается только пока в системе нет ни одного супер-админа
+(см. accounts.template_views.setup_view). Раньше здесь по ошибке стояла форма
+ввода кода доступа — но выдать код некому, пока нет ни одного пользователя,
+поэтому свежая установка становилась недоступной: /accounts/login/ редиректил
+сюда, а отсюда войти было нельзя. Код доступа для приглашённых сотрудников
+живёт на странице входа (login.html), где ему и место.
+{% endcomment %}
+
 {% block content %}
 <div style="display: flex; justify-content: center; align-items: center; min-height: 90vh;">
-    <div class="card" style="width: 100%; max-width: 400px; padding: 32px 28px; text-align: center;">
-        <!-- Brand mark -->
-        <svg width="40" height="40" viewBox="0 0 26 26" fill="none" style="margin: 0 auto 12px;" aria-hidden="true">
-            <path d="M13 2L5 9v8l8 7 8-7V9l-8-7z" stroke="var(--accent, #d67a4b)" stroke-width="1.8" stroke-linejoin="round" fill="none"/>
-            <path d="M13 2v23M5 9l8 7m0-7l8 7" stroke="var(--accent, #d67a4b)" stroke-width="1.5" stroke-linejoin="round" opacity=".35"/>
-        </svg>
-        <h2 style="font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variation-settings: 'SOFT' 60; margin-bottom: 4px;" data-i18n="app.name">SkladPro.Nod</h2>
-        <p class="text-sm text-muted" style="margin-bottom: 24px;">
-            <span data-i18n="auth.access_key_hint"></span>
+    <div class="card" style="width: 100%; max-width: 420px; padding: 32px 28px; text-align: center;">
+        <img src="{% static 'img/logo.svg' %}" alt="SkladPro" width="52" height="52"
+             style="margin: 0 auto 12px; display: block;">
+        <h2 style="font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variation-settings: 'SOFT' 60; margin-bottom: 4px;" data-i18n="setup.welcome">Добро пожаловать в SkladPro.Nod!</h2>
+        <p class="text-sm text-muted" style="margin-bottom: 24px;" data-i18n="setup.description">
+            Создайте супер-администратора платформы для начала работы
         </p>
 
         <div id="error-message" class="alert-box" style="display: none;"></div>
-        <div id="success-message" class="alert-box alert-success" style="display: none;" data-i18n="auth.activate"></div>
+        <div id="success-message" class="alert-box alert-success" style="display: none;" data-i18n="setup.setup_complete"></div>
 
-        <!-- Access Key: step 1 -- verify -->
-        <div id="ak-panel">
-            <form id="ak-verify-form">
-                <div class="form-group" style="text-align: left;">
-                    <label data-i18n="auth.access_key"></label>
-                    <input type="text" id="ak-code" class="form-control" placeholder="SKP-XXXX-XXXX-XXXX"
-                           autocomplete="one-time-code" required style="text-transform: uppercase; letter-spacing: 1px;">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.continue"></button>
-            </form>
-
-            <!-- Access Key: step 2 -- set password -->
-            <form id="ak-redeem-form" style="display: none;">
-                <p id="ak-welcome" style="margin-bottom: 12px; font-weight: 600; color: var(--primary);"></p>
-                <div class="form-group" style="text-align: left;">
-                    <label data-i18n="auth.set_password"></label>
-                    <input type="password" id="ak-password" class="form-control" required minlength="8"
-                           autocomplete="new-password">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.activate"></button>
-            </form>
-        </div>
-
-        <p class="text-xs text-muted" style="margin-top: 16px;">
-            <span data-i18n="auth.access_key_admin_hint"></span>
-        </p>
+        <form id="setup-form">
+            <div class="form-group" style="text-align: left;">
+                <label for="username" data-i18n="auth.username">Имя пользователя</label>
+                <input type="text" id="username" class="form-control" required minlength="3" maxlength="150"
+                       autocomplete="username" autofocus>
+            </div>
+            <div class="form-group" style="text-align: left;">
+                <label for="full-name" data-i18n="setup.full_name">Полное имя</label>
+                <input type="text" id="full-name" class="form-control" required maxlength="255"
+                       autocomplete="name">
+            </div>
+            <div class="form-group" style="text-align: left;">
+                <label for="phone" data-i18n="setup.phone">Телефон</label>
+                <input type="tel" id="phone" class="form-control" maxlength="20" autocomplete="tel">
+            </div>
+            <div class="form-group" style="text-align: left;">
+                <label for="password" data-i18n="auth.password">Пароль</label>
+                <input type="password" id="password" class="form-control" required minlength="8"
+                       autocomplete="new-password">
+            </div>
+            <div class="form-group" style="text-align: left;">
+                <label for="password-confirm" data-i18n="auth.password_confirm">Подтвердите пароль</label>
+                <input type="password" id="password-confirm" class="form-control" required minlength="8"
+                       autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block" data-i18n="setup.create_owner">Создать супер-администратора</button>
+        </form>
 
         <div style="margin-top: 24px;">
             <select id="lang-select" class="form-control" style="width: auto;">
@@ -65,61 +74,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const errorMsg = document.getElementById('error-message');
     const successMsg = document.getElementById('success-message');
-    const verifyForm = document.getElementById('ak-verify-form');
-    const redeemForm = document.getElementById('ak-redeem-form');
+    const form = document.getElementById('setup-form');
     const showError = (msg) => { errorMsg.textContent = msg; errorMsg.style.display = 'flex'; };
-    const clearError = () => { errorMsg.style.display = 'none'; successMsg.style.display = 'none'; };
+    const clearError = () => { errorMsg.style.display = 'none'; };
 
-    // Step 1: Verify access key
-    verifyForm.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
         clearError();
-        successMsg.style.display = 'none';
-        const vBtn = e.target.querySelector('button[type=submit]');
-        if (vBtn.disabled) return;
-        vBtn.disabled = true;
-        const code = document.getElementById('ak-code').value.trim().toUpperCase();
-        try {
-            const resp = await window.api.request('/accounts/access-key/verify/', {
-                method: 'POST', noAuth: true, body: JSON.stringify({ access_key: code }),
-            });
-            if (!resp.valid) { showError(t('auth.access_key_invalid')); return; }
-            document.getElementById('ak-welcome').textContent =
-                `${t('auth.welcome')}, ${resp.employee.full_name} — ${resp.employee.company}`;
-            verifyForm.style.display = 'none';
-            redeemForm.style.display = 'block';
-            document.getElementById('ak-password').focus();
-        } catch (error) {
-            showError(t('auth.access_key_invalid'));
-        } finally {
-            vBtn.disabled = false;
+        const btn = e.target.querySelector('button[type=submit]');
+        if (btn.disabled) return;
+
+        const password = document.getElementById('password').value;
+        const passwordConfirm = document.getElementById('password-confirm').value;
+        if (password !== passwordConfirm) {
+            showError(t('auth.password_mismatch'));
+            return;
         }
-    });
 
-    // Step 2: Set password and activate
-    redeemForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        clearError();
-        const rBtn = e.target.querySelector('button[type=submit]');
-        if (rBtn.disabled) return;
-        rBtn.disabled = true;
-        const code = document.getElementById('ak-code').value.trim().toUpperCase();
-        const password = document.getElementById('ak-password').value;
+        btn.disabled = true;
         try {
-            const fpr = window.api.getFingerprint();
-            const resp = await window.api.request('/accounts/access-key/redeem/', {
+            const resp = await window.api.request('/accounts/setup/owner/', {
                 method: 'POST', noAuth: true,
-                body: JSON.stringify({ access_key: code, new_password: password, fingerprint: fpr }),
+                body: JSON.stringify({
+                    username: document.getElementById('username').value.trim(),
+                    full_name: document.getElementById('full-name').value.trim(),
+                    phone: document.getElementById('phone').value.trim(),
+                    password: password,
+                    password_confirm: passwordConfirm,
+                }),
             });
             window.api.setTokens(resp.tokens.access, resp.tokens.refresh);
             successMsg.style.display = 'flex';
             setTimeout(() => { window.location.href = '/'; }, 800);
         } catch (error) {
-            const detail = error.data?.detail
-                || (error.data?.new_password && error.data.new_password[0])
-                || t('auth.access_key_invalid');
-            showError(detail);
-            rBtn.disabled = false;
+            // DRF отдаёт ошибки полями: показываем первую внятную.
+            const data = error.data || {};
+            const first = data.detail
+                || data.error
+                || (data.username && data.username[0])
+                || (data.password && data.password[0])
+                || (data.full_name && data.full_name[0])
+                || (data.non_field_errors && data.non_field_errors[0]);
+            showError(first || t('errors.server_error'));
+            btn.disabled = false;
         }
     });
 });

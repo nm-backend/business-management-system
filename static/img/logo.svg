@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="SkladPro">
+  <defs>
+    <linearGradient id="skp-steel" x1="18" y1="8" x2="46" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A7AEB8"/>
+      <stop offset="1" stop-color="#5A626D"/>
+    </linearGradient>
+    <linearGradient id="skp-gold" x1="9" y1="30" x2="55" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F5C24A"/>
+      <stop offset="1" stop-color="#E09B25"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Золотая опора («ковш» склада): нижняя половина шестигранника -->
+  <path d="M9 29v10.2a3 3 0 0 0 1.5 2.6L30.5 54.4a3 3 0 0 0 3 0L53.5 41.8a3 3 0 0 0 1.5-2.6V29L32 43.4Z"
+        fill="url(#skp-gold)"/>
+
+  <!-- Серая «S», вписанная в грани шестигранника -->
+  <path d="M45 12H27.5a6.75 6.75 0 0 0 0 13.5h9a6.75 6.75 0 0 1 0 13.5H19"
+        fill="none" stroke="url(#skp-steel)" stroke-width="7" stroke-linecap="square"/>
+
+  <!-- Кубик-груз: связывает знак со складской темой -->
+  <path d="M38.5 22.5l5.5-3.2 5.5 3.2v6.4l-5.5 3.2-5.5-3.2Z" fill="#4B525C"/>
+  <path d="M38.5 22.5l5.5 3.2 5.5-3.2-5.5-3.2Z" fill="#6E7681"/>
+</svg>
