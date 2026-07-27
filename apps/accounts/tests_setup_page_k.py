@@ -1,95 +1,88 @@
 """
-Свежая установка должна быть проходимой (критический баг с боевого сервера).
+Вход в систему на пустой базе (критический баг с боевого сервера).
 
-БЫЛО: setup_view показывается, только пока нет ни одного супер-админа, но в
-шаблоне стояла форма ВВОДА КОДА ДОСТУПА. Кода не существует (пользователей ноль,
-выдать некому), а /accounts/login/ редиректит на /accounts/setup/ — попасть в
-систему после деплоя было невозможно. Воспроизведено на проде.
+БЫЛО: login_view и index_view редиректили на /accounts/setup/, пока в базе нет
+супер-админа, а на setup-странице — только форма кода доступа. Кода не
+существует (выдавать некому), поэтому свежий деплой было НЕ ОТКРЫТЬ вообще.
+Воспроизведено на проде.
 
-СТАЛО: страница показывает форму создания супер-администратора, после создания
-вход работает, а сама страница закрывается редиректом на логин.
+СТАЛО (как задумано): страница входа доступна всегда и даёт два пути —
+логин/пароль или активация по коду доступа. Платформенный супер-администратор
+создаётся командой `manage.py createsuperuser`, коды доступа сотрудникам
+выдаются из админки.
 """
 from django.test import TestCase
 
 from apps.accounts.models import User
 
-SETUP_PAGE = '/accounts/setup/'
 LOGIN_PAGE = '/accounts/login/'
-SETUP_API = '/api/v1/accounts/setup/owner/'
+KEY_PAGE = '/accounts/setup/'
 LOGIN_API = '/api/v1/accounts/login/'
-
-CREDS = {
-    'username': 'platform_admin',
-    'full_name': 'Платформенный администратор',
-    'phone': '+996700000000',
-    'password': 'Str0ng!Pass9',
-    'password_confirm': 'Str0ng!Pass9',
-}
+ADMIN_LOGIN = '/admin/login/'
 
 
-class FreshInstallSetupPageTests(TestCase):
-    def test_setup_page_offers_admin_creation_not_access_key(self):
-        resp = self.client.get(SETUP_PAGE)
+class EmptyDatabaseEntryTests(TestCase):
+    """На пустой базе страницы входа должны открываться, а не редиректить в тупик."""
+
+    def test_login_page_opens_with_empty_database(self):
+        self.assertFalse(User.objects.exists())
+        resp = self.client.get(LOGIN_PAGE)
         self.assertEqual(resp.status_code, 200)
-        html = resp.content.decode()
-        # Форма создания администратора присутствует...
-        self.assertIn('id="setup-form"', html)
-        self.assertIn('setup.create_owner', html)
-        self.assertIn('id="password-confirm"', html)
-        self.assertIn('/accounts/setup/owner/', html)
-        # ...а тупиковая форма кода доступа — нет.
-        self.assertNotIn('SKP-XXXX-XXXX-XXXX', html)
-        self.assertNotIn('ak-verify-form', html)
 
-    def test_full_first_login_flow(self):
-        # 1. Создание супер-администратора через API формы.
-        resp = self.client.post(SETUP_API, CREDS, content_type='application/json')
-        self.assertEqual(resp.status_code, 201)
-        self.assertIn('access', resp.json()['tokens'])
+    def test_login_page_offers_both_ways_in(self):
+        html = self.client.get(LOGIN_PAGE).content.decode()
+        # 1) логин/пароль
+        self.assertIn('id="login-form"', html)
+        self.assertIn('id="username"', html)
+        self.assertIn('id="password"', html)
+        # 2) код доступа
+        self.assertIn('id="access-key-panel"', html)
+        self.assertIn('id="show-access-key"', html)
 
-        user = User.objects.get(username=CREDS['username'])
-        self.assertEqual(user.role, User.Role.SUPERADMIN)
-        self.assertTrue(user.is_staff)       # нужен для входа в /admin/
+    def test_key_activation_page_opens_with_empty_database(self):
+        resp = self.client.get(KEY_PAGE)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('ak-verify-form', resp.content.decode())
+
+    def test_admin_login_page_reachable(self):
+        # Вход в админку — источник кодов доступа.
+        resp = self.client.get(ADMIN_LOGIN)
+        self.assertEqual(resp.status_code, 200)
+
+
+class CreateSuperuserCommandTests(TestCase):
+    """Аккаунт из `manage.py createsuperuser` должен работать и в админке, и в приложении."""
+
+    def test_createsuperuser_gets_platform_role_and_can_log_in(self):
+        user = User.objects.create_superuser(username='platform_admin', password='Str0ng!Pass9')
+        self.assertEqual(user.role, User.Role.SUPERADMIN)   # роль платформы, не worker
+        self.assertTrue(user.is_staff)                      # доступ к /admin/
         self.assertTrue(user.is_superuser)
+        self.assertIsNone(user.company_id)                  # супер-админ вне компаний
 
-        # 2. Обычный вход логином/паролем работает.
         resp = self.client.post(LOGIN_API, {
-            'username': CREDS['username'], 'password': CREDS['password'],
+            'username': 'platform_admin', 'password': 'Str0ng!Pass9',
         }, content_type='application/json')
         self.assertEqual(resp.status_code, 200)
         self.assertIn('access', resp.json()['tokens'])
 
-        # 3. Страница настройки закрывается, а публичный эндпоинт больше не даёт
-        #    завести ВТОРОГО супер-админа (иначе любой аноним получил бы права).
-        self.assertRedirects(self.client.get(SETUP_PAGE), LOGIN_PAGE,
-                             fetch_redirect_response=False)
-        resp = self.client.post(SETUP_API, dict(CREDS, username='second_admin'),
-                                content_type='application/json')
-        self.assertEqual(resp.status_code, 403)
-        self.assertEqual(User.objects.filter(role=User.Role.SUPERADMIN).count(), 1)
-
-    def test_password_mismatch_rejected(self):
-        bad = dict(CREDS, password_confirm='Different!Pass9')
-        resp = self.client.post(SETUP_API, bad, content_type='application/json')
-        self.assertEqual(resp.status_code, 400)
-        self.assertFalse(User.objects.filter(username=CREDS['username']).exists())
+    def test_pages_still_open_after_superuser_exists(self):
+        User.objects.create_superuser(username='platform_admin2', password='Str0ng!Pass9')
+        self.assertEqual(self.client.get(LOGIN_PAGE).status_code, 200)
+        self.assertEqual(self.client.get(KEY_PAGE).status_code, 200)
 
 
 class BrandAssetsTests(TestCase):
-    def test_pages_reference_existing_logo(self):
+    def test_manifest_icons_exist_on_disk(self):
         # manifest.json ссылался на /static/images/logo.png, которого нет (404 в проде).
-        from pathlib import Path
         import json
+        from pathlib import Path
+
         from django.conf import settings
 
         static_dir = Path(settings.STATICFILES_DIRS[0])
-        self.assertTrue((static_dir / 'img' / 'logo.svg').is_file())
-
         manifest = json.loads((static_dir / 'manifest.json').read_text(encoding='utf-8'))
         for icon in manifest['icons']:
             rel = icon['src'].replace('/static/', '')
-            self.assertTrue((static_dir / rel).is_file(), f'иконка манифеста отсутствует: {icon["src"]}')
-
-    def test_setup_page_shows_logo(self):
-        html = self.client.get(SETUP_PAGE).content.decode()
-        self.assertIn('img/logo.svg', html)
+            self.assertTrue((static_dir / rel).is_file(),
+                            f'иконка манифеста отсутствует: {icon["src"]}')
