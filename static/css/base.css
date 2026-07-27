@@ -179,14 +179,21 @@ body.authenticated .bottom-nav { display: flex; }
 .top-bar .actions { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
 
 /* ---------- Main content ---------- */
+/* Прокручивается ДОКУМЕНТ, а не этот блок.
+   Раньше здесь стояли overflow-y: auto + -webkit-overflow-scrolling: touch —
+   это создаёт отдельный слой прокрутки внутри страницы. На телефоне он
+   перехватывает касание, хотя прокручивать ему нечего (высота блока равна
+   высоте содержимого), и палец «не двигает» экран: приходится тянуть вторым
+   пальцем или попадать точно по прокручиваемой области. Документ и так
+   прокручивается — вложенный скроллер лишний. */
 .main-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     padding: 16px clamp(12px, 4vw, 16px);
-    padding-bottom: calc(var(--bottom-nav-height) + 16px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    /* env() работает только при viewport-fit=cover (см. base.html) —
+       иначе отступ под нижней навигацией не учитывает вырез экрана. */
+    padding-bottom: calc(var(--bottom-nav-height) + 16px + env(safe-area-inset-bottom, 0px));
 }
 #app-content { flex: 1; }
 

@@ -3,9 +3,14 @@
 <html lang="uz">
   <head>
     <meta charset="UTF-8" />
+    <!-- maximum-scale=1.0 и user-scalable=no убраны: они запрещали пользователю
+         увеличивать текст жестом (нарушение доступности WCAG 1.4.4), а проблему
+         с прокруткой не решали. viewport-fit=cover обязателен, иначе
+         env(safe-area-inset-*) в CSS всегда равен нулю и нижняя навигация
+         уезжает под системную полосу на телефонах с вырезом. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <title>SkladPro.Nod</title>
     <!-- Favicon: раньше вкладка показывала стандартную иконку браузера. -->
