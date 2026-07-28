@@ -74,13 +74,34 @@ window.ui = {
         return modal;
     },
 
+    /**
+     * Сколько наших собственных history.back() ещё не откликнулись popstate.
+     *
+     * history.back() асинхронный: popstate приходит следующим тиком. За это
+     * время код успевает открыть СЛЕДУЮЩЕЕ окно («Изменить» и «Приход» в
+     * карточке сначала закрывают карточку), и запоздавший popstate закрывал
+     * именно его — окно моргало и исчезало. Считаем свои возвраты, чтобы
+     * отличать их от настоящей кнопки «Назад».
+     */
+    _pendingHistoryRelease: 0,
+
+    /** true, если этот popstate — эхо нашего history.back(), а не «Назад». */
+    consumeHistoryRelease() {
+        if (this._pendingHistoryRelease <= 0) return false;
+        this._pendingHistoryRelease -= 1;
+        return true;
+    },
+
     /** Закрывает окно, освобождая занятую им запись истории. */
     closeModal(modal) {
         if (!modal || modal.dataset.skpClosing) return;
         modal.dataset.skpClosing = '1';
         const ownsHistoryEntry = modal.dataset.skpHistory === '1';
         modal.remove();
-        if (ownsHistoryEntry && history.state && history.state.skpModal) history.back();
+        if (ownsHistoryEntry && history.state && history.state.skpModal) {
+            this._pendingHistoryRelease += 1;
+            history.back();
+        }
     },
 
     /**

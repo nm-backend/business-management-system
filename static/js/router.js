@@ -9,7 +9,12 @@ class Router {
         // ТЕМ ЖЕ адресом, поэтому здесь приходит popstate без hashchange —
         // просто закрываем верхнее окно и никуда не уходим.
         window.addEventListener('popstate', () => {
-            if (window.ui && window.ui.closeTopModal) window.ui.closeTopModal();
+            if (!window.ui || !window.ui.closeTopModal) return;
+            // Своё же history.back() из closeModal возвращается сюда с задержкой.
+            // Если за это время открыли следующее окно (карточка -> форма), этот
+            // popstate закрыл бы именно его: окно появлялось и тут же исчезало.
+            if (window.ui.consumeHistoryRelease && window.ui.consumeHistoryRelease()) return;
+            window.ui.closeTopModal();
         });
 
         // Смена адреса (клик по меню): окно не должно остаться над новой страницей.
