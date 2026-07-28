@@ -8,11 +8,18 @@ class FinishedProductsComponent {
         const user = window.currentUser;
         const canEdit = user.is_owner || user.is_admin;
 
+        // Архив отдаётся API только владельцу — у остальных вкладка была бы пуста.
+        this.tab = 'active';
         container.innerHTML = `
             <div class="tabs">
                 <button class="tab-btn" id="tab-materials" data-i18n="warehouse.title"></button>
                 <button class="tab-btn active" data-i18n="warehouse.finished_title"></button>
             </div>
+            ${user.is_owner ? `
+                <div class="tabs" id="product-subtabs">
+                    <button class="tab-btn active" data-ptab="active" data-i18n="common.active"></button>
+                    <button class="tab-btn" data-ptab="archive" data-i18n="common.archive"></button>
+                </div>` : ''}
             <div class="search-box">
                 <span class="search-icon">🔍</span>
                 <input type="text" id="product-search" class="form-control" data-i18n="warehouse.search">
@@ -22,6 +29,17 @@ class FinishedProductsComponent {
         `;
 
         container.querySelector('#tab-materials').addEventListener('click', () => window.router.navigate('/warehouse'));
+
+        container.querySelectorAll('[data-ptab]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                container.querySelectorAll('[data-ptab]').forEach((b) => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.tab = btn.dataset.ptab;
+                const addBtn = container.querySelector('#add-product-btn');
+                if (addBtn) addBtn.style.display = this.tab === 'archive' ? 'none' : '';
+                this.loadProducts();
+            });
+        });
 
         const searchInput = container.querySelector('#product-search');
         let timer;
@@ -46,7 +64,7 @@ class FinishedProductsComponent {
         const listEl = document.getElementById('products-list');
         window.listStates.skeleton(listEl);
         try {
-            let query = '?is_archived=false';
+            let query = `?is_archived=${this.tab === 'archive'}`;
             if (this.search) query += `&search=${encodeURIComponent(this.search)}`;
             const response = await window.api.request(`/warehouse/finished-products/${query}`);
             const products = response.results || response;
@@ -112,7 +130,14 @@ class FinishedProductsComponent {
                 ${user.is_owner ? row('warehouse.sale_price', window.ui.money(p.sale_price)) : ''}
                 ${row('warehouse.description', p.description)}
             </div>
-            ${canEdit ? `<button class="btn btn-secondary btn-block" id="edit-product" style="margin-top:14px;" data-i18n="common.edit"></button>` : ''}
+            ${canEdit ? `
+                <div style="display:flex;gap:10px;margin-top:14px;">
+                    <button class="btn btn-secondary btn-sm" id="edit-product" style="flex:1;" data-i18n="common.edit"></button>
+                    ${p.is_archived ? '' : `<button class="btn btn-success btn-sm" id="income-product" style="flex:1;" data-i18n="warehouse.incoming"></button>`}
+                </div>
+                ${user.is_owner ? `
+                    <button class="btn btn-secondary btn-sm btn-block" id="archive-product" style="margin-top:10px;"
+                        data-i18n="${p.is_archived ? 'common.restore' : 'common.archive'}"></button>` : ''}` : ''}
         `);
 
         if (canEdit) {
@@ -120,7 +145,68 @@ class FinishedProductsComponent {
                 window.ui.closeModal(modal);
                 this.openForm(p);
             });
+            modal.querySelector('#income-product')?.addEventListener('click', () => {
+                window.ui.closeModal(modal);
+                this.openIncomeForm(p);
+            });
+            modal.querySelector('#archive-product')?.addEventListener('click', async () => {
+                if (!p.is_archived && !(await window.confirmation.confirm(
+                    window.ui.t('common.archive_confirm'), window.ui.t('common.archive')))) return;
+                try {
+                    await window.api.request(
+                        `/warehouse/finished-products/${p.id}/${p.is_archived ? 'restore' : 'archive'}/`,
+                        { method: 'POST' },
+                    );
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadProducts();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
         }
+    }
+
+    /**
+     * Приход готовой продукции.
+     *
+     * Раньше остаток товара мог вырасти только через подтверждённое
+     * производство: купленный или возвращённый товар оприходовать было нечем,
+     * оставалось перезаписывать количество в форме руками.
+     */
+    openIncomeForm(p) {
+        const isOwner = window.currentUser.is_owner;
+        const modal = window.ui.modal('warehouse.incoming', `
+            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(p.name)}</p>
+            <form id="product-income-form">
+                <div class="form-group"><label data-i18n="warehouse.quantity"></label>
+                    <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
+                ${isOwner ? `
+                    <div class="form-group"><label data-i18n="warehouse.cost_price"></label>
+                        <input name="price_per_unit" type="number" step="0.01" min="0" class="form-control"></div>` : ''}
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <input name="reason" class="form-control"></div>
+                <button type="submit" class="btn btn-success btn-block" data-i18n="common.save"></button>
+            </form>
+        `);
+        modal.querySelector('#product-income-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            Object.keys(data).forEach((k) => { if (data[k] === '') delete data[k]; });
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request(`/warehouse/finished-products/${p.id}/incoming/`, {
+                        method: 'POST',
+                        body: JSON.stringify(data),
+                    });
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadProducts();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
     }
 
     openForm(p = null) {

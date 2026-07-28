@@ -1,5 +1,23 @@
+from decimal import Decimal
+
 from rest_framework import serializers
+
+from apps.core.validators import validate_not_future
 from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
+
+
+class IncomingSerializer(serializers.Serializer):
+    """
+    Вход операции прихода: сколько пришло, по какой цене и когда.
+
+    quantity строго больше нуля: приход на 0 или отрицательный — это не приход,
+    а списание, для которого есть свои операции.
+    """
+    quantity = serializers.DecimalField(max_digits=15, decimal_places=3, min_value=Decimal('0.001'))
+    price_per_unit = serializers.DecimalField(max_digits=15, decimal_places=2,
+                                              min_value=Decimal('0'), required=False)
+    arrival_date = serializers.DateField(required=False, validators=[validate_not_future])
+    reason = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
 class RawMaterialSerializer(serializers.ModelSerializer):
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
@@ -59,10 +77,19 @@ class FinishedProductOwnerSerializer(FinishedProductSerializer):
 class StockMovementSerializer(serializers.ModelSerializer):
     movement_type_display = serializers.CharField(source='get_movement_type_display', read_only=True)
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    # Без названий история отдавала только id материала/товара — показывать
+    # в списке было нечего.
+    material_name = serializers.CharField(source='material.name', read_only=True, default='')
+    product_name = serializers.CharField(source='product.name', read_only=True, default='')
+    unit = serializers.SerializerMethodField()
 
     class Meta:
         model = StockMovement
         fields = '__all__'
+
+    def get_unit(self, obj):
+        target = obj.material or obj.product
+        return target.unit if target else ''
 
 
 class StockMovementLimitedSerializer(StockMovementSerializer):

@@ -9,10 +9,18 @@ class WarehouseComponent {
         const user = window.currentUser;
         const canEdit = user.is_owner || user.is_admin;
 
+        // Архив видит только владелец: API отдаёт архивные позиции лишь ему,
+        // у остальных вкладка была бы всегда пустой.
+        this.tab = 'active';
         container.innerHTML = `
             <div class="tabs">
                 <button class="tab-btn active" data-i18n="warehouse.title"></button>
                 <button class="tab-btn" id="tab-products" data-i18n="warehouse.finished_title"></button>
+            </div>
+            <div class="tabs" id="warehouse-subtabs">
+                <button class="tab-btn active" data-wtab="active" data-i18n="common.active"></button>
+                ${user.is_owner ? `<button class="tab-btn" data-wtab="archive" data-i18n="common.archive"></button>` : ''}
+                ${canEdit ? `<button class="tab-btn" data-wtab="history" data-i18n="warehouse.stock_movement"></button>` : ''}
             </div>
             <div class="search-box" style="display:flex;gap:8px;align-items:center;">
                 <div style="position:relative;flex:1;">
@@ -26,6 +34,21 @@ class WarehouseComponent {
         `;
 
         container.querySelector('#tab-products').addEventListener('click', () => window.router.navigate('/finished-products'));
+
+        container.querySelectorAll('[data-wtab]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                container.querySelectorAll('[data-wtab]').forEach((b) => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.tab = btn.dataset.wtab;
+                // Поиск и «добавить» относятся к списку материалов, в истории они лишние.
+                const isHistory = this.tab === 'history';
+                container.querySelector('.search-box').style.display = isHistory ? 'none' : '';
+                const addBtn = container.querySelector('#add-material-btn');
+                if (addBtn) addBtn.style.display = isHistory || this.tab === 'archive' ? 'none' : '';
+                if (isHistory) this.loadHistory();
+                else this.loadMaterials();
+            });
+        });
 
         const searchInput = container.querySelector('#material-search');
         let timer;
@@ -75,7 +98,7 @@ class WarehouseComponent {
         const listEl = document.getElementById('materials-list');
         window.listStates.skeleton(listEl);
         try {
-            let query = '?is_archived=false';
+            let query = `?is_archived=${this.tab === 'archive'}`;
             if (this.search) query += `&search=${encodeURIComponent(this.search)}`;
             const response = await window.api.request(`/warehouse/raw-materials/${query}`);
             const materials = response.results || response;
@@ -143,8 +166,11 @@ class WarehouseComponent {
             ${canEdit ? `
                 <div style="display:flex;gap:10px;margin-top:14px;">
                     <button class="btn btn-secondary btn-sm" id="edit-material" style="flex:1;" data-i18n="common.edit"></button>
-                    <button class="btn btn-success btn-sm" id="income-material" style="flex:1;" data-i18n="warehouse.incoming"></button>
-                </div>` : ''}
+                    ${m.is_archived ? '' : `<button class="btn btn-success btn-sm" id="income-material" style="flex:1;" data-i18n="warehouse.incoming"></button>`}
+                </div>
+                ${user.is_owner ? `
+                    <button class="btn btn-secondary btn-sm btn-block" id="archive-material" style="margin-top:10px;"
+                        data-i18n="${m.is_archived ? 'common.restore' : 'common.archive'}"></button>` : ''}` : ''}
         `);
 
         if (canEdit) {
@@ -152,10 +178,63 @@ class WarehouseComponent {
                 window.ui.closeModal(modal);
                 this.openForm(m);
             });
-            modal.querySelector('#income-material').addEventListener('click', () => {
+            modal.querySelector('#income-material')?.addEventListener('click', () => {
                 window.ui.closeModal(modal);
                 this.openIncomeForm(m);
             });
+            modal.querySelector('#archive-material')?.addEventListener('click', async () => {
+                if (!m.is_archived && !(await window.confirmation.confirm(
+                    window.ui.t('common.archive_confirm'), window.ui.t('common.archive')))) return;
+                try {
+                    await window.api.request(
+                        `/warehouse/raw-materials/${m.id}/${m.is_archived ? 'restore' : 'archive'}/`,
+                        { method: 'POST' },
+                    );
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadMaterials();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        }
+    }
+
+    /** История движения склада: приходы, расходы, производство. */
+    async loadHistory() {
+        const listEl = document.getElementById('materials-list');
+        window.listStates.skeleton(listEl);
+        try {
+            const response = await window.api.request('/warehouse/stock-movements/?page_size=50');
+            const rows = response.results || response;
+            if (!rows.length) {
+                window.listStates.empty(listEl, window.ui.t('common.no_data'));
+                return;
+            }
+            const sign = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? '−' : '+');
+            const colour = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? 'text-danger' : 'text-success');
+            listEl.innerHTML = rows.map((r) => `
+                <div class="list-row" style="cursor:default;">
+                    <div style="min-width:0;">
+                        <div style="font-size:14px;font-weight:600;">
+                            ${window.ui.escape(r.material_name || r.product_name || '-')}
+                        </div>
+                        <div class="text-sm text-muted">
+                            ${window.ui.escape(r.movement_type_display || r.movement_type)}
+                            · ${window.ui.datetime(r.created_at)}
+                            ${r.created_by_name ? ` · ${window.ui.escape(r.created_by_name)}` : ''}
+                        </div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:15px;font-weight:600;" class="${colour(r.movement_type)}">
+                            ${sign(r.movement_type)}${window.ui.qty(r.quantity)}
+                            ${r.unit ? `<span data-i18n="units.${r.unit}"></span>` : ''}
+                        </div>
+                    </div>
+                </div>`).join('');
+            window.i18n.applyTranslations();
+        } catch (e) {
+            window.listStates.error(listEl, window.ui.t('common.error'), () => this.loadHistory());
         }
     }
 
@@ -232,23 +311,41 @@ class WarehouseComponent {
     }
 
     /** Приход материала: добавляет количество к остатку. */
+    /**
+     * Приход сырья.
+     *
+     * Раньше страница считала новый остаток сама и слала PATCH с абсолютным
+     * значением: два прихода со страницы, открытой до первого из них, затирали
+     * друг друга. Теперь прибавляет сервер (POST .../incoming/), он же пишет
+     * движение в историю и пересчитывает среднюю себестоимость.
+     */
     openIncomeForm(m) {
+        const isOwner = window.currentUser.is_owner;
+        const today = new Date().toISOString().slice(0, 10);
         const modal = window.ui.modal('warehouse.incoming', `
             <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(m.name)}</p>
             <form id="income-form">
                 <div class="form-group"><label data-i18n="warehouse.quantity"></label>
                     <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
+                ${isOwner ? `
+                    <div class="form-group"><label data-i18n="warehouse.purchase_price"></label>
+                        <input name="price_per_unit" type="number" step="0.01" min="0" class="form-control"></div>` : ''}
+                <div class="form-group"><label data-i18n="warehouse.arrival_date"></label>
+                    <input name="arrival_date" type="date" class="form-control" value="${today}" max="${today}"></div>
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <input name="reason" class="form-control"></div>
                 <button type="submit" class="btn btn-success btn-block" data-i18n="common.save"></button>
             </form>
         `);
         modal.querySelector('#income-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const add = Number(new FormData(e.target).get('quantity'));
+            const data = Object.fromEntries(new FormData(e.target));
+            Object.keys(data).forEach((k) => { if (data[k] === '') delete data[k]; });
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
-                    await window.api.request(`/warehouse/raw-materials/${m.id}/`, {
-                        method: 'PATCH',
-                        body: JSON.stringify({ quantity: Number(m.quantity) + add }),
+                    await window.api.request(`/warehouse/raw-materials/${m.id}/incoming/`, {
+                        method: 'POST',
+                        body: JSON.stringify(data),
                     });
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));

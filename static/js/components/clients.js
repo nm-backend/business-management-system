@@ -15,7 +15,7 @@ class ClientsComponent {
             </div>
             <div class="search-box">
                 <span class="search-icon">🔍</span>
-                <input type="text" id="client-search" class="form-control" data-i18n="common.search" placeholder="${window.ui.escape(window.ui.t('clients.search_hint') || '')}">
+                <input type="text" id="client-search" class="form-control" data-i18n="clients.search_hint">
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-client-btn" style="margin-bottom:12px;" data-i18n="clients.add_client"></button>` : ''}
             <div id="clients-list" class="card-grid"></div>
@@ -122,6 +122,8 @@ class ClientsComponent {
                 <button class="btn btn-secondary btn-sm" id="edit-client" style="flex:1;" data-i18n="common.edit"></button>
                 <button class="btn btn-primary btn-sm" id="client-orders" style="flex:1;" data-i18n="clients.orders"></button>
             </div>
+            <button class="btn btn-secondary btn-sm btn-block" id="archive-client" style="margin-top:10px;"
+                data-i18n="${c.is_archived ? 'common.restore' : 'common.archive'}"></button>
         `);
 
         modal.querySelector('#edit-client').addEventListener('click', () => {
@@ -131,6 +133,23 @@ class ClientsComponent {
         modal.querySelector('#client-orders').addEventListener('click', () => {
             window.ui.closeModal(modal);
             window.router.navigate('/orders');
+        });
+        // Вкладка «Архив» была только на чтение: убрать клиента в архив или
+        // вернуть его оттуда из интерфейса было нечем.
+        modal.querySelector('#archive-client').addEventListener('click', async () => {
+            if (!c.is_archived && !(await window.confirmation.confirm(
+                window.ui.t('common.archive_confirm'), window.ui.t('common.archive')))) return;
+            try {
+                await window.api.request(
+                    `/clients/clients/${c.id}/${c.is_archived ? 'restore' : 'archive'}/`,
+                    { method: 'POST' },
+                );
+                window.ui.closeModal(modal);
+                window.toast.success(window.ui.t('common.success'));
+                await this.loadClients();
+            } catch (error) {
+                window.toast.error(window.ui.errorText(error));
+            }
         });
     }
 

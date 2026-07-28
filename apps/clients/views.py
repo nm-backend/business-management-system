@@ -6,7 +6,9 @@ Views for clients API.
 """
 from django.db.models import Exists, OuterRef
 from rest_framework import filters, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.audit.models import AuditLog
@@ -81,6 +83,35 @@ class ClientViewSet(CompanyScopedViewSet):
             target=instance,
             request=self.request,
         )
+
+    # Вкладка «Архив» была только на чтение: положить туда клиента или вернуть
+    # его из интерфейса было нечем, наполнялась она лишь автоматическим
+    # auto_archive() после оплаты. Идём через archive()/restore(), а не через
+    # PATCH is_archived, иначе archived_at остаётся пустым.
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        client = self.get_object()
+        client.archive()
+        write_audit_log(
+            action=AuditLog.Action.ARCHIVE,
+            actor=request.user,
+            target=client,
+            request=request,
+        )
+        return Response(self.get_serializer(client).data)
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        client = self.get_object()
+        client.restore()
+        write_audit_log(
+            action=AuditLog.Action.UPDATE,
+            actor=request.user,
+            target=client,
+            changes={'is_archived': [True, False]},
+            request=request,
+        )
+        return Response(self.get_serializer(client).data)
 
 
 class PaymentViewSet(CompanyScopedViewSet):

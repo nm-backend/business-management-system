@@ -1,5 +1,7 @@
 from rest_framework import viewsets, filters
+from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
@@ -7,13 +9,83 @@ from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrWorker
 from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
 from .serializers import (
+    IncomingSerializer,
     RawMaterialSerializer, RawMaterialOwnerSerializer,
     FinishedProductSerializer, FinishedProductOwnerSerializer,
     StockMovementSerializer, StockMovementLimitedSerializer, RecipeSerializer, RecipeItemSerializer
 )
+from .services import record_incoming
 from apps.core.views import CompanyScopedViewSet
 
-class RawMaterialViewSet(CompanyScopedViewSet):
+
+class StockOperationsMixin:
+    """
+    Приход и архивация — общие операции склада сырья и готовой продукции.
+
+    Приход считает сервер (см. services.record_incoming): раньше количество
+    складывал браузер и присылал абсолютное значение, из-за чего два прихода с
+    несвежей страницы затирали друг друга.
+
+    Архивация идёт через SoftDeleteModel.archive()/restore(), а не прямым
+    PATCH-ем is_archived: иначе archived_at остаётся пустым и «когда убрали в
+    архив» узнать негде.
+    """
+
+    @action(detail=True, methods=['post'])
+    def incoming(self, request, pk=None):
+        target = self.get_object()
+        serializer = IncomingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        # Цена — финансовое поле: её задаёт только владелец. У админа приход
+        # проходит, но цену и среднюю себестоимость он не меняет.
+        price = data.get('price_per_unit') if request.user.is_owner else None
+
+        updated = record_incoming(
+            target=target,
+            quantity=data['quantity'],
+            price_per_unit=price,
+            arrival_date=data.get('arrival_date'),
+            user=request.user,
+            reason=data.get('reason', ''),
+        )
+        write_audit_log(
+            action=AuditLog.Action.UPDATE,
+            actor=request.user,
+            target=updated,
+            changes={'quantity': [str(target.quantity), str(updated.quantity)]},
+            request=request,
+        )
+        return Response(self.get_serializer(updated).data)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        obj = self.get_object()
+        obj.archive()
+        write_audit_log(
+            action=AuditLog.Action.ARCHIVE,
+            actor=request.user,
+            target=obj,
+            request=request,
+        )
+        return Response(self.get_serializer(obj).data)
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        obj = self.get_object()
+        obj.restore()
+        # Отдельного действия RESTORE в AuditLog нет; пишем как изменение поля,
+        # чтобы не заводить миграцию ради ярлыка.
+        write_audit_log(
+            action=AuditLog.Action.UPDATE,
+            actor=request.user,
+            target=obj,
+            changes={'is_archived': [True, False]},
+            request=request,
+        )
+        return Response(self.get_serializer(obj).data)
+
+class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
     """
     API склада сырья с разделением финансовых полей по роли.
 
@@ -28,7 +100,8 @@ class RawMaterialViewSet(CompanyScopedViewSet):
     ordering_fields = ['name', 'quantity', 'created_at']
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy',
+                           'incoming', 'archive', 'restore']:
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         return [IsCompanyMember(), IsOwnerOrAdminOrWorker()]
 
@@ -36,6 +109,8 @@ class RawMaterialViewSet(CompanyScopedViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return RawMaterial.objects.none()
         qs = super().get_queryset()
+        # Архив виден владельцу; остальным — только действующие позиции.
+        # Работать с архивной записью (в т.ч. вернуть её) тоже может владелец.
         if not self.request.user.is_owner:
             qs = qs.filter(is_archived=False)
         return qs
@@ -75,7 +150,7 @@ class RawMaterialViewSet(CompanyScopedViewSet):
             request=self.request,
         )
 
-class FinishedProductViewSet(CompanyScopedViewSet):
+class FinishedProductViewSet(StockOperationsMixin, CompanyScopedViewSet):
     """
     API готовой продукции с тем же правилом RBAC, что и склад сырья.
 
@@ -90,7 +165,8 @@ class FinishedProductViewSet(CompanyScopedViewSet):
     ordering_fields = ['name', 'quantity', 'created_at']
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy',
+                           'incoming', 'archive', 'restore']:
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         return [IsCompanyMember(), IsOwnerOrAdminOrWorker()]
 

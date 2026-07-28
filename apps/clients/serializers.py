@@ -35,6 +35,10 @@ class ClientAdminSerializer(serializers.ModelSerializer):
             'id', 'name', 'phone', 'address', 'comment', 'is_archived',
             'has_debt', 'has_active_orders', 'created_at', 'updated_at',
         ]
+        # Архивацию делают действия archive/restore: они зовут методы модели и
+        # проставляют archived_at. Прямой PATCH is_archived их обходил и
+        # оставлял «когда убрали в архив» пустым.
+        read_only_fields = ['is_archived']
 
     def get_has_active_orders(self, obj):
         annotated = getattr(obj, 'active_orders_exists', None)
@@ -51,4 +55,6 @@ class ClientOwnerSerializer(ClientAdminSerializer):
         # Производные финполя считает recalculate_financials из заказов/платежей.
         # Прямой записи через API быть не должно — иначе owner PATCH-ем подменял
         # бы долг клиента (искажение отчётов) до следующего пересчёта.
-        read_only_fields = ['total_orders_amount', 'total_paid', 'debt']
+        read_only_fields = ClientAdminSerializer.Meta.read_only_fields + [
+            'total_orders_amount', 'total_paid', 'debt',
+        ]
