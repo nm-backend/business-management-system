@@ -144,48 +144,65 @@ class FinanceComponent {
                     <div class="list-group">
                         ${expenses.map((x) => `
                             <div class="list-row" style="cursor:default;">
-                                <div>
+                                <div style="min-width:0;">
                                     <div style="font-weight:600;font-size:14px;" data-i18n="expense_categories.${x.category}"></div>
                                     <div class="text-sm text-muted">${window.ui.date(x.date)}${x.comment ? ` · ${window.ui.escape(x.comment)}` : ''}</div>
                                 </div>
-                                <span class="font-bold text-danger">-${window.ui.money(x.amount)}</span>
+                                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                                    <span class="font-bold text-danger">-${window.ui.money(x.amount)}</span>
+                                    <button class="icon-btn" data-edit="${x.id}" title="${window.ui.t('common.edit')}">✏️</button>
+                                    <button class="icon-btn" data-delete="${x.id}" title="${window.ui.t('common.delete')}">🗑️</button>
+                                </div>
                             </div>`).join('')}
                     </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
             el.querySelector('#add-expense-btn').addEventListener('click', () => this.openExpenseForm());
+            // Ошибочная запись раньше оставалась в отчёте навсегда: список был
+            // только на добавление, хотя API умеет и правку, и удаление.
+            el.querySelectorAll('[data-edit]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    this.openExpenseForm(expenses.find((x) => String(x.id) === btn.dataset.edit));
+                });
+            });
+            el.querySelectorAll('[data-delete]').forEach((btn) => {
+                btn.addEventListener('click', () => this.deleteExpense(btn.dataset.delete));
+            });
             window.i18n.applyTranslations();
         } catch (e) {
             window.listStates.error(el, window.ui.t('common.error'), () => this.loadExpenses());
         }
     }
 
-    openExpenseForm() {
+    /** Форма расхода: без аргумента — создание, с расходом — правка. */
+    openExpenseForm(expense = null) {
         const categories = [
             'rent', 'electricity', 'water', 'transport', 'delivery', 'taxes', 'salary',
             'advance', 'equipment_repair', 'tools', 'consumables', 'material_loss',
             'defect', 'unforeseen', 'owner_withdrawal', 'worker_debt', 'client_refund', 'other',
         ];
         const today = new Date().toISOString().slice(0, 10);
-        const modal = window.ui.modal('finance.add_expense', `
+        const sel = (value, current) => (value === current ? ' selected' : '');
+        const modal = window.ui.modal(expense ? 'common.edit' : 'finance.add_expense', `
             <form id="expense-form">
                 <div class="form-group"><label data-i18n="finance.category"></label>
                     <select name="category" class="form-control" required>
-                        ${categories.map((c) => `<option value="${c}" data-i18n="expense_categories.${c}"></option>`).join('')}
+                        ${categories.map((c) => `<option value="${c}"${sel(c, expense?.category)} data-i18n="expense_categories.${c}"></option>`).join('')}
                     </select></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div class="form-group"><label data-i18n="common.amount"></label>
-                        <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required></div>
+                        <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required
+                               value="${expense ? window.ui.escape(String(expense.amount)) : ''}"></div>
                     <div class="form-group"><label data-i18n="common.date"></label>
-                        <input name="date" type="date" class="form-control" required value="${today}"></div>
+                        <input name="date" type="date" class="form-control" required value="${expense?.date || today}"></div>
                 </div>
                 <div class="form-group"><label data-i18n="common.payment_method"></label>
                     <select name="payment_method" class="form-control">
-                        <option value="cash" data-i18n="common.cash"></option>
-                        <option value="card" data-i18n="common.card"></option>
-                        <option value="transfer" data-i18n="common.transfer"></option>
-                        <option value="other" data-i18n="common.other"></option>
+                        <option value="cash"${sel('cash', expense?.payment_method)} data-i18n="common.cash"></option>
+                        <option value="card"${sel('card', expense?.payment_method)} data-i18n="common.card"></option>
+                        <option value="transfer"${sel('transfer', expense?.payment_method)} data-i18n="common.transfer"></option>
+                        <option value="other"${sel('other', expense?.payment_method)} data-i18n="common.other"></option>
                     </select></div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
-                    <textarea name="comment" class="form-control" rows="2"></textarea></div>
+                    <textarea name="comment" class="form-control" rows="2">${expense ? window.ui.escape(expense.comment || '') : ''}</textarea></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
             </form>
         `);
@@ -194,7 +211,10 @@ class FinanceComponent {
             const data = Object.fromEntries(new FormData(e.target));
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
-                    await window.api.request('/finance/expenses/', { method: 'POST', body: JSON.stringify(data) });
+                    await window.api.request(
+                        expense ? `/finance/expenses/${expense.id}/` : '/finance/expenses/',
+                        { method: expense ? 'PATCH' : 'POST', body: JSON.stringify(data) },
+                    );
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadExpenses();
@@ -203,6 +223,18 @@ class FinanceComponent {
                 }
             });
         });
+    }
+
+    async deleteExpense(id) {
+        if (!(await window.confirmation.confirm(
+            window.ui.t('common.delete_confirm'), window.ui.t('common.delete')))) return;
+        try {
+            await window.api.request(`/finance/expenses/${id}/`, { method: 'DELETE' });
+            window.toast.success(window.ui.t('common.success'));
+            await this.loadExpenses();
+        } catch (error) {
+            window.toast.error(window.ui.errorText(error));
+        }
     }
 
     async loadPayments() {
@@ -217,50 +249,67 @@ class FinanceComponent {
                     <div class="list-group">
                         ${payments.map((p) => `
                             <div class="list-row" style="cursor:default;">
-                                <div>
+                                <div style="min-width:0;">
                                     <div style="font-weight:600;font-size:14px;">${window.ui.escape(p.worker_name)}</div>
                                     <div class="text-sm text-muted">
                                         ${window.ui.date(p.payment_date)} · <span data-i18n="payment_types.${p.payment_type}"></span>
                                     </div>
                                 </div>
-                                <span class="font-bold">${window.ui.money(p.amount)}</span>
+                                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                                    <span class="font-bold">${window.ui.money(p.amount)}</span>
+                                    <button class="icon-btn" data-pay-edit="${p.id}" title="${window.ui.t('common.edit')}">✏️</button>
+                                    <button class="icon-btn" data-pay-delete="${p.id}" title="${window.ui.t('common.delete')}">🗑️</button>
+                                </div>
                             </div>`).join('')}
                     </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
             el.querySelector('#add-payment-btn').addEventListener('click', () => this.openPaymentForm());
+            // Выплата уменьшает кассу и чистую прибыль — ошибку в ней надо
+            // уметь исправить, а не только добавить новую строку.
+            el.querySelectorAll('[data-pay-edit]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    this.openPaymentForm(payments.find((p) => String(p.id) === btn.dataset.payEdit));
+                });
+            });
+            el.querySelectorAll('[data-pay-delete]').forEach((btn) => {
+                btn.addEventListener('click', () => this.deletePayment(btn.dataset.payDelete));
+            });
             window.i18n.applyTranslations();
         } catch (e) {
             window.listStates.error(el, window.ui.t('common.error'), () => this.loadPayments());
         }
     }
 
-    async openPaymentForm() {
+    /** Форма выплаты: без аргумента — создание, с выплатой — правка. */
+    async openPaymentForm(payment = null) {
         const usersResp = await window.api.request('/accounts/users/');
         const users = usersResp.results || usersResp;
         const workers = users.filter((u) => u.role === 'worker');
         const today = new Date().toISOString().slice(0, 10);
+        const sel = (value, current) => (String(value) === String(current ?? '') ? ' selected' : '');
 
-        const modal = window.ui.modal('finance.add_payment', `
+        const modal = window.ui.modal(payment ? 'common.edit' : 'finance.add_payment', `
             <form id="worker-payment-form">
                 <div class="form-group"><label data-i18n="finance.worker"></label>
                     <select name="worker" class="form-control" required>
                         <option value="" data-i18n="common.select"></option>
-                        ${workers.map((w) => `<option value="${w.id}">${window.ui.escape(w.full_name || w.username)}</option>`).join('')}
+                        ${workers.map((w) => `<option value="${w.id}"${sel(w.id, payment?.worker)}>${window.ui.escape(w.full_name || w.username)}</option>`).join('')}
                     </select></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div class="form-group"><label data-i18n="common.amount"></label>
-                        <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required></div>
+                        <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required
+                               value="${payment ? window.ui.escape(String(payment.amount)) : ''}"></div>
                     <div class="form-group"><label data-i18n="common.date"></label>
-                        <input name="payment_date" type="date" class="form-control" required value="${today}"></div>
+                        <input name="payment_date" type="date" class="form-control" required value="${payment?.payment_date || today}"></div>
                 </div>
                 <div class="form-group"><label data-i18n="finance.payment_type"></label>
                     <select name="payment_type" class="form-control">
-                        <option value="salary" data-i18n="payment_types.salary"></option>
-                        <option value="advance" data-i18n="payment_types.advance"></option>
-                        <option value="bonus" data-i18n="payment_types.bonus"></option>
-                        <option value="other" data-i18n="payment_types.other"></option>
+                        <option value="salary"${sel('salary', payment?.payment_type)} data-i18n="payment_types.salary"></option>
+                        <option value="advance"${sel('advance', payment?.payment_type)} data-i18n="payment_types.advance"></option>
+                        <option value="bonus"${sel('bonus', payment?.payment_type)} data-i18n="payment_types.bonus"></option>
+                        <option value="other"${sel('other', payment?.payment_type)} data-i18n="payment_types.other"></option>
                     </select></div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
-                    <textarea name="comment" class="form-control" rows="2"></textarea></div>
+                    <textarea name="comment" class="form-control" rows="2">${payment ? window.ui.escape(payment.comment || '') : ''}</textarea></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
             </form>
         `);
@@ -269,7 +318,10 @@ class FinanceComponent {
             const data = Object.fromEntries(new FormData(e.target));
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
-                    await window.api.request('/finance/worker-payments/', { method: 'POST', body: JSON.stringify(data) });
+                    await window.api.request(
+                        payment ? `/finance/worker-payments/${payment.id}/` : '/finance/worker-payments/',
+                        { method: payment ? 'PATCH' : 'POST', body: JSON.stringify(data) },
+                    );
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadPayments();
@@ -278,6 +330,18 @@ class FinanceComponent {
                 }
             });
         });
+    }
+
+    async deletePayment(id) {
+        if (!(await window.confirmation.confirm(
+            window.ui.t('common.delete_confirm'), window.ui.t('common.delete')))) return;
+        try {
+            await window.api.request(`/finance/worker-payments/${id}/`, { method: 'DELETE' });
+            window.toast.success(window.ui.t('common.success'));
+            await this.loadPayments();
+        } catch (error) {
+            window.toast.error(window.ui.errorText(error));
+        }
     }
 
     async loadRates() {
