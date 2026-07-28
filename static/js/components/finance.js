@@ -356,41 +356,58 @@ class FinanceComponent {
                     <div class="list-group">
                         ${rates.map((r) => `
                             <div class="list-row" style="cursor:default;">
-                                <div>
+                                <div style="min-width:0;">
                                     <div style="font-weight:600;font-size:14px;">${window.ui.escape(r.product_name)}</div>
                                     <div class="text-sm text-muted" data-i18n="operations.${r.operation}"></div>
                                 </div>
-                                <span class="font-bold">${window.ui.money(r.rate_per_unit)} / <span data-i18n="units.${r.unit}"></span></span>
+                                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                                    <span class="font-bold">${window.ui.money(r.rate_per_unit)} / <span data-i18n="units.${r.unit}"></span></span>
+                                    <button class="icon-btn" data-rate-edit="${r.id}" title="${window.ui.t('common.edit')}">✏️</button>
+                                    <button class="icon-btn" data-rate-delete="${r.id}" title="${window.ui.t('common.delete')}">🗑️</button>
+                                </div>
                             </div>`).join('')}
                     </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
             el.querySelector('#add-rate-btn').addEventListener('click', () => this.openRateForm());
+            // Ставка задаёт стоимость работы во всех будущих начислениях —
+            // ошибку в ней нельзя было исправить, только добавить вторую строку.
+            el.querySelectorAll('[data-rate-edit]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    this.openRateForm(rates.find((r) => String(r.id) === btn.dataset.rateEdit));
+                });
+            });
+            el.querySelectorAll('[data-rate-delete]').forEach((btn) => {
+                btn.addEventListener('click', () => this.deleteRate(btn.dataset.rateDelete));
+            });
             window.i18n.applyTranslations();
         } catch (e) {
             window.listStates.error(el, window.ui.t('common.error'), () => this.loadRates());
         }
     }
 
-    async openRateForm() {
+    /** Форма ставки: без аргумента — создание, со ставкой — правка. */
+    async openRateForm(rate = null) {
         const productsResp = await window.api.request('/warehouse/finished-products/?is_archived=false');
         const products = productsResp.results || productsResp;
         const operations = ['cutting', 'polishing', 'mounting', 'packing', 'other'];
+        const sel = (value, current) => (String(value) === String(current ?? '') ? ' selected' : '');
 
-        const modal = window.ui.modal('finance.add_rate', `
+        const modal = window.ui.modal(rate ? 'common.edit' : 'finance.add_rate', `
             <form id="rate-form">
                 <div class="form-group"><label data-i18n="finance.product"></label>
                     <select name="product" class="form-control" required>
                         <option value="" data-i18n="common.select"></option>
-                        ${products.map((p) => `<option value="${p.id}">${window.ui.escape(p.name)}</option>`).join('')}
+                        ${products.map((p) => `<option value="${p.id}"${sel(p.id, rate?.product)}>${window.ui.escape(p.name)}</option>`).join('')}
                     </select></div>
                 <div class="form-group"><label data-i18n="finance.operation"></label>
                     <select name="operation" class="form-control">
-                        ${operations.map((o) => `<option value="${o}" data-i18n="operations.${o}"></option>`).join('')}
+                        ${operations.map((o) => `<option value="${o}"${sel(o, rate?.operation)} data-i18n="operations.${o}"></option>`).join('')}
                     </select></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div class="form-group"><label data-i18n="finance.rate"></label>
-                        <input name="rate_per_unit" type="number" step="0.01" min="0.01" class="form-control" required></div>
+                        <input name="rate_per_unit" type="number" step="0.01" min="0.01" class="form-control" required
+                               value="${rate ? window.ui.escape(String(rate.rate_per_unit)) : ''}"></div>
                     <div class="form-group"><label data-i18n="warehouse.unit"></label>
-                        <select name="unit" class="form-control">${window.ui.unitOptions('sht')}</select></div>
+                        <select name="unit" class="form-control">${window.ui.unitOptions(rate?.unit || 'sht')}</select></div>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
             </form>
@@ -400,7 +417,10 @@ class FinanceComponent {
             const data = Object.fromEntries(new FormData(e.target));
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
-                    await window.api.request('/finance/labor-rates/', { method: 'POST', body: JSON.stringify(data) });
+                    await window.api.request(
+                        rate ? `/finance/labor-rates/${rate.id}/` : '/finance/labor-rates/',
+                        { method: rate ? 'PATCH' : 'POST', body: JSON.stringify(data) },
+                    );
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadRates();
@@ -409,6 +429,18 @@ class FinanceComponent {
                 }
             });
         });
+    }
+
+    async deleteRate(id) {
+        if (!(await window.confirmation.confirm(
+            window.ui.t('common.delete_confirm'), window.ui.t('common.delete')))) return;
+        try {
+            await window.api.request(`/finance/labor-rates/${id}/`, { method: 'DELETE' });
+            window.toast.success(window.ui.t('common.success'));
+            await this.loadRates();
+        } catch (error) {
+            window.toast.error(window.ui.errorText(error));
+        }
     }
 }
 
