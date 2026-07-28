@@ -22,12 +22,13 @@ class WarehouseComponent {
                 ${user.is_owner ? `<button class="tab-btn" data-wtab="archive" data-i18n="common.archive"></button>` : ''}
                 ${canEdit ? `<button class="tab-btn" data-wtab="history" data-i18n="warehouse.stock_movement"></button>` : ''}
             </div>
-            <div class="search-box" style="display:flex;gap:8px;align-items:center;">
-                <div style="position:relative;flex:1;">
+            <div class="search-box search-box--with-action">
+                <div class="search-field">
                     <span class="search-icon">🔍</span>
                     <input type="text" id="material-search" class="form-control" data-i18n="warehouse.search">
                 </div>
-                <button class="btn btn-secondary" id="scan-barcode-btn" type="button" title="Scan Barcode" style="padding:8px 12px;font-size:18px;">📷</button>
+                <button class="btn btn-secondary" id="scan-barcode-btn" type="button"
+                        style="padding:8px 12px;font-size:18px;">📷</button>
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;margin-top:10px;" data-i18n="warehouse.add_material"></button>` : ''}
             <div class="list-group" id="materials-list"></div>
@@ -73,25 +74,154 @@ class WarehouseComponent {
         await this.loadMaterials();
     }
 
-    /** Модальное окно сканера штрихкодов / QR-кодов (по макетам) */
+    /**
+     * Сканер штрихкодов и QR-кодов.
+     *
+     * Раньше это был макет: тёмный прямоугольник с эмодзи и анимацией, а обе
+     * кнопки — «Фонарик» и «Галерея» — не имели ни одного обработчика. Нажатие
+     * не делало ничего (подтверждено пользователем).
+     *
+     * Теперь окно показывает живое изображение с камеры и распознаёт код через
+     * встроенный в браузер BarcodeDetector (Chrome/Android). Где его нет
+     * (Safari) — предлагается ввести код вручную. Найденный код уходит в поиск
+     * по складу.
+     */
     openBarcodeScanner() {
+        const t = (k) => window.ui.t(k);
         const modal = window.ui.modal('warehouse.scan_barcode', `
             <div class="scanner-modal" style="text-align:center;padding:10px 0;">
-                <div class="scanner-box" style="position:relative;width:100%;max-width:280px;height:200px;margin:0 auto 15px;background:#0f172a;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid var(--primary);">
-                    <div style="position:absolute;top:0;left:0;right:0;bottom:0;border:2px dashed rgba(255,255,255,0.4);margin:20px;border-radius:8px;"></div>
-                    <div style="position:absolute;width:80%;height:2px;background:#e5484d;box-shadow:0 0 8px #e5484d;animation:scan 2s infinite;"></div>
-                    <span style="font-size:32px;">📷</span>
+                <div class="scanner-box" id="scanner-box" style="position:relative;width:100%;max-width:280px;height:200px;margin:0 auto 15px;background:#0f172a;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid var(--primary);">
+                    <video id="scanner-video" playsinline muted style="display:none;"></video>
+                    <div style="position:absolute;top:0;left:0;right:0;bottom:0;border:2px dashed rgba(255,255,255,0.4);margin:20px;border-radius:8px;pointer-events:none;"></div>
+                    <span id="scanner-placeholder" style="font-size:32px;">📷</span>
                 </div>
                 <p class="text-sm text-muted" data-i18n="warehouse.scan_hint"></p>
+                <p class="text-sm scanner-status" id="scanner-status"></p>
                 <div style="display:flex;gap:10px;justify-content:center;margin-top:15px;">
-                    <button class="btn btn-secondary text-sm" type="button">🔦 <span data-i18n="warehouse.flashlight"></span></button>
-                    <button class="btn btn-secondary text-sm" type="button">🖼️ <span data-i18n="warehouse.gallery"></span></button>
+                    <button class="btn btn-secondary btn-sm" type="button" id="scanner-torch">🔦 <span data-i18n="warehouse.flashlight"></span></button>
+                    <button class="btn btn-secondary btn-sm" type="button" id="scanner-gallery">🖼️ <span data-i18n="warehouse.gallery"></span></button>
                 </div>
+                <input type="file" id="scanner-file" accept="image/*" style="display:none;">
+                <form id="scanner-manual" style="display:flex;gap:8px;margin-top:14px;">
+                    <input name="code" class="form-control" data-i18n="warehouse.scan_manual" style="flex:1 1 auto;min-width:0;">
+                    <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;" data-i18n="common.search"></button>
+                </form>
             </div>
-            <style>
-                @keyframes scan { 0%{top:20%;} 50%{top:80%;} 100%{top:20%;} }
-            </style>
         `);
+
+        const video = modal.querySelector('#scanner-video');
+        const placeholder = modal.querySelector('#scanner-placeholder');
+        const status = modal.querySelector('#scanner-status');
+        const torchBtn = modal.querySelector('#scanner-torch');
+        const fileInput = modal.querySelector('#scanner-file');
+        const say = (text, danger = false) => {
+            status.textContent = text;
+            status.className = `text-sm scanner-status ${danger ? 'text-danger' : 'text-muted'}`;
+        };
+
+        let stream = null;
+        let track = null;
+        let stopped = false;
+        const detector = 'BarcodeDetector' in window ? new window.BarcodeDetector() : null;
+
+        const stop = () => {
+            stopped = true;
+            if (stream) stream.getTracks().forEach((s) => s.stop());
+            stream = null;
+            track = null;
+        };
+        // Камеру надо гасить при любом способе закрытия окна (крестик, фон,
+        // Escape, «Назад»), поэтому следим за исчезновением окна из DOM.
+        const watcher = new MutationObserver(() => {
+            if (!modal.isConnected) { stop(); watcher.disconnect(); }
+        });
+        watcher.observe(document.body, { childList: true });
+
+        const found = (code) => {
+            stop();
+            const input = document.querySelector('#material-search');
+            window.ui.closeModal(modal);
+            if (input) {
+                input.value = code;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            window.toast.success(code);
+        };
+
+        const scanLoop = async () => {
+            if (stopped || !detector) return;
+            try {
+                const codes = await detector.detect(video);
+                if (codes && codes.length && codes[0].rawValue) return found(codes[0].rawValue);
+            } catch (e) { /* кадр не разобран — пробуем следующий */ }
+            if (!stopped) setTimeout(scanLoop, 400);
+        };
+
+        (async () => {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                say(t('warehouse.scan_no_camera'), true);
+                return;
+            }
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                });
+                if (stopped) { stop(); return; }
+                track = stream.getVideoTracks()[0];
+                video.srcObject = stream;
+                video.style.display = 'block';
+                placeholder.style.display = 'none';
+                await video.play();
+                // Фонарик есть далеко не у всех камер — кнопку прячем, чтобы не
+                // повторять историю с нажатием «в никуда».
+                const torchSupported = !!(track.getCapabilities && track.getCapabilities().torch);
+                if (!torchSupported) torchBtn.style.display = 'none';
+                say(detector ? t('warehouse.scan_hint') : t('warehouse.scan_no_detector'), !detector);
+                scanLoop();
+            } catch (e) {
+                // Камеры нет — фонарику светить нечем, кнопку убираем, чтобы
+                // она не осталась нажимаемой «в никуда».
+                torchBtn.style.display = 'none';
+                say(t('warehouse.scan_no_camera'), true);
+            }
+        })();
+
+        let torchOn = false;
+        torchBtn.addEventListener('click', async () => {
+            if (!track) return;
+            try {
+                torchOn = !torchOn;
+                await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+                torchBtn.classList.toggle('btn-primary', torchOn);
+            } catch (e) {
+                say(t('warehouse.scan_no_torch'), true);
+            }
+        });
+
+        // Ручной ввод — единственный рабочий путь там, где браузер не умеет
+        // распознавать коды (Windows-версия Chrome, Safari): обещание «введите
+        // код вручную» должно быть чем-то подкреплено.
+        modal.querySelector('#scanner-manual').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const code = new FormData(e.target).get('code').trim();
+            if (code) found(code);
+        });
+
+        modal.querySelector('#scanner-gallery').addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', async () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            if (!detector) { say(t('warehouse.scan_no_detector'), true); return; }
+            try {
+                const bitmap = await createImageBitmap(file);
+                const codes = await detector.detect(bitmap);
+                bitmap.close();
+                if (codes && codes.length && codes[0].rawValue) found(codes[0].rawValue);
+                else say(t('warehouse.scan_not_found'), true);
+            } catch (e) {
+                say(t('warehouse.scan_not_found'), true);
+            }
+        });
     }
 
     async loadMaterials() {

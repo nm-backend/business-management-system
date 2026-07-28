@@ -97,3 +97,32 @@ body.modal-open {
     width: 100%;
     overflow: hidden;
 }
+
+/* Строка поиска с кнопкой действия (сканер на складе).
+   .btn задаёт width:100%, поэтому в flex-строке кнопка забирала всю ширину:
+   воспроизведено на 1150 px — поле поиска 52 px, кнопка камеры 743 px. */
+.search-box--with-action {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.search-box--with-action > .search-field {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.search-box--with-action > .btn {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+/* Сканер штрихкодов: живое видео с камеры. */
+.scanner-box video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.scanner-status {
+    margin-top: 10px;
+    min-height: 20px;
+}

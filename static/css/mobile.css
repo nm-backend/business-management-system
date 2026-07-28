@@ -12,9 +12,17 @@
     padding-bottom: calc(var(--bottom-nav-height) + 16px + env(safe-area-inset-bottom, 0px));
 }
 
-/* ── Pull-to-refresh жесты не блокируем ── */
-html, body {
-    overscroll-behavior: contain;
+/* ── Overscroll: гасим «потяни, чтобы обновить» на самом окне ──
+   Значение ставим ТОЛЬКО на html. На body его быть не должно: из-за
+   overflow-x:hidden body — контейнер прокрутки без собственного запаса, и
+   `contain` на нём обрывал цепочку прокрутки. Воспроизведено: курсор над
+   боковым меню, колесо вниз — страница не двигалась (0 из 451 px), над
+   контентом прокручивалась. */
+html {
+    overscroll-behavior-y: contain;
+}
+body {
+    overscroll-behavior-y: auto;
 }
 
 /* ── Bottom nav: активный индикатор ── */
