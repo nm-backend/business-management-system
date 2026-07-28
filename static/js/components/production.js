@@ -224,7 +224,7 @@ class ProductionComponent {
                 </div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
                     <textarea name="comment" class="form-control" rows="2"></textarea></div>
-                <div class="form-group"><label data-i18n="production.photo"></label>
+                <div class="form-group"><label data-i18n="production.attach_photo"></label>
                     <input name="photo" type="file" accept="image/*" class="form-control"></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="production.send_for_confirmation"></button>
             </form>
