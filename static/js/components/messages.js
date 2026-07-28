@@ -496,10 +496,61 @@ class MessagesComponent {
         return map[type] || ['🔔', 'blue'];
     }
 
+    /**
+     * Куда ведёт уведомление. Возвращает '' — если вести некуда:
+     * тогда строка остаётся некликабельной, а не бросает в раздел без прав.
+     *
+     * Права важны: работнику закрыты финансы (finance.js рендерит заглушку
+     * для не-владельца) и клиенты (пункт меню у него скрыт).
+     */
+    notificationRoute(type) {
+        const user = window.currentUser || {};
+        const owner = !!user.is_owner;
+        const staff = owner || !!user.is_admin;
+        const map = {
+            new_order: '#/orders',
+            new_expense: owner ? '#/finance' : '',
+            cash_change: owner ? '#/finance' : '',
+            report_ready: owner ? '#/finance' : '',
+            unpaid_client: staff ? '#/clients' : '',
+            overdue_debt: staff ? '#/clients' : '',
+            material_shortage: '#/warehouse',
+            worker_refused: '#/production',
+            work_awaiting: '#/production',
+            task_assigned: '#/production',
+            task_changed: '#/production',
+            task_cancelled: '#/production',
+            work_confirmed: '#/production',
+            work_rejected: '#/production',
+            work_accrued: '#/production',
+            new_message: '#/messages',
+        };
+        return map[type] || '';
+    }
+
+    /** Клик по уведомлению: пометить прочитанным и перейти в нужный раздел. */
+    async openNotification(id) {
+        const n = (this.notifications || []).find((item) => String(item.id) === String(id));
+        if (!n) return;
+        const route = this.notificationRoute(n.type);
+        if (!n.is_read) {
+            n.is_read = true;
+            try {
+                await window.api.request(`/messaging/notifications/${n.id}/mark_read/`, { method: 'POST' });
+                if (window.refreshNotificationBadge) window.refreshNotificationBadge();
+            } catch (e) { /* переход важнее отметки */ }
+        }
+        if (route) window.location.hash = route.slice(1);
+        else this.loadNotifications();
+    }
+
     renderNotification(n) {
         const [icon, color] = this.notificationStyle(n.type);
+        const route = this.notificationRoute(n.type);
+        const clickable = route ? `cursor:pointer;` : 'cursor:default;';
         return `
-            <div class="list-row" style="cursor:default;${n.is_read ? '' : 'background:var(--primary-soft);'}">
+            <div class="list-row" ${route ? `data-notif-id="${n.id}" role="button" tabindex="0"` : ''}
+                 style="${clickable}${n.is_read ? '' : 'background:var(--primary-soft);'}">
                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
                     <div class="stat-icon ${color}" style="width:36px;height:36px;font-size:16px;border-radius:10px;">${icon}</div>
                     <div style="min-width:0;">
@@ -522,6 +573,7 @@ class MessagesComponent {
         try {
             const response = await window.api.request('/messaging/notifications/');
             const notifications = response.results || response;
+            this.notifications = notifications;
             if (!notifications.length) {
                 window.listStates.empty(el, window.ui.t('messages_section.no_notifications'));
                 return;
@@ -535,6 +587,13 @@ class MessagesComponent {
                     <div class="list-group">
                         ${g.items.map((n) => this.renderNotification(n)).join('')}
                     </div>`).join('')}`;
+            el.querySelectorAll('[data-notif-id]').forEach((row) => {
+                const open = () => this.openNotification(row.dataset.notifId);
+                row.addEventListener('click', open);
+                row.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+                });
+            });
             const markAll = el.querySelector('#mark-all-read');
             if (markAll) {
                 markAll.addEventListener('click', async () => {
