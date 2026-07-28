@@ -268,3 +268,88 @@ window.ui = {
         });
     },
 };
+
+/**
+ * Показ ошибок HTML5-валидации.
+ *
+ * Раньше браузер молча блокировал отправку формы: пользователь вводил, например,
+ * отрицательную сумму (поле с min="0.01"), жал «Сохранить» — и не происходило
+ * НИЧЕГО: ни тоста, ни подсветки, ни запроса. В приложении 31 обязательное поле
+ * и 17 числовых с ограничениями, так что молчаливый отказ встречался часто.
+ *
+ * Событие invalid не всплывает, поэтому слушаем на фазе перехвата.
+ */
+(function reportValidationErrors() {
+    let lastShownAt = 0;
+
+    document.addEventListener('invalid', (event) => {
+        const field = event.target;
+        if (!field || !field.validationMessage) return;
+
+        // Убираем стандартную подсказку браузера — показываем свой тост.
+        event.preventDefault();
+
+        // Первое неверное поле получает фокус и подсветку.
+        const alreadyFocused = document.activeElement === field;
+        if (!alreadyFocused && typeof field.focus === 'function') {
+            field.focus({ preventScroll: false });
+        }
+        field.classList.add('input-invalid');
+        field.addEventListener('input', () => field.classList.remove('input-invalid'), { once: true });
+
+        // Форма сыплет invalid на каждое поле — не заваливаем экран тостами.
+        const now = Date.now();
+        if (now - lastShownAt < 1500) return;
+        lastShownAt = now;
+
+        const label = field.closest('.form-group')?.querySelector('label')?.textContent?.trim();
+        const text = label ? `${label}: ${field.validationMessage}` : field.validationMessage;
+        if (window.toast && window.toast.error) window.toast.error(text);
+    }, true);
+})();
+
+/**
+ * Блокировка прокрутки страницы под открытым окном.
+ *
+ * Воспроизведено (390x844, колесо мыши над открытой формой заказа): страница
+ * под окном уезжала на 600 px при прокрутке по затемнению и ещё на 230 px при
+ * прокрутке по самому окну. На телефоне это выглядит так: тянешь список полей,
+ * а вместо него уползает список под окном — и после закрытия оказываешься в
+ * другом месте страницы.
+ *
+ * position:fixed, а не overflow:hidden: Safari на iOS игнорирует overflow на
+ * body. Позицию запоминаем и возвращаем при закрытии последнего окна.
+ *
+ * Слушаем DOM, а не точки открытия/закрытия: окна убирают из трёх разных мест
+ * (крестик, «Назад» в роутере, смена маршрута), и любой пропущенный путь
+ * оставил бы страницу навсегда заблокированной.
+ */
+(function lockScrollBehindModals() {
+    let savedY = 0;
+
+    const sync = () => {
+        const hasModal = !!document.querySelector('.modal');
+        const locked = document.body.classList.contains('modal-open');
+        if (hasModal === locked) return;
+
+        if (hasModal) {
+            savedY = window.scrollY || document.documentElement.scrollTop || 0;
+            document.body.style.top = `-${savedY}px`;
+            document.body.classList.add('modal-open');
+        } else {
+            document.body.classList.remove('modal-open');
+            document.body.style.top = '';
+            // Возврат без анимации: html { scroll-behavior: smooth } иначе
+            // прокручивал бы страницу на глазах у пользователя.
+            const html = document.documentElement;
+            const prev = html.style.scrollBehavior;
+            html.style.scrollBehavior = 'auto';
+            window.scrollTo(0, savedY);
+            html.style.scrollBehavior = prev;
+        }
+    };
+
+    const start = () => new MutationObserver(sync).observe(document.body, { childList: true });
+    if (document.body) start();
+    else document.addEventListener('DOMContentLoaded', start);
+})();

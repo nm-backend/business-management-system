@@ -77,3 +77,23 @@
     to { background-position: -200% 0; }
 }
 .skeleton-row { animation: skeleton 1.4s ease-in-out infinite; }
+
+/* Подсветка поля, не прошедшего проверку. Раньше браузер молча блокировал
+   отправку формы: ни тоста, ни подсветки — пользователь жал «Сохранить»
+   и не понимал, почему ничего не происходит. */
+.input-invalid,
+.form-control.input-invalid {
+    border-color: var(--danger-color, #d9534f);
+    box-shadow: 0 0 0 3px rgba(217, 83, 79, 0.15);
+}
+
+/* Пока открыто окно, страница под ним не должна ехать. position:fixed, а не
+   overflow:hidden — Safari на iOS игнорирует overflow у body. Позицию хранит
+   inline-стиль top, который выставляет ui.js. */
+body.modal-open {
+    position: fixed;
+    left: 0;
+    right: 0;
+    width: 100%;
+    overflow: hidden;
+}
