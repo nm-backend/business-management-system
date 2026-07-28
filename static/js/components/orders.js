@@ -55,6 +55,9 @@ class OrdersComponent {
 
     async loadOrders() {
         const listEl = document.getElementById('orders-list');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(listEl)) return;
         window.listStates.skeleton(listEl);
         try {
             const params = new URLSearchParams();

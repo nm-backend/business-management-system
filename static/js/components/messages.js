@@ -569,6 +569,9 @@ class MessagesComponent {
         const el = this.bodyEl;
         el.style.display = 'block';
         el.style.overflowY = 'auto';
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
             const response = await window.api.request('/messaging/notifications/');

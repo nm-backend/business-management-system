@@ -62,6 +62,9 @@ class FinishedProductsComponent {
 
     async loadProducts() {
         const listEl = document.getElementById('products-list');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(listEl)) return;
         window.listStates.skeleton(listEl);
         try {
             let query = `?is_archived=${this.tab === 'archive'}`;

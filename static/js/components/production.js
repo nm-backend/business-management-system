@@ -42,6 +42,9 @@ class ProductionComponent {
 
     async loadTasks() {
         const contentEl = this.container.querySelector('#production-content');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(contentEl)) return;
         window.listStates.loading(contentEl, window.ui.t('common.loading'));
         try {
             const response = await window.api.request('/production/tasks/');
@@ -88,6 +91,9 @@ class ProductionComponent {
 
     async loadWorks() {
         const contentEl = this.container.querySelector('#production-content');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(contentEl)) return;
         window.listStates.loading(contentEl, window.ui.t('common.loading'));
         try {
             const response = await window.api.request('/production/works/');
@@ -129,6 +135,9 @@ class ProductionComponent {
 
     async loadEarnings() {
         const contentEl = this.container.querySelector('#production-content');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(contentEl)) return;
         window.listStates.loading(contentEl, window.ui.t('common.loading'));
         try {
             const data = await window.api.request('/production/works/my_earnings/');

@@ -57,6 +57,9 @@ class FinanceComponent {
 
     async loadAnalytics() {
         const el = this.contentEl;
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         const period = this.period || 'month';
         try {
@@ -134,6 +137,9 @@ class FinanceComponent {
 
     async loadExpenses() {
         const el = this.contentEl;
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
             const response = await window.api.request('/finance/expenses/');
@@ -239,6 +245,9 @@ class FinanceComponent {
 
     async loadPayments() {
         const el = this.contentEl;
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
             const response = await window.api.request('/finance/worker-payments/');
@@ -346,6 +355,9 @@ class FinanceComponent {
 
     async loadRates() {
         const el = this.contentEl;
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
             const response = await window.api.request('/finance/labor-rates/');

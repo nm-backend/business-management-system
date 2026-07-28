@@ -47,6 +47,9 @@ class ClientsComponent {
 
     async loadClients(search = '') {
         const listEl = document.getElementById('clients-list');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(listEl)) return;
         window.listStates.skeleton(listEl);
         try {
             let query = `?is_archived=${this.currentTab === 'archive'}`;
@@ -131,7 +134,8 @@ class ClientsComponent {
             this.openForm(c);
         });
         modal.querySelector('#client-orders').addEventListener('click', () => {
-            window.ui.closeModal(modal);
+            // Окно закроет сам роутер на смене адреса. Закрывать его здесь
+            // нельзя: history.back() из closeModal откатывал переход обратно.
             window.router.navigate('/orders');
         });
         // Вкладка «Архив» была только на чтение: убрать клиента в архив или

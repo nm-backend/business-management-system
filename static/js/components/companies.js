@@ -50,6 +50,9 @@ class CompaniesComponent {
 
     async load() {
         const listEl = document.getElementById('companies-list');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(listEl)) return;
         window.listStates.loading(listEl, window.ui.t('common.loading'));
         try {
             const response = await window.api.request('/companies/');

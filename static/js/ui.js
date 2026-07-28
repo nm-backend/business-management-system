@@ -92,6 +92,7 @@ window.ui = {
         return true;
     },
 
+
     /** Закрывает окно, освобождая занятую им запись истории. */
     closeModal(modal) {
         if (!modal || modal.dataset.skpClosing) return;

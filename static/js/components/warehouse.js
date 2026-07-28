@@ -96,6 +96,9 @@ class WarehouseComponent {
 
     async loadMaterials() {
         const listEl = document.getElementById('materials-list');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(listEl)) return;
         window.listStates.skeleton(listEl);
         try {
             let query = `?is_archived=${this.tab === 'archive'}`;
@@ -203,6 +206,9 @@ class WarehouseComponent {
     /** История движения склада: приходы, расходы, производство. */
     async loadHistory() {
         const listEl = document.getElementById('materials-list');
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(listEl)) return;
         window.listStates.skeleton(listEl);
         try {
             const response = await window.api.request('/warehouse/stock-movements/?page_size=50');
