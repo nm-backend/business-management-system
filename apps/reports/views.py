@@ -381,25 +381,54 @@ class RevenueTimelineView(APIView):
             .order_by('month')
         )
 
+        payouts = (
+            WorkerPayment.objects.filter(
+                company_id=company_id,
+                payment_date__gte=six_months_ago,
+            )
+            .annotate(month=TruncMonth('payment_date'))
+            .values('month')
+            .annotate(total=Sum('amount'))
+            .order_by('month')
+        )
+
+        def month_key(value):
+            """
+            Первое число месяца как date.
+
+            TruncMonth над DateTimeField (оплаты) отдаёт datetime, над DateField
+            (расходы, выплаты) — date. Без приведения к одному типу один и тот же
+            месяц становился ДВУМЯ разными ключами, а sorted() по смеси date и
+            datetime падал с TypeError — график на дашборде отдавал 500, как
+            только в компании появлялись и оплата, и расход.
+            """
+            return value.date() if isinstance(value, datetime.datetime) else value
+
         # Собираем все месяцы
         months_set = set()
         rev_map = {}
         for p in payments:
-            m = p['month']
+            m = month_key(p['month'])
             months_set.add(m)
             rev_map[m] = money(p['total'])
 
         exp_map = {}
         for e in expenses:
-            m = e['month']
+            m = month_key(e['month'])
             months_set.add(m)
             exp_map[m] = money(e['total'])
 
         cogs_map = {}
         for d in delivered:
-            m = d['month']
+            m = month_key(d['month'])
             months_set.add(m)
             cogs_map[m] = money(d['cogs'])
+
+        payout_map = {}
+        for w in payouts:
+            m = month_key(w['month'])
+            months_set.add(m)
+            payout_map[m] = money(w['total'])
 
         months = sorted(months_set, reverse=True)[:6]
         months.reverse()
@@ -418,8 +447,12 @@ class RevenueTimelineView(APIView):
             rev = rev_map.get(m, 0)
             exp = exp_map.get(m, 0)
             cogs = cogs_map.get(m, 0)
+            payout = payout_map.get(m, 0)
             revenues.append(rev)
-            net_profits.append(rev - cogs - exp)
+            # Та же формула, что и у карточки «Чистая прибыль» (owner_analytics_data):
+            # выплаты работникам вычитаются. Иначе график показывал прибыль выше,
+            # чем карточка над ним, — на сумму выплат.
+            net_profits.append(rev - cogs - exp - payout)
 
         return Response({
             'labels': labels,
