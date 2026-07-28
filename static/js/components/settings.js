@@ -319,7 +319,7 @@ class SettingsComponent {
         modal.querySelector('#toggle-active').addEventListener('click', async () => {
             try {
                 await window.api.request(`/accounts/users/${u.id}/toggle_active/`, { method: 'POST' });
-                modal.remove();
+                window.ui.closeModal(modal);
                 window.toast.success(window.ui.t('common.success'));
                 await this.loadUsers();
             } catch (error) {
@@ -328,7 +328,7 @@ class SettingsComponent {
         });
 
         modal.querySelector('#reset-password').addEventListener('click', () => {
-            modal.remove();
+            window.ui.closeModal(modal);
             this.openResetPassword(u);
         });
     }
@@ -350,7 +350,7 @@ class SettingsComponent {
                     await window.api.request(`/accounts/users/${u.id}/reset_password/`, {
                         method: 'POST', body: JSON.stringify(data),
                     });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                 } catch (error) {
                     window.toast.error(window.ui.errorText(error));
@@ -384,7 +384,7 @@ class SettingsComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/accounts/users/', { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadUsers();
                 } catch (error) {
@@ -410,7 +410,7 @@ class SettingsComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/accounts/me/password/', { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('auth.password_changed'));
                 } catch (error) {
                     window.toast.error(window.ui.errorText(error));

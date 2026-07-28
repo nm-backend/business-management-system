@@ -21,7 +21,7 @@ class ConfirmationDialog {
                 </div>`;
             modal.querySelector('.confirmation-message').textContent = message;
             const finish = (result) => {
-                modal.remove();
+                window.ui.closeModal(modal);
                 resolve(result);
             };
             modal.querySelector('.close').addEventListener('click', () => finish(false));

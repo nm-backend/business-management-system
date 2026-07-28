@@ -18,6 +18,10 @@
     <link rel="apple-touch-icon" href="{% static 'img/logo.svg' %}" />
     <link rel="manifest" href="{% static 'manifest.json' %}" />
     <meta name="theme-color" content="#197387" />
+    <!-- apple-mobile-web-app-capable устарел и ругался в консоли на каждой
+         загрузке; стандартный тег — mobile-web-app-capable. Оставляем оба:
+         старые версии iOS понимают только apple-вариант. -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -161,7 +165,10 @@
     </div>
 
     <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" nonce="{{ request.csp_nonce }}"></script>
+    <!-- Chart.js хранится в проекте, а не тянется с cdn.jsdelivr.net: в цеху со
+         слабым интернетом графики просто не грузились, плюс это снимает
+         зависимость от чужого сервера и ошибку CSP на его sourcemap. -->
+    <script src="{% static 'js/vendor/chart.umd.min.js' %}?v={{ ASSET_VERSION }}" nonce="{{ request.csp_nonce }}"></script>
 
     <!-- Core JS -->
     <script src="{% static 'js/api.js' %}?v={{ ASSET_VERSION }}"></script>

@@ -195,7 +195,7 @@ class FinanceComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/finance/expenses/', { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadExpenses();
                 } catch (error) {
@@ -270,7 +270,7 @@ class FinanceComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/finance/worker-payments/', { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadPayments();
                 } catch (error) {
@@ -337,7 +337,7 @@ class FinanceComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/finance/labor-rates/', { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadRates();
                 } catch (error) {

@@ -144,14 +144,14 @@ class OrdersComponent {
             const el = modal.querySelector(`#${id}`);
             if (el) el.addEventListener('click', handler);
         };
-        bind('send-worker', () => { modal.remove(); this.openSendToWorker(o); });
-        bind('edit-order', () => { modal.remove(); this.openForm(o); });
-        bind('add-payment', () => { modal.remove(); this.openPaymentForm(o); });
+        bind('send-worker', () => { window.ui.closeModal(modal); this.openSendToWorker(o); });
+        bind('edit-order', () => { window.ui.closeModal(modal); this.openForm(o); });
+        bind('add-payment', () => { window.ui.closeModal(modal); this.openPaymentForm(o); });
         bind('deliver-order', async () => {
             if (!(await window.confirmation.confirm(window.ui.t('orders.deliver_confirm'), window.ui.t('orders.deliver')))) return;
             try {
                 await window.api.request(`/orders/orders/${o.id}/deliver/`, { method: 'POST' });
-                modal.remove();
+                window.ui.closeModal(modal);
                 window.toast.success(window.ui.t('common.success'));
                 await this.loadOrders();
             } catch (error) {
@@ -162,7 +162,7 @@ class OrdersComponent {
             if (!(await window.confirmation.confirm(window.ui.t('orders.cancel_confirm'), window.ui.t('common.cancel')))) return;
             try {
                 await window.api.request(`/orders/orders/${o.id}/cancel/`, { method: 'POST' });
-                modal.remove();
+                window.ui.closeModal(modal);
                 window.toast.success(window.ui.t('common.success'));
                 await this.loadOrders();
             } catch (error) {
@@ -224,7 +224,7 @@ class OrdersComponent {
                     } else {
                         await window.api.request('/orders/orders/', { method: 'POST', body: JSON.stringify(data) });
                     }
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadOrders();
                 } catch (error) {
@@ -262,7 +262,7 @@ class OrdersComponent {
                         method: 'POST',
                         body: JSON.stringify({ order: o.id, worker }),
                     });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadOrders();
                 } catch (error) {
@@ -308,7 +308,7 @@ class OrdersComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/clients/payments/', { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadOrders();
                 } catch (error) {

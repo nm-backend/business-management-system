@@ -125,11 +125,11 @@ class ClientsComponent {
         `);
 
         modal.querySelector('#edit-client').addEventListener('click', () => {
-            modal.remove();
+            window.ui.closeModal(modal);
             this.openForm(c);
         });
         modal.querySelector('#client-orders').addEventListener('click', () => {
-            modal.remove();
+            window.ui.closeModal(modal);
             window.router.navigate('/orders');
         });
     }
@@ -159,7 +159,7 @@ class ClientsComponent {
                     } else {
                         await window.api.request('/clients/clients/', { method: 'POST', body: JSON.stringify(data) });
                     }
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadClients();
                 } catch (error) {

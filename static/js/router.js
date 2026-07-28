@@ -5,7 +5,27 @@ class Router {
     constructor() {
         this.routes = {};
         this.query = new URLSearchParams();
-        window.addEventListener('hashchange', () => this.handleRoute());
+        // «Назад» при открытом окне: ui.modal() кладёт в историю свою запись с
+        // ТЕМ ЖЕ адресом, поэтому здесь приходит popstate без hashchange —
+        // просто закрываем верхнее окно и никуда не уходим.
+        window.addEventListener('popstate', () => {
+            if (window.ui && window.ui.closeTopModal) window.ui.closeTopModal();
+        });
+
+        // Смена адреса (клик по меню): окно не должно остаться над новой страницей.
+        window.addEventListener('hashchange', () => {
+            if (window.ui && window.ui.closeTopModal) {
+                while (window.ui.closeTopModal()) { /* закрываем все открытые */ }
+            }
+            this.handleRoute();
+        });
+
+        // Escape — привычный способ закрыть окно с клавиатуры.
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            const modals = document.querySelectorAll('.modal');
+            if (modals.length && window.ui) window.ui.closeModal(modals[modals.length - 1]);
+        });
     }
 
     addRoute(path, component) {

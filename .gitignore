@@ -216,3 +216,29 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Служебные данные инструментов и артефакты прогонов — не исходный код.
+# desktop.db весит 27 МБ и менялся при каждой сессии, раздувая историю.
+# Документацию в .freebuff (run.md, docs/) НЕ игнорируем — она нужна в репозитории.
+.freebuff/desktop.db
+.freebuff/desktop.db-shm
+.freebuff/desktop.db-wal
+.freebuff/worktrees/
+.playwright-mcp/
+
+# Локальные базы разработки (боевая — PostgreSQL).
+*.sqlite3
+*.sqlite3-journal
+
+# Загрузки пользователей: содержимое media создаётся в рантайме,
+# в репозитории ему не место (в Docker это отдельный том).
+media/
+
+# Скриншоты и отчёты проверок.
+*_dashboard.png
+*_warehouse.png
+logo_check.png
+
+# Дампы базы: содержат учётные записи с хешами паролей, токены и данные клиентов.
+# Бэкапы должны уходить в S3/Telegram (apps/backup), а не в репозиторий.
+backups/

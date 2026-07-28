@@ -117,7 +117,7 @@ class FinishedProductsComponent {
 
         if (canEdit) {
             modal.querySelector('#edit-product').addEventListener('click', () => {
-                modal.remove();
+                window.ui.closeModal(modal);
                 this.openForm(p);
             });
         }
@@ -168,7 +168,7 @@ class FinishedProductsComponent {
                             method: 'POST', body: JSON.stringify(data),
                         });
                     }
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadProducts();
                 } catch (error) {

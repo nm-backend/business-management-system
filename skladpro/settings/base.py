@@ -268,7 +268,32 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Версия статики для cache-busting (?v=...). Бампайте при изменении CSS/JS.
-ASSET_VERSION = '20260714enhance'
+def _compute_asset_version():
+    """
+    Версия статики для ?v=... — считается по времени изменения файлов в static/.
+
+    Раньше здесь стояла константа, которую нужно было помнить и бампать руками.
+    Её забывали — и после деплоя браузеры продолжали крутить СТАРЫЕ js/css из
+    кэша (воспроизведено: правка ui.js не доезжала до страницы, пока не сброшен
+    кэш). Теперь любое изменение файла меняет версию само.
+
+    ASSET_VERSION из окружения имеет приоритет: на проде удобно подставить хеш
+    коммита, чтобы все инстансы отдавали одинаковую версию.
+    """
+    env_version = config('ASSET_VERSION', default='')
+    if env_version:
+        return env_version
+    latest = 0
+    for directory in (BASE_DIR / 'static',):
+        if not directory.exists():
+            continue
+        for path in directory.rglob('*'):
+            if path.is_file():
+                latest = max(latest, int(path.stat().st_mtime))
+    return str(latest or 1)
+
+
+ASSET_VERSION = _compute_asset_version()
 
 # URL для аутентификации
 LOGIN_URL = '/accounts/login/'

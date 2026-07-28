@@ -149,11 +149,11 @@ class WarehouseComponent {
 
         if (canEdit) {
             modal.querySelector('#edit-material').addEventListener('click', () => {
-                modal.remove();
+                window.ui.closeModal(modal);
                 this.openForm(m);
             });
             modal.querySelector('#income-material').addEventListener('click', () => {
-                modal.remove();
+                window.ui.closeModal(modal);
                 this.openIncomeForm(m);
             });
         }
@@ -221,7 +221,7 @@ class WarehouseComponent {
                             method: 'POST', body: JSON.stringify(data),
                         });
                     }
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadMaterials();
                 } catch (error) {
@@ -250,7 +250,7 @@ class WarehouseComponent {
                         method: 'PATCH',
                         body: JSON.stringify({ quantity: Number(m.quantity) + add }),
                     });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadMaterials();
                 } catch (error) {

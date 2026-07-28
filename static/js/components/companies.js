@@ -107,7 +107,7 @@ class CompaniesComponent {
         modal.querySelector('#toggle-company').addEventListener('click', async () => {
             try {
                 await window.api.request(`/companies/${c.id}/toggle_active/`, { method: 'POST' });
-                modal.remove();
+                window.ui.closeModal(modal);
                 window.toast.success(window.ui.t('common.success'));
                 await this.load();
             } catch (error) {
@@ -139,7 +139,7 @@ class CompaniesComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/companies/', { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.load();
                 } catch (error) {

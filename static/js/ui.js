@@ -54,11 +54,47 @@ window.ui = {
                 </div>
                 <div class="modal-body">${bodyHtml}</div>
             </div>`;
-        modal.querySelector('.close').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+        const close = () => this.closeModal(modal);
+        modal.querySelector('.close').addEventListener('click', close);
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
         document.body.appendChild(modal);
+
+        // Окно занимает СВОЮ запись в истории (адрес не меняется). Тогда «Назад»
+        // на телефоне закрывает карточку, а не уводит на другую страницу.
+        // Раньше «Назад» менял хеш: страница под окном перерисовывалась, а само
+        // окно оставалось висеть поверх чужого экрана (воспроизведено: открыт
+        // заказ на #/orders, «Назад» -> #/settings, окно на месте).
+        history.pushState({ skpModal: true }, '', location.href);
+        modal.dataset.skpHistory = '1';
+
         window.i18n.applyTranslations();
+        // Фокус внутрь окна: Tab не должен уходить на страницу под ним.
+        const focusable = modal.querySelector('input, select, textarea, button:not(.close)');
+        if (focusable) focusable.focus();
         return modal;
+    },
+
+    /** Закрывает окно, освобождая занятую им запись истории. */
+    closeModal(modal) {
+        if (!modal || modal.dataset.skpClosing) return;
+        modal.dataset.skpClosing = '1';
+        const ownsHistoryEntry = modal.dataset.skpHistory === '1';
+        modal.remove();
+        if (ownsHistoryEntry && history.state && history.state.skpModal) history.back();
+    },
+
+    /**
+     * Закрывает верхнее окно БЕЗ обращения к истории.
+     * Вызывается из роутера, когда назад/переход уже произошёл.
+     */
+    closeTopModal() {
+        const modals = document.querySelectorAll('.modal');
+        if (!modals.length) return false;
+        const top = modals[modals.length - 1];
+        top.dataset.skpHistory = '';   // запись истории уже израсходована
+        top.dataset.skpClosing = '1';
+        top.remove();
+        return true;
     },
 
     /** Кнопка отправки формы: блокирует на время запроса. */

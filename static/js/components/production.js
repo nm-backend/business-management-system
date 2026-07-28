@@ -182,7 +182,7 @@ class ProductionComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request(`/production/tasks/${id}/refuse/`, { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadTasks();
                 } catch (error) {
@@ -247,7 +247,7 @@ class ProductionComponent {
             await window.ui.submitGuard(form.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/production/works/', { method: 'POST', body: formData });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('production.work_submitted'));
                     this.tab = 'works';
                     this.container.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === 'works'));
@@ -278,7 +278,7 @@ class ProductionComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request(`/production/works/${id}/confirm/`, { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('production.work_confirmed'));
                     await this.loadWorks();
                 } catch (error) {
@@ -302,7 +302,7 @@ class ProductionComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request(`/production/works/${id}/reject/`, { method: 'POST', body: JSON.stringify(data) });
-                    modal.remove();
+                    window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('production.work_rejected'));
                     await this.loadWorks();
                 } catch (error) {
