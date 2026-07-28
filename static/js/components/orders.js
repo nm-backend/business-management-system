@@ -7,6 +7,7 @@ class OrdersComponent {
     async render(container) {
         document.getElementById('page-title').setAttribute('data-i18n', 'orders.title');
         this.currentStatus = 'all';
+        this.search = '';
         const user = window.currentUser;
         const canEdit = user.is_owner || user.is_admin;
 
@@ -17,9 +18,24 @@ class OrdersComponent {
                     <button class="tab-btn ${s === 'all' ? 'active' : ''}" data-status="${s}"
                         data-i18n="${s === 'all' ? 'common.all' : 'statuses.' + s}"></button>`).join('')}
             </div>
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="order-search" class="form-control" data-i18n="orders.search">
+            </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-order-btn" style="margin-bottom:12px;" data-i18n="orders.new_order"></button>` : ''}
             <div id="orders-list" class="card-grid"></div>
         `;
+
+        // Поиск с задержкой: не дёргаем API на каждое нажатие.
+        const searchInput = container.querySelector('#order-search');
+        let searchTimer = null;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                this.search = searchInput.value.trim();
+                this.loadOrders();
+            }, 350);
+        });
 
         container.querySelectorAll('.tab-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -41,7 +57,16 @@ class OrdersComponent {
         const listEl = document.getElementById('orders-list');
         window.listStates.skeleton(listEl);
         try {
-            const query = this.currentStatus !== 'all' ? `?status=${this.currentStatus}` : '';
+            const params = new URLSearchParams();
+            if (this.currentStatus !== 'all') params.set('status', this.currentStatus);
+            if (this.search) {
+                // «#12» и «12» — это номер заказа (точное совпадение по id),
+                // всё остальное уходит в текстовый поиск.
+                const digits = this.search.replace(/^#/, '');
+                if (/^\d+$/.test(digits)) params.set('id', digits);
+                else params.set('search', this.search);
+            }
+            const query = params.toString() ? `?${params}` : '';
             const response = await window.api.request(`/orders/orders/${query}`);
             this.orders = response.results || response;
 

@@ -25,8 +25,12 @@ class OrderViewSet(CompanyScopedViewSet):
     queryset = Order.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['custom_product_name', 'comment', 'client__name']
-    filterset_fields = ['status', 'payment_status', 'worker', 'client']
+    # product__name — заказ на товар из каталога хранит имя в связанном продукте,
+    # а не в custom_product_name: без этого поиск «Столешница» не находил ничего.
+    search_fields = ['custom_product_name', 'comment', 'client__name', 'product__name']
+    # id — заказы ищут по номеру («#12»), а SearchFilter умеет только icontains
+    # по тексту и на целочисленном ключе не работает.
+    filterset_fields = ['status', 'payment_status', 'worker', 'client', 'id']
     ordering_fields = ['created_at', 'deadline']
 
     def get_serializer_class(self):
