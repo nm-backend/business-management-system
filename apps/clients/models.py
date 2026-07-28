@@ -10,6 +10,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Sum
 
+from apps.core.validators import validate_not_future, validate_phone
 from apps.core.models import TimestampedModel, SoftDeleteModel
 
 # Статусы заказа, при которых клиент считается активным.
@@ -22,7 +23,8 @@ ACTIVE_ORDER_STATUSES = (
 class Client(TimestampedModel, SoftDeleteModel):
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='clients', null=True, verbose_name='Компания')
     name = models.CharField(max_length=255, verbose_name='Название')
-    phone = models.CharField(max_length=50, blank=True, verbose_name='Телефон')
+    phone = models.CharField(max_length=50, blank=True, validators=[validate_phone],
+                             verbose_name='Телефон')
     address = models.TextField(blank=True, verbose_name='Адрес')
     comment = models.TextField(blank=True, verbose_name='Комментарий')
 
@@ -100,7 +102,8 @@ class Payment(TimestampedModel):
     received_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='received_payments', verbose_name='Кем принято')
     # db_index: Meta.ordering сортирует ВСЕ выборки платежей по payment_date,
     # поэтому индекс убирает полную сортировку на больших объёмах.
-    payment_date = models.DateTimeField(db_index=True, verbose_name='Дата оплаты')
+    payment_date = models.DateTimeField(db_index=True, validators=[validate_not_future],
+                                        verbose_name='Дата оплаты')
 
     class Meta:
         verbose_name = 'Оплата'

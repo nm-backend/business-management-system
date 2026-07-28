@@ -13,7 +13,7 @@ from django.utils import timezone
 from apps.core.models import TimestampedModel, SoftDeleteModel
 from apps.core.validators import validate_file_size
 from apps.clients.models import Client
-from apps.warehouse.models import FinishedProduct
+from apps.warehouse.models import FinishedProduct, UnitChoices
 
 
 class Order(TimestampedModel, SoftDeleteModel):
@@ -40,7 +40,8 @@ class Order(TimestampedModel, SoftDeleteModel):
     custom_product_name = models.CharField(max_length=255, blank=True, verbose_name='Название товара (вручную)')
     quantity = models.DecimalField(max_digits=10, decimal_places=2,
                                    validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Количество')
-    unit = models.CharField(max_length=20, verbose_name='Единица измерения')
+    unit = models.CharField(max_length=20, choices=UnitChoices.choices,
+                            verbose_name='Единица измерения')
     deadline = models.DateTimeField(null=True, blank=True, verbose_name='Срок выполнения')
     worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders', verbose_name='Работник')
     comment = models.TextField(blank=True, verbose_name='Комментарий')

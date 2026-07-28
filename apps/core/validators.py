@@ -79,3 +79,43 @@ def validate_file_size(value):
         raise ValidationError(
             f'Файл хажми {limit // (1024 * 1024)} МБ дан ошмаслиги керак.'
         )
+
+
+def validate_not_future(value):
+    """
+    Запрещает даты «из будущего».
+
+    Найдено проверкой боевых эндпоинтов: принимались расход от 2030 года,
+    приход материала завтрашним днём и оплата будущей датой. Такие записи
+    выпадают из отчётов за текущий период (выручка занижается, расход не
+    виден), а склад показывает поступление, которого ещё не было.
+    """
+    from django.utils import timezone
+
+    if value is None:
+        return
+    now = timezone.now()
+    # Поле может быть как датой, так и датой-временем.
+    current = now if hasattr(value, 'hour') else timezone.localdate()
+    if value > current:
+        raise ValidationError('Дата не может быть в будущем.')
+
+
+PHONE_ALLOWED = set('0123456789 +-()')
+
+
+def validate_phone(value):
+    """
+    Мягкая проверка телефона: цифры и разделители, минимум 5 цифр.
+
+    Строгий формат задавать нельзя — номера бывают разных стран и с добавочными.
+    Но текст вроде «не телефон вообще» раньше сохранялся как номер, и позвонить
+    по такому контакту невозможно.
+    """
+    if not value:
+        return
+    text = str(value).strip()
+    if set(text) - PHONE_ALLOWED or sum(ch.isdigit() for ch in text) < 5:
+        raise ValidationError(
+            'Телефон может содержать только цифры и знаки + - ( ), минимум 5 цифр.'
+        )

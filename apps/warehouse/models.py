@@ -9,10 +9,13 @@ Warehouse models - управление складом сырья и готов�
 
 ВАЖНО: Финансовые поля (цены) доступны только владельцу.
 """
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.core.exceptions import ValidationError
 from apps.core.models import TimestampedModel, SoftDeleteModel
-from apps.core.validators import validate_file_size
+from apps.core.validators import validate_file_size, validate_not_future
 
 
 class UnitChoices(models.TextChoices):
@@ -72,15 +75,20 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     size = models.CharField(max_length=100, blank=True, verbose_name='Размер')
     thickness = models.CharField(max_length=50, blank=True, verbose_name='Толщина')
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT, verbose_name='Единица измерения')
-    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Количество')
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0,
+                                   validators=[MinValueValidator(Decimal('0'))], verbose_name='Количество')
     storage_location = models.CharField(max_length=255, blank=True, verbose_name='Место хранения')
     photo = models.ImageField(upload_to='materials/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
-    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Минимальный остаток')
+    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0,
+                                    validators=[MinValueValidator(Decimal('0'))], verbose_name='Минимальный остаток')
     supplier = models.CharField(max_length=255, blank=True, verbose_name='Поставщик')
-    arrival_date = models.DateField(null=True, blank=True, verbose_name='Дата поступления')
+    arrival_date = models.DateField(null=True, blank=True, validators=[validate_not_future],
+                                    verbose_name='Дата поступления')
     comment = models.TextField(blank=True, verbose_name='Комментарий')
-    purchase_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Цена закупки')  # ФИНАНСОВОЕ ПОЛЕ
-    avg_cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Средняя себестоимость')  # ФИНАНСОВОЕ ПОЛЕ
+    purchase_price = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                         validators=[MinValueValidator(Decimal('0'))], verbose_name='Цена закупки')  # ФИНАНСОВОЕ ПОЛЕ
+    avg_cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                         validators=[MinValueValidator(Decimal('0'))], verbose_name='Средняя себестоимость')  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         """
@@ -149,9 +157,12 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     photo = models.ImageField(upload_to='products/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
     description = models.TextField(blank=True, verbose_name='Описание')
     min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Минимальный остаток')
-    reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Зарезервировано под заказы')
-    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Себестоимость')  # ФИНАНСОВОЕ ПОЛЕ
-    sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Цена продажи')  # ФИНАНСОВОЕ ПОЛЕ
+    reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0,
+                                        validators=[MinValueValidator(Decimal('0'))], verbose_name='Зарезервировано под заказы')
+    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                        validators=[MinValueValidator(Decimal('0'))], verbose_name='Себестоимость')  # ФИНАНСОВОЕ ПОЛЕ
+    sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                        validators=[MinValueValidator(Decimal('0'))], verbose_name='Цена продажи')  # ФИНАНСОВОЕ ПОЛЕ
 
     class Meta:
         """

@@ -11,7 +11,7 @@ from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
 from apps.core.models import TimestampedModel
-from apps.core.validators import validate_file_size
+from apps.core.validators import validate_not_future, validate_file_size
 from apps.warehouse.models import UnitChoices
 
 
@@ -98,7 +98,8 @@ class Expense(TimestampedModel):
     category = models.CharField(max_length=30, choices=ExpenseCategory.choices, db_index=True, verbose_name='Категория')
     amount = models.DecimalField(max_digits=15, decimal_places=2,
                                  validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Сумма')
-    date = models.DateField(db_index=True, verbose_name='Дата')
+    date = models.DateField(db_index=True, validators=[validate_not_future],
+                            verbose_name='Дата')
     comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
     receipt_photo = models.ImageField(upload_to='finance/receipts/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото чека')
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='expenses', verbose_name='Кем добавлено')

@@ -16,6 +16,7 @@ import datetime
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
@@ -24,6 +25,11 @@ from apps.clients.models import Client
 from apps.orders.models import Order
 from apps.production.models import WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial, Recipe, RecipeItem
+
+# Срок ВСЕГДА в будущем: заказ с прошедшим сроком отклоняется валидацией (400)
+# ещё до проверки прав, и тест переставал проверять межтенантный отказ (403).
+# Фиксированная дата в коде теста «протухала» с ходом времени.
+FUTURE_DEADLINE = (timezone.now() + datetime.timedelta(days=30)).isoformat()
 
 
 class _TwoCompanies(TestCase):
@@ -87,14 +93,14 @@ class OrderCrossTenantTests(_TwoCompanies):
         resp = self.api(self.owner_a).post('/api/v1/orders/orders/', {
             'client': self.client_a.id, 'product': self.product_a.id,
             'quantity': '1', 'unit': 'sht', 'worker': self.worker_b.id,
-            'deadline': '2026-01-01',
+            'deadline': FUTURE_DEADLINE,
         }, format='json')
         self.assertEqual(resp.status_code, 403)
 
     def test_create_order_with_foreign_client_rejected(self):
         resp = self.api(self.owner_a).post('/api/v1/orders/orders/', {
             'client': self.client_b.id, 'product': self.product_a.id,
-            'quantity': '1', 'unit': 'sht', 'deadline': '2026-01-01',
+            'quantity': '1', 'unit': 'sht', 'deadline': FUTURE_DEADLINE,
         }, format='json')
         self.assertEqual(resp.status_code, 403)
 
@@ -112,7 +118,7 @@ class OrderCrossTenantTests(_TwoCompanies):
         resp = self.api(self.owner_a).post('/api/v1/orders/orders/', {
             'client': self.client_a.id, 'product': self.product_a.id,
             'quantity': '1', 'unit': 'sht', 'worker': self.worker_a.id,
-            'deadline': '2026-01-01',
+            'deadline': FUTURE_DEADLINE,
         }, format='json')
         self.assertEqual(resp.status_code, 201)
 

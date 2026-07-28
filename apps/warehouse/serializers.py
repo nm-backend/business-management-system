@@ -34,6 +34,24 @@ class FinishedProductSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
 
+    def validate(self, attrs):
+        """
+        Резерв не может превышать остаток.
+
+        available_quantity считается как quantity - reserved_for_orders, поэтому
+        резерв больше остатка давал ОТРИЦАТЕЛЬНОЕ доступное количество и ломал
+        признак нехватки товара (воспроизведено: остаток 1, резерв 100 -> API
+        принимал запись).
+        """
+        instance = self.instance
+        quantity = attrs.get('quantity', getattr(instance, 'quantity', None))
+        reserved = attrs.get('reserved_for_orders', getattr(instance, 'reserved_for_orders', None))
+        if quantity is not None and reserved is not None and reserved > quantity:
+            raise serializers.ValidationError({
+                'reserved_for_orders': f'Резерв не может превышать остаток ({quantity}).'
+            })
+        return attrs
+
 class FinishedProductOwnerSerializer(FinishedProductSerializer):
     class Meta(FinishedProductSerializer.Meta):
         fields = FinishedProductSerializer.Meta.fields + ['cost_price', 'sale_price']

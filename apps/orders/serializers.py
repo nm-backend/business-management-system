@@ -18,6 +18,20 @@ class OrderSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     worker_name = serializers.SerializerMethodField()
 
+    def validate_deadline(self, value):
+        """
+        Новый заказ нельзя создать с уже прошедшим сроком.
+
+        Воспроизведено: API принимал заказ со сроком 2020-01-01 — он сразу
+        попадал в «просроченные» и портил показатель просрочки на дашборде.
+        У существующего заказа срок менять можно: его переносят и задним числом.
+        """
+        from django.utils import timezone
+
+        if value and self.instance is None and value < timezone.now():
+            raise serializers.ValidationError('Срок выполнения не может быть в прошлом.')
+        return value
+
     class Meta:
         model = Order
         fields = [

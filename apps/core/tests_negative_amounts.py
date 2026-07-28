@@ -10,8 +10,13 @@
 import datetime
 from decimal import Decimal
 
+from django.utils import timezone
 from django.test import TestCase
 from rest_framework.test import APIClient
+
+# Срок в будущем: иначе заказ отклоняется из-за прошедшего срока, и тест
+# «проходит» не проверив то, ради чего написан — отказ по отрицательной сумме.
+FUTURE_DEADLINE = (timezone.now() + datetime.timedelta(days=30)).isoformat()
 
 from apps.accounts.models import User
 from apps.companies.models import Company
@@ -63,7 +68,7 @@ class NegativeAmountTests(TestCase):
     def test_negative_order_total_amount_rejected(self):
         resp = self.api.post('/api/v1/orders/orders/', {
             'client': self.client_obj.id, 'product': self.product.id,
-            'quantity': '1', 'unit': 'sht', 'deadline': '2026-01-01',
+            'quantity': '1', 'unit': 'sht', 'deadline': FUTURE_DEADLINE,
             'total_amount': '-1000',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -71,7 +76,7 @@ class NegativeAmountTests(TestCase):
     def test_negative_order_quantity_rejected(self):
         resp = self.api.post('/api/v1/orders/orders/', {
             'client': self.client_obj.id, 'product': self.product.id,
-            'quantity': '-5', 'unit': 'sht', 'deadline': '2026-01-01',
+            'quantity': '-5', 'unit': 'sht', 'deadline': FUTURE_DEADLINE,
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
