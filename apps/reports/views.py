@@ -155,6 +155,12 @@ def owner_analytics_data(company_id, date_from, date_to):
     def expenses_by(*categories):
         return money(expenses_qs.filter(category__in=categories).aggregate(s=Sum('amount'))['s'])
 
+    # ВНИМАНИЕ: Expense с категориями SALARY/ADVANCE И WorkerPayment — разные сущности.
+    # Если владелец проведёт выплату работнику через ОБА канала (и Expense, и
+    # WorkerPayment), сумма вычтется дважды. Это не кодовая ошибка, а UX-аспект:
+    # при создании Expense с категорией SALARY или WorkerPayment система не
+    # проверяет дублирование. Рекомендуется использовать ТОЛЬКО WorkerPayment
+    # для выплат работникам, а Expense.SALARY — для дополнительных проводок.
     salaries = expenses_by(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE)
     taxes = expenses_by(ExpenseCategory.TAXES)
     losses = expenses_by(ExpenseCategory.MATERIAL_LOSS, ExpenseCategory.DEFECT)

@@ -9,6 +9,7 @@ from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from apps.core.models import TimestampedModel, SoftDeleteModel
 from apps.core.validators import validate_file_size
@@ -71,11 +72,14 @@ class Order(TimestampedModel, SoftDeleteModel):
     def save(self, *args, **kwargs):
         # delivered_at проставляется один раз — при первом переходе в DELIVERED,
         # независимо от пути изменения статуса (deliver-action, админка и т.п.).
+        # Копируем kwargs, чтобы не мутировать исходный словарь: если вызывающий
+        # код переиспользует один dict для нескольких save(), мутация приведёт к
+        # неожиданному расширению update_fields (добавится 'delivered_at').
         if self.status == self.Status.DELIVERED and self.delivered_at is None:
             self.delivered_at = timezone.now()
-            update_fields = kwargs.get('update_fields')
-            if update_fields is not None and 'delivered_at' not in update_fields:
-                kwargs['update_fields'] = list(update_fields) + ['delivered_at']
+            uf = kwargs.get('update_fields')
+            if uf is not None and 'delivered_at' not in uf:
+                kwargs = {**kwargs, 'update_fields': list(uf) + ['delivered_at']}
         super().save(*args, **kwargs)
 
     @property

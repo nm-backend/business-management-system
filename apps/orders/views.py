@@ -108,7 +108,7 @@ class OrderViewSet(CompanyScopedViewSet):
     def perform_destroy(self, instance):
         """Удаление запрещено - заказ отменяется и архивируется."""
         instance.status = Order.Status.CANCELLED
-        instance.save(update_fields=['status'])
+        instance.save(update_fields=['status', 'updated_at'])
         instance.archive()
         instance.client.recalculate_financials()
         write_audit_log(
@@ -181,9 +181,10 @@ class OrderViewSet(CompanyScopedViewSet):
         order.status = Order.Status.DELIVERED
         order.save(update_fields=['status'])
         order.client.recalculate_financials()
-        order.client.auto_archive()
-        if order.payment_status != Order.PaymentStatus.PAID:
-            # Без сумм: администратор видит только факт неоплаты.
+        # Архив только при полной оплате — клиент с долгом остаётся активным.
+        if order.payment_status == Order.PaymentStatus.PAID:
+            order.client.auto_archive()
+        else:
             notify_staff(
                 order.company_id,
                 Notification.NotificationType.UNPAID_CLIENT,

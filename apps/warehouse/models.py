@@ -126,7 +126,6 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     Модель готовой продукции на складе.
 
     Хранит информацию о готовых изделиях, доступных для продажи.
-    Поддерживает резервирование под заказы.
 
     Поля:
         name: CharField - название продукции
@@ -136,7 +135,7 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         photo: ImageField - фото продукции
         description: TextField - описание
         min_stock: DecimalField - минимальный остаток для предупреждений
-        reserved_for_orders: DecimalField - зарезервировано под заказы
+        reserved_for_orders: DecimalField - ЗАГОТОВКА: резервирование пока не реализовано
         cost_price: DecimalField - себестоимость (ФИНАНСОВОЕ ПОЛЕ - только owner)
         sale_price: DecimalField - цена продажи (ФИНАНСОВОЕ ПОЛЕ - только owner)
 
@@ -147,7 +146,9 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     Особенности:
         - Поддерживает мягкое удаление (SoftDeleteModel)
         - Автоматические временные метки (TimestampedModel)
-        - Резервирование под заказы для точного учета
+        - TODO: reserved_for_orders — резервирование на складе при создании заказа не реализовано.
+          Поле объявлено, но никогда не заполняется (always 0). Реализовать, когда понадобится
+          блокировка товара под заказ до выдачи.
     """
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='finished_products', null=True, verbose_name='Компания')
     name = models.CharField(max_length=255, verbose_name='Название')
@@ -159,6 +160,7 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Минимальный остаток')
     reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0,
                                         validators=[MinValueValidator(Decimal('0'))], verbose_name='Зарезервировано под заказы')
+    arrival_date = models.DateField(null=True, blank=True, verbose_name='Дата поступления')
     cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0,
                                         validators=[MinValueValidator(Decimal('0'))], verbose_name='Себестоимость')  # ФИНАНСОВОЕ ПОЛЕ
     sale_price = models.DecimalField(max_digits=15, decimal_places=2, default=0,
