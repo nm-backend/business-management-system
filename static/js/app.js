@@ -23,6 +23,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Платформенный супер-администратор управляет только компаниями.
     if (user.is_superadmin) {
         document.getElementById('notifications-btn').style.display = 'none';
+        // Скрываем пункты нижней навигации, недоступные для superadmin
+        // (сайдбар фильтруется в setupSidebar через data-role).
+        ['nav-orders', 'nav-warehouse', 'nav-clients', 'nav-production'].forEach(function(id) {
+            let el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
         window.router.addRoute('/', window.CompaniesComponent);
         window.router.addRoute('/companies', window.CompaniesComponent);
         window.router.addRoute('/settings', window.SettingsComponent);

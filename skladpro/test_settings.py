@@ -43,4 +43,13 @@ DATABASES = {
 # Ускоряет создание пользователей в тестах.
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
+# Высокие лимиты троттлинга — 477 тестов за 8 с не должны триггерить 429.
+REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
+    'user': '10000/minute',
+    'login': '10000/min',
+    'access_key_verify': '10000/min',
+    'access_key_redeem': '10000/min',
+    'two_factor': '10000/min',
+}
+
 MEDIA_ROOT = BASE_DIR / 'test_media'

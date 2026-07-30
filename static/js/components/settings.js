@@ -24,6 +24,7 @@ class SettingsComponent {
                 </div>
             </div>
 
+            ${!user.is_superadmin ? `
             <div class="section-title" data-i18n="nav.menu"></div>
             <div class="list-group">
                 <a class="list-row" href="#/messages" style="text-decoration:none;color:inherit;">
@@ -41,6 +42,7 @@ class SettingsComponent {
                         <span>💰 <span data-i18n="finance.title"></span></span><span>›</span>
                     </a>` : ''}
             </div>
+            ` : ''}
 
             <div class="section-title" data-i18n="settings.language"></div>
             <div class="list-group">
@@ -77,7 +79,7 @@ class SettingsComponent {
                 </div>
             </div>
 
-            ${user.is_owner ? `
+            ${user.is_owner || user.is_admin ? `
                 <div class="section-title" data-i18n="nav.accounts"></div>
                 <div class="list-group" id="users-list">
                     <div class="list-state list-state-loading"><span class="spinner"></span></div>
@@ -162,7 +164,7 @@ class SettingsComponent {
             row.addEventListener('click', () => this.download(row.dataset.export, row.dataset.file));
         });
 
-        if (user.is_owner) {
+        if (user.is_owner || user.is_admin) {
             container.querySelector('#add-user-btn').addEventListener('click', () => this.openUserForm());
             this.loadUsers();
         }
@@ -270,13 +272,16 @@ class SettingsComponent {
 
     openUserDetail(u) {
         if (u.role === 'owner') return; // владелец управляется только через профиль
+        const user = window.currentUser;
+        const isOwner = user.is_owner;
+        if (!isOwner && u.role === 'admin') return; // admin не может управлять другим admin
         const modal = window.ui.modal('nav.accounts', `
             <div class="card-title">
                 <span>${window.ui.escape(u.full_name || u.username)}</span>
                 <span class="badge badge-new" data-i18n="roles.${u.role}"></span>
             </div>
-            ${u.role === 'admin' || u.role === 'worker' ? `
-                <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;margin-bottom:14px;">
+            ${isOwner && (u.role === 'admin' || u.role === 'worker') ? `
+                <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:14px;">
                     <label class="list-row" style="cursor:pointer;">
                         <span class="text-sm" data-i18n="settings.can_write_to_owner"></span>
                         <input type="checkbox" id="perm-write-owner" ${u.can_write_to_owner ? 'checked' : ''}>
@@ -291,45 +296,93 @@ class SettingsComponent {
                             <input type="checkbox" id="perm-see-workers" ${u.can_see_other_workers ? 'checked' : ''}>
                         </label>` : ''}
                 </div>` : ''}
+            ${isOwner ? `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <button class="btn ${u.is_active === false ? 'btn-success' : 'btn-danger'} btn-sm" id="toggle-active"
                     data-i18n="${u.is_active === false ? 'settings.unblock' : 'settings.block'}"></button>
                 <button class="btn btn-secondary btn-sm" id="reset-password" data-i18n="settings.reset_password"></button>
-            </div>
+            </div>` : `
+            <button class="btn btn-primary btn-block btn-sm" id="issue-access-key"><span data-i18n="settings.issue_access_key"></span></button>`}
         `);
 
-        const savePerm = async (field, value) => {
-            try {
-                await window.api.request(`/accounts/users/${u.id}/`, {
-                    method: 'PATCH', body: JSON.stringify({ [field]: value }),
-                });
-                window.toast.success(window.ui.t('common.success'));
-            } catch (error) {
-                window.toast.error(window.ui.errorText(error));
-            }
-        };
-        const bindPerm = (id, field) => {
-            const box = modal.querySelector(`#${id}`);
-            if (box) box.addEventListener('change', () => savePerm(field, box.checked));
-        };
-        bindPerm('perm-write-owner', 'can_write_to_owner');
-        bindPerm('perm-create-workers', 'can_create_workers');
-        bindPerm('perm-see-workers', 'can_see_other_workers');
+        if (isOwner) {
+            const savePerm = async (field, value) => {
+                try {
+                    await window.api.request(`/accounts/users/${u.id}/`, {
+                        method: 'PATCH', body: JSON.stringify({ [field]: value }),
+                    });
+                    window.toast.success(window.ui.t('common.success'));
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            };
+            const bindPerm = (id, field) => {
+                const box = modal.querySelector(`#${id}`);
+                if (box) box.addEventListener('change', () => savePerm(field, box.checked));
+            };
+            bindPerm('perm-write-owner', 'can_write_to_owner');
+            bindPerm('perm-create-workers', 'can_create_workers');
+            bindPerm('perm-see-workers', 'can_see_other_workers');
 
-        modal.querySelector('#toggle-active').addEventListener('click', async () => {
-            try {
-                await window.api.request(`/accounts/users/${u.id}/toggle_active/`, { method: 'POST' });
+            modal.querySelector('#toggle-active').addEventListener('click', async () => {
+                try {
+                    await window.api.request(`/accounts/users/${u.id}/toggle_active/`, { method: 'POST' });
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadUsers();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+
+            modal.querySelector('#reset-password').addEventListener('click', () => {
                 window.ui.closeModal(modal);
-                window.toast.success(window.ui.t('common.success'));
-                await this.loadUsers();
-            } catch (error) {
-                window.toast.error(window.ui.errorText(error));
+                this.openResetPassword(u);
+            });
+        } else {
+            // Admin: issue access key for worker
+            const keyBtn = modal.querySelector('#issue-access-key');
+            if (keyBtn) {
+                keyBtn.addEventListener('click', async () => {
+                    try {
+                        const resp = await window.api.request(`/accounts/users/${u.id}/access_key/`, {
+                            method: 'POST', body: JSON.stringify({}),
+                        });
+                        // Show the access key in a copyable field
+                        window.ui.closeModal(modal);
+                        this.showAccessKey(resp.key, u.full_name || u.username);
+                        await this.loadUsers();
+                    } catch (error) {
+                        window.toast.error(window.ui.errorText(error));
+                    }
+                });
             }
-        });
+        }
+    }
 
-        modal.querySelector('#reset-password').addEventListener('click', () => {
-            window.ui.closeModal(modal);
-            this.openResetPassword(u);
+    showAccessKey(key, name) {
+        const modal = window.ui.modal('settings.access_key_code', `
+            <p style="margin-bottom:12px;"><span data-i18n="settings.access_key_for"></span> <strong>${window.ui.escape(name)}</strong></p>
+            <div class="form-group">
+                <input type="text" class="form-control" value="${window.ui.escape(key)}" readonly
+                       style="font-family:monospace;font-size:18px;text-align:center;font-weight:bold;letter-spacing:2px;"
+                       id="access-key-value">
+            </div>
+            <p class="text-sm text-muted" style="text-align:center;" data-i18n="settings.access_key_hint"></p>
+            <button class="btn btn-primary btn-block" id="copy-access-key"><span data-i18n="settings.copy_key"></span></button>
+        `);
+        modal.querySelector('#copy-access-key').addEventListener('click', async () => {
+            const input = modal.querySelector('#access-key-value');
+            try {
+                await navigator.clipboard.writeText(input.value);
+                window.toast.success('✅ ' + window.ui.t('common.copied'));
+                window.ui.closeModal(modal);
+            } catch (e) {
+                input.select();
+                document.execCommand('copy');
+                window.toast.success('✅ ' + window.ui.t('common.copied'));
+                window.ui.closeModal(modal);
+            }
         });
     }
 
@@ -360,6 +413,11 @@ class SettingsComponent {
     }
 
     openUserForm() {
+        const user = window.currentUser;
+        const isOwner = user.is_owner;
+        const roleOptions = isOwner
+            ? '<option value="worker" data-i18n="roles.worker"></option><option value="admin" data-i18n="roles.admin"></option>'
+            : '<option value="worker" data-i18n="roles.worker"></option>';
         const modal = window.ui.modal('settings.add_account', `
             <form id="user-form">
                 <div class="form-group"><label data-i18n="auth.username"></label>
@@ -368,11 +426,7 @@ class SettingsComponent {
                     <input name="full_name" class="form-control"></div>
                 <div class="form-group"><label data-i18n="setup.phone"></label>
                     <input name="phone" class="form-control"></div>
-                <div class="form-group"><label data-i18n="settings.role"></label>
-                    <select name="role" class="form-control">
-                        <option value="worker" data-i18n="roles.worker"></option>
-                        <option value="admin" data-i18n="roles.admin"></option>
-                    </select></div>
+                ${isOwner ? '<div class="form-group"><label data-i18n="settings.role"></label><select name="role" class="form-control">' + roleOptions + '</select></div>' : ''}
                 <div class="form-group"><label data-i18n="auth.password"></label>
                     <input name="password" type="password" class="form-control" required minlength="8"></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
@@ -381,6 +435,8 @@ class SettingsComponent {
         modal.querySelector('#user-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const data = Object.fromEntries(new FormData(e.target));
+            // Admin always creates workers; backend enforces this too
+            if (!isOwner) data.role = 'worker';
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request('/accounts/users/', { method: 'POST', body: JSON.stringify(data) });
