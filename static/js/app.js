@@ -36,9 +36,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Мобильное нижнее меню по ролям: работник вместо клиентов видит задачи.
+    // Мобильное нижнее меню по ролям: работник вместо клиентов видит задачи,
+    // менеджер видит и клиентов, и производство.
     if (user.is_worker) {
         document.getElementById('nav-clients').style.display = 'none';
+    }
+    if (user.is_worker || user.is_manager) {
         document.getElementById('nav-production').style.display = 'flex';
     }
 
@@ -330,7 +333,7 @@ function setupSidebar(user) {
         } else if (role === 'owner') {
             show = user.is_owner;
         } else if (role === 'staff') {
-            show = user.is_owner || user.is_admin;
+            show = user.is_owner || user.is_admin || user.is_manager;
         }
         link.style.display = show ? '' : 'none';
     });

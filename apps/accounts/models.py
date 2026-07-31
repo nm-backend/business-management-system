@@ -118,11 +118,16 @@ class User(AbstractUser):
                     не привязан к компании, не видит бизнес-данные.
         OWNER: владелец бизнеса - полный доступ ко всем данным своей компании
         ADMIN: администратор - управление складом и работниками своей компании
+        MANAGER: менеджер - просмотр клиентов, заказов и производства
+                 (только чтение, без финансовых сумм); без доступа к финансам
+                 и настройкам. Создание/изменение записей - только
+                 owner/admin (а для производства - ещё и worker).
         WORKER: работник - ограниченный доступ для выполнения задач
         """
         SUPERADMIN = 'superadmin', 'Super Administrator'
         OWNER = 'owner', 'Egasi'
         ADMIN = 'admin', 'Administrator'
+        MANAGER = 'manager', 'Menejer'
         WORKER = 'worker', 'Ishchi'
 
     class Language(models.TextChoices):
@@ -258,6 +263,19 @@ class User(AbstractUser):
             bool - True если role == 'worker'
         """
         return self.role == self.Role.WORKER
+
+    @property
+    def is_manager(self):
+        """
+        Проверяет, является ли пользователь менеджером.
+
+        Менеджер видит клиентов, заказы и производство (только чтение),
+        но не имеет доступа к финансам и настройкам.
+
+        Возвращает:
+            bool - True если role == 'manager'
+        """
+        return self.role == self.Role.MANAGER
 
     @property
     def display_role(self):

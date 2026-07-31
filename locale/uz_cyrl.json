@@ -43,6 +43,7 @@
     "superadmin": "Супер администратор",
     "owner": "Egasi",
     "admin": "Administrator",
+    "manager": "Menejer",
     "worker": "Ishchi"
   },
   "audit": {
@@ -173,7 +174,9 @@
     "m": "м",
     "m2": "м²",
     "izdelie": "изделие",
-    "dona": "дона"
+    "dona": "дона",
+    "kg": "кг",
+    "m3": "м³"
   },
   "orders": {
     "title": "Буюртмалар",

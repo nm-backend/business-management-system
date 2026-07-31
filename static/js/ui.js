@@ -171,7 +171,7 @@ window.ui = {
 
     /** <option> для единиц измерения. */
     unitOptions(selected) {
-        return ['sht', 'm', 'm2', 'izdelie']
+        return ['sht', 'kg', 'm', 'm2', 'm3', 'izdelie', 'dona']
             .map((u) => `<option value="${u}" ${u === selected ? 'selected' : ''} data-i18n="units.${u}"></option>`)
             .join('');
     },

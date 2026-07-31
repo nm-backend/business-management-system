@@ -49,13 +49,20 @@ class OrderViewSet(CompanyScopedViewSet):
             .select_related('client', 'product', 'worker')
             .prefetch_related('product__recipes__items__material')
         )
-        if user.is_owner or user.is_admin:
+        # Менеджер видит ВСЕ заказы компании (только чтение), как owner/admin;
+        # работник — только назначенные ему. Изменения разрешены лишь owner/admin
+        # (get_permissions ниже), поэтому manager не может их двигать.
+        if user.is_owner or user.is_admin or user.is_manager:
             return queryset
         return queryset.filter(worker=user)
 
     def get_permissions(self):
+        # transition — тот же «запись», что и deliver/cancel: Kanban двигает
+        # заказы именно через него (PATCH status). Раньше он оставался открытым
+        # для любого сотрудника компании; с появлением manager (queryset видит
+        # ВСЕ заказы) это стало бы путём записи для роли «только чтение».
         if self.action in ('create', 'update', 'partial_update', 'destroy',
-                           'deliver', 'cancel'):
+                           'deliver', 'cancel', 'transition'):
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         return [IsCompanyMember()]
 

@@ -71,6 +71,7 @@ class UserSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
     is_owner = serializers.ReadOnlyField()
     is_admin = serializers.ReadOnlyField()
     is_worker = serializers.ReadOnlyField()
+    is_manager = serializers.ReadOnlyField()
     is_superadmin = serializers.ReadOnlyField()
     company_name = serializers.CharField(source='company.name', read_only=True, default=None)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
@@ -85,7 +86,7 @@ class UserSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'full_name', 'phone', 'email',
-            'role', 'display_role', 'is_owner', 'is_admin', 'is_worker', 'is_superadmin',
+            'role', 'display_role', 'is_owner', 'is_admin', 'is_worker', 'is_manager', 'is_superadmin',
             'company', 'company_name', 'avatar', 'language',
             'position', 'department', 'birth_date', 'hire_date', 'bio',
             'status', 'status_display', 'last_activity',

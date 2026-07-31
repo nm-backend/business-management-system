@@ -16,7 +16,7 @@ class ProductionComponent {
                 <button class="tab-btn" data-tab="works" data-i18n="production.works"></button>
                 ${user.is_worker ? `<button class="tab-btn" data-tab="earnings" data-i18n="worker_section.my_earnings"></button>` : ''}
             </div>
-            <button class="btn btn-primary btn-block" id="add-work-btn" style="margin-bottom:12px;" data-i18n="production.add_work"></button>
+            ${!user.is_manager ? `<button class="btn btn-primary btn-block" id="add-work-btn" style="margin-bottom:12px;" data-i18n="production.add_work"></button>` : ''}
             <div id="production-content"></div>
         `;
 
@@ -28,7 +28,8 @@ class ProductionComponent {
                 this.loadTab();
             });
         });
-        container.querySelector('#add-work-btn').addEventListener('click', () => this.openWorkForm());
+        const addWorkBtn = container.querySelector('#add-work-btn');
+        if (addWorkBtn) addWorkBtn.addEventListener('click', () => this.openWorkForm());
 
         window.i18n.applyTranslations();
         await this.loadTab();
@@ -72,7 +73,7 @@ class ProductionComponent {
                         </div>` : ''}
                     ${user.is_worker && t.status === 'accepted' ? `
                         <button class="btn btn-primary btn-sm btn-block" style="margin-top:12px;" data-submit-work="${t.id}" data-i18n="production.send_for_confirmation"></button>` : ''}
-                    ${!user.is_worker && ['pending', 'accepted'].includes(t.status) ? `
+                    ${(user.is_owner || user.is_admin) && ['pending', 'accepted'].includes(t.status) ? `
                         <button class="btn btn-secondary btn-sm" style="margin-top:12px;" data-cancel-task="${t.id}" data-i18n="common.cancel"></button>` : ''}
                 </div>`).join('');
 

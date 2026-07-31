@@ -9,7 +9,12 @@ class KanbanComponent {
     }
 
     async render(container) {
-        document.getElementById('page-title').textContent = '🔄 Kanban';
+        // Убираем data-i18n, иначе applyTranslations() из роутера перезапишет
+        // наш заголовок переводом с ПРОШЛОЙ страницы (например, после финансов
+        // на kanban висел «Молиявий таҳлил» вместо «Kanban»).
+        const title = document.getElementById('page-title');
+        title.removeAttribute('data-i18n');
+        title.textContent = '🔄 Kanban';
         this.container = container;
         await this.loadOrders();
     }
@@ -106,9 +111,13 @@ class KanbanComponent {
     }
 
     createCard(o) {
+        const user = window.currentUser || {};
+        // Перетаскивать заказ между статусами может только owner/admin:
+        // manager видит доску только на чтение (двигать заказы нельзя).
+        const canDrag = !!(user.is_owner || user.is_admin);
         const card = document.createElement('div');
         card.className = 'kanban-card';
-        card.draggable = true;
+        card.draggable = canDrag;
         card.dataset.id = o.id;
 
         if (o.has_material_shortage || o.payment_status === 'unpaid') {
@@ -120,6 +129,7 @@ class KanbanComponent {
 
         // Drag events
         card.addEventListener('dragstart', (e) => {
+            if (!canDrag) return;
             e.dataTransfer.setData('text/plain', String(o.id));
             e.dataTransfer.effectAllowed = 'move';
             this.draggedId = o.id;

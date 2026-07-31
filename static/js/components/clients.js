@@ -94,6 +94,7 @@ class ClientsComponent {
 
     openDetail(c) {
         const user = window.currentUser;
+        const canEdit = user.is_owner || user.is_admin;
         const row = (labelKey, valueHtml, danger = false) => (!valueHtml ? '' : `
             <div class="list-row" style="cursor:default;">
                 <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
@@ -122,14 +123,15 @@ class ClientsComponent {
                 <div class="section-title" data-i18n="clients.payment_history"></div>
                 <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">${payments}</div>` : ''}
             <div style="display:flex;gap:10px;margin-top:14px;">
-                <button class="btn btn-secondary btn-sm" id="edit-client" style="flex:1;" data-i18n="common.edit"></button>
+                ${canEdit ? `<button class="btn btn-secondary btn-sm" id="edit-client" style="flex:1;" data-i18n="common.edit"></button>` : ''}
                 <button class="btn btn-primary btn-sm" id="client-orders" style="flex:1;" data-i18n="clients.orders"></button>
             </div>
-            <button class="btn btn-secondary btn-sm btn-block" id="archive-client" style="margin-top:10px;"
-                data-i18n="${c.is_archived ? 'common.restore' : 'common.archive'}"></button>
+            ${canEdit ? `<button class="btn btn-secondary btn-sm btn-block" id="archive-client" style="margin-top:10px;"
+                data-i18n="${c.is_archived ? 'common.restore' : 'common.archive'}"></button>` : ''}
         `);
 
-        modal.querySelector('#edit-client').addEventListener('click', () => {
+        const editBtn = modal.querySelector('#edit-client');
+        if (editBtn) editBtn.addEventListener('click', () => {
             window.ui.closeModal(modal);
             this.openForm(c);
         });
@@ -140,7 +142,8 @@ class ClientsComponent {
         });
         // Вкладка «Архив» была только на чтение: убрать клиента в архив или
         // вернуть его оттуда из интерфейса было нечем.
-        modal.querySelector('#archive-client').addEventListener('click', async () => {
+        const archiveBtn = modal.querySelector('#archive-client');
+        if (archiveBtn) archiveBtn.addEventListener('click', async () => {
             if (!c.is_archived && !(await window.confirmation.confirm(
                 window.ui.t('common.archive_confirm'), window.ui.t('common.archive')))) return;
             try {

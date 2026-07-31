@@ -137,6 +137,12 @@ class CorePermissionTests(SimpleTestCase):
         self.assertTrue(perm.has_permission(make_request(make_user('admin')), None))
         self.assertFalse(perm.has_permission(make_request(make_user('worker')), None))
 
+    def test_is_owner_or_admin_or_manager(self):
+        perm = core_permissions.IsOwnerOrAdminOrManager()
+        for role in ('owner', 'admin', 'manager'):
+            self.assertTrue(perm.has_permission(make_request(make_user(role)), None), role)
+        self.assertFalse(perm.has_permission(make_request(make_user('worker')), None))
+
     def test_is_owner_or_admin_or_worker(self):
         perm = core_permissions.IsOwnerOrAdminOrWorker()
         for role in ('owner', 'admin', 'worker'):

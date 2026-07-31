@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.mixins import CreateModelMixin
 
-from apps.core.permissions import IsCompanyMember, IsOwnerOrAdmin
+from apps.core.permissions import IsCompanyMember, IsOwnerOrAdmin, IsOwnerOrAdminOrWorker
 from apps.messaging.models import Notification
 from apps.messaging.services import notify, notify_staff
 from .models import RefusalReason, Task, TaskStatus, WorkRecord
@@ -54,6 +54,10 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         # owner/admin — иначе работник PATCH'ем поставил бы своей задаче
         # status='confirmed' в обход confirm_work или переназначил бы её на
         # заказ другой компании (поле order на update раньше не проверялось).
+        # Создание задачи: owner/admin назначают, worker создаёт свою
+        # самостоятельную задачу — manager НЕ создаёт (только просмотр).
+        if self.action == 'create':
+            return [IsCompanyMember(), IsOwnerOrAdminOrWorker()]
         if self.action in ('update', 'partial_update'):
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         return [IsCompanyMember()]
@@ -179,6 +183,10 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         # labor_cost, минуя confirm_work — без проверки склада, без списания
         # сырья и без audit (раздувая свой заработок). Прямой update разрешаем
         # лишь owner/admin, а чувствительные поля закрыты в сериализаторе.
+        # Создание записи: worker сдаёт свою работу, owner/admin заводят чужую —
+        # manager НЕ создаёт (только просмотр).
+        if self.action == 'create':
+            return [IsCompanyMember(), IsOwnerOrAdminOrWorker()]
         if self.action in ('update', 'partial_update'):
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         return [IsCompanyMember()]

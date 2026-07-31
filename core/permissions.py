@@ -94,6 +94,26 @@ class IsOwnerOrAdmin(BasePermission):
         )
 
 
+class IsOwnerOrAdminOrManager(BasePermission):
+    """
+    Разрешает доступ пользователям с ролями 'owner', 'admin' или 'manager'.
+
+    Менеджер получает ПРОСМОТР клиентов/заказов/производства (без записи):
+    чтение разрешено всем трём ролям, а изменяющие операции остаются
+    за owner/admin (проверяется на уровне view через get_permissions).
+
+    Используется для:
+    - Чтения клиентов и заказов (list/retrieve)
+    - Операционной аналитики без денег (reports/analytics/admin)
+    """
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.role in ('owner', 'admin', 'manager')
+        )
+
+
 class IsOwnerOrAdminOrWorker(BasePermission):
     """
     Разрешает доступ всем аутентифицированным пользователям с валидной ролью.

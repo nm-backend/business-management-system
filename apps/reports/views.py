@@ -33,7 +33,7 @@ from apps.finance.models import Expense, ExpenseCategory, WorkerPayment
 from apps.orders.models import Order
 from apps.production.models import WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
-from core.permissions import IsOwner, IsOwnerOrAdmin
+from core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAdminOrManager
 
 MONEY = DecimalField(max_digits=15, decimal_places=2)
 
@@ -468,8 +468,13 @@ class RevenueTimelineView(APIView):
 
 
 class AdminAnalyticsView(APIView):
-    """GET /api/v1/reports/analytics/admin/ - владелец и администратор."""
-    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
+    """
+    GET /api/v1/reports/analytics/admin/ - операционная аналитика без денег.
+
+    Доступ: владелец, администратор и менеджер (manager видит только
+    операционные показатели, без финансовых сумм).
+    """
+    permission_classes = [IsCompanyMember, IsOwnerOrAdminOrManager]
 
     def get(self, request):
         return Response(admin_analytics_data(request.user.company_id))

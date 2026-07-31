@@ -42,7 +42,7 @@ class Order(TimestampedModel, SoftDeleteModel):
     quantity = models.DecimalField(max_digits=10, decimal_places=2,
                                    validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Количество')
     unit = models.CharField(max_length=20, choices=UnitChoices.choices,
-                            verbose_name='Единица измерения')
+                            default=UnitChoices.IZDELIE, verbose_name='Единица измерения')
     deadline = models.DateTimeField(null=True, blank=True, verbose_name='Срок выполнения')
     worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders', verbose_name='Работник')
     comment = models.TextField(blank=True, verbose_name='Комментарий')

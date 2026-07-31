@@ -506,7 +506,7 @@ class MessagesComponent {
     notificationRoute(type) {
         const user = window.currentUser || {};
         const owner = !!user.is_owner;
-        const staff = owner || !!user.is_admin;
+        const staff = owner || !!user.is_admin || !!user.is_manager;
         const map = {
             new_order: '#/orders',
             new_expense: owner ? '#/finance' : '',

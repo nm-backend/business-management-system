@@ -16,8 +16,10 @@ from apps.audit.services import collect_model_changes, write_audit_log
 from apps.messaging.models import Notification
 from apps.messaging.services import notify
 from apps.orders.models import Order
+from rest_framework.permissions import SAFE_METHODS
+
 from apps.core.permissions import IsCompanyMember
-from core.permissions import IsOwner, IsOwnerOrAdmin
+from core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAdminOrManager
 from .models import ACTIVE_ORDER_STATUSES, Client, Payment
 from .serializers import ClientAdminSerializer, ClientOwnerSerializer, PaymentSerializer
 from apps.core.views import CompanyScopedViewSet
@@ -26,6 +28,17 @@ from apps.core.views import CompanyScopedViewSet
 class ClientViewSet(CompanyScopedViewSet):
     queryset = Client.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember, IsOwnerOrAdmin]  # Работник клиентов не видит
+
+    def get_permissions(self):
+        """
+        Менеджер видит клиентов (только чтение), но не управляет ими.
+
+        Чтение (list/retrieve): owner/admin/manager. Изменения (create/update/
+        archive/restore): только owner/admin. Работник клиентов не видит вовсе.
+        """
+        if self.request.method in SAFE_METHODS:
+            return [IsCompanyMember(), IsOwnerOrAdminOrManager()]
+        return [IsCompanyMember(), IsOwnerOrAdmin()]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'phone', 'comment']
     filterset_fields = ['is_archived']

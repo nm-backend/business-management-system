@@ -22,6 +22,8 @@ def user(role='worker', authenticated=True, **extra):
         is_owner=(role == 'owner'),
         is_admin=(role == 'admin'),
         is_worker=(role == 'worker'),
+        is_manager=(role == 'manager'),
+        company_id=None,
     )
     for k, v in extra.items():
         setattr(ns, k, v)
@@ -90,6 +92,19 @@ class AppsCorePermissionTests(SimpleTestCase):
         self.assertTrue(perms.IsOwnerOrAdmin().has_permission(req(user('owner')), None))
         self.assertTrue(perms.IsOwnerOrAdmin().has_permission(req(user('admin')), None))
         self.assertFalse(perms.IsOwnerOrAdmin().has_permission(req(user('worker')), None))
+
+    def test_is_owner_or_admin_or_manager(self):
+        perm = perms.IsOwnerOrAdminOrManager()
+        for role in ('owner', 'admin', 'manager'):
+            self.assertTrue(perm.has_permission(req(user(role)), None), role)
+        self.assertFalse(perm.has_permission(req(user('worker')), None))
+
+    def test_is_owner_or_admin_or_worker(self):
+        perm = perms.IsOwnerOrAdminOrWorker()
+        for role in ('owner', 'admin', 'worker'):
+            self.assertTrue(perm.has_permission(req(user(role)), None), role)
+        # Менеджер НЕ входит: создание задач/работ — только owner/admin/worker.
+        self.assertFalse(perm.has_permission(req(user('manager')), None))
 
     def test_is_authenticated(self):
         self.assertTrue(perms.IsAuthenticated().has_permission(req(user()), None))

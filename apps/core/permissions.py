@@ -80,6 +80,35 @@ class IsOwnerOrAdmin(permissions.BasePermission):
         return request.user and (request.user.is_owner or request.user.is_admin)
 
 
+class IsOwnerOrAdminOrManager(permissions.BasePermission):
+    """
+    Permission - владелец, администратор или менеджер.
+
+    Менеджер получает ПРОСМОТР клиентов/заказов/производства (только чтение,
+    без финансовых сумм). Изменяющие операции остаются за owner/admin
+    (проверяется на уровне view через get_permissions), поэтому этот класс
+    применяется к чтению (list/retrieve) и операционной аналитике.
+    """
+    def has_permission(self, request, view):
+        return request.user and (
+            request.user.is_owner or request.user.is_admin or request.user.is_manager
+        )
+
+
+class IsOwnerOrAdminOrWorker(permissions.BasePermission):
+    """
+    Permission - владелец, администратор или работник.
+
+    Разрешает доступ owner/admin/worker, но НЕ менеджеру. Используется для
+    изменяющих операций, которые менеджер выполнять не должен (например,
+    создание задач и записей о работе в производстве).
+    """
+    def has_permission(self, request, view):
+        return request.user and (
+            request.user.is_owner or request.user.is_admin or request.user.is_worker
+        )
+
+
 class IsAuthenticated(permissions.BasePermission):
     """
     Permission - аутентифицированный пользователь.

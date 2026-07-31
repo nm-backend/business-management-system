@@ -14,7 +14,7 @@ class WarehouseComponent {
         this.tab = 'active';
         container.innerHTML = `
             <div class="tabs">
-                <button class="tab-btn active" data-i18n="warehouse.title"></button>
+                <button class="tab-btn active" id="tab-materials" data-i18n="warehouse.title"></button>
                 <button class="tab-btn" id="tab-products" data-i18n="warehouse.finished_title"></button>
             </div>
             <div class="tabs" id="warehouse-subtabs">
@@ -36,11 +36,35 @@ class WarehouseComponent {
 
         container.querySelector('#tab-products').addEventListener('click', () => window.router.navigate('/finished-products'));
 
+        // «Хом ашё омбори» — возврат к списку материалов из любой подвкладки.
+        // Раньше кнопка не имела обработчика: после «Омбор ҳаракати» она
+        // выглядела активной, но клик ничего не делал, и материалы приходилось
+        // возвращать кнопкой «Фаол».
+        // Подсветка главных вкладок («Хом ашё омбори» / «Тайёр маҳсулот»)
+        // должна соответствовать контенту: при «Омбор ҳаракати»/«Архивга»
+        // «Хом ашё омбори» не должен оставаться подсвеченным.
+        const setMaterialsTabActive = (active) => {
+            container.querySelector('#tab-materials').classList.toggle('active', active);
+        };
+        const showMaterials = () => {
+            container.querySelectorAll('[data-wtab]').forEach((b) => b.classList.remove('active'));
+            const activeBtn = container.querySelector('[data-wtab="active"]');
+            if (activeBtn) activeBtn.classList.add('active');
+            setMaterialsTabActive(true);
+            this.tab = 'active';
+            container.querySelector('.search-box').style.display = '';
+            const addBtn = container.querySelector('#add-material-btn');
+            if (addBtn) addBtn.style.display = '';
+            this.loadMaterials();
+        };
+        container.querySelector('#tab-materials').addEventListener('click', () => showMaterials());
+
         container.querySelectorAll('[data-wtab]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 container.querySelectorAll('[data-wtab]').forEach((b) => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.tab = btn.dataset.wtab;
+                setMaterialsTabActive(this.tab === 'active');
                 // Поиск и «добавить» относятся к списку материалов, в истории они лишние.
                 const isHistory = this.tab === 'history';
                 container.querySelector('.search-box').style.display = isHistory ? 'none' : '';

@@ -36,6 +36,8 @@ class UnitChoices(models.TextChoices):
     M2 = 'm2', 'Квадратный метр'
     IZDELIE = 'izdelie', 'Изделие'
     DONA = 'dona', 'Дона'
+    KG = 'kg', 'Килограмм'
+    M3 = 'm3', 'Кубический метр'
 
 class RawMaterial(TimestampedModel, SoftDeleteModel):
     """
