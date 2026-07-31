@@ -124,7 +124,9 @@ class APIClient {
             throw { status: response.status, data: errorData };
         }
 
-        if (response.status === 204) {
+        // 204 No Content и 205 Reset Content приходят с пустым телом —
+        // не пытаемся разбирать JSON (иначе SyntaxError в консоли).
+        if (response.status === 204 || response.status === 205) {
             return null;
         }
 
