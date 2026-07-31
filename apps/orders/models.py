@@ -108,6 +108,43 @@ class Order(TimestampedModel, SoftDeleteModel):
             self.payment_status = self.PaymentStatus.PARTIAL
         self.save(update_fields=['payment_status', 'updated_at'])
 
+    def reserve_product(self):
+        """
+        Резервирует товар под заказ: reserved_for_orders += quantity.
+
+        Атомарно (select_for_update), чтобы два параллельных заказа на один
+        товар не потеряли резерв друг друга (как в apply_payment_amount).
+        Заказ без товара (custom_product_name) ничего не резервирует.
+        """
+        if not self.product_id or not self.quantity:
+            return
+        from django.db import transaction
+
+        with transaction.atomic():
+            product = FinishedProduct.objects.select_for_update().get(pk=self.product_id)
+            product.reserved_for_orders = (product.reserved_for_orders or Decimal('0')) + self.quantity
+            product.save(update_fields=['reserved_for_orders', 'updated_at'])
+
+    def release_product(self, product_id=None, quantity=None):
+        """
+        Снимает резерв товара: reserved_for_orders -= quantity.
+
+        product_id/quantity принимаются явно для пересчёта при смене товара или
+        количества заказа (в perform_update старый резерв снимается по старым
+        значениям). Без аргументов используются собственные product/quantity.
+        Резерв не уходит в минус (заказы, созданные до фичи, резерва не имели).
+        """
+        pid = product_id if product_id is not None else self.product_id
+        qty = quantity if quantity is not None else self.quantity
+        if not pid or not qty:
+            return
+        from django.db import transaction
+
+        with transaction.atomic():
+            product = FinishedProduct.objects.select_for_update().get(pk=pid)
+            product.reserved_for_orders = max((product.reserved_for_orders or Decimal('0')) - qty, Decimal('0'))
+            product.save(update_fields=['reserved_for_orders', 'updated_at'])
+
     def apply_payment_amount(self, amount):
         """
         Атомарно прибавляет сумму оплаты к paid_amount и обновляет payment_status.

@@ -80,6 +80,8 @@ class OrderViewSet(CompanyScopedViewSet):
         company = self.request.user.company
         self._assert_related_own_company(serializer.validated_data)
         order = serializer.save(company=company)
+        # Товар резервируется под заказ сразу при создании (reserved_for_orders).
+        order.reserve_product()
         order.client.recalculate_financials()
         notify_staff(
             company,
@@ -98,8 +100,18 @@ class OrderViewSet(CompanyScopedViewSet):
 
     def perform_update(self, serializer):
         self._assert_related_own_company(serializer.validated_data)
+        # Старый резерв снимаем по прежним product/quantity: если товар или
+        # количество изменились, иначе резерв «прилипнет» к старому значению.
+        old_product_id = serializer.instance.product_id
+        old_quantity = serializer.instance.quantity
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
         order = serializer.save()
+        if order.product_id != old_product_id or order.quantity != old_quantity:
+            order.release_product(product_id=old_product_id, quantity=old_quantity)
+            # Выданный/отменённый заказ резерв не «заводит» заново: deliver/cancel
+            # уже сняли его, и правка количества не должна воскрешать резерв.
+            if order.status not in (Order.Status.DELIVERED, Order.Status.CANCELLED):
+                order.reserve_product()
         if 'total_amount' in changes:
             order.update_payment_status()
         order.client.recalculate_financials()
@@ -114,6 +126,7 @@ class OrderViewSet(CompanyScopedViewSet):
 
     def perform_destroy(self, instance):
         """Удаление запрещено - заказ отменяется и архивируется."""
+        instance.release_product()
         instance.status = Order.Status.CANCELLED
         instance.save(update_fields=['status', 'updated_at'])
         instance.archive()
@@ -185,6 +198,8 @@ class OrderViewSet(CompanyScopedViewSet):
         order = self.get_object()
         if order.status == Order.Status.CANCELLED:
             return Response({'detail': 'Order is cancelled'}, status=status.HTTP_400_BAD_REQUEST)
+        # Товар ушёл клиенту — резерв снимаем.
+        order.release_product()
         order.status = Order.Status.DELIVERED
         order.save(update_fields=['status'])
         order.client.recalculate_financials()
@@ -224,6 +239,8 @@ class OrderViewSet(CompanyScopedViewSet):
                            'Оформите возврат расходом «Возврат клиенту».'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Резерв возвращается на склад при отмене заказа.
+        order.release_product()
         order.status = Order.Status.CANCELLED
         order.save(update_fields=['status'])
         order.client.recalculate_financials()

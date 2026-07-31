@@ -137,7 +137,7 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         photo: ImageField - фото продукции
         description: TextField - описание
         min_stock: DecimalField - минимальный остаток для предупреждений
-        reserved_for_orders: DecimalField - ЗАГОТОВКА: резервирование пока не реализовано
+        reserved_for_orders: DecimalField - количество, зарезервированное под заказы
         cost_price: DecimalField - себестоимость (ФИНАНСОВОЕ ПОЛЕ - только owner)
         sale_price: DecimalField - цена продажи (ФИНАНСОВОЕ ПОЛЕ - только owner)
 
@@ -145,12 +145,9 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         available_quantity: DecimalField - доступное количество (quantity - reserved)
         is_low_stock: bool - True если available_quantity <= min_stock
 
-    Особенности:
-        - Поддерживает мягкое удаление (SoftDeleteModel)
-        - Автоматические временные метки (TimestampedModel)
-        - TODO: reserved_for_orders — резервирование на складе при создании заказа не реализовано.
-          Поле объявлено, но никогда не заполняется (always 0). Реализовать, когда понадобится
-          блокировка товара под заказ до выдачи.
+    Резервирование: поле заполняется при создании заказа на товар
+    (apps/orders — Order.reserve_product), снимается при отмене, удалении
+    и выдаче заказа (Order.release_product).
     """
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='finished_products', null=True, verbose_name='Компания')
     name = models.CharField(max_length=255, verbose_name='Название')
