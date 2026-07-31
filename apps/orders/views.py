@@ -198,6 +198,12 @@ class OrderViewSet(CompanyScopedViewSet):
         order = self.get_object()
         if order.status == Order.Status.CANCELLED:
             return Response({'detail': 'Order is cancelled'}, status=status.HTTP_400_BAD_REQUEST)
+        # Повторная выдача блокируется: заказ уже отдан клиенту, второй раз
+        # списать резерв/начислить долг нельзя (раньше выдачу можно было
+        # дёргать сколько угодно — дубли в audit и лишний пересчёт финансов).
+        if order.status == Order.Status.DELIVERED:
+            return Response({'detail': 'Order is already delivered'},
+                            status=status.HTTP_400_BAD_REQUEST)
         # Товар ушёл клиенту — резерв снимаем.
         order.release_product()
         order.status = Order.Status.DELIVERED

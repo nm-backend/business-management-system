@@ -155,6 +155,28 @@ class DeliverButtonContractTests(TestCase):
         resp = c.post(f'/api/v1/orders/orders/{order.id}/deliver/')
         self.assertEqual(resp.status_code, 400)
 
+    def test_already_delivered_order_cannot_be_delivered_again(self):
+        """
+        Повторная выдача блокируется: заказ уже отдан клиенту.
+
+        Раньше deliver можно было дёргать сколько угодно раз — каждый вызов
+        снимал резерв, пересчитывал финансы и писал дубль в audit-журнал.
+        """
+        c = APIClient()
+        c.force_authenticate(self.owner)
+        order = self._order(Order.Status.NEW)
+
+        first = c.post(f'/api/v1/orders/orders/{order.id}/deliver/')
+        self.assertEqual(first.status_code, 200, first.content[:200])
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.DELIVERED)
+
+        second = c.post(f'/api/v1/orders/orders/{order.id}/deliver/')
+        self.assertEqual(second.status_code, 400, 'повторная выдача должна давать 400')
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.DELIVERED)
+        self.assertIsNotNone(order.delivered_at)
+
     def test_ui_shows_deliver_button_for_every_non_terminal_status(self):
         """Условие показа кнопки в orders.js должно совпадать с контрактом API."""
         from pathlib import Path
