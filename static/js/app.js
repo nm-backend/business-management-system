@@ -345,6 +345,50 @@ function escapeText(value) {
     return div.innerHTML;
 }
 
+/* ────────────────────────────────────────────────────────────────
+   Клик в зоне нижней навигации по «выглядывающей» строке контента.
+
+   На низких экранах фиксированная bottom-nav (64px, z-index 30) перекрывает
+   низ контента: строка «Хабарлар» в настройках оказывалась частично под ней,
+   и клик по видимой части строки попадал в пункт меню «Омбор» — пользователь
+   жал «Хабарлар», а открывался склад.
+
+   Если клик пришёлся на зону навигации, но под ней «выглядывает» кликабельная
+   строка (≥12px видимой части), активируем строку вместо пункта меню.
+   Настоящий клик по пункту меню не трогаем: он ниже строки (y > bottom строки)
+   или строка целиком ушла под навигацию (top >= navTop).
+   ──────────────────────────────────────────────────────────────── */
+document.addEventListener('click', (e) => {
+    // Модалка поверх навигации — не перехватываем.
+    if (document.querySelector('.modal')) return;
+    const nav = document.getElementById('app-bottom-nav');
+    if (!nav || getComputedStyle(nav).display === 'none' || !nav.contains(e.target)) return;
+    const navTop = nav.getBoundingClientRect().top;
+    // Перехватываем ТОЛЬКО клики у верхней кромки навигации (≤12px): там
+    // строка ещё визуально соединена со своей видимой частью. Подписи меню и
+    // центр иконок сидят ниже — их клики не трогаем, чтобы не перехватывать
+    // настоящий тап по пункту навигации (строка под меню при прокрутке есть
+    // на любом телефоне).
+    if (e.clientY <= navTop || e.clientY - navTop > 12) return;
+    // Что «выглядывает» из-под навигации в точке клика по x.
+    const peek = document.elementFromPoint(e.clientX, navTop - 2);
+    if (!peek || !peek.closest) return;
+    const interactive = peek.closest('a[href], .list-row, button, [data-id]');
+    if (!interactive) return;
+    const r = interactive.getBoundingClientRect();
+    // Строка не под навигацией — обычный клик по меню.
+    if (r.top >= navTop) return;
+    // Строка почти целиком скрыта — клик по ней не намеренный.
+    if (r.bottom - navTop < 12) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Синтетический клик по строке: ссылка сама выполнит переход,
+    // а обработчики строки сработают как обычно. Цель клика вне навигации,
+    // поэтому capture-обработчик выше вернётся на nav.contains(e.target)
+    // и зацикливания не будет.
+    interactive.click();
+}, true);
+
 async function refreshNotificationBadge() {
     try {
         const response = await window.api.request('/messaging/notifications/?is_read=false');

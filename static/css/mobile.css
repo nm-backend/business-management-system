@@ -20,6 +20,9 @@
    контентом прокручивалась. */
 html {
     overscroll-behavior-y: contain;
+    /* Контент при прокрутке не должен уходить под фиксированную bottom-nav
+       (в т.ч. scrollIntoView/focus при перехвате клика в зоне навигации). */
+    scroll-padding-bottom: calc(var(--bottom-nav-height) + 12px);
 }
 body {
     overscroll-behavior-y: auto;
