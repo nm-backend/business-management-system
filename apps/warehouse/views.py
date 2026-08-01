@@ -2,6 +2,7 @@ from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.response import Response
+from django.db.models import Sum
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
@@ -9,12 +10,12 @@ from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrManager
 from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
 from .serializers import (
-    IncomingSerializer,
+    IncomingSerializer, OutgoingSerializer,
     RawMaterialSerializer, RawMaterialOwnerSerializer,
     FinishedProductSerializer, FinishedProductOwnerSerializer,
     StockMovementSerializer, StockMovementLimitedSerializer, RecipeSerializer, RecipeItemSerializer
 )
-from .services import record_incoming
+from .services import record_incoming, record_outgoing
 from apps.core.views import CompanyScopedViewSet
 
 
@@ -46,6 +47,41 @@ class StockOperationsMixin:
             quantity=data['quantity'],
             price_per_unit=price,
             arrival_date=data.get('arrival_date'),
+            document_number=data.get('document_number', ''),
+            user=request.user,
+            reason=data.get('reason', ''),
+        )
+        write_audit_log(
+            action=AuditLog.Action.UPDATE,
+            actor=request.user,
+            target=updated,
+            changes={'quantity': [str(target.quantity), str(updated.quantity)]},
+            request=request,
+        )
+        return Response(self.get_serializer(updated).data)
+
+    @action(detail=True, methods=['post'])
+    def outgoing(self, request, pk=None):
+        """
+        Расход/списание сырья или товара (макет «Материални чиқариш»).
+
+        POST .../{id}/outgoing/
+        Тело: {"quantity": 5, "movement_type": "outgoing|loss|adjustment",
+               "outgoing_date": "2024-05-25", "document_number": "№К-1258",
+               "reason": "..."}
+        Списывается только доступное количество (остаток минус резерв).
+        """
+        target = self.get_object()
+        serializer = OutgoingSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        updated = record_outgoing(
+            target=target,
+            quantity=data['quantity'],
+            movement_type=data.get('movement_type'),
+            outgoing_date=data.get('outgoing_date'),
+            document_number=data.get('document_number', ''),
             user=request.user,
             reason=data.get('reason', ''),
         )
@@ -95,18 +131,36 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
     """
     queryset = RawMaterial.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name', 'stone_type', 'color', 'supplier']
-    filterset_fields = ['is_archived', 'unit']
+    search_fields = ['name', 'stone_type', 'color', 'supplier', 'barcode']
+    filterset_fields = ['is_archived', 'unit', 'storage_zone']
     ordering_fields = ['name', 'quantity', 'created_at']
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy',
-                           'incoming', 'archive', 'restore']:
+                           'incoming', 'outgoing', 'archive', 'restore']:
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         # Чтение склада: все сотрудники компании (owner/admin/worker/manager) —
         # цены (purchase_price/avg_cost_price) скрыты не-owner сериализатором,
         # финансовых сумм manager не видит.
         return [IsCompanyMember()]
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """
+        Итоговые показатели склада сырья (макет «Хомашё омбори»).
+
+        GET /api/v1/warehouse/raw-materials/summary/
+        Возвращает общий остаток (жами қолдиқ) и, для владельца, общую
+        стоимость (умумий қиймат = остаток * средняя себестоимость).
+        """
+        qs = RawMaterial.objects.filter(company_id=request.user.company_id, is_archived=False)
+        total_quantity = qs.aggregate(s=Sum('quantity'))['s'] or 0
+        data = {'total_quantity': total_quantity}
+        if request.user.is_owner:
+            data['total_value'] = sum(
+                (m.quantity or 0) * (m.avg_cost_price or 0) for m in qs.only('quantity', 'avg_cost_price')
+            )
+        return Response(data)
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
@@ -169,7 +223,7 @@ class FinishedProductViewSet(StockOperationsMixin, CompanyScopedViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy',
-                           'incoming', 'archive', 'restore']:
+                           'incoming', 'outgoing', 'archive', 'restore']:
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         # Чтение склада: все сотрудники компании (owner/admin/worker/manager) —
         # цены (purchase_price/avg_cost_price) скрыты не-owner сериализатором,

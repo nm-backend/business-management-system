@@ -18,6 +18,19 @@ from apps.core.models import TimestampedModel, SoftDeleteModel
 from apps.core.validators import validate_file_size, validate_not_future
 
 
+class StorageZoneChoices(models.TextChoices):
+    """
+    Зоны хранения на складе сырья (макет «Хомашё омбори»).
+
+    Вместо свободного текста storage_location макет показывает выбор зоны
+    (А/Б/В) — по ней можно фильтровать и видеть занятость склада.
+    """
+    A = 'a', 'А зона'
+    B = 'b', 'Б зона'
+    C = 'c', 'В зона'
+    OTHER = 'other', 'Бошқа'
+
+
 class UnitChoices(models.TextChoices):
     """
     Единицы измерения для материалов и продукции.
@@ -79,7 +92,20 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT, verbose_name='Единица измерения')
     quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0,
                                    validators=[MinValueValidator(Decimal('0'))], verbose_name='Количество')
+    # Штрихкод материала (макет: «Баркод», сканер по нему ищет на складе).
+    barcode = models.CharField(max_length=128, blank=True, default='',
+                               db_index=True, verbose_name='Штрихкод')
+    # Зона хранения (А/Б/В) — макет «Хомашё омбори».
+    storage_zone = models.CharField(max_length=10, choices=StorageZoneChoices.choices,
+                                    blank=True, default='', verbose_name='Зона хранения')
     storage_location = models.CharField(max_length=255, blank=True, verbose_name='Место хранения')
+    # Резерв сырья под заказы: заполняется при создании заказа на товар с
+    # рецептом (Order.reserve_raw_materials), снимается при отмене/выдаче заказа
+    # и при подтверждении работы (сырьё физически израсходовано).
+    reserved_for_orders = models.DecimalField(
+        max_digits=15, decimal_places=3, default=0,
+        validators=[MinValueValidator(Decimal('0'))], verbose_name='Зарезервировано под заказы',
+    )
     photo = models.ImageField(upload_to='materials/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
     min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0,
                                     validators=[MinValueValidator(Decimal('0'))], verbose_name='Минимальный остаток')
@@ -114,14 +140,27 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
         return f"{self.name} ({self.quantity} {self.get_unit_display()})"
 
     @property
+    def available_quantity(self):
+        """
+        Доступное количество сырья с учётом резервов под заказы.
+
+        Возвращает:
+            Decimal - quantity - reserved_for_orders
+        """
+        return self.quantity - self.reserved_for_orders
+
+    @property
     def is_low_stock(self):
         """
         Проверяет, находится ли материал на низком остатке.
 
+        Учитывает резервы: материал, зарезервированный под заказы, доступен
+        для новых заказов лишь в объёме available_quantity.
+
         Возвращает:
-            bool - True если quantity <= min_stock
+            bool - True если available_quantity <= min_stock
         """
-        return self.quantity <= self.min_stock
+        return self.available_quantity <= self.min_stock
 
 class FinishedProduct(TimestampedModel, SoftDeleteModel):
     """
@@ -263,6 +302,9 @@ class StockMovement(TimestampedModel):
     price_per_unit = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name='Цена за единицу')
     reason = models.CharField(max_length=255, blank=True, verbose_name='Причина')
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='stock_movements', verbose_name='Кем создано')
+    # Номер документа прихода/расхода (макет: «Хужжат раками» №К-1258).
+    document_number = models.CharField(max_length=100, blank=True, default='',
+                                       verbose_name='Номер документа')
     related_order_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного заказа')
     related_production_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного производства')
 

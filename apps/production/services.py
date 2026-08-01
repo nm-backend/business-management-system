@@ -116,10 +116,17 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
     if shortages:
         raise MaterialShortageError(shortages)
 
-    # 3. Списание сырья.
+    # 3. Списание сырья. Заодно снимаем резерв под заказ: сырьё физически
+    # израсходовано, обещание заказу исполнено — reserved_for_orders падает.
     for material, required in locked_materials:
         material.quantity -= required
-        material.save(update_fields=['quantity', 'updated_at'])
+        if work.task and work.task.order_id:
+            material.reserved_for_orders = max(
+                (material.reserved_for_orders or Decimal('0')) - required, Decimal('0')
+            )
+            material.save(update_fields=['quantity', 'reserved_for_orders', 'updated_at'])
+        else:
+            material.save(update_fields=['quantity', 'updated_at'])
         StockMovement.objects.create(
             company_id=work.company_id,
             movement_type=StockMovement.MovementType.PRODUCTION_OUT,

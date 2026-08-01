@@ -22,6 +22,17 @@ class WarehouseComponent {
                 ${user.is_owner ? `<button class="tab-btn" data-wtab="archive" data-i18n="common.archive"></button>` : ''}
                 ${canEdit ? `<button class="tab-btn" data-wtab="history" data-i18n="warehouse.stock_movement"></button>` : ''}
             </div>
+            <div class="warehouse-summary" id="warehouse-summary" style="display:none;gap:10px;margin-bottom:10px;">
+                <div class="card" style="flex:1;margin:0;">
+                    <div class="text-sm text-muted" data-i18n="warehouse.summary_total"></div>
+                    <div class="font-bold" id="summary-total"></div>
+                </div>
+                ${user.is_owner ? `
+                <div class="card" style="flex:1;margin:0;">
+                    <div class="text-sm text-muted" data-i18n="warehouse.summary_value"></div>
+                    <div class="font-bold" id="summary-value"></div>
+                </div>` : ''}
+            </div>
             <div class="search-box search-box--with-action">
                 <div class="search-field">
                     <span class="search-icon">🔍</span>
@@ -96,6 +107,23 @@ class WarehouseComponent {
 
         window.i18n.applyTranslations();
         await this.loadMaterials();
+        this.loadSummary();
+    }
+
+    /** Итоговые показатели склада: общий остаток и стоимость (для owner). */
+    async loadSummary() {
+        const wrap = document.getElementById('warehouse-summary');
+        if (!wrap || window.listStates.gone(wrap)) return;
+        try {
+            const data = await window.api.request('/warehouse/raw-materials/summary/');
+            const totalEl = document.getElementById('summary-total');
+            if (totalEl) totalEl.textContent = window.ui.qty(data.total_quantity);
+            const valueEl = document.getElementById('summary-value');
+            if (valueEl) valueEl.textContent = window.ui.money(data.total_value ?? 0);
+            wrap.style.display = 'flex';
+        } catch (e) {
+            /* итоги некритичны */
+        }
     }
 
     /**
@@ -309,7 +337,11 @@ class WarehouseComponent {
             </div>
             <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">
                 ${this.detailRow('warehouse.quantity', `${window.ui.qty(m.quantity)} ${window.ui.t('units.' + m.unit)}`, m.is_low_stock)}
+                ${this.detailRow('warehouse.reserved', window.ui.qty(m.reserved_for_orders))}
+                ${this.detailRow('warehouse.available', window.ui.qty(m.available_quantity))}
                 ${this.detailRow('warehouse.min_stock', window.ui.qty(m.min_stock))}
+                ${this.detailRow('warehouse.barcode', m.barcode)}
+                ${this.detailRow('warehouse.storage_zone', m.storage_zone_display)}
                 ${this.detailRow('warehouse.color', m.color)}
                 ${this.detailRow('warehouse.size', m.size)}
                 ${this.detailRow('warehouse.thickness', m.thickness)}
@@ -321,9 +353,10 @@ class WarehouseComponent {
                 ${this.detailRow('warehouse.comment', m.comment)}
             </div>
             ${canEdit ? `
-                <div style="display:flex;gap:10px;margin-top:14px;">
-                    <button class="btn btn-secondary btn-sm" id="edit-material" style="flex:1;" data-i18n="common.edit"></button>
-                    ${m.is_archived ? '' : `<button class="btn btn-success btn-sm" id="income-material" style="flex:1;" data-i18n="warehouse.incoming"></button>`}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+                    <button class="btn btn-secondary btn-sm" id="edit-material" data-i18n="common.edit"></button>
+                    ${m.is_archived ? '' : `<button class="btn btn-success btn-sm" id="income-material" data-i18n="warehouse.incoming"></button>`}
+                    ${m.is_archived ? '' : `<button class="btn btn-danger btn-sm" id="outgoing-material" data-i18n="warehouse.outgoing"></button>`}
                 </div>
                 ${user.is_owner ? `
                     <button class="btn btn-secondary btn-sm btn-block" id="archive-material" style="margin-top:10px;"
@@ -338,6 +371,10 @@ class WarehouseComponent {
             modal.querySelector('#income-material')?.addEventListener('click', () => {
                 window.ui.closeModal(modal);
                 this.openIncomeForm(m);
+            });
+            modal.querySelector('#outgoing-material')?.addEventListener('click', () => {
+                window.ui.closeModal(modal);
+                this.openOutgoingForm(m);
             });
             modal.querySelector('#archive-material')?.addEventListener('click', async () => {
                 if (!m.is_archived && !(await window.confirmation.confirm(
@@ -430,6 +467,18 @@ class WarehouseComponent {
                     <div class="form-group"><label data-i18n="warehouse.min_stock"></label>
                         <input name="min_stock" type="number" step="0.001" min="0" class="form-control" value="${m?.min_stock ?? 0}"></div>
                 </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="form-group"><label data-i18n="warehouse.barcode"></label>
+                        <input name="barcode" class="form-control" value="${window.ui.escape(m?.barcode || '')}"></div>
+                    <div class="form-group"><label data-i18n="warehouse.storage_zone"></label>
+                        <select name="storage_zone" class="form-control">
+                            <option value=""></option>
+                            <option value="a" ${m?.storage_zone === 'a' ? 'selected' : ''} data-i18n="warehouse.zone_a"></option>
+                            <option value="b" ${m?.storage_zone === 'b' ? 'selected' : ''} data-i18n="warehouse.zone_b"></option>
+                            <option value="c" ${m?.storage_zone === 'c' ? 'selected' : ''} data-i18n="warehouse.zone_c"></option>
+                            <option value="other" ${m?.storage_zone === 'other' ? 'selected' : ''} data-i18n="warehouse.zone_other"></option>
+                        </select></div>
+                </div>
                 <div class="form-group"><label data-i18n="warehouse.storage_location"></label>
                     <input name="storage_location" class="form-control" value="${window.ui.escape(m?.storage_location || '')}"></div>
                 <div class="form-group"><label data-i18n="warehouse.supplier"></label>
@@ -490,6 +539,8 @@ class WarehouseComponent {
                 ${isOwner ? `
                     <div class="form-group"><label data-i18n="warehouse.purchase_price"></label>
                         <input name="price_per_unit" type="number" step="0.01" min="0" class="form-control"></div>` : ''}
+                <div class="form-group"><label data-i18n="warehouse.document_number"></label>
+                    <input name="document_number" class="form-control"></div>
                 <div class="form-group"><label data-i18n="warehouse.arrival_date"></label>
                     <input name="arrival_date" type="date" class="form-control" value="${today}" max="${today}"></div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
@@ -510,6 +561,58 @@ class WarehouseComponent {
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadMaterials();
+                    this.loadSummary();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    /**
+     * Расход/списание сырья (макет «Материални чиқариш»).
+     *
+     * Тип движения: расход (outgoing), потеря/брак (loss) или корректировка
+     * (adjustment). Списывается только доступное количество: зарезервированное
+     * под заказы сырьё сервер не даст списать (POST .../outgoing/).
+     */
+    openOutgoingForm(m) {
+        const today = new Date().toISOString().slice(0, 10);
+        const modal = window.ui.modal('warehouse.outgoing', `
+            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(m.name)}</p>
+            <form id="outgoing-form">
+                <div class="form-group"><label data-i18n="warehouse.quantity"></label>
+                    <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required
+                           max="${window.ui.qty(m.available_quantity)}"></div>
+                <div class="form-group"><label data-i18n="warehouse.outgoing_type"></label>
+                    <select name="movement_type" class="form-control">
+                        <option value="outgoing" data-i18n="warehouse.movement_outgoing"></option>
+                        <option value="loss" data-i18n="warehouse.movement_loss"></option>
+                        <option value="adjustment" data-i18n="warehouse.movement_adjustment"></option>
+                    </select></div>
+                <div class="form-group"><label data-i18n="warehouse.document_number"></label>
+                    <input name="document_number" class="form-control"></div>
+                <div class="form-group"><label data-i18n="warehouse.outgoing_date"></label>
+                    <input name="outgoing_date" type="date" class="form-control" value="${today}" max="${today}"></div>
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <input name="reason" class="form-control"></div>
+                <button type="submit" class="btn btn-danger btn-block" data-i18n="warehouse.outgoing"></button>
+            </form>
+        `);
+        modal.querySelector('#outgoing-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            Object.keys(data).forEach((k) => { if (data[k] === '') delete data[k]; });
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request(`/warehouse/raw-materials/${m.id}/outgoing/`, {
+                        method: 'POST',
+                        body: JSON.stringify(data),
+                    });
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadMaterials();
+                    this.loadSummary();
                 } catch (error) {
                     window.toast.error(window.ui.errorText(error));
                 }

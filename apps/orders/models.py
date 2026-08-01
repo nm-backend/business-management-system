@@ -145,6 +145,63 @@ class Order(TimestampedModel, SoftDeleteModel):
             product.reserved_for_orders = max((product.reserved_for_orders or Decimal('0')) - qty, Decimal('0'))
             product.save(update_fields=['reserved_for_orders', 'updated_at'])
 
+    def _recipe_requirements(self, product_id=None, quantity=None):
+        """[(material, required_qty), ...] по активному рецепту товара."""
+        from apps.warehouse.models import FinishedProduct as FP
+        from apps.production.services import get_recipe_requirements
+
+        pid = product_id if product_id is not None else self.product_id
+        qty = quantity if quantity is not None else self.quantity
+        if not pid or not qty:
+            return []
+        try:
+            product = FP.objects.get(pk=pid)
+        except FP.DoesNotExist:
+            return []
+        return get_recipe_requirements(product, qty)
+
+    def reserve_raw_materials(self):
+        """
+        Резервирует сырьё под заказ: по активному рецепту товара
+        reserved_for_orders += required * quantity.
+
+        Атомарно (select_for_update). Заказ без товара или без активного
+        рецепта ничего не резервирует (макет «Хомашё омбори»: у материала
+        виден резерв и номер заказа).
+        """
+        if not self.product_id or not self.quantity:
+            return
+        from django.db import transaction
+        from apps.warehouse.models import RawMaterial
+
+        with transaction.atomic():
+            for material, required in self._recipe_requirements():
+                locked = RawMaterial.objects.select_for_update().get(pk=material.pk)
+                locked.reserved_for_orders = (
+                    (locked.reserved_for_orders or Decimal('0')) + required
+                )
+                locked.save(update_fields=['reserved_for_orders', 'updated_at'])
+
+    def release_raw_materials(self, product_id=None, quantity=None):
+        """
+        Снимает резерв сырья по рецепту товара: reserved_for_orders -= required.
+
+        product_id/quantity — явно, для пересчёта при смене товара/количества.
+        Резерв не уходит в минус (заказы до фичи резерва не имели).
+        """
+        if not self.product_id and not product_id:
+            return
+        from django.db import transaction
+        from apps.warehouse.models import RawMaterial
+
+        with transaction.atomic():
+            for material, required in self._recipe_requirements(product_id, quantity):
+                locked = RawMaterial.objects.select_for_update().get(pk=material.pk)
+                locked.reserved_for_orders = max(
+                    (locked.reserved_for_orders or Decimal('0')) - required, Decimal('0')
+                )
+                locked.save(update_fields=['reserved_for_orders', 'updated_at'])
+
     def apply_payment_amount(self, amount):
         """
         Атомарно прибавляет сумму оплаты к paid_amount и обновляет payment_status.

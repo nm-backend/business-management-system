@@ -134,7 +134,9 @@ class FinishedProductsComponent {
                 ${row('warehouse.description', p.description)}
             </div>
             ${canEdit ? `
-                <div style="display:flex;gap:10px;margin-top:14px;">
+                <button class="btn btn-secondary btn-sm btn-block" id="product-recipes" style="margin-top:10px;" data-i18n="warehouse.recipes"></button>` : ''}
+            ${canEdit ? `
+                <div style="display:flex;gap:10px;margin-top:10px;">
                     <button class="btn btn-secondary btn-sm" id="edit-product" style="flex:1;" data-i18n="common.edit"></button>
                     ${p.is_archived ? '' : `<button class="btn btn-success btn-sm" id="income-product" style="flex:1;" data-i18n="warehouse.incoming"></button>`}
                 </div>
@@ -144,6 +146,9 @@ class FinishedProductsComponent {
         `);
 
         if (canEdit) {
+            modal.querySelector('#product-recipes')?.addEventListener('click', () => {
+                this.openRecipes(p);
+            });
             modal.querySelector('#edit-product').addEventListener('click', () => {
                 window.ui.closeModal(modal);
                 this.openForm(p);
@@ -212,6 +217,189 @@ class FinishedProductsComponent {
         });
     }
 
+    /**
+     * Рецепты товара: список с составом и «Керак / Колдик» по материалам.
+     *
+     * Макет «Тайёр маҳсулот»: у товара виден рецепт (RCP-001) с материалами
+     * и требуемым количеством; здесь же рецепты создаются и редактируются.
+     * Backend-эндпоинты /warehouse/recipes/ и /warehouse/recipe-items/ уже
+     * существовали, но UI для них не было.
+     */
+    async openRecipes(p) {
+        const modal = window.ui.modal('warehouse.recipes', `<div id="recipes-body"></div>`);
+        const body = modal.querySelector('#recipes-body');
+
+        const load = async () => {
+            window.listStates.loading(body, window.ui.t('common.loading'));
+            try {
+                const [recipesResp, materialsResp] = await Promise.all([
+                    window.api.request(`/warehouse/recipes/?product=${p.id}&page_size=100`),
+                    window.api.request('/warehouse/raw-materials/?is_archived=false&page_size=200'),
+                ]);
+                const recipes = recipesResp.results || recipesResp;
+                const materials = materialsResp.results || materialsResp;
+                const materialMap = Object.fromEntries(materials.map((m) => [String(m.id), m]));
+
+                body.innerHTML = `
+                    <button class="btn btn-primary btn-block" id="add-recipe-btn" style="margin-bottom:12px;" data-i18n="warehouse.add_recipe"></button>
+                    ${recipes.length ? recipes.map((r) => this.renderRecipeRow(r, materialMap)).join('')
+                        : `<div class="card list-state" data-i18n="common.no_data"></div>`}
+                `;
+                body.querySelector('#add-recipe-btn').addEventListener('click', () => this.openRecipeForm(p));
+                body.querySelectorAll('[data-edit-recipe]').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const recipe = recipes.find((r) => String(r.id) === btn.dataset.editRecipe);
+                        this.openRecipeForm(p, recipe);
+                    });
+                });
+                body.querySelectorAll('[data-activate-recipe]').forEach((btn) => {
+                    btn.addEventListener('click', async () => {
+                        const id = btn.dataset.activateRecipe;
+                        try {
+                            await window.api.request(`/warehouse/recipes/${id}/`, {
+                                method: 'PATCH', body: JSON.stringify({ is_active: true }),
+                            });
+                            window.toast.success(window.ui.t('common.success'));
+                            await load();
+                        } catch (error) {
+                            window.toast.error(window.ui.errorText(error));
+                        }
+                    });
+                });
+                window.i18n.applyTranslations();
+            } catch (e) {
+                window.listStates.error(body, window.ui.t('common.error'), () => load());
+            }
+        };
+        await load();
+    }
+
+    renderRecipeRow(r, materialMap) {
+        const items = (r.items || []).map((item) => {
+            const m = materialMap[String(item.material)];
+            const available = m ? m.available_quantity : null;
+            const ok = available !== null && available >= Number(item.quantity_required);
+            return `
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm">${window.ui.escape(item.material_name || '-')}</span>
+                    <span class="text-sm text-muted">
+                        <span data-i18n="warehouse.recipe_required"></span>: ${window.ui.qty(item.quantity_required)} <span data-i18n="units.${item.unit}"></span>
+                        ${available !== null
+                            ? `· <span data-i18n="warehouse.recipe_available"></span>: <span class="${ok ? '' : 'text-danger'}">${window.ui.qty(available)} <span data-i18n="units.${m.unit}"></span></span>`
+                            : ''}
+                    </span>
+                </div>`;
+        }).join('');
+
+        return `
+            <div class="card" style="margin-bottom:10px;">
+                <div class="card-title" style="margin-bottom:4px;">
+                    <span>${window.ui.escape(r.name || r.product_name || '-')}</span>
+                    ${r.is_active ? `<span class="badge badge-ready" data-i18n="common.active"></span>` : ''}
+                </div>
+                ${items ? `<div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">${items}</div>` : ''}
+                <div style="display:flex;gap:10px;margin-top:10px;">
+                    <button class="btn btn-secondary btn-sm" style="flex:1;" data-edit-recipe="${r.id}" data-i18n="common.edit"></button>
+                    ${r.is_active ? '' : `<button class="btn btn-success btn-sm" style="flex:1;" data-activate-recipe="${r.id}" data-i18n="warehouse.recipe_activate"></button>`}
+                </div>
+            </div>`;
+    }
+
+    /** Форма рецепта: название, активность и строки состава (материал + количество). */
+    async openRecipeForm(p, recipe = null) {
+        const materialsResp = await window.api.request('/warehouse/raw-materials/?is_archived=false&page_size=200');
+        const materials = materialsResp.results || materialsResp;
+
+        const itemRow = (item = {}) => `
+            <div class="recipe-item-row" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:8px;">
+                <select name="material" class="form-control" required>
+                    <option value=""></option>
+                    ${materials.map((m) => `<option value="${m.id}" ${String(m.id) === String(item.material || '') ? 'selected' : ''}>${window.ui.escape(m.name)}</option>`).join('')}
+                </select>
+                <input name="quantity_required" type="number" step="0.001" min="0.001" class="form-control" required
+                       placeholder="${window.ui.t('production.quantity')}" value="${item.quantity_required ?? ''}">
+                <button type="button" class="icon-btn recipe-item-remove" aria-label="${window.ui.t('common.delete')}">🗑️</button>
+            </div>`;
+
+        const modal = window.ui.modal(recipe ? 'common.edit' : 'warehouse.add_recipe', `
+            <form id="recipe-form">
+                <div class="form-group"><label data-i18n="warehouse.recipe_name"></label>
+                    <input name="name" class="form-control" required value="${window.ui.escape(recipe?.name || '')}"></div>
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" name="is_active" ${recipe?.is_active ? 'checked' : ''}>
+                        <span data-i18n="warehouse.recipe_active"></span>
+                    </label>
+                </div>
+                <div class="form-group"><label data-i18n="warehouse.recipe_items"></label>
+                    <div id="recipe-items">${(recipe?.items || []).map((i) => itemRow(i)).join('') || itemRow()}</div>
+                    <button type="button" class="btn btn-secondary btn-sm btn-block" id="add-item-row" style="margin-top:6px;" data-i18n="warehouse.recipe_add_item"></button>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
+            </form>
+        `);
+
+        const addRow = () => {
+            const wrap = modal.querySelector('#recipe-items');
+            wrap.insertAdjacentHTML('beforeend', itemRow());
+            bindRemove();
+        };
+        const bindRemove = () => {
+            modal.querySelectorAll('.recipe-item-remove').forEach((btn) => {
+                btn.onclick = () => btn.closest('.recipe-item-row').remove();
+            });
+        };
+        bindRemove();
+        modal.querySelector('#add-item-row').addEventListener('click', addRow);
+
+        modal.querySelector('#recipe-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const name = form.querySelector('[name=name]').value.trim();
+            const isActive = form.querySelector('[name=is_active]').checked;
+            await window.ui.submitGuard(form.querySelector('button[type=submit]'), async () => {
+                try {
+                    let savedRecipe = recipe;
+                    if (recipe) {
+                        await window.api.request(`/warehouse/recipes/${recipe.id}/`, {
+                            method: 'PATCH', body: JSON.stringify({ name, is_active: isActive }),
+                        });
+                    } else {
+                        const created = await window.api.request('/warehouse/recipes/', {
+                            method: 'POST', body: JSON.stringify({ product: p.id, name, is_active: isActive }),
+                        });
+                        savedRecipe = created;
+                    }
+                    // Строки состава: обновляем существующие (по id), создаём новые.
+                    const rows = [...form.querySelectorAll('.recipe-item-row')];
+                    for (const rowEl of rows) {
+                        const itemId = rowEl.dataset.itemId;
+                        const data = {
+                            material: rowEl.querySelector('[name=material]').value,
+                            quantity_required: rowEl.querySelector('[name=quantity_required]').value,
+                        };
+                        if (!data.material) continue;
+                        if (itemId) {
+                            await window.api.request(`/warehouse/recipe-items/${itemId}/`, {
+                                method: 'PATCH', body: JSON.stringify(data),
+                            });
+                        } else {
+                            await window.api.request('/warehouse/recipe-items/', {
+                                method: 'POST',
+                                body: JSON.stringify({ ...data, recipe: savedRecipe.id }),
+                            });
+                        }
+                    }
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.openRecipes(p);
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
     openForm(p = null) {
         const isOwner = window.currentUser.is_owner;
         const modal = window.ui.modal(p ? 'common.edit' : 'warehouse.add_product', `
@@ -227,8 +415,11 @@ class FinishedProductsComponent {
                         <input name="quantity" type="number" step="0.001" min="0" class="form-control" required value="${p?.quantity ?? ''}"></div>
                     <div class="form-group"><label data-i18n="warehouse.min_stock"></label>
                         <input name="min_stock" type="number" step="0.001" min="0" class="form-control" value="${p?.min_stock ?? 0}"></div>
-                    <div class="form-group"><label data-i18n="warehouse.reserved"></label>
-                        <input name="reserved_for_orders" type="number" step="0.001" min="0" class="form-control" value="${p?.reserved_for_orders ?? 0}"></div>
+                </div>
+                <div class="form-group">
+                    <label data-i18n="warehouse.reserved"></label>
+                    <input type="text" class="form-control" value="${window.ui.qty(p?.reserved_for_orders ?? 0)}" disabled>
+                    <small class="text-muted" data-i18n="warehouse.reserved_hint"></small>
                 </div>
                 ${isOwner ? `
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">

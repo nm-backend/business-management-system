@@ -21,7 +21,7 @@ from .models import FinishedProduct, RawMaterial, StockMovement
 
 @transaction.atomic
 def record_incoming(*, target, quantity, price_per_unit=None, arrival_date=None,
-                    user=None, reason=''):
+                    document_number=None, user=None, reason=''):
     """
     Приходует количество на склад и записывает движение.
 
@@ -69,7 +69,65 @@ def record_incoming(*, target, quantity, price_per_unit=None, arrival_date=None,
         product=None if is_material else locked,
         quantity=quantity,
         price_per_unit=price,
+        document_number=document_number or '',
         reason=reason or f'Приход {timezone.localdate().isoformat()}',
+        created_by=user,
+    )
+    return locked
+
+
+@transaction.atomic
+def record_outgoing(*, target, quantity, movement_type=None, outgoing_date=None,
+                    document_number=None, user=None, reason=''):
+    """
+    Расход/списание сырья со склада с записью движения.
+
+    Материал, зарезервированный под заказы (reserved_for_orders), списать
+    нельзя: он уже пообещан заказу. Списание ограничено available_quantity
+    (quantity - reserved_for_orders).
+    """
+    from rest_framework.exceptions import ValidationError
+
+    is_material = isinstance(target, RawMaterial)
+    model = RawMaterial if is_material else FinishedProduct
+
+    locked = model.objects.select_for_update().get(pk=target.pk)
+    quantity = Decimal(quantity)
+
+    mtype = movement_type or StockMovement.MovementType.OUTGOING
+    if mtype not in (StockMovement.MovementType.OUTGOING,
+                     StockMovement.MovementType.LOSS,
+                     StockMovement.MovementType.ADJUSTMENT):
+        # Проверяем до мутации строки: OutgoingSerializer ловит недопустимый тип
+        # ещё на входе, но сервис защищается и сам (дефенс-ин-депс).
+        raise ValidationError({'movement_type': 'Недопустимый тип расхода.'})
+
+    available = locked.quantity - locked.reserved_for_orders
+    if quantity > available:
+        raise ValidationError({
+            'quantity': (
+                f'Доступно для списания только {available} '
+                f'({locked.reserved_for_orders} зарезервировано под заказы).'
+            )
+        })
+
+    locked.quantity = locked.quantity - quantity
+    locked.save(update_fields=['quantity', 'updated_at'])
+
+    # Дата списания из документа: created_at у движения останется «сейчас»,
+    # поэтому пишем её в причину, чтобы история не теряла дату документа.
+    reason_text = reason or f'Расход {timezone.localdate().isoformat()}'
+    if outgoing_date:
+        reason_text = f'{reason_text} (дата документа: {outgoing_date.isoformat()})'
+
+    StockMovement.objects.create(
+        company_id=locked.company_id,
+        movement_type=mtype,
+        material=locked if is_material else None,
+        product=None if is_material else locked,
+        quantity=quantity,
+        document_number=document_number or '',
+        reason=reason_text,
         created_by=user,
     )
     return locked

@@ -80,8 +80,9 @@ class OrderViewSet(CompanyScopedViewSet):
         company = self.request.user.company
         self._assert_related_own_company(serializer.validated_data)
         order = serializer.save(company=company)
-        # Товар резервируется под заказ сразу при создании (reserved_for_orders).
+        # Товар и сырьё по его рецепту резервируются под заказ сразу при создании.
         order.reserve_product()
+        order.reserve_raw_materials()
         order.client.recalculate_financials()
         notify_staff(
             company,
@@ -108,10 +109,12 @@ class OrderViewSet(CompanyScopedViewSet):
         order = serializer.save()
         if order.product_id != old_product_id or order.quantity != old_quantity:
             order.release_product(product_id=old_product_id, quantity=old_quantity)
+            order.release_raw_materials(product_id=old_product_id, quantity=old_quantity)
             # Выданный/отменённый заказ резерв не «заводит» заново: deliver/cancel
             # уже сняли его, и правка количества не должна воскрешать резерв.
             if order.status not in (Order.Status.DELIVERED, Order.Status.CANCELLED):
                 order.reserve_product()
+                order.reserve_raw_materials()
         if 'total_amount' in changes:
             order.update_payment_status()
         order.client.recalculate_financials()
@@ -127,6 +130,7 @@ class OrderViewSet(CompanyScopedViewSet):
     def perform_destroy(self, instance):
         """Удаление запрещено - заказ отменяется и архивируется."""
         instance.release_product()
+        instance.release_raw_materials()
         instance.status = Order.Status.CANCELLED
         instance.save(update_fields=['status', 'updated_at'])
         instance.archive()
@@ -204,8 +208,9 @@ class OrderViewSet(CompanyScopedViewSet):
         if order.status == Order.Status.DELIVERED:
             return Response({'detail': 'Order is already delivered'},
                             status=status.HTTP_400_BAD_REQUEST)
-        # Товар ушёл клиенту — резерв снимаем.
+        # Товар и сырьё ушли — резервы снимаем.
         order.release_product()
+        order.release_raw_materials()
         order.status = Order.Status.DELIVERED
         order.save(update_fields=['status'])
         order.client.recalculate_financials()
@@ -245,8 +250,9 @@ class OrderViewSet(CompanyScopedViewSet):
                            'Оформите возврат расходом «Возврат клиенту».'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        # Резерв возвращается на склад при отмене заказа.
+        # Резервы товара и сырья возвращаются на склад при отмене заказа.
         order.release_product()
+        order.release_raw_materials()
         order.status = Order.Status.CANCELLED
         order.save(update_fields=['status'])
         order.client.recalculate_financials()
