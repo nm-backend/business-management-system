@@ -245,6 +245,17 @@ class OrdersComponent {
             const data = Object.fromEntries(new FormData(e.target));
             if (!data.product) delete data.product;
             if (!data.deadline) delete data.deadline;
+            // Заказ обязан указывать товар: позицию каталога или название
+            // вручную. Раньше форма спокойно отправляла пустое, и сервер
+            // создавал заказ, который ничего не резервирует и не выдаётся.
+            // Сервер это правило тоже проверяет — здесь только чтобы не
+            // гонять заведомо неверный запрос и сразу показать, где ошибка.
+            if (!data.product && !(data.custom_product_name || '').trim()) {
+                window.toast.error(window.ui.t('orders.product_required'));
+                e.target.querySelector('[name=product]').classList.add('input-invalid');
+                e.target.querySelector('[name=product]').focus();
+                return;
+            }
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     if (o) {

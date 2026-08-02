@@ -227,7 +227,8 @@
     "deliver": "Выдать клиенту",
     "deliver_confirm": "Выдать заказ клиенту?",
     "cancel_confirm": "Отменить заказ?",
-    "add_payment": "Принять оплату"
+    "add_payment": "Принять оплату",
+    "product_required": "Выберите товар или впишите название вручную"
   },
   "statuses": {
     "new": "Новый",

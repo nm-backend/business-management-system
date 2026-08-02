@@ -18,6 +18,29 @@ class OrderSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     worker_name = serializers.SerializerMethodField()
 
+    def validate(self, attrs):
+        """
+        Заказ обязан указывать товар: позицию каталога или название вручную.
+
+        Воспроизведено: POST без product и без custom_product_name отвечал 201.
+        Такой заказ не просто «пустая строка в списке» — у него нет рецепта,
+        поэтому он ничего не резервирует (Order.reserve_product выходит на
+        `if not self.product_id`), не попадает в расчёт нехватки материалов и
+        не может быть корректно выдан.
+
+        Оба поля остаются необязательными по отдельности: изделие «по описанию»
+        каталожной позиции не имеет и живёт в custom_product_name.
+        """
+        instance = self.instance
+        product = attrs.get('product', getattr(instance, 'product', None))
+        custom = attrs.get('custom_product_name',
+                           getattr(instance, 'custom_product_name', '') or '')
+        if not product and not custom.strip():
+            raise serializers.ValidationError({
+                'product': 'Выберите товар из каталога или впишите название вручную.',
+            })
+        return attrs
+
     def validate_deadline(self, value):
         """
         Новый заказ нельзя создать с уже прошедшим сроком.
