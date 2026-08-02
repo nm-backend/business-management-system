@@ -192,7 +192,8 @@
     "movement_loss": "Жоготуу/брак",
     "movement_adjustment": "Түзөтүү",
     "outgoing_date": "Чыгарылган дата",
-    "available": "Жеткиликтүү"
+    "available": "Жеткиликтүү",
+    "photo_replace_hint": "Учурдагы сүрөттү алмаштыруу үчүн файл тандаңыз"
   },
   "units": {
     "sht": "даана",

@@ -490,23 +490,35 @@ class WarehouseComponent {
                         <input name="purchase_price" type="number" step="0.01" min="0" class="form-control" value="${m?.purchase_price ?? 0}"></div>` : ''}
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
                     <textarea name="comment" class="form-control" rows="2">${window.ui.escape(m?.comment || '')}</textarea></div>
+                <div class="form-group"><label data-i18n="warehouse.photo"></label>
+                    <input name="photo" type="file" accept="image/*" class="form-control">
+                    ${m?.photo ? `<small class="text-muted" data-i18n="warehouse.photo_replace_hint"></small>` : ''}</div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
             </form>
         `);
 
         modal.querySelector('#material-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const data = Object.fromEntries(new FormData(e.target));
-            if (!data.arrival_date) delete data.arrival_date;
+            // formBody сам выберет multipart, если приложили фото: JSON.stringify
+            // выбрасывал файл, и картинка не доходила до сервера.
+            const body = await window.ui.formBody(e.target);
+            if (body instanceof FormData) {
+                if (!body.get('arrival_date')) body.delete('arrival_date');
+            }
+            const payload = body instanceof FormData ? body : (() => {
+                const data = JSON.parse(body);
+                if (!data.arrival_date) delete data.arrival_date;
+                return JSON.stringify(data);
+            })();
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     if (m) {
                         await window.api.request(`/warehouse/raw-materials/${m.id}/`, {
-                            method: 'PATCH', body: JSON.stringify(data),
+                            method: 'PATCH', body: payload,
                         });
                     } else {
                         await window.api.request('/warehouse/raw-materials/', {
-                            method: 'POST', body: JSON.stringify(data),
+                            method: 'POST', body: payload,
                         });
                     }
                     window.ui.closeModal(modal);

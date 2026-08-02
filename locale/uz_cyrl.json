@@ -192,7 +192,8 @@
     "movement_loss": "Йўқотиш/брак",
     "movement_adjustment": "Тўғирлаш",
     "outgoing_date": "Чиқарилган сана",
-    "available": "Мавжуд"
+    "available": "Мавжуд",
+    "photo_replace_hint": "Жорий расмни алмаштириш учун файл танланг"
   },
   "units": {
     "sht": "шт",

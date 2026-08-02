@@ -430,22 +430,27 @@ class FinishedProductsComponent {
                     </div>` : ''}
                 <div class="form-group"><label data-i18n="warehouse.description"></label>
                     <textarea name="description" class="form-control" rows="2">${window.ui.escape(p?.description || '')}</textarea></div>
+                <div class="form-group"><label data-i18n="warehouse.photo"></label>
+                    <input name="photo" type="file" accept="image/*" class="form-control">
+                    ${p?.photo ? `<small class="text-muted" data-i18n="warehouse.photo_replace_hint"></small>` : ''}</div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
             </form>
         `);
 
         modal.querySelector('#product-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const data = Object.fromEntries(new FormData(e.target));
+            // formBody сам выберет multipart, если приложили фото: JSON.stringify
+            // выбрасывал файл, и картинка не доходила до сервера.
+            const body = await window.ui.formBody(e.target);
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     if (p) {
                         await window.api.request(`/warehouse/finished-products/${p.id}/`, {
-                            method: 'PATCH', body: JSON.stringify(data),
+                            method: 'PATCH', body,
                         });
                     } else {
                         await window.api.request('/warehouse/finished-products/', {
-                            method: 'POST', body: JSON.stringify(data),
+                            method: 'POST', body,
                         });
                     }
                     window.ui.closeModal(modal);

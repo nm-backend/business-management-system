@@ -254,6 +254,39 @@ window.ui = {
     },
 
     /** Сжатие изображений на стороне клиента перед отправкой (для работы в цеху при плохом 3G/4G). */
+    /**
+     * Готовит тело запроса из формы: multipart, если выбран файл, иначе JSON.
+     *
+     * Формы склада и товаров собирали Object.fromEntries(FormData) и слали
+     * JSON.stringify. Файл при этом превращается в {} и молча пропадает —
+     * поэтому фото материала и товара показать было невозможно, хотя вывод
+     * картинки в списке и карточке есть.
+     *
+     * Пустое файловое поле выбрасываем: пустая строка в multipart затёрла бы
+     * уже загруженное фото при обычном сохранении карточки.
+     */
+    async formBody(form, extra = {}) {
+        const fileInputs = [...form.querySelectorAll('input[type=file]')];
+        const chosen = fileInputs.filter((input) => input.files && input.files[0]);
+
+        if (!chosen.length) {
+            const data = Object.fromEntries(new FormData(form));
+            fileInputs.forEach((input) => delete data[input.name]);
+            Object.assign(data, extra);
+            return JSON.stringify(data);
+        }
+
+        const formData = new FormData(form);
+        for (const input of chosen) {
+            formData.set(input.name, await this.compressImage(input.files[0]));
+        }
+        fileInputs
+            .filter((input) => !(input.files && input.files[0]))
+            .forEach((input) => formData.delete(input.name));
+        Object.entries(extra).forEach(([key, value]) => formData.set(key, value));
+        return formData;
+    },
+
     async compressImage(file, maxWidth = 1280, maxHeight = 1280, quality = 0.8) {
         if (!file || !file.type.startsWith('image/')) return file;
         return new Promise((resolve) => {
