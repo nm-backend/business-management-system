@@ -17,7 +17,7 @@ from apps.messaging.models import Notification
 from apps.messaging.services import notify_staff
 from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin
-from apps.warehouse.services import record_outgoing
+from apps.warehouse.services import record_incoming, record_outgoing
 from .models import Order
 from .serializers import OrderSerializer, OrderOwnerSerializer
 from apps.core.views import CompanyScopedViewSet
@@ -129,14 +129,44 @@ class OrderViewSet(CompanyScopedViewSet):
                 request=self.request,
             )
 
+    def _unwind_order(self, order, actor):
+        """
+        Общий разбор заказа для отмены и удаления.
+
+        Удаление делает то же, что отмена (переводит в «отменён»), поэтому
+        правила обязаны совпадать. Раньше они разошлись: destroy не проверял
+        оплату и не возвращал товар — удалением можно было обойти запрет
+        отменять оплаченный заказ и потерять списанное.
+
+        Возвращает текст ошибки, если разбирать нельзя, иначе None.
+        """
+        if (order.paid_amount or 0) > 0:
+            return ('По заказу есть оплата — отменить нельзя. '
+                    'Оформите возврат расходом «Возврат клиенту».')
+        # Выданный заказ уже списал товар. Отмена означает возврат от клиента:
+        # приходуем обратно со следом в журнале, иначе товар исчезает с бумаги.
+        if order.status == Order.Status.DELIVERED and order.product_id:
+            record_incoming(
+                target=order.product,
+                quantity=order.quantity,
+                user=actor,
+                reason=f'Возврат по отмене заказа #{order.id}',
+            )
+        else:
+            # Невыданный заказ ничего не списывал — возвращаем только резерв.
+            order.release_product()
+        order.release_raw_materials()
+        order.status = Order.Status.CANCELLED
+        order.save(update_fields=['status'])
+        order.client.recalculate_financials()
+        return None
+
     def perform_destroy(self, instance):
         """Удаление запрещено - заказ отменяется и архивируется."""
-        instance.release_product()
-        instance.release_raw_materials()
-        instance.status = Order.Status.CANCELLED
-        instance.save(update_fields=['status', 'updated_at'])
+        error = self._unwind_order(instance, self.request.user)
+        if error:
+            raise DRFValidationError({'detail': error})
         instance.archive()
-        instance.client.recalculate_financials()
         write_audit_log(
             action=AuditLog.Action.ARCHIVE,
             actor=self.request.user,
@@ -269,18 +299,9 @@ class OrderViewSet(CompanyScopedViewSet):
         ни на чём. Возврат оформляется расходом категории «Возврат клиенту».
         """
         order = self.get_object()
-        if (order.paid_amount or 0) > 0:
-            return Response(
-                {'detail': 'По заказу есть оплата — отменить нельзя. '
-                           'Оформите возврат расходом «Возврат клиенту».'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        # Резервы товара и сырья возвращаются на склад при отмене заказа.
-        order.release_product()
-        order.release_raw_materials()
-        order.status = Order.Status.CANCELLED
-        order.save(update_fields=['status'])
-        order.client.recalculate_financials()
+        error = self._unwind_order(order, request.user)
+        if error:
+            return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
         write_audit_log(
             action=AuditLog.Action.UPDATE,
             actor=request.user,
