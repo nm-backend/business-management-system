@@ -17,6 +17,16 @@ CHANNEL_LAYERS = {
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=lambda v: [s.strip() for s in v.split(',')])
 
+# Railway (и другие PaaS) опрашивают healthcheck по внутреннему домену
+# (RAILWAY_PRIVATE_DOMAIN, напр. business-management-system.railway.internal),
+# которого обычно нет в ALLOWED_HOSTS. Без него Django отвечает 400 DisallowedHost,
+# оркестратор считает контейнер нездоровым, и edge отдаёт 502 "Application failed
+# to respond" при живом приложении (воспроизведено на боевом Railway).
+# Добавляем приватный домен автоматически, если он задан и ещё не в списке.
+_railway_private_domain = config('RAILWAY_PRIVATE_DOMAIN', default='')
+if _railway_private_domain and _railway_private_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_railway_private_domain)
+
 # ── Защита: production не должен стартовать с небезопасными настройками ──
 # Превращаем «тихий риск» (Django лишь предупреждает) в громкий отказ запуска.
 from django.core.exceptions import ImproperlyConfigured  # noqa: E402

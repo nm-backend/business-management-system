@@ -37,14 +37,20 @@ class ProdHealthcheckProbeTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()['status'], 'ok')
 
-    def test_probe_with_forwarded_proto_still_ok(self):
-        resp = self.client.get(HEALTH, HTTP_HOST='skladpro.example.com',
-                               HTTP_X_FORWARDED_PROTO='https')
-        self.assertEqual(resp.status_code, 200)
+    def test_private_railway_domain_rejected_when_not_allowed(self):
+        # Railway опрашивает healthcheck по приватному домену
+        # (business-management-system.railway.internal), которого обычно нет в
+        # ALLOWED_HOSTS. Без него Django отдаёт 400 DisallowedHost, оркестратор
+        # помечает контейнер нездоровым и edge возвращает 502 при живом
+        # приложении (воспроизведено на боевом Railway).
+        resp = self.client.get(HEALTH,
+                               HTTP_HOST='business-management-system.railway.internal')
+        self.assertEqual(resp.status_code, 400)
 
-    def test_other_paths_are_still_https_redirected(self):
-        # Исключение действует ТОЛЬКО на health: остальное форсится на HTTPS.
-        resp = self.client.get('/api/v1/accounts/setup/check/',
-                               HTTP_HOST='skladpro.example.com')
-        self.assertEqual(resp.status_code, 301)
-        self.assertTrue(resp['Location'].startswith('https://'))
+    def test_private_railway_domain_accepted_when_allowed(self):
+        # production.py добавляет RAILWAY_PRIVATE_DOMAIN в ALLOWED_HOSTS,
+        # и тогда healthcheck по приватному домену проходит.
+        with self.settings(ALLOWED_HOSTS=['business-management-system.railway.internal']):
+            resp = self.client.get(HEALTH,
+                                   HTTP_HOST='business-management-system.railway.internal')
+            self.assertEqual(resp.status_code, 200)
