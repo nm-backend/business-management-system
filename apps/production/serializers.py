@@ -5,7 +5,17 @@ Serializers for production API.
 с защитой финансовых данных для non-owner пользователей.
 """
 from rest_framework import serializers
-from .models import Task, WorkRecord
+
+from apps.core.validators import validate_file_size
+from .models import Task, WorkPhoto, WorkRecord
+
+
+class WorkPhotoSerializer(serializers.ModelSerializer):
+    """Снимок из галереи работы — только чтение, отдаём URL."""
+
+    class Meta:
+        model = WorkPhoto
+        fields = ['id', 'image', 'created_at']
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -71,13 +81,14 @@ class WorkRecordSerializer(serializers.ModelSerializer):
     worker_name = serializers.CharField(source='worker.username', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
+    photos = WorkPhotoSerializer(many=True, read_only=True)
 
     class Meta:
         model = WorkRecord
         fields = [
             'id', 'task', 'worker', 'worker_name',
             'product', 'product_name', 'quantity', 'defect_quantity', 'unit',
-            'photo', 'comment', 'status',
+            'photo', 'photos', 'comment', 'status',
             'confirmed_by', 'confirmed_by_name', 'confirmed_at',
             'rejection_reason', 'labor_cost',
             'is_confirmed', 'created_at', 'updated_at'
@@ -99,13 +110,14 @@ class WorkRecordLimitedSerializer(serializers.ModelSerializer):
     worker_name = serializers.CharField(source='worker.username', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
+    photos = WorkPhotoSerializer(many=True, read_only=True)
 
     class Meta:
         model = WorkRecord
         fields = [
             'id', 'task', 'worker', 'worker_name',
             'product', 'product_name', 'quantity', 'defect_quantity', 'unit',
-            'photo', 'comment', 'status',
+            'photo', 'photos', 'comment', 'status',
             'confirmed_by', 'confirmed_by_name', 'confirmed_at',
             'rejection_reason',
             'is_confirmed', 'created_at', 'updated_at'
@@ -123,13 +135,34 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
 
     Используется работником при выполнении работы.
     """
+    # Галерея: рабочий прикладывает несколько снимков (макет «Ишни якунлаш»).
+    # Правило мягкое — работу без фото принимаем, админ видит пометку и решает
+    # сам: рабочий без камеры или со слабым интернетом не должен застрять.
+    uploaded_photos = serializers.ListField(
+        child=serializers.ImageField(validators=[validate_file_size]),
+        write_only=True, required=False, allow_empty=True,
+    )
+
     class Meta:
         model = WorkRecord
         fields = [
             'task', 'worker', 'product', 'quantity', 'defect_quantity', 'unit',
-            'photo', 'comment'
+            'photo', 'uploaded_photos', 'comment'
         ]
         extra_kwargs = {'worker': {'required': False}}
+
+    def create(self, validated_data):
+        photos = validated_data.pop('uploaded_photos', [])
+        work = super().create(validated_data)
+        if photos:
+            WorkPhoto.objects.bulk_create(
+                [WorkPhoto(work=work, image=image) for image in photos]
+            )
+        elif work.photo:
+            # Совместимость со старым одиночным полем: снимок тоже попадает в
+            # галерею, иначе интерфейс его не покажет.
+            WorkPhoto.objects.create(work=work, image=work.photo)
+        return work
 
     def validate_quantity(self, value):
         # Отрицательное/нулевое количество портит склад при подтверждении:

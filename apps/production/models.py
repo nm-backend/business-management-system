@@ -266,3 +266,30 @@ class WorkRecord(TimestampedModel):
             bool - True если status == 'confirmed'
         """
         return self.status == self.WorkStatus.CONFIRMED
+
+
+class WorkPhoto(TimestampedModel):
+    """
+    Фотография выполненной работы.
+
+    По макету «Ишни тасдиқлаш» администратор принимает решение, глядя на
+    галерею снимков («Суратлар»: миниатюры и «+2»), а рабочий прикладывает
+    минимум два фото. Модель хранила ровно одно поле photo, и снимок нигде не
+    показывался — админ подтверждал вслепую, хотя подтверждение меняет склад и
+    начисляет рабочему деньги.
+
+    Старое поле WorkRecord.photo сохранено: миграция переносит его сюда первым
+    снимком, чтобы ничего из уже загруженного не потерялось.
+    """
+    work = models.ForeignKey(WorkRecord, on_delete=models.CASCADE,
+                             related_name='photos', verbose_name='Работа')
+    image = models.ImageField(upload_to='production/work_photos/',
+                              validators=[validate_file_size], verbose_name='Фото')
+
+    class Meta:
+        verbose_name = 'Фото работы'
+        verbose_name_plural = 'Фото работ'
+        ordering = ['id']
+
+    def __str__(self):
+        return f'Фото работы #{self.work_id}'

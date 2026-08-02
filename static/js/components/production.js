@@ -90,6 +90,30 @@ class ProductionComponent {
         }
     }
 
+    /**
+     * Полоса снимков работы: три миниатюры и «+N», как на макете «Ишни
+     * тасдиқлаш». Раньше фото не показывалось нигде — админ подтверждал
+     * вслепую, хотя подтверждение меняет склад и начисляет рабочему деньги.
+     * Работу, присланную без снимков, помечаем явно.
+     */
+    photoStrip(work) {
+        const photos = work.photos || [];
+        if (!photos.length) {
+            return `<div class="text-sm text-muted" style="margin-top:6px;"
+                         data-i18n="production.no_photos"></div>`;
+        }
+        const shown = photos.slice(0, 3);
+        const rest = photos.length - shown.length;
+        return `
+            <div class="work-photo-strip" style="margin-top:8px;">
+                ${shown.map((p) => `
+                    <a class="work-photo-thumb" href="${p.image}" target="_blank" rel="noopener">
+                        <img src="${p.image}" alt="" loading="lazy">
+                    </a>`).join('')}
+                ${rest > 0 ? `<span class="work-photo-more">+${rest}</span>` : ''}
+            </div>`;
+    }
+
     async loadWorks() {
         const contentEl = this.container.querySelector('#production-content');
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
@@ -115,6 +139,11 @@ class ProductionComponent {
                         ${user.is_worker ? '' : `${window.ui.escape(w.worker_name)} · `}
                         ${window.ui.qty(w.quantity)} <span data-i18n="units.${w.unit}"></span> · ${window.ui.datetime(w.created_at)}
                     </div>
+                    ${Number(w.defect_quantity) > 0 ? `
+                        <div class="text-sm text-danger" style="margin-top:4px;">
+                            <span data-i18n="production.defect_quantity"></span>: ${window.ui.qty(w.defect_quantity)}
+                        </div>` : ''}
+                    ${this.photoStrip(w)}
                     ${w.comment ? `<div class="text-sm" style="margin-top:6px;">${window.ui.escape(w.comment)}</div>` : ''}
                     ${w.rejection_reason ? `<div class="text-sm text-danger" style="margin-top:6px;">✕ ${window.ui.escape(w.rejection_reason)}</div>` : ''}
                     ${w.labor_cost !== undefined && w.status === 'confirmed' ? `
@@ -240,10 +269,41 @@ class ProductionComponent {
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
                     <textarea name="comment" class="form-control" rows="2"></textarea></div>
                 <div class="form-group"><label data-i18n="production.attach_photo"></label>
-                    <input name="photo" type="file" accept="image/*" class="form-control"></div>
+                    <input name="uploaded_photos" type="file" accept="image/*" multiple class="form-control">
+                    <small class="text-muted" data-i18n="production.photo_hint"></small>
+                    <div id="work-photo-preview" class="work-photo-preview"></div></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="production.send_for_confirmation"></button>
             </form>
         `);
+
+        // Превью выбранных снимков с крестиком, как на макете «Ишни якунлаш».
+        const photoInputEl = modal.querySelector('input[name=uploaded_photos]');
+        const previewEl = modal.querySelector('#work-photo-preview');
+        let chosenFiles = [];
+        const renderPreview = () => {
+            previewEl.innerHTML = chosenFiles.map((file, index) => `
+                <div class="work-photo-thumb">
+                    <img src="${URL.createObjectURL(file)}" alt="">
+                    <button type="button" class="work-photo-remove" data-remove="${index}"
+                            aria-label="${window.ui.escape(window.ui.t('common.delete'))}">×</button>
+                </div>`).join('');
+            previewEl.querySelectorAll('[data-remove]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    chosenFiles.splice(Number(btn.dataset.remove), 1);
+                    syncInput();
+                    renderPreview();
+                });
+            });
+        };
+        const syncInput = () => {
+            const dt = new DataTransfer();
+            chosenFiles.forEach((file) => dt.items.add(file));
+            photoInputEl.files = dt.files;
+        };
+        photoInputEl.addEventListener('change', () => {
+            chosenFiles = [...photoInputEl.files];
+            renderPreview();
+        });
 
         modal.querySelector('#work-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -254,9 +314,17 @@ class ProductionComponent {
             if (task) formData.set('task', task.id);
             if (!user.is_worker) formData.set('worker', user.id);
 
-            if (photoInput && photoInput.files[0]) {
-                const compressed = await window.ui.compressImage(photoInput.files[0]);
-                formData.set('photo', compressed);
+            // Галерея: каждый снимок уходит отдельным значением uploaded_photos,
+            // сжатый тем же ui.compressImage.
+            formData.delete('uploaded_photos');
+            const chosen = photoInput ? [...photoInput.files] : [];
+            for (const file of chosen) {
+                formData.append('uploaded_photos', await window.ui.compressImage(file));
+            }
+            // Макет просит два снимка. Правило мягкое: предупреждаем, но пускаем —
+            // рабочий без камеры или со слабым интернетом не должен застрять.
+            if (chosen.length < 2) {
+                window.toast.info(window.ui.t('production.photo_hint'));
             }
 
             await window.ui.submitGuard(form.querySelector('button[type=submit]'), async () => {
