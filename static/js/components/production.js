@@ -232,6 +232,11 @@ class ProductionComponent {
                     <div class="form-group"><label data-i18n="warehouse.unit"></label>
                         <select name="unit" class="form-control">${window.ui.unitOptions('izdelie')}</select></div>
                 </div>
+                <div class="form-group"><label data-i18n="production.defect_quantity"></label>
+                    <input name="defect_quantity" type="number" step="0.001" min="0" value="0" class="form-control">
+                    <small class="text-muted" data-i18n="production.defect_hint"></small></div>
+                <div style="display:none;">
+                </div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
                     <textarea name="comment" class="form-control" rows="2"></textarea></div>
                 <div class="form-group"><label data-i18n="production.attach_photo"></label>

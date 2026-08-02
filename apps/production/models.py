@@ -4,6 +4,9 @@ Production models - управление производством и зада�
 Этот модуль содержит модели для управления производственными задачами,
 работами работников и подтверждением выполненной работы.
 """
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 from apps.core.models import TimestampedModel
 from apps.core.validators import validate_file_size
@@ -212,6 +215,13 @@ class WorkRecord(TimestampedModel):
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='work_records', verbose_name='Работник')
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records', verbose_name='Товар')
     quantity = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Количество')
+    # Брак по макету «Ишни якунлаш»: рабочий указывает его отдельно от годного.
+    # Сырьё расходуется и на брак тоже, а на склад готовой продукции попадает
+    # только годное — без этого поля материал, ушедший в брак, не списывался
+    # и остаток сырья был завышен.
+    defect_quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, default=0,
+        validators=[MinValueValidator(Decimal('0'))], verbose_name='Брак')
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, verbose_name='Единица измерения')
     photo = models.ImageField(upload_to='production/work_photos/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
     comment = models.TextField(blank=True, default='', verbose_name='Комментарий')

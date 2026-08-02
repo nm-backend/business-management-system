@@ -97,7 +97,11 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
         raise AlreadyProcessedError()
 
     product = work.product
-    requirements = get_recipe_requirements(product, work.quantity)
+    # Сырьё уходит и на брак: рабочий его уже израсходовал, годным оно не
+    # стало. Считали только по годному — материал, ушедший в брак, оставался
+    # на складе и остаток был завышен (макет «Ишни якунлаш», поле «Брак»).
+    consumed_quantity = work.quantity + (work.defect_quantity or Decimal('0'))
+    requirements = get_recipe_requirements(product, consumed_quantity)
 
     # 1-2. Рецепт и наличие сырья (блокируем строки от параллельных подтверждений).
     shortages = []
