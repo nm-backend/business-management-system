@@ -4,10 +4,18 @@ Views for finance API.
 Этот модуль содержит API views для управления финансами.
 Все финансовые данные доступны только владельцу (owner).
 """
+from decimal import Decimal
+
+from django.db.models import Sum
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
+
+from apps.accounts.models import User
 from apps.core.permissions import IsCompanyMember, FinancialDataPermission
 from apps.core.validators import parse_date_param, parse_int_param
+from apps.production.models import WorkRecord
 from .models import Expense, LaborRate, WorkerPayment
 from .serializers import (
     ExpenseSerializer, ExpenseCreateSerializer,
@@ -148,6 +156,67 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
             queryset = queryset.filter(payment_date__lte=parse_date_param(date_to, 'date_to'))
 
         return queryset
+
+    @action(detail=False, methods=['get'])
+    def settlements(self, request):
+        """
+        Расчёты с работниками: начислено, выплачено, остаток — по каждому.
+
+        Вкладка «Оплата работников» показывала только сами выплаты. Работник,
+        который выполнил подтверждённые работы, но денег ещё не получил, в ней
+        не появлялся вовсе — владелец не видел, кому и сколько должен
+        (замечание тестировщика: «работы произведены и оплачены, а тут пусто»).
+
+        Формула та же, что у показателя «Долги работникам» в отчётах
+        (apps/reports/views.py): начислено — сумма labor_cost подтверждённых
+        работ, выплачено — сумма выплат. Иначе экраны противоречили бы друг
+        другу.
+
+        Два сгруппированных запроса вместо обхода работников по одному:
+        список сотрудников растёт, а число запросов остаётся постоянным.
+        """
+        company_id = request.user.company_id
+
+        earned = {
+            row['worker_id']: row['total']
+            for row in WorkRecord.objects
+            .filter(company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED)
+            .values('worker_id')
+            .annotate(total=Sum('labor_cost'))
+        }
+        paid = {
+            row['worker_id']: row['total']
+            for row in WorkerPayment.objects
+            .filter(company_id=company_id)
+            .values('worker_id')
+            .annotate(total=Sum('amount'))
+        }
+
+        worker_ids = set(earned) | set(paid)
+        names = {
+            user.id: (user.full_name or user.username)
+            for user in User.objects.filter(id__in=worker_ids).only('id', 'full_name', 'username')
+        }
+
+        rows = []
+        for worker_id in worker_ids:
+            accrued = earned.get(worker_id) or Decimal('0')
+            payout = paid.get(worker_id) or Decimal('0')
+            rows.append({
+                'worker': worker_id,
+                'worker_name': names.get(worker_id, ''),
+                'accrued': accrued,
+                'paid': payout,
+                'balance': accrued - payout,
+            })
+        rows.sort(key=lambda row: (-row['balance'], row['worker_name']))
+
+        return Response({
+            'results': rows,
+            'total_accrued': sum((row['accrued'] for row in rows), Decimal('0')),
+            'total_paid': sum((row['paid'] for row in rows), Decimal('0')),
+            'total_balance': sum((row['balance'] for row in rows), Decimal('0')),
+        })
 
     def perform_create(self, serializer):
         worker = serializer.validated_data.get('worker')

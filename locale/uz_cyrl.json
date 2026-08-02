@@ -344,7 +344,10 @@
     "rate": "Ставка",
     "product": "Маҳсулот",
     "payment_type": "Тўлов тури",
-    "owner_only": "Бу саҳифа фақат эгаси учун"
+    "owner_only": "Бу саҳифа фақат эгаси учун",
+    "worker_settlements": "Ишчилар билан ҳисоб-китоб",
+    "accrued": "Ҳисобланди",
+    "paid_out": "Тўланди"
   },
   "payment_types": {
     "salary": "Иш ҳақи",

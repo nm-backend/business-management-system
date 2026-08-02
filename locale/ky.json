@@ -344,7 +344,10 @@
     "rate": "Ставка",
     "product": "Продукция",
     "payment_type": "Төлөм түрү",
-    "owner_only": "Бул баракча ээси үчүн гана"
+    "owner_only": "Бул баракча ээси үчүн гана",
+    "worker_settlements": "Жумушчулар менен эсептешүү",
+    "accrued": "Эсептелди",
+    "paid_out": "Төлөндү"
   },
   "payment_types": {
     "salary": "Эмгек акы",

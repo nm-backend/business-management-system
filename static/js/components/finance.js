@@ -250,9 +250,33 @@ class FinanceComponent {
         if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
-            const response = await window.api.request('/finance/worker-payments/');
+            // Расчёты по работникам и сами выплаты грузим параллельно: это два
+            // независимых запроса, последовательно они удваивали ожидание.
+            const [response, settlements] = await Promise.all([
+                window.api.request('/finance/worker-payments/'),
+                window.api.request('/finance/worker-payments/settlements/').catch(() => null),
+            ]);
             const payments = response.results || response;
+            // Раздел показывал только выплаты: работник с подтверждённой, но
+            // ещё не оплаченной работой не появлялся здесь вовсе, и владелец
+            // не видел, кому должен.
+            const rows = settlements?.results || [];
+            const debtRow = (r) => `
+                <div class="list-row" style="cursor:default;">
+                    <div style="min-width:0;">
+                        <div style="font-weight:600;font-size:14px;">${window.ui.escape(r.worker_name)}</div>
+                        <div class="text-sm text-muted">
+                            <span data-i18n="finance.accrued"></span>: ${window.ui.money(r.accrued)} ·
+                            <span data-i18n="finance.paid_out"></span>: ${window.ui.money(r.paid)}
+                        </div>
+                    </div>
+                    <span class="font-bold ${Number(r.balance) > 0 ? 'text-danger' : 'text-success'}"
+                          style="flex-shrink:0;">${window.ui.money(r.balance)}</span>
+                </div>`;
             el.innerHTML = `
+                ${rows.length ? `
+                    <div class="section-title" data-i18n="finance.worker_settlements"></div>
+                    <div class="list-group">${rows.map(debtRow).join('')}</div>` : ''}
                 <button class="btn btn-primary btn-block" id="add-payment-btn" style="margin-bottom:12px;" data-i18n="finance.add_payment"></button>
                 ${payments.length ? `
                     <div class="list-group">
