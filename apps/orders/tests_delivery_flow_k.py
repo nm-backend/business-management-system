@@ -37,7 +37,9 @@ class OrderDeliveryFlowTests(TestCase):
                                                role=User.Role.WORKER, company=self.company)
         self.client_obj = Client.objects.create(company=self.company, name='Заказчик')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'),
+            # Запас нужен, потому что выдача теперь списывает товар со склада.
+            # Тест про статусы и задачи, а не про остаток.
+            company=self.company, name='Столешница', quantity=Decimal('100'),
             cost_price=Decimal('1000'))
         self.order = Order.objects.create(
             company=self.company, client=self.client_obj, product=self.product,
@@ -128,7 +130,7 @@ class DeliverButtonContractTests(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         self.cli = Client.objects.create(company=self.company, name='К')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='П', quantity=Decimal('5'))
+            company=self.company, name='П', quantity=Decimal('100'))
 
     def _order(self, status):
         return Order.objects.create(

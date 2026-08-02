@@ -273,6 +273,10 @@ class RawMaterialReservationTests(_Base):
         self.assertEqual(self.material.reserved_for_orders, Decimal('0.000'))
 
     def test_order_deliver_releases_raw_materials(self):
+        # Выдача теперь списывает готовую продукцию, поэтому нужен запас.
+        # Тест про снятие резерва сырья, а не про остаток товара.
+        self.product.quantity = Decimal('100')
+        self.product.save(update_fields=['quantity'])
         order_id = self._create_order()
         r = self.api().post(f'/api/v1/orders/orders/{order_id}/deliver/')
         self.assertEqual(r.status_code, 200, r.content[:300])

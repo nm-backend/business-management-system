@@ -7,6 +7,7 @@ Views for orders API.
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -16,6 +17,7 @@ from apps.messaging.models import Notification
 from apps.messaging.services import notify_staff
 from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin
+from apps.warehouse.services import record_outgoing
 from .models import Order
 from .serializers import OrderSerializer, OrderOwnerSerializer
 from apps.core.views import CompanyScopedViewSet
@@ -209,8 +211,31 @@ class OrderViewSet(CompanyScopedViewSet):
             return Response({'detail': 'Order is already delivered'},
                             status=status.HTTP_400_BAD_REQUEST)
         # Товар и сырьё ушли — резервы снимаем.
+        # Резерв снимаем ДО списания: record_outgoing разрешает списывать
+        # только доступное (остаток минус резерв), и собственный резерв заказа
+        # иначе заблокировал бы его же выдачу.
         order.release_product()
         order.release_raw_materials()
+
+        # Списание со склада. Раньше выдача только снимала резерв: товар
+        # физически уезжал к клиенту, а остаток продолжал его показывать, и в
+        # журнале движений выдачи не было вообще. Отсюда расхождение остатков,
+        # журнала и статистики (замечание тестировщика).
+        if order.product_id:
+            try:
+                record_outgoing(
+                    target=order.product,
+                    quantity=order.quantity,
+                    user=request.user,
+                    reason=f'Выдача заказа #{order.id}',
+                )
+            except DRFValidationError as exc:
+                # Не хватило товара — возвращаем резерв и не выдаём: иначе
+                # остаток ушёл бы в минус, а клиент получил бы то, чего нет.
+                order.reserve_product()
+                detail = exc.detail.get('quantity', exc.detail) if isinstance(exc.detail, dict) else exc.detail
+                return Response({'detail': detail}, status=status.HTTP_400_BAD_REQUEST)
+
         order.status = Order.Status.DELIVERED
         order.save(update_fields=['status'])
         order.client.recalculate_financials()
