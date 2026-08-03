@@ -128,8 +128,17 @@ class FinanceComponent {
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
+            a.style.display = 'none';
+            // Ссылку нужно добавить в DOM: без этого некоторые браузеры и
+            // Android WebView игнорируют клик, а файл «скачивается» пустым.
+            document.body.appendChild(a);
             a.click();
-            URL.revokeObjectURL(url);
+            // URL нельзя рвать сразу: загрузка из blob стартует асинхронно,
+            // и мгновенный revokeObjectURL оставлял файл нулевой длины.
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+                a.remove();
+            }, 1000);
         } catch (e) {
             window.toast.error(window.ui.t('common.error'));
         }

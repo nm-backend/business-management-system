@@ -327,3 +327,86 @@ class NotificationTests(TestCase):
     def test_str_shows_type_and_title(self):
         note = Notification(type=Notification.NotificationType.NEW_ORDER, title='Order #1')
         self.assertEqual(str(note), 'Янги буюртма - Order #1')
+
+
+class DirectMessageNotificationTests(TestCase):
+    """
+    Замечание тестировщика (баг 15): о новом личном сообщении узнавали
+    только из WebSocket, пока страница открыта. Теперь при отправке
+    создаётся уведомление получателю — как у остальных событий.
+    """
+
+    def setUp(self):
+        self.company, self.owner, self.worker, self.admin = make_company('Alpha')
+        self.api = APIClient()
+
+    def test_direct_message_creates_notification_for_recipient(self):
+        self.api.force_authenticate(user=self.owner)
+        start = self.api.post('/api/v1/messaging/conversations/start_direct/',
+                              {'user_id': self.worker.id}, format='json')
+        conv_id = start.data['id']
+        self.owner.full_name = 'Владелец Альфа'
+        self.owner.save(update_fields=['full_name'])
+
+        resp = self.api.post('/api/v1/messaging/messages/',
+                             {'conversation': conv_id, 'content': 'Привет, проверь задачу!'}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.content[:300])
+
+        note = Notification.objects.filter(user=self.worker).first()
+        self.assertIsNotNone(note)
+        self.assertEqual(note.type, Notification.NotificationType.NEW_MESSAGE)
+        self.assertEqual(note.title, 'Владелец Альфа')
+        self.assertEqual(note.message, 'Привет, проверь задачу!')
+        # Отправителю уведомление не создаём.
+        self.assertFalse(Notification.objects.filter(user=self.owner).exists())
+
+    def test_general_message_creates_no_notification(self):
+        self.api.force_authenticate(user=self.owner)
+        general = self.api.get('/api/v1/messaging/conversations/general/').data
+        resp = self.api.post('/api/v1/messaging/messages/',
+                             {'conversation': general['id'], 'content': 'всем привет'}, format='json')
+        self.assertEqual(resp.status_code, 201, resp.content[:300])
+        self.assertFalse(Notification.objects.filter(
+            type=Notification.NotificationType.NEW_MESSAGE).exists())
+
+
+class NotificationRelatedClientTests(TestCase):
+    """
+    Баг 20: уведомление о неоплаченном/просроченном заказе должно нести
+    id клиента, чтобы фронтенд открывал фильтр заказов по этому клиенту.
+    """
+
+    def setUp(self):
+        self.company, self.owner, self.worker, self.admin = make_company('Alpha')
+        self.api = APIClient()
+
+    def test_serializer_returns_related_client(self):
+        from decimal import Decimal
+
+        from apps.clients.models import Client
+        from apps.messaging.serializers import NotificationSerializer
+        from apps.orders.models import Order
+
+        client = Client.objects.create(company=self.company, name='Гулнора')
+        order = Order.objects.create(
+            company=self.company, client=client,
+            custom_product_name='Столешница', quantity=Decimal('1'),
+            total_amount=Decimal('500000'), status=Order.Status.DELIVERED,
+        )
+        note = Notification.objects.create(
+            company=self.company, user=self.owner,
+            type=Notification.NotificationType.UNPAID_CLIENT,
+            title='Заказ #1', message='не оплачен', related_order=order,
+        )
+        data = NotificationSerializer(note).data
+        self.assertEqual(data['related_client'], client.id)
+        self.assertEqual(data['related_order'], order.id)
+
+    def test_serializer_related_client_none_without_order(self):
+        from apps.messaging.serializers import NotificationSerializer
+        note = Notification.objects.create(
+            company=self.company, user=self.owner,
+            type=Notification.NotificationType.NEW_MESSAGE,
+            title='Кто-то', message='привет',
+        )
+        self.assertIsNone(NotificationSerializer(note).data['related_client'])

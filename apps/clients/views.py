@@ -39,8 +39,11 @@ class ClientViewSet(CompanyScopedViewSet):
         if self.request.method in SAFE_METHODS:
             return [IsCompanyMember(), IsOwnerOrAdminOrManager()]
         return [IsCompanyMember(), IsOwnerOrAdmin()]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['name', 'phone', 'comment']
+
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    # SearchFilter убираем: поиск по имени должен понимать транслит
+    # («Gulnora» -> «Гулнора»). Для этого строим OR-фильтр по вариантам
+    # запроса сами (apps/core/translit.py).
     filterset_fields = ['is_archived']
     ordering_fields = ['name', 'created_at']
 
@@ -57,9 +60,14 @@ class ClientViewSet(CompanyScopedViewSet):
             status__in=ACTIVE_ORDER_STATUSES,
             is_archived=False,
         )
-        return super().get_queryset().prefetch_related('payments').annotate(
+        queryset = super().get_queryset().prefetch_related('payments').annotate(
             active_orders_exists=Exists(active_orders),
         )
+        search = self.request.query_params.get('search')
+        if search:
+            from apps.core.translit import translit_search_qs
+            queryset = translit_search_qs(queryset, search, ['name', 'phone', 'comment'])
+        return queryset
 
     def get_serializer_class(self):
         if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:

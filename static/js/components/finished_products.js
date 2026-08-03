@@ -313,7 +313,7 @@ class FinishedProductsComponent {
         const itemRow = (item = {}) => `
             <div class="recipe-item-row" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:8px;">
                 <select name="material" class="form-control" required>
-                    <option value=""></option>
+                    <option value="" data-i18n="common.select"></option>
                     ${materials.map((m) => `<option value="${m.id}" ${String(m.id) === String(item.material || '') ? 'selected' : ''}>${window.ui.escape(m.name)}</option>`).join('')}
                 </select>
                 <input name="quantity_required" type="number" step="0.001" min="0.001" class="form-control" required

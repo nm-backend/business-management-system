@@ -26,12 +26,9 @@ from apps.core.views import CompanyScopedViewSet
 class OrderViewSet(CompanyScopedViewSet):
     queryset = Order.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    # product__name — заказ на товар из каталога хранит имя в связанном продукте,
-    # а не в custom_product_name: без этого поиск «Столешница» не находил ничего.
-    search_fields = ['custom_product_name', 'comment', 'client__name', 'product__name']
-    # id — заказы ищут по номеру («#12»), а SearchFilter умеет только icontains
-    # по тексту и на целочисленном ключе не работает.
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    # Поиск руками в get_queryset: SearchFilter не умеет транслит, а клиента
+    # «Гулнора» должны находить по «Gulnora» (и наоборот).
     filterset_fields = ['status', 'payment_status', 'worker', 'client', 'id']
     ordering_fields = ['created_at', 'deadline']
 
@@ -55,8 +52,19 @@ class OrderViewSet(CompanyScopedViewSet):
         # работник — только назначенные ему. Изменения разрешены лишь owner/admin
         # (get_permissions ниже), поэтому manager не может их двигать.
         if user.is_owner or user.is_admin or user.is_manager:
-            return queryset
-        return queryset.filter(worker=user)
+            qs = queryset
+        else:
+            qs = queryset.filter(worker=user)
+        search = self.request.query_params.get('search')
+        if search:
+            # product__name — заказ на товар из каталога хранит имя в связанном
+            # продукте; транслит-варианты покрывают ввод латиницей/кириллицей.
+            from apps.core.translit import translit_search_qs
+            qs = translit_search_qs(
+                qs, search,
+                ['custom_product_name', 'comment', 'client__name', 'product__name'],
+            )
+        return qs
 
     def get_permissions(self):
         # transition — тот же «запись», что и deliver/cancel: Kanban двигает

@@ -138,7 +138,10 @@ class ClientsComponent {
         modal.querySelector('#client-orders').addEventListener('click', () => {
             // Окно закроет сам роутер на смене адреса. Закрывать его здесь
             // нельзя: history.back() из closeModal откатывал переход обратно.
-            window.router.navigate('/orders');
+            // Раньше открывались ВСЕ заказы — чтобы увидеть долг клиента,
+            // его приходилось выискивать глазами в общем списке. Теперь
+            // список сразу отфильтрован по клиенту.
+            window.router.navigate(`/orders?client=${c.id}`);
         });
         // Вкладка «Архив» была только на чтение: убрать клиента в архив или
         // вернуть его оттуда из интерфейса было нечем.
@@ -166,7 +169,12 @@ class ClientsComponent {
                 <div class="form-group"><label data-i18n="clients.name"></label>
                     <input name="name" class="form-control" required value="${window.ui.escape(c?.name || '')}"></div>
                 <div class="form-group"><label data-i18n="clients.phone"></label>
-                    <input name="phone" class="form-control" value="${window.ui.escape(c?.phone || '')}"></div>
+                    <!-- Тот же формат, что валидирует сервер (validate_phone):
+                         только цифры, +, ( ), - и пробелы. Раньше форму можно
+                         было отправить с любым мусором, а ошибку показывал
+                         только сервер после отправки. -->
+                    <input name="phone" class="form-control" value="${window.ui.escape(c?.phone || '')}"
+                           pattern="(?:[0-9+\\x28\\x29 \\u002D]*[0-9]){5,}[0-9+\\x28\\x29 \\u002D]*" title="${window.ui.t('clients.phone_hint')}"></div>
                 <div class="form-group"><label data-i18n="clients.address"></label>
                     <textarea name="address" class="form-control" rows="2">${window.ui.escape(c?.address || '')}</textarea></div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>

@@ -107,6 +107,37 @@ public class MainActivity extends Activity {
             }
         });
 
+        // Скачивание отчётов (xlsx/pdf): без DownloadListener WebView пытался
+        // открыть attachment-ответ как страницу — вместо файла пользователь
+        // видел бинарный «кашу»/пустое окно. Теперь отдаём ссылку системе.
+        webView.setDownloadListener(new android.webkit.DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition,
+                                        String mimetype, long contentLength) {
+                try {
+                    Uri uri = Uri.parse(url);
+                    android.app.DownloadManager dm =
+                            (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                    android.app.DownloadManager.Request req =
+                            new android.app.DownloadManager.Request(uri);
+                    req.setMimeType(mimetype);
+                    req.addRequestHeader("User-Agent", userAgent);
+                    String fileName = android.webkit.URLUtil.guessFileName(
+                            url, contentDisposition, mimetype);
+                    req.setTitle(fileName);
+                    req.setDescription(getString(R.string.app_name));
+                    req.allowScanningByMediaScanner();
+                    req.setNotificationVisibility(
+                            android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    dm.enqueue(req);
+                } catch (Exception e) {
+                    Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                }
+            }
+        });
+
         if (savedInstanceState == null) {
             loadStart();
         } else {

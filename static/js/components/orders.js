@@ -6,18 +6,45 @@
 class OrdersComponent {
     async render(container) {
         document.getElementById('page-title').setAttribute('data-i18n', 'orders.title');
-        this.currentStatus = 'all';
-        this.search = '';
         const user = window.currentUser;
         const canEdit = user.is_owner || user.is_admin;
 
-        const statuses = ['all', 'new', 'sent_to_worker', 'in_progress', 'awaiting_confirmation', 'ready', 'delivered', 'cancelled'];
+        // Глубокие ссылки: дашборд ведёт на заказы клиента или на неоплату
+        // (#/orders?client=5, #/orders?payment_status=unpaid).
+        const q = window.router.query;
+        this.currentStatus = q.get('status') || 'all';
+        this.paymentFilter = q.get('payment_status') || '';
+        this.clientFilter = q.get('client') ? Number(q.get('client')) : null;
+        this.search = '';
+        if (this.paymentFilter && this.currentStatus === 'all') {
+            // Вкладка «Не оплачено» — перекрытие статуса: любой статус, но
+            // только неоплаченные.
+            this.currentStatus = this.paymentFilter === 'unpaid' ? '__unpaid__' : this.currentStatus;
+        }
+
+        let clientName = '';
+        if (this.clientFilter) {
+            try {
+                const c = await window.api.request(`/clients/clients/${this.clientFilter}/`);
+                clientName = c.name || '';
+            } catch (e) { /* клиент удалён/нет доступа — просто без имени */ }
+        }
+        this.clientName = clientName;
+
+        const statuses = ['all', 'new', 'sent_to_worker', 'in_progress', 'awaiting_confirmation', 'ready', 'delivered', 'cancelled', '__unpaid__'];
+        const labelKey = (s) => s === 'all' ? 'common.all'
+            : s === '__unpaid__' ? 'payment_statuses.unpaid' : 'statuses.' + s;
+
         container.innerHTML = `
             <div class="tabs">
                 ${statuses.map((s) => `
-                    <button class="tab-btn ${s === 'all' ? 'active' : ''}" data-status="${s}"
-                        data-i18n="${s === 'all' ? 'common.all' : 'statuses.' + s}"></button>`).join('')}
+                    <button class="tab-btn ${s === this.currentStatus ? 'active' : ''}" data-status="${s}"
+                        data-i18n="${labelKey(s)}"></button>`).join('')}
             </div>
+            ${this.clientFilter ? `
+                <div class="filter-chip" style="display:inline-flex;align-items:center;gap:8px;background:var(--secondary-bg, #f0f0f3);border-radius:16px;padding:6px 14px;margin-bottom:10px;font-size:14px;">
+                    <span>👤 ${window.ui.escape(clientName)}</span>
+                    <button type="button" id="clear-client-filter" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;" aria-label="${window.ui.t('common.clear_filter')}">✕</button>                </div>` : ''}
             <div class="search-box">
                 <span class="search-icon">🔍</span>
                 <input type="text" id="order-search" class="form-control" data-i18n="orders.search">
@@ -42,9 +69,16 @@ class OrdersComponent {
                 container.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.currentStatus = btn.dataset.status;
+                // Вкладка «Не оплачено» — отдельный фильтр: при переходе на
+                // любой статус он сбрасывается (вкладки взаимоисключающие).
+                this.paymentFilter = this.currentStatus === '__unpaid__' ? 'unpaid' : '';
                 this.loadOrders();
             });
         });
+        const clearClientBtn = container.querySelector('#clear-client-filter');
+        if (clearClientBtn) {
+            clearClientBtn.addEventListener('click', () => window.router.navigate('/orders'));
+        }
         if (canEdit) {
             container.querySelector('#add-order-btn').addEventListener('click', () => this.openForm());
         }
@@ -61,7 +95,12 @@ class OrdersComponent {
         window.listStates.skeleton(listEl);
         try {
             const params = new URLSearchParams();
-            if (this.currentStatus !== 'all') params.set('status', this.currentStatus);
+            if (this.currentStatus !== 'all') {
+                if (this.currentStatus === '__unpaid__') params.set('payment_status', 'unpaid');
+                else params.set('status', this.currentStatus);
+            }
+            if (this.paymentFilter && this.currentStatus !== '__unpaid__') params.set('payment_status', this.paymentFilter);
+            if (this.clientFilter) params.set('client', this.clientFilter);
             if (this.search) {
                 // «#12» и «12» — это номер заказа (точное совпадение по id),
                 // всё остальное уходит в текстовый поиск.
@@ -91,7 +130,7 @@ class OrdersComponent {
     }
 
     renderCard(o) {
-        const danger = o.has_material_shortage || o.payment_status === 'unpaid';
+        const danger = o.has_material_shortage || o.has_product_shortage || o.payment_status === 'unpaid';
         return `
             <div class="card" data-id="${o.id}" style="cursor:pointer;${danger ? 'border-left:4px solid var(--danger-color);' : ''}">
                 <div class="card-title" style="margin-bottom:4px;">
@@ -104,6 +143,7 @@ class OrdersComponent {
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
                     <div>
                         ${o.has_material_shortage ? `<div class="text-sm text-danger">⚠️ <span data-i18n="orders.material_shortage"></span></div>` : ''}
+                        ${o.has_product_shortage ? `<div class="text-sm text-danger">⚠️ <span data-i18n="orders.product_shortage"></span></div>` : ''}
                         ${o.is_overdue ? `<div class="text-sm text-danger">⏰ <span data-i18n="dashboard.deadline_passed"></span></div>` : ''}
                     </div>
                     ${window.ui.paymentBadge(o.payment_status)}
@@ -129,6 +169,13 @@ class OrdersComponent {
                 <span data-i18n="orders.required_materials"></span> ${window.ui.qty(s.required)},
                 <span data-i18n="warehouse.quantity"></span> ${window.ui.qty(s.available)}
             </div>`).join('');
+        const productShortage = o.product_shortage ? `
+            <div class="alert-box" style="margin-bottom:8px;">
+                ⚠️ <span data-i18n="orders.product_shortage_detail"></span>:
+                <span data-i18n="orders.required_materials"></span> ${window.ui.qty(o.product_shortage.required)},
+                <span data-i18n="warehouse.available"></span> ${window.ui.qty(o.product_shortage.available)}
+                <span data-i18n="units.${o.product_shortage.unit}"></span>
+            </div>` : '';
 
         const modal = window.ui.modal('orders.order_details', `
             <div class="card-title">
@@ -136,6 +183,7 @@ class OrdersComponent {
                 ${window.ui.orderBadge(o.status)}
             </div>
             ${shortages}
+            ${productShortage}
             <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">
                 ${row('orders.product', window.ui.escape(o.product_name || o.custom_product_name || '-'))}
                 ${row('orders.quantity', `${window.ui.qty(o.quantity)} <span data-i18n="units.${o.unit}"></span>`)}
@@ -147,8 +195,10 @@ class OrdersComponent {
                 ${user.is_owner && o.total_amount - o.paid_amount > 0 ? row('clients.debt', `<span class="text-danger">${window.ui.money(o.total_amount - o.paid_amount)}</span>`) : ''}
                 ${row('orders.comment', window.ui.escape(o.comment || ''))}
             </div>
+            <div class="text-sm font-bold" style="margin-top:14px;margin-bottom:8px;" data-i18n="orders.works_history"></div>
+            <div id="order-works" class="text-sm"></div>
             ${canManage ? `
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;position:sticky;bottom:0;background:var(--surface-card);margin-left:-20px;margin-right:-20px;padding:10px 20px 22px;">
                     ${['new', 'awaiting_material', 'worker_refused'].includes(o.status) ? `
                         <button class="btn btn-primary btn-sm" id="send-worker" data-i18n="orders.send_to_worker"></button>` : ''}
                     ${!['delivered', 'cancelled'].includes(o.status) ? `
@@ -172,6 +222,32 @@ class OrdersComponent {
             const el = modal.querySelector(`#${id}`);
             if (el) el.addEventListener('click', handler);
         };
+
+        // История выполнения заказа: какие работы сдали, кто и когда
+        // подтвердил. Раньше в карточке заказа этого не было вообще —
+        // владелец не мог увидеть, сделана ли работа и кем.
+        window.api.request(`/production/works/?order=${o.id}`).then((resp) => {
+            if (!modal.isConnected) return;
+            const works = resp.results || resp;
+            const worksEl = modal.querySelector('#order-works');
+            if (!worksEl) return;
+            if (!works.length) {
+                worksEl.innerHTML = `<span class="text-muted" data-i18n="common.no_data"></span>`;
+            } else {
+                worksEl.innerHTML = works.map((w) => `
+                    <div class="list-row" style="cursor:default;">
+                        <span class="text-sm">${window.ui.escape(w.product_name || '-')} × ${window.ui.qty(w.quantity)} ${window.ui.workBadge(w.status)}</span>
+                        <span class="text-sm text-muted" style="text-align:right;">
+                            ${window.ui.escape(w.worker_name)}
+                            ${w.status === 'confirmed' && w.confirmed_by_name ? `<br>${window.ui.t('production.confirmed_by')}: ${window.ui.escape(w.confirmed_by_name)} · ${window.ui.datetime(w.confirmed_at)}` : ''}
+                        </span>
+                    </div>`).join('');
+            }
+            window.i18n.applyTranslations();
+        }).catch(() => {
+            const worksEl = modal.querySelector('#order-works');
+            if (worksEl && modal.isConnected) worksEl.innerHTML = `<span class="text-muted" data-i18n="common.error"></span>`;
+        });
         bind('send-worker', () => { window.ui.closeModal(modal); this.openSendToWorker(o); });
         bind('edit-order', () => { window.ui.closeModal(modal); this.openForm(o); });
         bind('add-payment', () => { window.ui.closeModal(modal); this.openPaymentForm(o); });
@@ -209,20 +285,33 @@ class OrdersComponent {
         const clients = clientsResp.results || clientsResp;
         const products = productsResp.results || productsResp;
 
+        const productById = new Map(products.map((p) => [String(p.id), p]));
+        // В режиме редактирования в reserved_for_orders учтён и резерв
+        // ЭТОГО заказа — при выдаче он снимается, поэтому при сверке
+        // с формой его нужно вернуть обратно в доступное количество.
+        const ownReserved = (o && o.product) ? (Number(o.quantity) || 0) : 0;
+
+        function availabilityOf(p) {
+            return (Number(p.available_quantity) || 0) + ownReserved;
+        }
+
         const modal = window.ui.modal(o ? 'common.edit' : 'orders.new_order', `
             <form id="order-form">
                 <div class="form-group"><label data-i18n="orders.client"></label>
                     <select name="client" class="form-control" required>
-                        <option value=""></option>
+                        <option value="" data-i18n="common.select"></option>
                         ${clients.map((c) => `<option value="${c.id}" ${o?.client === c.id ? 'selected' : ''}>${window.ui.escape(c.name)}</option>`).join('')}
                     </select></div>
                 <div class="form-group"><label data-i18n="orders.product"></label>
                     <select name="product" class="form-control">
-                        <option value=""></option>
-                        ${products.map((p) => `<option value="${p.id}" ${o?.product === p.id ? 'selected' : ''}>${window.ui.escape(p.name)}</option>`).join('')}
-                    </select></div>
+                        <option value="" data-i18n="common.select"></option>
+                        ${products.map((p) => `<option value="${p.id}" ${o?.product === p.id ? 'selected' : ''}>${window.ui.escape(p.name)} (${window.ui.qty(availabilityOf(p))} ${window.ui.t(`units.${p.unit}`)})</option>`).join('')}
+                    </select>
+                    <div id="product-availability" class="text-sm text-muted" style="margin-top:4px;"></div>
+                </div>
                 <div class="form-group"><label data-i18n="orders.custom_product"></label>
-                    <input name="custom_product_name" class="form-control" value="${window.ui.escape(o?.custom_product_name || '')}"></div>
+                    <input name="custom_product_name" class="form-control" value="${window.ui.escape(o?.custom_product_name || '')}"
+                           placeholder="${window.ui.t('orders.product_required')}" autocomplete="off"></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div class="form-group"><label data-i18n="orders.quantity"></label>
                         <input name="quantity" type="number" step="0.01" min="0.01" class="form-control" required value="${o?.quantity ?? ''}"></div>
@@ -240,10 +329,86 @@ class OrdersComponent {
             </form>
         `);
 
+        const productSelect = modal.querySelector('[name=product]');
+        const customInput = modal.querySelector('[name=custom_product_name]');
+        const quantityInput = modal.querySelector('[name=quantity]');
+        const unitSelect = modal.querySelector('[name=unit]');
+        const availabilityBox = modal.querySelector('#product-availability');
+        const unitOptions = unitSelect.innerHTML;
+
+        function syncUnitForProduct() {
+            const p = productById.get(productSelect.value);
+            if (!p) return;
+            if (unitSelect.querySelector(`option[value="${p.unit}"]`)) {
+                unitSelect.value = p.unit;
+            }
+        }
+
+        // Товар и «другой товар» взаимоисключающие: выбор из каталога
+        // очищает и блокирует ручной ввод, ввод названия снимает выбор
+        // из каталога. Раньше можно было отправить оба или пустой
+        // custom_product_name при выбранном товаре — сервер не понимал,
+        // что именно заказали, а после сохранения в форме оставался
+        // «другой товар» без названия.
+        productSelect.addEventListener('change', () => {
+            if (productSelect.value) {
+                customInput.disabled = true;
+                customInput.value = '';
+                customInput.classList.remove('input-invalid');
+                syncUnitForProduct();
+            } else {
+                customInput.disabled = false;
+            }
+            updateAvailability();
+        });
+        customInput.addEventListener('input', () => {
+            if (customInput.value.trim()) {
+                productSelect.value = '';
+                customInput.disabled = false;
+                updateAvailability();
+            }
+        });
+        quantityInput.addEventListener('input', updateAvailability);
+        window.i18n.applyTranslations();
+
+        function updateAvailability() {
+            const p = productById.get(productSelect.value);
+            const qty = Number(quantityInput.value);
+            if (!p || !qty || !(qty > 0)) {
+                availabilityBox.textContent = '';
+                return;
+            }
+            const unit = window.ui.t(`units.${p.unit}`);
+            const available = availabilityOf(p);
+            if (qty > available) {
+                availabilityBox.innerHTML = `⚠️ <span data-i18n="orders.product_shortage"></span> (<span data-i18n="warehouse.available"></span>: ${window.ui.qty(available)} ${unit})`;
+                availabilityBox.classList.add('text-danger');
+                availabilityBox.classList.remove('text-muted');
+            } else {
+                availabilityBox.innerHTML = `<span data-i18n="warehouse.available"></span>: ${window.ui.qty(available)} ${unit}`;
+                availabilityBox.classList.add('text-muted');
+                availabilityBox.classList.remove('text-danger');
+            }
+            window.i18n.applyTranslations();
+        }
+
+        if (o) {
+            if (o.has_product_shortage && o.product_shortage) {
+                const s = o.product_shortage;
+                availabilityBox.innerHTML = `⚠️ <span data-i18n="orders.product_shortage"></span> (<span data-i18n="warehouse.available"></span>: ${window.ui.qty(s.available)} ${window.ui.t(`units.${s.unit}`)})`;
+                availabilityBox.classList.add('text-danger');
+                availabilityBox.classList.remove('text-muted');
+            }
+            if (o.product) {
+                customInput.disabled = true;
+                syncUnitForProduct();
+            }
+        }
+        updateAvailability();
+
         modal.querySelector('#order-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const data = Object.fromEntries(new FormData(e.target));
-            if (!data.product) delete data.product;
             if (!data.deadline) delete data.deadline;
             // Заказ обязан указывать товар: позицию каталога или название
             // вручную. Раньше форма спокойно отправляла пустое, и сервер
@@ -256,6 +421,12 @@ class OrdersComponent {
                 e.target.querySelector('[name=product]').focus();
                 return;
             }
+            // Товар из каталога и «другой товар» — альтернативы: если
+            // выбран товар, ручное название не шлём (поле отключено и
+            // пустое), если название введено — явно сбрасываем товар,
+            // чтобы PATCH переключил заказ с каталога на ручное название.
+            if (!data.product) data.product = null;
+            if (!data.custom_product_name) data.custom_product_name = '';
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     if (o) {
@@ -285,7 +456,7 @@ class OrdersComponent {
             <form id="assign-form">
                 <div class="form-group"><label data-i18n="orders.worker"></label>
                     <select name="worker" class="form-control" required>
-                        <option value=""></option>
+                        <option value="" data-i18n="common.select"></option>
                         ${workers.map((w) => `<option value="${w.id}">${window.ui.escape(w.full_name || w.username)}</option>`).join('')}
                     </select></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="orders.send_to_worker"></button>

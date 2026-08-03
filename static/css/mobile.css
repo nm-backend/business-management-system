@@ -80,6 +80,10 @@ body {
     .modal-content {
         border-radius: 20px 20px 0 0;
         max-height: 92dvh;
+        /* Нижняя часть листа упирается в самый низ экрана: без отступа под
+           безопасную зону кнопки в конце окна уезжали под системную полосу
+           жестов (воспроизведено: «кнопки в карточке заказа не видны»). */
+        padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     .modal {
         align-items: flex-end;

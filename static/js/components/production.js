@@ -148,6 +148,10 @@ class ProductionComponent {
                     ${w.rejection_reason ? `<div class="text-sm text-danger" style="margin-top:6px;">✕ ${window.ui.escape(w.rejection_reason)}</div>` : ''}
                     ${w.labor_cost !== undefined && w.status === 'confirmed' ? `
                         <div class="text-sm text-success font-bold" style="margin-top:6px;">+ ${window.ui.money(w.labor_cost)}</div>` : ''}
+                    ${w.status === 'confirmed' ? `
+                        <div class="text-xs text-muted" style="margin-top:4px;">
+                            ${window.ui.t('production.confirmed_by')}: ${window.ui.escape(w.confirmed_by_name || '—')} · ${window.ui.datetime(w.confirmed_at)}
+                        </div>` : ''}
                     ${canConfirm && w.status === 'awaiting_confirmation' ? `
                         <div style="display:flex;gap:10px;margin-top:12px;">
                             <button class="btn btn-success btn-sm" style="flex:1;" data-confirm="${w.id}" data-i18n="production.confirm"></button>
@@ -252,7 +256,7 @@ class ProductionComponent {
             <form id="work-form">
                 <div class="form-group"><label data-i18n="production.product"></label>
                     <select name="product" class="form-control" required>
-                        <option value=""></option>
+                        <option value="" data-i18n="common.select"></option>
                         ${products.map((p) => `<option value="${p.id}">${window.ui.escape(p.name)}</option>`).join('')}
                     </select></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -346,6 +350,7 @@ class ProductionComponent {
     confirmWork(id) {
         const isOwner = window.currentUser.is_owner;
         const modal = window.ui.modal('production.confirm', `
+            <div id="confirm-work-details"></div>
             <p class="text-sm text-muted" style="margin-bottom:12px;" data-i18n="production.confirm_hint"></p>
             <form id="confirm-form">
                 ${isOwner ? `
@@ -354,6 +359,28 @@ class ProductionComponent {
                 <button type="submit" class="btn btn-success btn-block" data-i18n="production.confirm"></button>
             </form>
         `);
+        // Показываем, что именно подтверждается: товар, количество, брак,
+        // снимки. Подтверждение меняет склад и начисляет деньги — раньше
+        // админ жал кнопку вслепую, не видя самой работы.
+        window.api.request(`/production/works/${id}/`).then((w) => {
+            if (!modal.isConnected) return;
+            const details = modal.querySelector('#confirm-work-details');
+            details.innerHTML = `
+                <div class="card" style="box-shadow:none;border:1px solid #efeff4;margin-bottom:12px;padding:12px;">
+                    <div class="text-sm font-bold">${window.ui.escape(w.product_name || '-')} × ${window.ui.qty(w.quantity)} <span data-i18n="units.${w.unit}"></span></div>
+                    <div class="text-sm text-muted" style="margin-top:4px;">${window.ui.escape(w.worker_name)} · ${window.ui.datetime(w.created_at)}</div>
+                    ${Number(w.defect_quantity) > 0 ? `
+                        <div class="text-sm text-danger" style="margin-top:4px;"><span data-i18n="production.defect_quantity"></span>: ${window.ui.qty(w.defect_quantity)}</div>` : ''}
+                    ${this.photoStrip(w)}
+                    ${w.comment ? `<div class="text-sm" style="margin-top:6px;">${window.ui.escape(w.comment)}</div>` : ''}
+                </div>`;
+            window.i18n.applyTranslations();
+        }).catch(() => {
+            if (!modal.isConnected) return;
+            modal.querySelector('#confirm-work-details').innerHTML =
+                `<div class="alert-box" style="margin-bottom:12px;"><span data-i18n="common.error"></span></div>`;
+            window.i18n.applyTranslations();
+        });
         modal.querySelector('#confirm-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const data = Object.fromEntries(new FormData(e.target));

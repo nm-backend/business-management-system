@@ -503,17 +503,21 @@ class MessagesComponent {
      * Права важны: работнику закрыты финансы (finance.js рендерит заглушку
      * для не-владельца) и клиенты (пункт меню у него скрыт).
      */
-    notificationRoute(type) {
+    notificationRoute(n) {
         const user = window.currentUser || {};
         const owner = !!user.is_owner;
         const staff = owner || !!user.is_admin || !!user.is_manager;
+        const clientUnpaid = n.related_client
+            ? `#/orders?client=${n.related_client}&payment_status=unpaid` : (staff ? '#/clients' : '');
         const map = {
             new_order: '#/orders',
             new_expense: owner ? '#/finance' : '',
             cash_change: owner ? '#/finance' : '',
             report_ready: owner ? '#/finance' : '',
-            unpaid_client: staff ? '#/clients' : '',
-            overdue_debt: staff ? '#/clients' : '',
+            // Неоплата и просрочка ведут на неоплаченные заказы этого клиента,
+            // а не на общий список клиентов: иначе долг приходится выискивать.
+            unpaid_client: clientUnpaid,
+            overdue_debt: clientUnpaid,
             material_shortage: '#/warehouse',
             worker_refused: '#/production',
             work_awaiting: '#/production',
@@ -525,14 +529,14 @@ class MessagesComponent {
             work_accrued: '#/production',
             new_message: '#/messages',
         };
-        return map[type] || '';
+        return map[n.type] || '';
     }
 
     /** Клик по уведомлению: пометить прочитанным и перейти в нужный раздел. */
     async openNotification(id) {
         const n = (this.notifications || []).find((item) => String(item.id) === String(id));
         if (!n) return;
-        const route = this.notificationRoute(n.type);
+        const route = this.notificationRoute(n);
         if (!n.is_read) {
             n.is_read = true;
             try {
@@ -546,7 +550,7 @@ class MessagesComponent {
 
     renderNotification(n) {
         const [icon, color] = this.notificationStyle(n.type);
-        const route = this.notificationRoute(n.type);
+        const route = this.notificationRoute(n);
         const clickable = route ? `cursor:pointer;` : 'cursor:default;';
         return `
             <div class="list-row" ${route ? `data-notif-id="${n.id}" role="button" tabindex="0"` : ''}

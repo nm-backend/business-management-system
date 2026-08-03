@@ -224,6 +224,11 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         status_filter = self.request.query_params.get('status')
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        order_filter = self.request.query_params.get('order')
+        if order_filter:
+            # Работы по заказу (связь через задачу) — для карточки заказа,
+            # чтобы показать историю выполнения.
+            queryset = queryset.filter(task__order_id=order_filter)
         return queryset
 
     def perform_create(self, serializer):

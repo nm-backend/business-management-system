@@ -175,13 +175,18 @@ class NotificationSerializer(serializers.ModelSerializer):
     Используется для всех ролей.
     """
     type_display = serializers.CharField(source='get_type_display', read_only=True)
+    # Клиент связанного заказа — для перехода из уведомления о неоплате
+    # сразу на неоплаченные заказы этого клиента (#/orders?client=&payment_status=unpaid).
+    related_client = serializers.IntegerField(
+        source='related_order.client_id', read_only=True, default=None,
+    )
 
     class Meta:
         model = Notification
         fields = [
             'id', 'user', 'type', 'type_display', 'title', 'message',
             'is_read', 'read_at', 'is_unread',
-            'related_order', 'related_task',
+            'related_order', 'related_task', 'related_client',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at', 'read_at']

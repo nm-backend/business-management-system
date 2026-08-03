@@ -43,8 +43,8 @@ class DashboardComponent {
                 ${window.ui.statCard({ icon: window.icon('wallet', 18), color: 'blue', titleKey: 'dashboard.cash_balance', value: window.ui.money(data.cash), id: 'cash-card' })}
                 ${window.ui.statCard({ icon: window.icon('pie-chart', 18), color: 'purple', titleKey: 'finance.gross_profit', value: window.ui.money(data.gross_profit) })}
                 ${window.ui.statCard({ icon: window.icon('receipt', 18), color: 'orange', titleKey: 'finance.expenses', value: window.ui.money(data.expenses_total), delta: data.deltas?.expenses_total })}
-                ${window.ui.statCard({ icon: window.icon('users', 18), color: 'red', titleKey: 'finance.client_debts', value: window.ui.money(data.client_debts), valueClass: data.client_debts > 0 ? 'text-danger' : '' })}
-                ${window.ui.statCard({ icon: window.icon('wrench', 18), color: 'blue', titleKey: 'finance.worker_debts', value: window.ui.money(data.worker_debts) })}
+                ${window.ui.statCard({ icon: window.icon('users', 18), color: 'red', titleKey: 'finance.client_debts', value: window.ui.money(data.client_debts), valueClass: data.client_debts > 0 ? 'text-danger' : '', id: 'client-debts-card' })}
+                ${window.ui.statCard({ icon: window.icon('wrench', 18), color: 'blue', titleKey: 'finance.worker_debts', value: window.ui.money(data.worker_debts), id: 'worker-debts-card' })}
 
                 ${window.ui.statCard({ icon: window.icon('users', 18), color: 'blue', titleKey: 'dashboard.active_employees', value: data.active_employees_count || 0 })}
                 ${window.ui.statCard({ icon: window.icon('clock', 18), color: 'red', titleKey: 'dashboard.overdue_percentage', value: (data.overdue_percentage || 0) + '%' })}
@@ -94,6 +94,14 @@ class DashboardComponent {
         });
         const cashCard = container.querySelector('#cash-card');
         if (cashCard) cashCard.addEventListener('click', () => window.router.navigate('/finance'));
+        // Долги клиентов: карточка ведёт на клиентов (там виден долг по
+        // каждому), из карточки клиента — на его заказы. Раньше карточка
+        // долга была мёртвой: посмотреть, кто именно должен, было негде.
+        const clientDebtsCard = container.querySelector('#client-debts-card');
+        if (clientDebtsCard) clientDebtsCard.addEventListener('click', () => window.router.navigate('/clients'));
+        // Долг работникам: выплаты и задолженность считаются во финансах.
+        const workerDebtsCard = container.querySelector('#worker-debts-card');
+        if (workerDebtsCard) workerDebtsCard.addEventListener('click', () => window.router.navigate('/finance'));
 
         // График выручки
         this.renderRevenueChart(container, data);
@@ -233,10 +241,10 @@ class DashboardComponent {
                 <div class="section-title" data-i18n="admin_analytics.unpaid_clients"></div>
                 <div class="list-group">
                     ${data.unpaid_clients.map((c) => `
-                        <div class="list-row" style="cursor:default;">
+                        <a class="list-row" href="#/orders?client=${c.id}&payment_status=unpaid" style="text-decoration:none;color:inherit;">
                             <span>${window.ui.escape(c.name)}</span>
                             <span class="badge badge-cancel" data-i18n="payment_statuses.unpaid"></span>
-                        </div>`).join('')}
+                        </a>`).join('')}
                 </div>` : ''}
 
             ${data.worker_performance.length ? `

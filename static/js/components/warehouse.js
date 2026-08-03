@@ -472,7 +472,7 @@ class WarehouseComponent {
                         <input name="barcode" class="form-control" value="${window.ui.escape(m?.barcode || '')}"></div>
                     <div class="form-group"><label data-i18n="warehouse.storage_zone"></label>
                         <select name="storage_zone" class="form-control">
-                            <option value=""></option>
+                            <option value="" data-i18n="common.select"></option>
                             <option value="a" ${m?.storage_zone === 'a' ? 'selected' : ''} data-i18n="warehouse.zone_a"></option>
                             <option value="b" ${m?.storage_zone === 'b' ? 'selected' : ''} data-i18n="warehouse.zone_b"></option>
                             <option value="c" ${m?.storage_zone === 'c' ? 'selected' : ''} data-i18n="warehouse.zone_c"></option>

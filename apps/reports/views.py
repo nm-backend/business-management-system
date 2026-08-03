@@ -75,7 +75,13 @@ def parse_period(request):
     presets = {
         'today': (today, today),
         'yesterday': (today - datetime.timedelta(days=1), today - datetime.timedelta(days=1)),
-        'week': (today - datetime.timedelta(days=7), today),
+        # Календарная неделя (понедельник → сегодня), а не скользящие 7 дней:
+        # скользящее окно почти всегда пересекало границу месяца, и «неделя»
+        # стабильно показывала БОЛЬШЕ, чем «месяц» в начале месяца — тестеры
+        # справедливо видели в этом поломанную математику. Теперь неделя и
+        # месяц — сопоставимые календарные окна (неделя ⊆ месяц, когда она
+        # началась в этом месяце).
+        'week': (today - datetime.timedelta(days=today.weekday()), today),
         'month': (today.replace(day=1), today),
         'quarter': (quarter_start, today),
         'year': (today.replace(month=1, day=1), today),
@@ -651,33 +657,73 @@ class AdminOrdersExportView(APIView):
     permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
 
     def get(self, request):
+        is_owner = request.user.is_owner
         rows = [['#', 'Мижоз', 'Маҳсулот', 'Миқдор', 'Ҳолат', 'Тўлов', 'Муддат']]
+        # Колонка долга — только для владельца: суммы (total_amount, paid_amount)
+        # администратору не видны нигде в системе, и в отчёте их быть не должно.
+        # Раньше в экспорте не было и для владельца — «сколько клиент ещё
+        # должен по этому заказу» приходилось считать вручную из двух других
+        # отчётов. Долг = сумма заказа минус фактически оплаченное.
+        if is_owner:
+            rows[0].append('Қарз')
         orders = Order.objects.filter(
             company_id=request.user.company_id, is_archived=False,
         ).select_related('client', 'product')
+        paid_by_order = {}
+        if is_owner:
+            paid_by_order = dict(
+                Payment.objects.filter(
+                    company_id=request.user.company_id, order__isnull=False,
+                ).values('order').annotate(total=Sum('amount'))
+                .values_list('order', 'total')
+            )
         for o in orders:
-            rows.append([
+            row = [
                 o.id, o.client.name,
                 o.product.name if o.product else o.custom_product_name,
                 o.quantity, o.get_status_display(), o.get_payment_status_display(),
                 o.deadline.date() if o.deadline else '',
-            ])
+            ]
+            if is_owner:
+                row.append(money(o.total_amount - money(paid_by_order.get(o.id))))
+            rows.append(row)
         if request.query_params.get('format') == 'pdf':
             return pdf_response('SkladPro.Nod - Буюртмалар', rows, 'orders-report.pdf')
         return xlsx_response(rows, 'orders-report.xlsx', 'Orders')
 
 
 class AdminWorkExportView(APIView):
-    """GET /api/v1/reports/export/work/ - выработка работников по количеству."""
+    """GET /api/v1/reports/export/work/ - выработка работников.
+
+    Админ получает количества (без денег). Для владельца отчёт по сотрудникам
+    обязан показывать и деньги: сколько начислено за подтверждённые работы
+    (labor_cost). Раньше владелец видел в этом отчёте ровно то же, что и админ,
+    — суммы пришлось бы собирать вручную из другой страницы.
+    """
     permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
 
     def get(self, request):
+        company_id = request.user.company_id
+        is_owner = request.user.is_owner
         rows = [['Ишчи', 'Тасдиқланган ишлар', 'Умумий миқдор']]
-        for row in admin_analytics_data(request.user.company_id)['worker_performance']:
-            rows.append([
+        if is_owner:
+            rows[0].append('Начислено')
+        qs = (
+            WorkRecord.objects.filter(company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED)
+            .values(worker_username=F('worker__username'), worker_full_name=F('worker__full_name'))
+            .annotate(total_quantity=Sum('quantity'), works=Count('id'))
+            .order_by('-total_quantity')
+        )
+        if is_owner:
+            qs = qs.annotate(labor=Sum('labor_cost'))
+        for row in qs:
+            line = [
                 row['worker_full_name'] or row['worker_username'],
                 row['works'], row['total_quantity'],
-            ])
+            ]
+            if is_owner:
+                line.append(row.get('labor') or 0)
+            rows.append(line)
         if request.query_params.get('format') == 'pdf':
             return pdf_response('SkladPro.Nod - Ишчилар иши', rows, 'work-report.pdf')
         return xlsx_response(rows, 'work-report.xlsx', 'Work')

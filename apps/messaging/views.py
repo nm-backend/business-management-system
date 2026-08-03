@@ -35,6 +35,7 @@ from .services import (
     ensure_general_conversation,
     ensure_participant,
     get_or_create_direct,
+    notify,
 )
 
 MESSAGE_PAGE = 50  # сколько последних сообщений отдаём при открытии беседы
@@ -179,6 +180,26 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
 
         broadcast_message(message)
 
+        # Уведомление о личном сообщении: получатель может быть не на вкладке
+        # чата (замечание тестировщика — про новые сообщения узнавали только
+        # из WebSocket, пока страница открыта). Для общего чата уведомление
+        # не создаём — каждый писать не может, а непрочитанные счётчики и так
+        # висят на вкладке чата.
+        if conversation.kind == Conversation.Kind.DIRECT:
+            recipients = (
+                ConversationParticipant.objects
+                .filter(conversation=conversation)
+                .exclude(user=request.user)
+                .select_related('user')
+            )
+            for participant in recipients:
+                notify(
+                    participant.user,
+                    Notification.NotificationType.NEW_MESSAGE,
+                    request.user.full_name or request.user.username,
+                    message.content[:200],
+                )
+
         out = ChatMessageSerializer(message, context={'request': request})
         return Response(out.data, status=status.HTTP_201_CREATED)
 
@@ -201,7 +222,9 @@ class EmployeeViewSet(viewsets.ReadOnlyModelViewSet):
 
         search = self.request.query_params.get('search')
         if search:
-            qs = qs.filter(Q(full_name__icontains=search) | Q(username__icontains=search))
+            # Транслит: «Gulnora» находит «Гулнора» и наоборот (apps/core/translit.py).
+            from apps.core.translit import translit_search_qs
+            qs = translit_search_qs(qs, search, ['full_name', 'username'])
         return qs.order_by('full_name', 'username')
 
 
