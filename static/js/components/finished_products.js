@@ -131,6 +131,9 @@ class FinishedProductsComponent {
                 ${row('warehouse.min_stock', window.ui.qty(p.min_stock))}
                 ${user.is_owner ? row('warehouse.cost_price', window.ui.money(p.cost_price)) : ''}
                 ${user.is_owner ? row('warehouse.sale_price', window.ui.money(p.sale_price)) : ''}
+                ${user.is_owner ? row('finance.labor_rate_per_unit',
+                    p.labor_rate ? window.ui.money(p.labor_rate)
+                                 : `<span class="text-danger" data-i18n="finance.labor_rate_missing"></span>`) : ''}
                 ${row('warehouse.description', p.description)}
             </div>
             ${canEdit ? `
@@ -427,7 +430,11 @@ class FinishedProductsComponent {
                             <input name="cost_price" type="number" step="0.01" min="0" class="form-control" value="${p?.cost_price ?? 0}"></div>
                         <div class="form-group"><label data-i18n="warehouse.sale_price"></label>
                             <input name="sale_price" type="number" step="0.01" min="0" class="form-control" value="${p?.sale_price ?? 0}"></div>
-                    </div>` : ''}
+                    </div>
+                    <div class="form-group"><label data-i18n="finance.labor_rate_per_unit"></label>
+                        <input name="labor_rate" type="number" step="0.01" min="0" class="form-control"
+                               value="${p?.labor_rate ?? ''}">
+                        <small class="text-muted" data-i18n="finance.labor_rate_hint"></small></div>` : ''}
                 <div class="form-group"><label data-i18n="warehouse.description"></label>
                     <textarea name="description" class="form-control" rows="2">${window.ui.escape(p?.description || '')}</textarea></div>
                 <div class="form-group"><label data-i18n="warehouse.photo"></label>

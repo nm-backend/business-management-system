@@ -91,8 +91,56 @@ class FinishedProductSerializer(serializers.ModelSerializer):
         ]
 
 class FinishedProductOwnerSerializer(FinishedProductSerializer):
+    """
+    Владелец видит и задаёт ставку оплаты труда прямо здесь.
+
+    Ставка живёт в отдельной модели LaborRate (товар + операция) и правилась
+    только в разделе «Финансы → Ставки». Человек, ведущий производство, туда
+    не заходит, поэтому связи «сколько получит работник» с товаром не видел —
+    отсюда замечание «непонятно, где задаётся стоимость работы». Раздел
+    «Ставки» остаётся как общий обзор по всем товарам.
+    """
+    labor_rate = serializers.DecimalField(max_digits=15, decimal_places=2,
+                                          min_value=Decimal('0'), required=False,
+                                          allow_null=True)
+
     class Meta(FinishedProductSerializer.Meta):
-        fields = FinishedProductSerializer.Meta.fields + ['cost_price', 'sale_price']
+        fields = FinishedProductSerializer.Meta.fields + ['cost_price', 'sale_price', 'labor_rate']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        rate = instance.labor_rates.order_by('operation').first()
+        data['labor_rate'] = str(rate.rate_per_unit) if rate else None
+        return data
+
+    def _save_labor_rate(self, product, value):
+        """Одна ставка на товар: правим существующую или заводим первую."""
+        from apps.finance.models import LaborRate
+
+        rate = product.labor_rates.order_by('operation').first()
+        if rate:
+            rate.rate_per_unit = value
+            rate.save(update_fields=['rate_per_unit', 'updated_at'])
+        else:
+            LaborRate.objects.create(
+                company=product.company, product=product,
+                operation=LaborRate.OperationType.OTHER,
+                rate_per_unit=value, unit=product.unit,
+            )
+
+    def create(self, validated_data):
+        rate = validated_data.pop('labor_rate', None)
+        product = super().create(validated_data)
+        if rate is not None:
+            self._save_labor_rate(product, rate)
+        return product
+
+    def update(self, instance, validated_data):
+        rate = validated_data.pop('labor_rate', None)
+        product = super().update(instance, validated_data)
+        if rate is not None:
+            self._save_labor_rate(product, rate)
+        return product
 
 class StockMovementSerializer(serializers.ModelSerializer):
     movement_type_display = serializers.CharField(source='get_movement_type_display', read_only=True)

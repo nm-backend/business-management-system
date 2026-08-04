@@ -44,6 +44,14 @@ class _Base(TestCase):
         self.product = FinishedProduct.objects.create(
             company=self.company, name='Столешница', quantity=Decimal('2'), unit='dona')
 
+        # Подтверждение работы требует заданной ставки: без неё оно
+        # отказывает, чтобы работнику не начислялся молча ноль.
+        from apps.finance.models import LaborRate
+        for _p in FinishedProduct.objects.filter(company=self.company):
+            LaborRate.objects.get_or_create(
+                company=self.company, product=_p,
+                operation=LaborRate.OperationType.OTHER,
+                defaults={'rate_per_unit': Decimal('100'), 'unit': _p.unit})
     def api(self, user=None):
         c = APIClient()
         c.force_authenticate(user or self.owner)
@@ -180,6 +188,14 @@ class RecipeAPITests(_Base):
         self.m2 = RawMaterial.objects.create(company=self.company, name='Клей',
                                              quantity=Decimal('50'), unit='kg')
 
+        # Подтверждение работы требует заданной ставки: без неё оно
+        # отказывает, чтобы работнику не начислялся молча ноль.
+        from apps.finance.models import LaborRate
+        for _p in FinishedProduct.objects.filter(company=self.company):
+            LaborRate.objects.get_or_create(
+                company=self.company, product=_p,
+                operation=LaborRate.OperationType.OTHER,
+                defaults={'rate_per_unit': Decimal('100'), 'unit': _p.unit})
     def _make_recipe(self, **kw):
         data = {'product': self.product.id, 'name': 'Стандарт', **kw}
         r = self.api().post(RECIPES, data, format='json')
@@ -248,6 +264,14 @@ class RawMaterialReservationTests(_Base):
         RecipeItem.objects.create(recipe=self.recipe, material=self.material,
                                   quantity_required=Decimal('2'), unit='m2')
 
+        # Подтверждение работы требует заданной ставки: без неё оно
+        # отказывает, чтобы работнику не начислялся молча ноль.
+        from apps.finance.models import LaborRate
+        for _p in FinishedProduct.objects.filter(company=self.company):
+            LaborRate.objects.get_or_create(
+                company=self.company, product=_p,
+                operation=LaborRate.OperationType.OTHER,
+                defaults={'rate_per_unit': Decimal('100'), 'unit': _p.unit})
     def _create_order(self, **kw):
         r = self.api().post('/api/v1/orders/orders/', {
             'client': self.cli.id, 'product': self.product.id,

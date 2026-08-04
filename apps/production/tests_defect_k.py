@@ -36,6 +36,14 @@ class DefectConsumptionTests(TestCase):
         RecipeItem.objects.create(recipe=recipe, material=self.material,
                                   quantity_required=Decimal('2'), unit='m2')
 
+        # Подтверждение работы требует заданной ставки: без неё оно
+        # отказывает, чтобы работнику не начислялся молча ноль.
+        from apps.finance.models import LaborRate
+        for _p in FinishedProduct.objects.filter(company=self.company):
+            LaborRate.objects.get_or_create(
+                company=self.company, product=_p,
+                operation=LaborRate.OperationType.OTHER,
+                defaults={'rate_per_unit': Decimal('100'), 'unit': _p.unit})
     def _work(self, quantity, defect):
         return WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,

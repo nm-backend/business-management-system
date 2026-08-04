@@ -357,7 +357,10 @@
     "owner_only": "Эта страница доступна только хозяину",
     "worker_settlements": "Расчёты с работниками",
     "accrued": "Начислено",
-    "paid_out": "Выплачено"
+    "paid_out": "Выплачено",
+    "labor_rate_per_unit": "Оплата труда за единицу",
+    "labor_rate_hint": "Столько начисляется работнику за единицу продукции",
+    "labor_rate_missing": "не задана"
   },
   "payment_types": {
     "salary": "Зарплата",

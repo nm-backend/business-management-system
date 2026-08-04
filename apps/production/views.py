@@ -298,6 +298,18 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
                 {'detail': 'Материал етарли эмас', 'shortages': error.shortages},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except services.MissingLaborRateError as error:
+            # Раньше в этом случае молча начислялся ноль: работа
+            # подтверждалась, склад пополнялся, а работник не получал ничего.
+            return Response(
+                {'detail': (
+                    f'Для товара «{error.product_name}» не задана ставка оплаты труда. '
+                    f'Укажите её в карточке товара и повторите подтверждение.'
+                    if error.product_name else
+                    'В работе не указан товар — начислить оплату не по чему.'
+                ), 'code': 'labor_rate_missing'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except services.AlreadyProcessedError:
             return Response({'detail': 'Work has already been processed'},
                             status=status.HTTP_409_CONFLICT)

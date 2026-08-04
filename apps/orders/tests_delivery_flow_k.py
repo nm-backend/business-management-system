@@ -46,6 +46,14 @@ class OrderDeliveryFlowTests(TestCase):
             quantity=Decimal('2'), unit='dona', total_amount=Decimal('5000'),
             deadline=datetime.datetime(2026, 12, 1, tzinfo=datetime.timezone.utc))
 
+        # Подтверждение работы требует заданной ставки: без неё оно
+        # отказывает, чтобы работнику не начислялся молча ноль.
+        from apps.finance.models import LaborRate
+        for _p in FinishedProduct.objects.filter(company=self.company):
+            LaborRate.objects.get_or_create(
+                company=self.company, product=_p,
+                operation=LaborRate.OperationType.OTHER,
+                defaults={'rate_per_unit': Decimal('100'), 'unit': _p.unit})
     def api(self, user):
         c = APIClient()
         c.force_authenticate(user=user)
@@ -132,6 +140,14 @@ class DeliverButtonContractTests(TestCase):
         self.product = FinishedProduct.objects.create(
             company=self.company, name='П', quantity=Decimal('100'))
 
+        # Подтверждение работы требует заданной ставки: без неё оно
+        # отказывает, чтобы работнику не начислялся молча ноль.
+        from apps.finance.models import LaborRate
+        for _p in FinishedProduct.objects.filter(company=self.company):
+            LaborRate.objects.get_or_create(
+                company=self.company, product=_p,
+                operation=LaborRate.OperationType.OTHER,
+                defaults={'rate_per_unit': Decimal('100'), 'unit': _p.unit})
     def _order(self, status):
         return Order.objects.create(
             company=self.company, client=self.cli, product=self.product,

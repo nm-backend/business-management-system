@@ -130,8 +130,17 @@ class WorkConfirmServiceTests(TestCase):
         self.assertEqual(work.labor_cost, Decimal('30.00'))
 
     def test_calculate_labor_cost_without_product_or_rate(self):
-        self.assertEqual(services.calculate_labor_cost(self._work(product=None)), Decimal('0'))
-        self.assertEqual(services.calculate_labor_cost(self._work()), Decimal('0'))
+        """
+        Отсутствие ставки — это не «бесплатно», а незаполненный справочник.
+
+        Раньше здесь возвращался ноль, и работа подтверждалась с нулевым
+        начислением молча: администратор видел «подтверждено», работник не
+        получал ничего. Теперь расчёт останавливается.
+        """
+        with self.assertRaises(services.MissingLaborRateError):
+            services.calculate_labor_cost(self._work(product=None))
+        with self.assertRaises(services.MissingLaborRateError):
+            services.calculate_labor_cost(self._work())
 
     def test_reject_keeps_stock_and_sets_reason(self):
         work = self._work()

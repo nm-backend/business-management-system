@@ -45,6 +45,14 @@ class _Base(TestCase):
         RecipeItem.objects.create(recipe=recipe, material=self.material,
                                   quantity_required=Decimal('2'), unit='sht')
 
+        # Подтверждение работы требует заданной ставки: без неё оно
+        # отказывает, чтобы работнику не начислялся молча ноль.
+        from apps.finance.models import LaborRate
+        for _p in FinishedProduct.objects.filter(company=self.company):
+            LaborRate.objects.get_or_create(
+                company=self.company, product=_p,
+                operation=LaborRate.OperationType.OTHER,
+                defaults={'rate_per_unit': Decimal('100'), 'unit': _p.unit})
     def api(self, user):
         c = APIClient()
         c.force_authenticate(user=user)

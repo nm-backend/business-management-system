@@ -357,7 +357,10 @@
     "owner_only": "Бул баракча ээси үчүн гана",
     "worker_settlements": "Жумушчулар менен эсептешүү",
     "accrued": "Эсептелди",
-    "paid_out": "Төлөндү"
+    "paid_out": "Төлөндү",
+    "labor_rate_per_unit": "Бирдик үчүн эмгек акы",
+    "labor_rate_hint": "Бир бирдик продукция үчүн жумушчуга ушунча эсептелет",
+    "labor_rate_missing": "коюлган эмес"
   },
   "payment_types": {
     "salary": "Эмгек акы",

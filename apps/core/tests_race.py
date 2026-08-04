@@ -94,6 +94,12 @@ class WarehouseRaceTests(TransactionTestCase):
         from apps.warehouse.models import FinishedProduct, RawMaterial, Recipe, RecipeItem
 
         product = FinishedProduct.objects.create(company=self.company, name='P', quantity=Decimal('0'))
+        # Подтверждение требует ставки: без неё оно отказывает, чтобы
+        # работнику не начислялся молча ноль. Тест про гонку, а не про оплату.
+        from apps.finance.models import LaborRate
+        LaborRate.objects.create(company=self.company, product=product,
+                                 operation=LaborRate.OperationType.OTHER,
+                                 rate_per_unit=Decimal('100'), unit=product.unit)
         material = RawMaterial.objects.create(company=self.company, name='M', quantity=Decimal('10'))
         recipe = Recipe.objects.create(company=self.company, product=product, name='R')
         RecipeItem.objects.create(recipe=recipe, material=material, quantity_required=Decimal('2'))
@@ -140,6 +146,14 @@ class PaymentRaceTests(TransactionTestCase):
             company=self.company, client=client, product=product, quantity=Decimal('1'),
             unit='sht', total_amount=Decimal('100'), deadline=datetime.date(2026, 1, 1))
 
+        # Подтверждение работы требует заданной ставки: без неё оно
+        # отказывает, чтобы работнику не начислялся молча ноль.
+        from apps.finance.models import LaborRate
+        for _p in FinishedProduct.objects.filter(company=self.company):
+            LaborRate.objects.get_or_create(
+                company=self.company, product=_p,
+                operation=LaborRate.OperationType.OTHER,
+                defaults={'rate_per_unit': Decimal('100'), 'unit': _p.unit})
     def test_concurrent_payments_are_not_lost(self):
         """16 одновременных оплат по 1 -> paid_amount ровно 16 (без потери)."""
         from apps.orders.models import Order

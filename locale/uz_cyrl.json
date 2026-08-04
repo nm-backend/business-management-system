@@ -357,7 +357,10 @@
     "owner_only": "Бу саҳифа фақат эгаси учун",
     "worker_settlements": "Ишчилар билан ҳисоб-китоб",
     "accrued": "Ҳисобланди",
-    "paid_out": "Тўланди"
+    "paid_out": "Тўланди",
+    "labor_rate_per_unit": "Бир бирлик учун иш ҳақи",
+    "labor_rate_hint": "Бир бирлик маҳсулот учун ишчига шунча ҳисобланади",
+    "labor_rate_missing": "белгиланмаган"
   },
   "payment_types": {
     "salary": "Иш ҳақи",

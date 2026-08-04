@@ -67,14 +67,36 @@ def check_material_shortages(product, quantity):
     return shortages
 
 
+class MissingLaborRateError(Exception):
+    """
+    Для товара не задана ставка оплаты труда.
+
+    Раньше в этом случае начислялся ноль — молча. Работа подтверждалась, склад
+    пополнялся, администратор видел «подтверждено» и был уверен, что всё в
+    порядке, а работник не получал ничего и узнавал об этом только из своей
+    карточки. Для SaaS это тихая потеря денег сотрудника, поэтому подтверждение
+    теперь останавливается с понятным текстом.
+    """
+
+    def __init__(self, product_name=''):
+        self.product_name = product_name
+        super().__init__(product_name)
+
+
 def calculate_labor_cost(work):
-    """Начислено = количество работы x ставка за единицу (по ставке товара)."""
+    """
+    Начислено = количество работы x ставка за единицу (по ставке товара).
+
+    Ноль возвращается только когда ставка действительно нулевая: отсутствие
+    ставки — это не «бесплатно», а незаполненный справочник, и такую работу
+    подтверждать нельзя (см. MissingLaborRateError).
+    """
     from apps.finance.models import LaborRate
     if not work.product:
-        return Decimal('0')
+        raise MissingLaborRateError('')
     rate = LaborRate.objects.filter(product=work.product).order_by('operation').first()
     if not rate:
-        return Decimal('0')
+        raise MissingLaborRateError(work.product.name)
     return rate.rate_per_unit * work.quantity
 
 
