@@ -267,12 +267,29 @@ class OrderViewSet(CompanyScopedViewSet):
                     user=request.user,
                     reason=f'Выдача заказа #{order.id}',
                 )
-            except DRFValidationError as exc:
+            except DRFValidationError:
+                # Считаем доступное ДО возврата резерва: резерв этого же заказа
+                # иначе занизил бы цифру в сообщении — он отложен как раз под него.
+                order.product.refresh_from_db()
+                available = order.product.quantity - (order.product.reserved_for_orders or 0)
                 # Не хватило товара — возвращаем резерв и не выдаём: иначе
                 # остаток ушёл бы в минус, а клиент получил бы то, чего нет.
                 order.reserve_product()
-                detail = exc.detail.get('quantity', exc.detail) if isinstance(exc.detail, dict) else exc.detail
-                return Response({'detail': detail}, status=status.HTTP_400_BAD_REQUEST)
+                # Сообщение из record_outgoing говорит про «списание» и
+                # «резерв» — на выдаче это непонятно. Особенно когда клиент
+                # уже оплатил и пришёл забирать раньше срока: он видит отказ
+                # и не понимает, что делать. Объясняем ситуацию по-человечески.
+                return Response({
+                    'detail': (
+                        f'На складе недостаточно товара «{order.product.name}»: '
+                        f'нужно {order.quantity}, доступно {max(available, 0)}. '
+                        f'Подтвердите производство этой партии или оприходуйте товар '
+                        f'приходом — после этого выдача пройдёт.'
+                    ),
+                    'code': 'not_enough_stock',
+                    'required': str(order.quantity),
+                    'available': str(max(available, 0)),
+                }, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = Order.Status.DELIVERED
         order.save(update_fields=['status'])

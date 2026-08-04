@@ -146,3 +146,53 @@ class DeliveryWritesOffStockTests(_Base):
         self.assertEqual(self.deliver(order_id).status_code, 200)
         self.assertFalse(StockMovement.objects.filter(
             movement_type=StockMovement.MovementType.OUTGOING).exists())
+
+
+class EarlyPickupMessageTests(_Base):
+    """
+    Клиент оплатил вперёд и пришёл забирать раньше, чем товар произвели.
+
+    Выдача обязана отказать (иначе остаток уйдёт в минус), но отказ должен
+    объяснять ситуацию. Прежний текст приходил из record_outgoing и говорил
+    про «списание» и «зарезервировано под заказы» — на выдаче это непонятно,
+    особенно когда деньги уже приняты.
+    """
+
+    def test_refusal_explains_what_to_do(self):
+        self.product.quantity = Decimal('0')
+        self.product.save(update_fields=['quantity'])
+        order_id = self.create_order(quantity='2').json()['id']
+        self.api.post('/api/v1/clients/payments/', {
+            'client': self.client_obj.id, 'order': order_id, 'amount': '1000',
+            'payment_method': 'cash', 'payment_date': timezone.now().isoformat(),
+        }, format='json')
+
+        resp = self.api.post(f'{ORDERS}{order_id}/deliver/')
+        self.assertEqual(resp.status_code, 400)
+        body = resp.json()
+        self.assertEqual(body['code'], 'not_enough_stock')
+        self.assertEqual(body['required'], '2.00')
+        self.assertEqual(body['available'], '0.000')
+        self.assertIn('Столешница', body['detail'])
+        self.assertIn('Подтвердите производство', body['detail'])
+
+    def test_available_ignores_own_reserve(self):
+        """Резерв этого же заказа не должен занижать цифру в сообщении."""
+        self.product.quantity = Decimal('1')
+        self.product.save(update_fields=['quantity'])
+        order_id = self.create_order(quantity='5').json()['id']
+        body = self.api.post(f'{ORDERS}{order_id}/deliver/').json()
+        self.assertEqual(body['available'], '1.000', 'на складе физически 1 штука')
+
+    def test_delivery_passes_after_stock_arrives(self):
+        """После оприходования выдача проходит — тупика нет."""
+        self.product.quantity = Decimal('0')
+        self.product.save(update_fields=['quantity'])
+        order_id = self.create_order(quantity='2').json()['id']
+        self.assertEqual(self.api.post(f'{ORDERS}{order_id}/deliver/').status_code, 400)
+
+        self.api.post(f'/api/v1/warehouse/finished-products/{self.product.id}/incoming/',
+                      {'quantity': '2'}, format='json')
+        self.assertEqual(self.api.post(f'{ORDERS}{order_id}/deliver/').status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.quantity, Decimal('0.000'), 'пришло 2, выдали 2')
