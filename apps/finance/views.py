@@ -66,6 +66,8 @@ class ExpenseViewSet(CompanyScopedViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        from apps.audit.models import AuditLog
+        from apps.audit.services import write_audit_log
         from apps.messaging.models import Notification
         from apps.messaging.services import notify
 
@@ -76,6 +78,39 @@ class ExpenseViewSet(CompanyScopedViewSet):
             'Янги харажат',
             f'{expense.get_category_display()}: {expense.amount}',
         )
+        write_audit_log(
+            action=AuditLog.Action.CREATE,
+            actor=self.request.user,
+            target=expense,
+            request=self.request,
+        )
+
+    def perform_update(self, serializer):
+        from apps.audit.models import AuditLog
+        from apps.audit.services import collect_model_changes, write_audit_log
+
+        changes = collect_model_changes(serializer.instance, serializer.validated_data)
+        expense = serializer.save()
+        if changes:
+            write_audit_log(
+                action=AuditLog.Action.UPDATE,
+                actor=self.request.user,
+                target=expense,
+                changes=changes,
+                request=self.request,
+            )
+
+    def perform_destroy(self, instance):
+        from apps.audit.models import AuditLog
+        from apps.audit.services import write_audit_log
+
+        write_audit_log(
+            action=AuditLog.Action.DELETE,
+            actor=self.request.user,
+            target=instance,
+            request=self.request,
+        )
+        instance.delete()
 
 
 class LaborRateViewSet(CompanyScopedViewSet):
@@ -111,7 +146,15 @@ class LaborRateViewSet(CompanyScopedViewSet):
         product = serializer.validated_data.get('product')
         if product and product.company_id != self.request.user.company_id:
             raise PermissionDenied('Product must belong to your company')
-        serializer.save(company=self.request.user.company)
+        rate = serializer.save(company=self.request.user.company)
+        from apps.audit.models import AuditLog
+        from apps.audit.services import write_audit_log
+        write_audit_log(
+            action=AuditLog.Action.CREATE,
+            actor=self.request.user,
+            target=rate,
+            request=self.request,
+        )
 
     def perform_update(self, serializer):
         # Без этой проверки PATCH мог перепривязать ставку к product ЧУЖОЙ
@@ -119,7 +162,29 @@ class LaborRateViewSet(CompanyScopedViewSet):
         product = serializer.validated_data.get('product')
         if product and product.company_id != self.request.user.company_id:
             raise PermissionDenied('Product must belong to your company')
-        serializer.save()
+        from apps.audit.models import AuditLog
+        from apps.audit.services import collect_model_changes, write_audit_log
+        changes = collect_model_changes(serializer.instance, serializer.validated_data)
+        rate = serializer.save()
+        if changes:
+            write_audit_log(
+                action=AuditLog.Action.UPDATE,
+                actor=self.request.user,
+                target=rate,
+                changes=changes,
+                request=self.request,
+            )
+
+    def perform_destroy(self, instance):
+        from apps.audit.models import AuditLog
+        from apps.audit.services import write_audit_log
+        write_audit_log(
+            action=AuditLog.Action.DELETE,
+            actor=self.request.user,
+            target=instance,
+            request=self.request,
+        )
+        instance.delete()
 
 
 class WorkerPaymentViewSet(CompanyScopedViewSet):
@@ -227,7 +292,15 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         worker = serializer.validated_data.get('worker')
         if worker and worker.company_id != self.request.user.company_id:
             raise PermissionDenied('Worker must belong to your company')
-        serializer.save(created_by=self.request.user, company=self.request.user.company)
+        payment = serializer.save(created_by=self.request.user, company=self.request.user.company)
+        from apps.audit.models import AuditLog
+        from apps.audit.services import write_audit_log
+        write_audit_log(
+            action=AuditLog.Action.CREATE,
+            actor=self.request.user,
+            target=payment,
+            request=self.request,
+        )
 
     def perform_update(self, serializer):
         # Без этой проверки PATCH мог перепривязать выплату к worker ЧУЖОЙ
@@ -236,4 +309,26 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         worker = serializer.validated_data.get('worker')
         if worker and worker.company_id != self.request.user.company_id:
             raise PermissionDenied('Worker must belong to your company')
-        serializer.save()
+        from apps.audit.models import AuditLog
+        from apps.audit.services import collect_model_changes, write_audit_log
+        changes = collect_model_changes(serializer.instance, serializer.validated_data)
+        payment = serializer.save()
+        if changes:
+            write_audit_log(
+                action=AuditLog.Action.UPDATE,
+                actor=self.request.user,
+                target=payment,
+                changes=changes,
+                request=self.request,
+            )
+
+    def perform_destroy(self, instance):
+        from apps.audit.models import AuditLog
+        from apps.audit.services import write_audit_log
+        write_audit_log(
+            action=AuditLog.Action.DELETE,
+            actor=self.request.user,
+            target=instance,
+            request=self.request,
+        )
+        instance.delete()

@@ -38,6 +38,8 @@ class QueryCountTests(TestCase):
         for i in range(n):
             w = User.objects.create_user(username=f'perf_w{n}_{i}', password='p',
                                          role=User.Role.WORKER, company=company)
+            w.set_unusable_password()  # ключ выдаётся только приглашённым
+            w.save(update_fields=['password'])
             w.skills.set(skills)
             issue_access_key(user=w, created_by=owner)
             workers.append(w)

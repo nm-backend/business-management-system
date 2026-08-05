@@ -11,7 +11,10 @@ class RawMaterialAdmin(admin.ModelAdmin):
     list_filter = ('company', 'stone_type', 'unit', 'is_archived')
     search_fields = ('name', 'supplier', 'comment')
     autocomplete_fields = ('company',)
-    readonly_fields = ('created_at', 'updated_at')
+    # Остаток и резерв меняются только движениями (record_incoming/outgoing):
+    # правка мимо журнала ломает инвариант «остаток = стартовый + приходы −
+    # расходы» (коммит 0c32033 закрыл это на API, но не в админке).
+    readonly_fields = ('created_at', 'updated_at', 'quantity', 'reserved_for_orders')
     ordering = ('name',)
     list_select_related = ('company',)
 
@@ -26,7 +29,7 @@ class FinishedProductAdmin(admin.ModelAdmin):
     list_filter = ('company', 'category', 'unit', 'is_archived')
     search_fields = ('name', 'description')
     autocomplete_fields = ('company',)
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at', 'quantity', 'reserved_for_orders')
     ordering = ('name',)
     list_select_related = ('company',)
 

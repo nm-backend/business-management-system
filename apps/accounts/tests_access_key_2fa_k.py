@@ -25,8 +25,11 @@ class AccessKey2FAServiceTests(TestCase):
         self.company = Company.objects.create(name='K2FA', is_active=True)
         self.admin = User.objects.create_user(username='k2_admin', password='p',
                                                role=User.Role.ADMIN, company=self.company)
-        self.worker = User.objects.create_user(username='k2_worker', password='OldPass123!',
+        # Приглашённый без пароля — только такому выдаётся ключ.
+        self.worker = User.objects.create_user(username='k2_worker',
                                                role=User.Role.WORKER, company=self.company)
+        self.worker.set_unusable_password()
+        self.worker.save()
 
     def test_issue_refused_when_2fa_enabled(self):
         enable_2fa(self.worker)
@@ -41,7 +44,7 @@ class AccessKey2FAServiceTests(TestCase):
         self.assertIsNone(user)
         self.assertEqual(error, 'two_factor_enabled')
         self.worker.refresh_from_db()
-        self.assertTrue(self.worker.check_password('OldPass123!'))  # пароль НЕ сменён
+        self.assertFalse(self.worker.has_usable_password())  # пароль НЕ установлен
 
     def test_redeem_still_works_without_2fa(self):
         key = issue_access_key(user=self.worker, created_by=self.admin)
@@ -55,8 +58,10 @@ class AccessKey2FAEndpointTests(TestCase):
         self.company = Company.objects.create(name='K2FAE', is_active=True)
         self.owner = User.objects.create_user(username='k2e_owner', password='p',
                                                role=User.Role.OWNER, company=self.company)
-        self.worker = User.objects.create_user(username='k2e_worker', password='OldPass123!',
+        self.worker = User.objects.create_user(username='k2e_worker',
                                                role=User.Role.WORKER, company=self.company)
+        self.worker.set_unusable_password()
+        self.worker.save()
 
     def test_issue_endpoint_returns_400_for_2fa_worker(self):
         enable_2fa(self.worker)
@@ -73,4 +78,4 @@ class AccessKey2FAEndpointTests(TestCase):
                         {'access_key': key.key, 'new_password': 'NewPass123!x'}, format='json')
         self.assertEqual(resp.status_code, 400)
         self.worker.refresh_from_db()
-        self.assertTrue(self.worker.check_password('OldPass123!'))
+        self.assertFalse(self.worker.has_usable_password())

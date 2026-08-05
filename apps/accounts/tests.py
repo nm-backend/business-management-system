@@ -121,6 +121,10 @@ def _company(name):
 class AccessKeyModelTests(TestCase):
     def setUp(self):
         self.company, self.owner, self.admin, self.worker = _company('Alpha')
+        # Ключи выпускаются только приглашённым (без рабочего пароля) — см.
+        # запрет has_usable_password в issue_access_key.
+        self.worker.set_unusable_password()
+        self.worker.save()
 
     def test_code_format(self):
         key = issue_access_key(user=self.worker, created_by=self.owner)
@@ -155,6 +159,8 @@ class AccessKeyModelTests(TestCase):
 class AccessKeyServiceTests(TestCase):
     def setUp(self):
         self.company, self.owner, self.admin, self.worker = _company('Beta')
+        self.worker.set_unusable_password()
+        self.worker.save()
 
     def test_redeem_activates_and_is_one_time(self):
         self.worker.set_unusable_password()
@@ -199,9 +205,17 @@ class AccessKeyAPITests(TestCase):
         self.api = APIClient()
 
     def test_owner_issues_key_for_worker(self):
+        # Активный сотрудник с паролем не получает ключ (захват аккаунта).
         self.api.force_authenticate(self.owner)
         resp = self.api.post(f'/api/v1/accounts/users/{self.worker.id}/access_key/')
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status_code, 400)
+        # Приглашённый (без пароля) — получает.
+        invited = User.objects.create_user(username='gamma_invited',
+                                           role=User.Role.WORKER, company=self.company)
+        invited.set_unusable_password()
+        invited.save()
+        resp = self.api.post(f'/api/v1/accounts/users/{invited.id}/access_key/')
+        self.assertEqual(resp.status_code, 201, resp.data)
         self.assertTrue(resp.data['key'].startswith('SKP-'))
         self.assertEqual(resp.data['status'], 'active')
 
@@ -222,8 +236,12 @@ class AccessKeyAPITests(TestCase):
         self.assertEqual(resp.status_code, 403)
 
     def test_verify_and_redeem_flow_then_login(self):
+        invited = User.objects.create_user(username='gamma_invited2',
+                                           role=User.Role.WORKER, company=self.company)
+        invited.set_unusable_password()
+        invited.save()
         self.api.force_authenticate(self.owner)
-        issued = self.api.post(f'/api/v1/accounts/users/{self.worker.id}/access_key/').data
+        issued = self.api.post(f'/api/v1/accounts/users/{invited.id}/access_key/').data
         code = issued['key']
 
         pub = APIClient()
@@ -236,7 +254,7 @@ class AccessKeyAPITests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn('tokens', r.data)
         # employee can now log in with the chosen password
-        login = pub.post('/api/v1/accounts/login/', {'username': self.worker.username, 'password': 'Str0ng!Pass9'}, format='json')
+        login = pub.post('/api/v1/accounts/login/', {'username': invited.username, 'password': 'Str0ng!Pass9'}, format='json')
         self.assertEqual(login.status_code, 200)
 
     def test_verify_invalid_code(self):
@@ -337,6 +355,8 @@ class AdminSmokeTests(TestCase):
     """Проверяет, что кастомные админки открываются без ошибок (500)."""
     def setUp(self):
         self.company, self.owner, self.admin, self.worker = _company('Theta')
+        self.worker.set_unusable_password()
+        self.worker.save()
         issue_access_key(user=self.worker, created_by=self.owner)
         self.superadmin = User.objects.create_superuser(username='root', password='pw12345X')
         self.client = Client()

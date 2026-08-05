@@ -738,9 +738,13 @@ class ExportReportAPIView(APIView):
         if report_type == 'material_shortage':
             company_id = request.user.company_id
             rows = [['Номи', 'Тури', 'Миқдор', 'Бирлик', 'Мин. қолдиқ', 'Камомад']]
+            # Считаем по ДОСТУПНОМУ остатку (минус резерв под заказы), как
+            # карточка склада (is_low_stock): иначе материал «в норме» по
+            # физическому остатку, но целиком зарезервированный, не попадает
+            # в отчёт о нехватке.
             for m in RawMaterial.objects.filter(
-                company_id=company_id, is_archived=False, quantity__lt=F('min_stock')
-            ).order_by('name'):
+                company_id=company_id, is_archived=False,
+            ).annotate(available=F('quantity') - F('reserved_for_orders')).filter(available__lt=F('min_stock')).order_by('name'):
                 rows.append([
                     m.name, m.stone_type, m.quantity, m.get_unit_display(),
                     m.min_stock, m.min_stock - m.quantity

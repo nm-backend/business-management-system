@@ -220,6 +220,12 @@ class EmployeeViewSet(viewsets.ReadOnlyModelViewSet):
             company_id=user.company_id, is_active=True,
         ).exclude(pk=user.pk).exclude(role=User.Role.SUPERADMIN)
 
+        # Флаг can_see_other_workers (у admin и worker, owner видит всегда):
+        # без него в контактах видны только admin/owner/manager — работники
+        # скрыты, и личный диалог с ними не начнётся (зеркально валидатору).
+        if not user.is_owner and not user.can_see_other_workers:
+            qs = qs.exclude(role=User.Role.WORKER)
+
         search = self.request.query_params.get('search')
         if search:
             # Транслит: «Gulnora» находит «Гулнора» и наоборот (apps/core/translit.py).

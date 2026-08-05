@@ -4,6 +4,9 @@ Core models - базовые абстрактные модели для всег
 Этот модуль содержит фундаментальные модели, которые используются
 в других приложениях как базовые классы для обеспечения единообразия.
 """
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -133,7 +136,9 @@ class ExchangeRate(TimestampedModel):
     """
     from_currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name='rates_from', verbose_name='Из валюты')
     to_currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name='rates_to', verbose_name='В валюту')
-    rate = models.DecimalField(max_digits=12, decimal_places=6, help_text='Exchange rate', verbose_name='Курс')
+    rate = models.DecimalField(max_digits=12, decimal_places=6,
+                               validators=[MinValueValidator(Decimal('0.000001'))],
+                               help_text='Exchange rate', verbose_name='Курс')
     effective_date = models.DateField(db_index=True, verbose_name='Действует с')
 
     class Meta:

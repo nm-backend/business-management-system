@@ -50,6 +50,8 @@ class ChatMessageCreateSerializer(serializers.ModelSerializer):
         value = (value or '').strip()
         if not value:
             raise serializers.ValidationError('Сообщение не может быть пустым.')
+        if len(value) > 10000:
+            raise serializers.ValidationError('Сообщение слишком длинное (максимум 10000 символов).')
         return value
 
     def validate_conversation(self, conversation):
@@ -160,6 +162,10 @@ class StartDirectSerializer(serializers.Serializer):
         except User.DoesNotExist:
             raise serializers.ValidationError('Сотрудник не найден.')
         if other.company_id != me.company_id or other.is_superadmin:
+            raise serializers.ValidationError('Сотрудник не найден.')
+        # Работники скрыты от тех, у кого нет флага can_see_other_workers
+        # (owner видит всех) — зеркально списку контактов EmployeeViewSet.
+        if other.role == User.Role.WORKER and not me.is_owner and not me.can_see_other_workers:
             raise serializers.ValidationError('Сотрудник не найден.')
         # Работник не может писать хозяину без разрешения.
         if me.role == User.Role.WORKER and other.role == User.Role.OWNER and not me.can_write_to_owner:

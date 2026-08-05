@@ -20,6 +20,7 @@ from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, Valida
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
 from .fingerprint_jwt import RefreshToken as FingerprintRefreshToken
 from apps.audit.models import AuditLog
@@ -268,10 +269,15 @@ class LogoutView(APIView):
         try:
             refresh_token = request.data.get('refresh')
             if refresh_token:
-                token = RefreshToken(refresh_token)
+                token = SimpleJWTRefreshToken(refresh_token)
                 token.blacklist()
-        except Exception:
-            pass
+        except (InvalidToken, TokenError):
+            # Токен не валиден — черный список его не примет. Не глотаем
+            # молча: клиент должен знать, что сессия не заблокирована.
+            return Response(
+                {'detail': 'Invalid refresh token'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         write_audit_log(
             action=AuditLog.Action.LOGOUT,
             actor=request.user,

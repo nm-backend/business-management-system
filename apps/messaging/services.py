@@ -6,6 +6,7 @@ Messaging services — уведомления и операции корпора
 права, изоляция), а затем broadcast_message() доставляет его онлайн-
 участникам мгновенно.
 """
+from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
 
@@ -103,15 +104,38 @@ def get_or_create_direct(company, user_a, user_b):
     if existing:
         return existing, False
 
-    conversation = Conversation.objects.create(
-        company_id=company_id,
-        kind=Conversation.Kind.DIRECT,
-        created_by=user_a,
-    )
-    ConversationParticipant.objects.bulk_create([
-        ConversationParticipant(conversation=conversation, user=user_a, last_read_at=timezone.now()),
-        ConversationParticipant(conversation=conversation, user=user_b),
-    ])
+    # Два параллельных запроса оба могли не найти диалог и создать два.
+    # Блокируем строки обоих пользователей: создание пары сериализуется,
+    # второй поток после блокировки увидит диалог, созданный первым.
+    from apps.accounts.models import User
+    with transaction.atomic():
+        User.objects.select_for_update().filter(pk__in=[user_a.pk, user_b.pk]).order_by('pk').first()
+        convs_with_a = ConversationParticipant.objects.filter(
+            user=user_a,
+            conversation__company_id=company_id,
+            conversation__kind=Conversation.Kind.DIRECT,
+        ).values_list('conversation_id', flat=True)
+        shared_ids = ConversationParticipant.objects.filter(
+            user=user_b, conversation_id__in=convs_with_a,
+        ).values_list('conversation_id', flat=True)
+        existing = (
+            Conversation.objects.filter(id__in=shared_ids)
+            .annotate(n=Count('participants'))
+            .filter(n=2)
+            .first()
+        )
+        if existing:
+            return existing, False
+
+        conversation = Conversation.objects.create(
+            company_id=company_id,
+            kind=Conversation.Kind.DIRECT,
+            created_by=user_a,
+        )
+        ConversationParticipant.objects.bulk_create([
+            ConversationParticipant(conversation=conversation, user=user_a, last_read_at=timezone.now()),
+            ConversationParticipant(conversation=conversation, user=user_b),
+        ])
     return conversation, True
 
 
@@ -153,22 +177,28 @@ def broadcast_message(message):
     except Exception:  # channels не установлен — тихо выходим
         return
 
-    channel_layer = get_channel_layer()
-    if channel_layer is None:
-        return
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return
 
-    payload = {
-        'type': 'chat.message',  # -> ChatConsumer.chat_message
-        'message': {
-            'id': message.id,
-            'conversation': message.conversation_id,
-            'conversation_kind': message.conversation.kind,
-            'company': message.company_id,
-            'sender': message.sender_id,
-            'sender_name': message.sender.full_name or message.sender.username,
-            'content': message.content,
-            'created_at': message.created_at.isoformat(),
-        },
-    }
-    for uid in recipient_user_ids(message.conversation):
-        async_to_sync(channel_layer.group_send)(f'chat_user_{uid}', payload)
+        payload = {
+            'type': 'chat.message',  # -> ChatConsumer.chat_message
+            'message': {
+                'id': message.id,
+                'conversation': message.conversation_id,
+                'conversation_kind': message.conversation.kind,
+                'company': message.company_id,
+                'sender': message.sender_id,
+                'sender_name': message.sender.full_name or message.sender.username,
+                'content': message.content,
+                'created_at': message.created_at.isoformat(),
+            },
+        }
+        for uid in recipient_user_ids(message.conversation):
+            async_to_sync(channel_layer.group_send)(f'chat_user_{uid}', payload)
+    except Exception:
+        # Канальный слой (Redis) недоступен/упал — сообщение уже сохранено,
+        # доедет при следующей загрузке. Не роняем запрос: клиент иначе
+        # получил бы 500 и отправил бы сообщение повторно (дубликат).
+        return

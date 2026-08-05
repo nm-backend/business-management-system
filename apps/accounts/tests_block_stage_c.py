@@ -43,7 +43,13 @@ class _Base(TestCase):
 
 
 class RedeemBlockedTests(_Base):
+    def _invite(self, user):
+        """Переводит сотрудника в статус приглашённого (без пароля)."""
+        user.set_unusable_password()
+        user.save()
+
     def test_redeem_does_not_reactivate_blocked_user(self):
+        self._invite(self.worker)
         key = issue_access_key(user=self.worker, created_by=self.owner)  # ключ выдан до блокировки
         self.worker.is_active = False
         self.worker.blocked_by_owner = True
@@ -57,6 +63,7 @@ class RedeemBlockedTests(_Base):
 
     def test_issue_key_to_blocked_user_raises(self):
         # Блокировка админом = blocked_by_owner (так её ставит toggle_active).
+        self._invite(self.worker)
         self.worker.is_active = False
         self.worker.blocked_by_owner = True
         self.worker.save(update_fields=['is_active', 'blocked_by_owner'])
@@ -65,6 +72,7 @@ class RedeemBlockedTests(_Base):
 
     def test_issue_key_to_invited_inactive_user_still_works(self):
         """Приглашённый (is_active=False, но НЕ blocked_by_owner) — ключ выдаётся."""
+        self._invite(self.worker)
         self.worker.is_active = False  # до-активационный статус, не блокировка
         self.worker.save(update_fields=['is_active'])
         key = issue_access_key(user=self.worker, created_by=self.owner)

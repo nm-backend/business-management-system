@@ -241,6 +241,13 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             raise PermissionDenied('Product must belong to your company')
         if task and task.company_id != user.company_id:
             raise PermissionDenied('Task must belong to your company')
+        # Задача привязана к конкретному работнику; работа — к исполнителю.
+        # Работник A, привязавший работу к задаче B, при подтверждении
+        # «завершал» бы чужую задачу (заказ уходил в READY), а деньги получал
+        # сам. Проверка после подстановки worker (для работника это он сам).
+        work_worker = worker or user
+        if task and task.worker_id != work_worker.id:
+            raise PermissionDenied("Task must belong to the work's worker")
         # Owner/admin не может записать работу на сотрудника чужой компании.
         if worker and worker.company_id != user.company_id:
             raise PermissionDenied('Worker must belong to your company')

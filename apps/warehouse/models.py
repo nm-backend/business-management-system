@@ -192,10 +192,12 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     name = models.CharField(max_length=255, verbose_name='Название')
     category = models.CharField(max_length=100, blank=True, verbose_name='Категория')
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.IZDELIE, verbose_name='Единица измерения')
-    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Количество')
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0,
+                                   validators=[MinValueValidator(Decimal('0'))], verbose_name='Количество')
     photo = models.ImageField(upload_to='products/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
     description = models.TextField(blank=True, verbose_name='Описание')
-    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name='Минимальный остаток')
+    min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0,
+                                    validators=[MinValueValidator(Decimal('0'))], verbose_name='Минимальный остаток')
     reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0,
                                         validators=[MinValueValidator(Decimal('0'))], verbose_name='Зарезервировано под заказы')
     arrival_date = models.DateField(null=True, blank=True, verbose_name='Дата поступления')

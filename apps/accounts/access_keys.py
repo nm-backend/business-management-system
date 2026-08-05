@@ -23,6 +23,12 @@ def issue_access_key(*, user, created_by=None, expires_in_days=None):
     """
     if user.is_superadmin or user.company_id is None:
         raise ValueError('Access keys can be issued only to company employees.')
+    # Ключ сбрасывает пароль без подтверждения старого (redeem делает
+    # set_password). Для УЖЕ активированного сотрудника (есть рабочий пароль)
+    # это тихий захват аккаунта тем, кто увидел ключ. Приглашённые создаются
+    # с unusable-паролем — им ключ и предназначен.
+    if user.has_usable_password():
+        raise ValueError('Cannot issue an access key to an already activated account.')
     # Заблокированному АДМИНИСТРАТОРОМ сотруднику ключ не выдаём (иначе обход
     # блокировки через публичный redeem). Внимание: is_active=False сам по себе
     # НЕ означает блокировку — так же выглядит приглашённый, ещё не активированный

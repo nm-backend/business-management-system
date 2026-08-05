@@ -72,15 +72,20 @@ class FingerprintTokenRefreshSerializer(TokenRefreshSerializer):
         data = super().validate(attrs)
 
         # Вычитываем fingerprint из СТАРОГО токена (который был в запросе)
-        # и встраиваем в НОВЫЙ токен, который сформировал super().validate()
+        # и встраиваем в НОВЫЙ токен, который сформировал super().validate().
+        # Источник — claim старого токена, а НЕ запрос: иначе клиент без
+        # fingerprint получил бы вращённый токен без защиты, и кража старого
+        # токена стала бы безвозвратной (защита деградирует навсегда).
         old_token_str = attrs.get('refresh', '')
-        fingerprint = self.context.get('fingerprint', '')
 
-        if fingerprint and data.get('refresh'):
+        if data.get('refresh'):
             try:
-                new_token = RefreshToken(data['refresh'])
-                new_token.set_fingerprint(fingerprint)
-                data['refresh'] = str(new_token)
+                old_token = RefreshToken(old_token_str)
+                stored_fpr = old_token.payload.get(FINGERPRINT_CLAIM)
+                if stored_fpr:
+                    new_token = RefreshToken(data['refresh'])
+                    new_token.payload[FINGERPRINT_CLAIM] = stored_fpr
+                    data['refresh'] = str(new_token)
             except Exception:
                 # Если не смогли — отдаём токен без fingerprint (безопасность
                 # снижена, но не сломана — старый токен уже в blacklist'е).
@@ -114,15 +119,22 @@ class FingerprintTokenRefreshView(BaseTokenRefreshView):
         fingerprint = request.data.get('fingerprint', '')
         refresh_token_str = request.data.get('refresh', '')
 
-        # Шаг 1: Если fingerprint предоставлен — валидируем его.
-        # Если fingerprint не совпал с тем, что в токене — кража.
-        # Если fingerprint не предоставлен — всё равно обрабатываем запрос,
-        # но без дополнительной защиты (обратная совместимость).
-        if fingerprint and refresh_token_str:
+        # Шаг 1: валидируем fingerprint, если токен его требует.
+        # Токен, выпущенный с защитой (claim fpr), обновить БЕЗ fingerprint
+        # нельзя: иначе кража токена обходилась бы простым удалением поля
+        # из запроса, а вращённый токен терял бы защиту навсегда.
+        # Токены без fpr (выпущенные до внедрения фичи) обновляются как раньше.
+        if refresh_token_str:
             try:
                 token = RefreshToken(refresh_token_str)
-                if not token.check_fingerprint(fingerprint):
-                    return self._handle_theft(token)
+                if token.payload.get(FINGERPRINT_CLAIM):
+                    if not fingerprint:
+                        return Response(
+                            {'detail': 'fingerprint is required for this token'},
+                            status=status.HTTP_401_UNAUTHORIZED,
+                        )
+                    if not token.check_fingerprint(fingerprint):
+                        return self._handle_theft(token)
             except (InvalidToken, TokenError):
                 return Response(
                     {'detail': 'Token is invalid or expired'},
@@ -130,8 +142,8 @@ class FingerprintTokenRefreshView(BaseTokenRefreshView):
                 )
 
         # Шаг 2: Вращаем токен через SimpleJWT (стандартный refresh).
-        # Сериализатор FingerprintTokenRefreshSerializer сам встроит fingerprint
-        # в новый токен (если fingerprint предоставлен).
+        # Сериализатор FingerprintTokenRefreshSerializer сам перенесёт
+        # fingerprint из старого токена в новый.
         return super().post(request, *args, **kwargs)
 
     def _handle_theft(self, token):

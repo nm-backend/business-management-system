@@ -252,6 +252,7 @@ class OrderViewSet(CompanyScopedViewSet):
     def deliver(self, request, pk=None):
         """Выдаёт заказ клиенту; при полной оплате клиент уходит в архив."""
         order = self.get_object()
+        old_status = order.status
         # Строка заказа блокируется на всё время выдачи: два параллельных
         # deliver иначе оба проходили проверку статуса и каждый списывал товар
         # (record_outgoing) — остаток падал вдвое, в журнале дублировалась
@@ -292,9 +293,13 @@ class OrderViewSet(CompanyScopedViewSet):
                     # иначе занизил бы цифру в сообщении — он отложен как раз под него.
                     order.product.refresh_from_db()
                     available = order.product.quantity - (order.product.reserved_for_orders or 0)
-                    # Не хватило товара — возвращаем резерв и не выдаём: иначе
-                    # остаток ушёл бы в минус, а клиент получил бы то, чего нет.
+                    # Не хватило товара — возвращаем резервы (и товара, и сырья по
+                    # рецепту) и не выдаём: иначе остаток ушёл бы в минус, а клиент
+                    # получил бы то, чего нет. Раньше возвращался только резерв
+                    # товара — сырьё оставалось «зарезервированным» навсегда, и
+                    # следующие заказы не могли перебронировать материал.
                     order.reserve_product()
+                    order.reserve_raw_materials()
                     # Сообщение из record_outgoing говорит про «списание» и
                     # «резерв» — на выдаче это непонятно. Особенно когда клиент
                     # уже оплатил и пришёл забирать раньше срока: он видит отказ
@@ -329,7 +334,10 @@ class OrderViewSet(CompanyScopedViewSet):
             action=AuditLog.Action.UPDATE,
             actor=request.user,
             target=order,
-            changes={'status': {'old': 'ready', 'new': 'delivered'}},
+            # Фактический исходный статус, а не хардкод 'ready': выдача доступна
+            # из любого терминального-кроме-выданного статуса (решение e8fc29b),
+            # и журнал обязан отражать реальный переход.
+            changes={'status': {'old': old_status, 'new': 'delivered'}},
             request=request,
         )
         return Response(self.get_serializer(order).data)
