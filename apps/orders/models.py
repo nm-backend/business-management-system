@@ -175,7 +175,10 @@ class Order(TimestampedModel, SoftDeleteModel):
         from apps.warehouse.models import RawMaterial
 
         with transaction.atomic():
-            for material, required in self._recipe_requirements():
+            # Сортируем материалы по pk: два параллельных заказа с рецептами,
+            # где материалы перечислены в разном порядке, иначе блокировали бы
+            # строки в разной последовательности и упирались в дедлок.
+            for material, required in sorted(self._recipe_requirements(), key=lambda item: item[0].pk):
                 locked = RawMaterial.objects.select_for_update().get(pk=material.pk)
                 locked.reserved_for_orders = (
                     (locked.reserved_for_orders or Decimal('0')) + required
@@ -195,7 +198,8 @@ class Order(TimestampedModel, SoftDeleteModel):
         from apps.warehouse.models import RawMaterial
 
         with transaction.atomic():
-            for material, required in self._recipe_requirements(product_id, quantity):
+            # Тот же фиксированный порядок блокировок, что и в reserve_raw_materials.
+            for material, required in sorted(self._recipe_requirements(product_id, quantity), key=lambda item: item[0].pk):
                 locked = RawMaterial.objects.select_for_update().get(pk=material.pk)
                 locked.reserved_for_orders = max(
                     (locked.reserved_for_orders or Decimal('0')) - required, Decimal('0')

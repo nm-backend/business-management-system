@@ -17,7 +17,7 @@ import datetime
 from apps.core.validators import parse_date_param, parse_int_param
 import io
 
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Max, Sum
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -182,7 +182,9 @@ def owner_analytics_data(company_id, date_from, date_to):
         .aggregate(s=Sum('amount'))['s']
     )
 
-    client_debts = money(Client.objects.filter(company_id=company_id).aggregate(s=Sum('debt'))['s'])
+    client_debts = money(Client.objects.filter(
+        company_id=company_id, is_archived=False,
+    ).aggregate(s=Sum('debt'))['s'])
     worker_earned = money(WorkRecord.objects.filter(
         company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED,
     ).aggregate(s=Sum('labor_cost'))['s'])
@@ -198,18 +200,22 @@ def owner_analytics_data(company_id, date_from, date_to):
         - worker_paid_total
     )
 
+    # Группировка по id, а не по имени: два товара с одинаковым именем иначе
+    # сливались в одну строку с суммированием, а переименованный товар/работник
+    # раздваивался на две строки.
     top_products = list(
         Order.objects.filter(company_id=company_id, status=Order.Status.DELIVERED, product__isnull=False,
                              delivered_at__date__range=(date_from, date_to))
-        .values(name=F('product__name'))
-        .annotate(total_quantity=Sum('quantity'), orders=Count('id'))
+        .values('product_id')
+        .annotate(name=Max('product__name'), total_quantity=Sum('quantity'), orders=Count('id'))
         .order_by('-total_quantity')[:5]
     )
     top_worker = (
         WorkRecord.objects.filter(company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED,
                                   confirmed_at__date__range=(date_from, date_to))
-        .values(name=F('worker__full_name'), username=F('worker__username'))
-        .annotate(total_quantity=Sum('quantity'), works=Count('id'))
+        .values('worker_id')
+        .annotate(name=Max('worker__full_name'), username=Max('worker__username'),
+                  total_quantity=Sum('quantity'), works=Count('id'))
         .order_by('-total_quantity')
         .first()
     )
@@ -524,6 +530,26 @@ def xlsx_response(rows, filename, sheet_title):
     return response
 
 
+def _csv_safe_cell(cell):
+    """Защита от Formula Injection для CSV.
+
+    В отличие от xlsx, Excel интерпретирует и '-' как начало формулы, но
+    отрицательные суммы в отчётах — числа (Decimal/int), их не трогаем.
+    Строки ('=HYPERLINK(...)', '=1+2', '-1+2' и т.п.) префиксуем апострофом.
+    """
+    if cell is None:
+        return ''
+    if isinstance(cell, str):
+        starts_formula = (
+            cell[:1] in ('=', '+', '@', '\t', '\r', '\n')
+            or (cell[:1] == '-' and len(cell) > 1 and cell[1].isdigit())
+        )
+        if starts_formula:
+            return "'" + cell
+        return cell
+    return str(cell)
+
+
 def csv_response(rows, filename):
     """Собирает CSV из списка строк и возвращает как HTTP ответ.
 
@@ -535,7 +561,7 @@ def csv_response(rows, filename):
 
     buffer = io.StringIO()
     writer = csv.writer(buffer, delimiter=';')
-    writer.writerows([[str(cell) if cell is not None else '' for cell in row] for row in rows])
+    writer.writerows([_csv_safe_cell(cell) for cell in row] for row in rows)
     response = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
@@ -636,6 +662,11 @@ class OwnerFinanceExportView(APIView):
             ['Ялпи фойда', data['gross_profit']],
             ['Харажатлар', data['expenses_total']],
             ['Иш ҳақилар', data['salaries']],
+            # Выплаты работникам — отдельный отток (не Expense): без этой строки
+            # «Харажатлар» + «Иш ҳақилар» не сходились с «Соф фойда», которая их
+            # вычитает (см. owner_analytics_data: net_profit = revenue - cogs -
+            # expenses - worker_payments).
+            ['Ишчиларга тўловлар', data['worker_payments']],
             ['Солиқлар', data['taxes']],
             ['Йўқотишлар', data['losses']],
             ['Эгаси чиқими', data['owner_withdrawal']],
@@ -777,7 +808,7 @@ class ExportReportAPIView(APIView):
             ).annotate(available=F('quantity') - F('reserved_for_orders')).filter(available__lt=F('min_stock')).order_by('name'):
                 rows.append([
                     m.name, m.stone_type, m.quantity, m.get_unit_display(),
-                    m.min_stock, m.min_stock - m.quantity
+                    m.min_stock, m.min_stock - m.available
                 ])
             format_type = request.query_params.get('format_type', 'xlsx')
             if format_type == 'pdf':

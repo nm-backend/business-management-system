@@ -90,45 +90,68 @@ class OrderViewSet(CompanyScopedViewSet):
     def perform_create(self, serializer):
         company = self.request.user.company
         self._assert_related_own_company(serializer.validated_data)
-        order = serializer.save(company=company)
-        # Товар и сырьё по его рецепту резервируются под заказ сразу при создании.
-        order.reserve_product()
-        order.reserve_raw_materials()
-        order.client.recalculate_financials()
-        notify_staff(
-            company,
-            Notification.NotificationType.NEW_ORDER,
-            'Янги буюртма',
-            f'#{order.id} {order.client.name}: '
-            f'{order.product.name if order.product else order.custom_product_name} x {order.quantity}',
-            order=order,
-        )
-        write_audit_log(
-            action=AuditLog.Action.CREATE,
-            actor=self.request.user,
-            target=order,
-            request=self.request,
-        )
+        # Всё в одной транзакции: раньше заказ сохранялся, а резерв сырья падал
+        # (например, материал удалили между валидацией и резервированием) — 500
+        # после коммита, заказ оставался без резерва, клиент ретраил и плодил
+        # дубликаты. Теперь сбой откатывает создание целиком.
+        with transaction.atomic():
+            order = serializer.save(company=company)
+            # Товар и сырьё по его рецепту резервируются под заказ сразу при создании.
+            order.reserve_product()
+            order.reserve_raw_materials()
+            order.client.recalculate_financials()
+            notify_staff(
+                company,
+                Notification.NotificationType.NEW_ORDER,
+                'Янги буюртма',
+                f'#{order.id} {order.client.name}: '
+                f'{order.product.name if order.product else order.custom_product_name} x {order.quantity}',
+                order=order,
+            )
+            write_audit_log(
+                action=AuditLog.Action.CREATE,
+                actor=self.request.user,
+                target=order,
+                request=self.request,
+            )
 
     def perform_update(self, serializer):
         self._assert_related_own_company(serializer.validated_data)
-        # Старый резерв снимаем по прежним product/quantity: если товар или
-        # количество изменились, иначе резерв «прилипнет» к старому значению.
-        old_product_id = serializer.instance.product_id
-        old_quantity = serializer.instance.quantity
-        changes = collect_model_changes(serializer.instance, serializer.validated_data)
-        order = serializer.save()
-        if order.product_id != old_product_id or order.quantity != old_quantity:
-            order.release_product(product_id=old_product_id, quantity=old_quantity)
-            order.release_raw_materials(product_id=old_product_id, quantity=old_quantity)
-            # Выданный/отменённый заказ резерв не «заводит» заново: deliver/cancel
-            # уже сняли его, и правка количества не должна воскрешать резерв.
-            if order.status not in (Order.Status.DELIVERED, Order.Status.CANCELLED):
-                order.reserve_product()
-                order.reserve_raw_materials()
-        if 'total_amount' in changes:
-            order.update_payment_status()
-        order.client.recalculate_financials()
+        # Строка заказа блокируется на всю правку: release/reserve — check-then-act,
+        # и два параллельных PATCH (смена товара/количества) иначе снимали бы
+        # резерв по одному снапшоту — старый резерв «прилипал» навсегда, а
+        # total_amount в гонке с apply_payment_amount позволял оплату сверх долга.
+        with transaction.atomic():
+            locked = Order.objects.select_for_update().get(pk=serializer.instance.pk)
+            old_product_id = locked.product_id
+            old_quantity = locked.quantity
+            old_client_id = locked.client_id
+            changes = collect_model_changes(locked, serializer.validated_data)
+            order = serializer.save()
+            # Старый резерв снимаем по прежним product/quantity: если товар или
+            # количество изменились, иначе резерв «прилипнет» к старому значению.
+            if order.product_id != old_product_id or order.quantity != old_quantity:
+                order.release_product(product_id=old_product_id, quantity=old_quantity)
+                order.release_raw_materials(product_id=old_product_id, quantity=old_quantity)
+                # Выданный/отменённый заказ резерв не «заводит» заново: deliver/cancel
+                # уже сняли его, и правка количества не должна воскрешать резерв.
+                if order.status not in (Order.Status.DELIVERED, Order.Status.CANCELLED):
+                    order.reserve_product()
+                    order.reserve_raw_materials()
+            if 'total_amount' in changes:
+                order.update_payment_status()
+            order.client.recalculate_financials()
+            # Смена клиента заказа переносит сумму долга: без пересчёта старого
+            # клиента его total_orders_amount/debt «висели» с ушедшим заказом до
+            # любого следующего события.
+            if old_client_id and old_client_id != order.client_id:
+                from apps.clients.models import Client
+                try:
+                    old_client = Client.objects.get(pk=old_client_id)
+                except Client.DoesNotExist:
+                    old_client = None
+                if old_client:
+                    old_client.recalculate_financials()
         if changes:
             write_audit_log(
                 action=AuditLog.Action.UPDATE,
@@ -229,16 +252,22 @@ class OrderViewSet(CompanyScopedViewSet):
             Order.Status.AWAITING_CONFIRMATION: [Order.Status.READY],
         }
 
-        allowed = allowed_transitions.get(order.status, [])
-        if new_status not in allowed:
-            return Response(
-                {'error': f'Cannot transition from {order.status} to {new_status}'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # Строка блокируется, как в deliver/cancel: параллельные transition,
+        # deliver и cancel иначе читали один статус и писали поверх друг друга —
+        # отменённый заказ «воскресал» в рабочем статусе (резервы уже сняты,
+        # финансы пересчитаны), а выданный возвращался из DELIVERED в работу.
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            allowed = allowed_transitions.get(order.status, [])
+            if new_status not in allowed:
+                return Response(
+                    {'error': f'Cannot transition from {order.status} to {new_status}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        old_status = order.status
-        order.status = new_status
-        order.save(update_fields=['status', 'updated_at'])
+            old_status = order.status
+            order.status = new_status
+            order.save(update_fields=['status', 'updated_at'])
         write_audit_log(
             action=AuditLog.Action.UPDATE,
             actor=request.user,

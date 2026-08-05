@@ -37,6 +37,20 @@ class SkillSerializer(serializers.ModelSerializer):
         annotated = getattr(obj, 'employees_total', None)
         return annotated if annotated is not None else obj.employees.count()
 
+    def validate_name(self, value):
+        # Дубликат (company, name) ронял создание в IntegrityError — 500 вместо 400.
+        request = self.context.get('request')
+        company_id = getattr(request.user, 'company_id', None) if request else None
+        instance = getattr(self, 'instance', None)
+        duplicate = Skill.objects.filter(name=value)
+        if company_id:
+            duplicate = duplicate.filter(company_id=company_id)
+        if instance is not None:
+            duplicate = duplicate.exclude(pk=instance.pk)
+        if duplicate.exists():
+            raise serializers.ValidationError('Навык с таким названием уже существует.')
+        return value
+
 
 class CompanyScopedSkillsMixin:
     """
@@ -174,6 +188,13 @@ class UserCreateSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer
             except DjangoValidationError as error:
                 raise serializers.ValidationError({'password': error.messages}) from error
         return attrs
+
+    def validate_username(self, value):
+        # Без проверки дубликат username ронял создание в IntegrityError — 500
+        # вместо понятного 400 (журнал аудита ждал бы уже созданного юзера).
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError('Пользователь с таким логином уже существует.')
+        return value
 
     def create(self, validated_data):
         """

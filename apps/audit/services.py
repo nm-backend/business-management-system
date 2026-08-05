@@ -33,11 +33,29 @@ def get_client_ip(request):
     if request is None:
         return None
 
+    def _valid_ip(value):
+        # Поле AuditLog.ip_address — inet-колонка Postgres, и «unknown» (типичный
+        # ответ nginx, не распознавшего клиента) или мусор в X-Forwarded-For
+        # роняли сохранение в DataError — 500 на любом аудируемом эндпоинте,
+        # а на оплате откатывался весь платёж.
+        try:
+            import ipaddress
+            ipaddress.ip_address(value)
+            return True
+        except ValueError:
+            return False
+
     forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
     if forwarded_for:
-        return forwarded_for.split(',')[0].strip()
+        candidate = forwarded_for.split(',')[0].strip()
+        if _valid_ip(candidate):
+            return candidate
 
-    return request.META.get('REMOTE_ADDR')
+    remote_addr = request.META.get('REMOTE_ADDR')
+    if remote_addr and _valid_ip(remote_addr):
+        return remote_addr
+
+    return None
 
 
 def get_audit_object_type(instance):

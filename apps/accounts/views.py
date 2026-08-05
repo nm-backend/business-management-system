@@ -280,6 +280,13 @@ class LogoutView(APIView):
             refresh_token = request.data.get('refresh')
             if refresh_token:
                 token = SimpleJWTRefreshToken(refresh_token)
+                # Чужой токен не блэклистим: любой аутентифицированный мог бы
+                # завладеть чужим refresh (логи, сниффинг) и выбить жертву.
+                if token.get('user_id') != request.user.id:
+                    return Response(
+                        {'detail': 'Refresh token does not belong to the current user'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 token.blacklist()
         except (InvalidToken, TokenError):
             # Токен не валиден — черный список его не примет. Не глотаем
@@ -821,13 +828,19 @@ class UserViewSet(CompanyScopedViewSet):
             {'is_active': bool} - новое состояние активности
         """
         user = self.get_object()
-        if user.role == 'owner':
-            return Response({'error': 'Cannot deactivate owner account'}, status=status.HTTP_400_BAD_REQUEST)
-        user.is_active = not user.is_active
-        # Помечаем индивидуальную блокировку, чтобы разблокировка КОМПАНИИ её
-        # не сняла молча (blocked_by_owner=True сохраняется через company-каскад).
-        user.blocked_by_owner = not user.is_active
-        user.save(update_fields=['is_active', 'blocked_by_owner'])
+        # read-modify-write под блокировкой: два параллельных toggle_active
+        # иначе читали одно значение и писали одно и то же — одна операция
+        # «пропадала» (потерянное обновление).
+        from django.db import transaction
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=user.pk)
+            if user.role == 'owner':
+                return Response({'error': 'Cannot deactivate owner account'}, status=status.HTTP_400_BAD_REQUEST)
+            user.is_active = not user.is_active
+            # Помечаем индивидуальную блокировку, чтобы разблокировка КОМПАНИИ её
+            # не сняла молча (blocked_by_owner=True сохраняется через company-каскад).
+            user.blocked_by_owner = not user.is_active
+            user.save(update_fields=['is_active', 'blocked_by_owner'])
         if not user.is_active:
             # Блокировка — немедленно обрываем активные сессии (refresh-токены).
             blacklist_all_tokens(user)
@@ -940,6 +953,26 @@ class PushSubscriptionView(APIView):
         if not endpoint or not keys.get('p256dh') or not keys.get('auth'):
             return Response(
                 {'error': 'endpoint, keys.p256dh and keys.auth are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Endpoint — произвольный URL: без проверки сотрудник мог зарегистрировать
+        # свой сервер и получать на него все push-уведомления компании.
+        from urllib.parse import urlparse
+        parsed = urlparse(str(endpoint))
+        if parsed.scheme != 'https' or not parsed.netloc:
+            return Response(
+                {'error': 'endpoint must be a valid https URL'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Лимит подписок на пользователя: сломанный клиент, плодящий подписки
+        # при каждом входе, иначе раздувал рассылку (send_push_to_company идёт
+        # по ВСЕМ подпискам компании).
+        active_count = PushSubscription.objects.filter(
+            user=request.user, is_active=True,
+        ).count()
+        if active_count >= 5:
+            return Response(
+                {'error': 'Push subscription limit reached (5). Unsubscribe old devices first.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

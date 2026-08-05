@@ -61,20 +61,24 @@ class CompanyViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
         """Блокирует/разблокирует компанию вместе со всеми её пользователями."""
-        company = self.get_object()
-        company.is_active = not company.is_active
-        company.save(update_fields=['is_active'])
-        company_users = User.objects.filter(company=company)
-        if company.is_active:
-            # Разблокировка: восстанавливаем только тех, кого НЕ блокировал
-            # владелец индивидуально (иначе снятая компания-блокировка молча
-            # вернула бы доступ уволенному/отстранённому сотруднику).
-            company_users.filter(blocked_by_owner=False).update(is_active=True)
-        else:
-            # Блокировка: гасим всех и обрываем их активные сессии.
-            company_users.update(is_active=False)
-            for u in company_users:
-                blacklist_all_tokens(u)
+        # read-modify-write под блокировкой: два параллельных toggle иначе
+        # читали одно значение и писали одно и то же (потерянное обновление).
+        from django.db import transaction
+        with transaction.atomic():
+            company = Company.objects.select_for_update().get(pk=self.get_object().pk)
+            company.is_active = not company.is_active
+            company.save(update_fields=['is_active'])
+            company_users = User.objects.filter(company=company)
+            if company.is_active:
+                # Разблокировка: восстанавливаем только тех, кого НЕ блокировал
+                # владелец индивидуально (иначе снятая компания-блокировка молча
+                # вернула бы доступ уволенному/отстранённому сотруднику).
+                company_users.filter(blocked_by_owner=False).update(is_active=True)
+            else:
+                # Блокировка: гасим всех и обрываем их активные сессии.
+                company_users.update(is_active=False)
+                for u in company_users:
+                    blacklist_all_tokens(u)
         write_audit_log(
             action=AuditLog.Action.ACTIVATE if company.is_active else AuditLog.Action.DEACTIVATE,
             actor=request.user,
