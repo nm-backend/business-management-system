@@ -193,7 +193,8 @@
     "movement_adjustment": "Тўғирлаш",
     "outgoing_date": "Чиқарилган сана",
     "available": "Мавжуд",
-    "photo_replace_hint": "Жорий расмни алмаштириш учун файл танланг"
+    "photo_replace_hint": "Жорий расмни алмаштириш учун файл танланг",
+    "quantity_readonly_hint": "Кирим ва чиқим орқали ўзгаради — журналда из қолади"
   },
   "units": {
     "sht": "шт",

@@ -6,6 +6,33 @@ from apps.core.validators import validate_not_future
 from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
 
 
+class StockQuantityGuardMixin:
+    """
+    Остаток нельзя менять прямой правкой карточки — только операциями склада.
+
+    Воспроизведено: PATCH quantity менял остаток с 10 на 99999, а журнал
+    движений оставался пустым. То есть журнал переставал быть источником
+    правды: инвентаризацию не свести, себестоимость не проверить, а
+    злоупотребление внутри компании не отследить — при этом ни одна запись не
+    указывала, кто и когда изменил цифру.
+
+    При СОЗДАНИИ позиции количество задать можно: это стартовый остаток. Все
+    последующие изменения идут через приход, расход и корректировку
+    (`/incoming/`, `/outgoing/`) — каждая пишет StockMovement с автором и
+    причиной.
+    """
+
+    #: поля, которые после создания меняются только складскими операциями
+    quantity_guarded_fields = ('quantity',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance is not None:
+            for name in self.quantity_guarded_fields:
+                if name in self.fields:
+                    self.fields[name].read_only = True
+
+
 class IncomingSerializer(serializers.Serializer):
     """
     Вход операции прихода: сколько пришло, по какой цене и когда.
@@ -44,7 +71,7 @@ class OutgoingSerializer(serializers.Serializer):
         required=False,
     )
 
-class RawMaterialSerializer(serializers.ModelSerializer):
+class RawMaterialSerializer(StockQuantityGuardMixin, serializers.ModelSerializer):
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
     storage_zone_display = serializers.CharField(source='get_storage_zone_display', read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
@@ -72,7 +99,7 @@ class RawMaterialOwnerSerializer(RawMaterialSerializer):
     class Meta(RawMaterialSerializer.Meta):
         fields = RawMaterialSerializer.Meta.fields + ['purchase_price', 'avg_cost_price']
 
-class FinishedProductSerializer(serializers.ModelSerializer):
+class FinishedProductSerializer(StockQuantityGuardMixin, serializers.ModelSerializer):
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
     available_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)

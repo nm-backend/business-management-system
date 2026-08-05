@@ -415,7 +415,9 @@ class FinishedProductsComponent {
                     <div class="form-group"><label data-i18n="warehouse.unit"></label>
                         <select name="unit" class="form-control">${window.ui.unitOptions(p?.unit || 'izdelie')}</select></div>
                     <div class="form-group"><label data-i18n="warehouse.quantity"></label>
-                        <input name="quantity" type="number" step="0.001" min="0" class="form-control" required value="${p?.quantity ?? ''}"></div>
+                        <input name="quantity" type="number" step="0.001" min="0" class="form-control"
+                               ${p ? 'disabled' : 'required'} value="${p?.quantity ?? ''}">
+                        ${p ? `<small class="text-muted" data-i18n="warehouse.quantity_readonly_hint"></small>` : ''}</div>
                     <div class="form-group"><label data-i18n="warehouse.min_stock"></label>
                         <input name="min_stock" type="number" step="0.001" min="0" class="form-control" value="${p?.min_stock ?? 0}"></div>
                 </div>

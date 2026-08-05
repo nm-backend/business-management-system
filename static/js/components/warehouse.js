@@ -463,7 +463,9 @@ class WarehouseComponent {
                     <div class="form-group"><label data-i18n="warehouse.unit"></label>
                         <select name="unit" class="form-control">${window.ui.unitOptions(m?.unit || 'sht')}</select></div>
                     <div class="form-group"><label data-i18n="warehouse.quantity"></label>
-                        <input name="quantity" type="number" step="0.001" min="0" class="form-control" required value="${m?.quantity ?? ''}"></div>
+                        <input name="quantity" type="number" step="0.001" min="0" class="form-control"
+                               ${m ? 'disabled' : 'required'} value="${m?.quantity ?? ''}">
+                        ${m ? `<small class="text-muted" data-i18n="warehouse.quantity_readonly_hint"></small>` : ''}</div>
                     <div class="form-group"><label data-i18n="warehouse.min_stock"></label>
                         <input name="min_stock" type="number" step="0.001" min="0" class="form-control" value="${m?.min_stock ?? 0}"></div>
                 </div>
