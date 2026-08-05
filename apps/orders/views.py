@@ -10,6 +10,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
@@ -146,28 +147,39 @@ class OrderViewSet(CompanyScopedViewSet):
         оплату и не возвращал товар — удалением можно было обойти запрет
         отменять оплаченный заказ и потерять списанное.
 
+        Строка заказа блокируется (select_for_update): два параллельных cancel
+        выданного заказа иначе оба видели status=DELIVERED и каждый приходовал
+        товар обратно (record_incoming) — остаток завышался вдвое.
+
         Возвращает текст ошибки, если разбирать нельзя, иначе None.
         """
-        if (order.paid_amount or 0) > 0:
-            return ('По заказу есть оплата — отменить нельзя. '
-                    'Оформите возврат расходом «Возврат клиенту».')
-        # Выданный заказ уже списал товар. Отмена означает возврат от клиента:
-        # приходуем обратно со следом в журнале, иначе товар исчезает с бумаги.
-        if order.status == Order.Status.DELIVERED and order.product_id:
-            record_incoming(
-                target=order.product,
-                quantity=order.quantity,
-                user=actor,
-                reason=f'Возврат по отмене заказа #{order.id}',
-            )
-        else:
-            # Невыданный заказ ничего не списывал — возвращаем только резерв.
-            order.release_product()
-        order.release_raw_materials()
-        order.status = Order.Status.CANCELLED
-        order.save(update_fields=['status'])
-        order.client.recalculate_financials()
-        return None
+        with transaction.atomic():
+            locked = Order.objects.select_for_update().get(pk=order.pk)
+            if (locked.paid_amount or 0) > 0:
+                return ('По заказу есть оплата — отменить нельзя. '
+                        'Оформите возврат расходом «Возврат клиенту».')
+            if locked.status == Order.Status.CANCELLED:
+                return 'Заказ уже отменён.'
+            # Выданный заказ уже списал товар. Отмена означает возврат от клиента:
+            # приходуем обратно со следом в журнале, иначе товар исчезает с бумаги.
+            if locked.status == Order.Status.DELIVERED and locked.product_id:
+                record_incoming(
+                    target=locked.product,
+                    quantity=locked.quantity,
+                    user=actor,
+                    reason=f'Возврат по отмене заказа #{locked.id}',
+                )
+            else:
+                # Невыданный заказ ничего не списывал — возвращаем только резерв.
+                locked.release_product()
+            locked.release_raw_materials()
+            locked.status = Order.Status.CANCELLED
+            locked.save(update_fields=['status'])
+            locked.client.recalculate_financials()
+            # Синхронизируем переданный инстанс, чтобы ответ сериализатора
+            # показывал актуальный статус.
+            order.status = Order.Status.CANCELLED
+            return None
 
     def perform_destroy(self, instance):
         """Удаление запрещено - заказ отменяется и архивируется."""
@@ -240,71 +252,79 @@ class OrderViewSet(CompanyScopedViewSet):
     def deliver(self, request, pk=None):
         """Выдаёт заказ клиенту; при полной оплате клиент уходит в архив."""
         order = self.get_object()
-        if order.status == Order.Status.CANCELLED:
-            return Response({'detail': 'Order is cancelled'}, status=status.HTTP_400_BAD_REQUEST)
-        # Повторная выдача блокируется: заказ уже отдан клиенту, второй раз
-        # списать резерв/начислить долг нельзя (раньше выдачу можно было
-        # дёргать сколько угодно — дубли в audit и лишний пересчёт финансов).
-        if order.status == Order.Status.DELIVERED:
-            return Response({'detail': 'Order is already delivered'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        # Товар и сырьё ушли — резервы снимаем.
-        # Резерв снимаем ДО списания: record_outgoing разрешает списывать
-        # только доступное (остаток минус резерв), и собственный резерв заказа
-        # иначе заблокировал бы его же выдачу.
-        order.release_product()
-        order.release_raw_materials()
+        # Строка заказа блокируется на всё время выдачи: два параллельных
+        # deliver иначе оба проходили проверку статуса и каждый списывал товар
+        # (record_outgoing) — остаток падал вдвое, в журнале дублировалась
+        # «Выдача заказа №…». Под блокировкой повторный запрос видит
+        # DELIVERED и останавливается.
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            if order.status == Order.Status.CANCELLED:
+                return Response({'detail': 'Order is cancelled'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            # Повторная выдача блокируется: заказ уже отдан клиенту, второй раз
+            # списать резерв/начислить долг нельзя (раньше выдачу можно было
+            # дёргать сколько угодно — дубли в audit и лишний пересчёт финансов).
+            if order.status == Order.Status.DELIVERED:
+                return Response({'detail': 'Order is already delivered'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            # Товар и сырьё ушли — резервы снимаем.
+            # Резерв снимаем ДО списания: record_outgoing разрешает списывать
+            # только доступное (остаток минус резерв), и собственный резерв заказа
+            # иначе заблокировал бы его же выдачу.
+            order.release_product()
+            order.release_raw_materials()
 
-        # Списание со склада. Раньше выдача только снимала резерв: товар
-        # физически уезжал к клиенту, а остаток продолжал его показывать, и в
-        # журнале движений выдачи не было вообще. Отсюда расхождение остатков,
-        # журнала и статистики (замечание тестировщика).
-        if order.product_id:
-            try:
-                record_outgoing(
-                    target=order.product,
-                    quantity=order.quantity,
-                    user=request.user,
-                    reason=f'Выдача заказа #{order.id}',
+            # Списание со склада. Раньше выдача только снимала резерв: товар
+            # физически уезжал к клиенту, а остаток продолжал его показывать, и в
+            # журнале движений выдачи не было вообще. Отсюда расхождение остатков,
+            # журнала и статистики (замечание тестировщика).
+            if order.product_id:
+                try:
+                    record_outgoing(
+                        target=order.product,
+                        quantity=order.quantity,
+                        user=request.user,
+                        reason=f'Выдача заказа #{order.id}',
+                    )
+                except DRFValidationError:
+                    # Считаем доступное ДО возврата резерва: резерв этого же заказа
+                    # иначе занизил бы цифру в сообщении — он отложен как раз под него.
+                    order.product.refresh_from_db()
+                    available = order.product.quantity - (order.product.reserved_for_orders or 0)
+                    # Не хватило товара — возвращаем резерв и не выдаём: иначе
+                    # остаток ушёл бы в минус, а клиент получил бы то, чего нет.
+                    order.reserve_product()
+                    # Сообщение из record_outgoing говорит про «списание» и
+                    # «резерв» — на выдаче это непонятно. Особенно когда клиент
+                    # уже оплатил и пришёл забирать раньше срока: он видит отказ
+                    # и не понимает, что делать. Объясняем ситуацию по-человечески.
+                    return Response({
+                        'detail': (
+                            f'На складе недостаточно товара «{order.product.name}»: '
+                            f'нужно {order.quantity}, доступно {max(available, 0)}. '
+                            f'Подтвердите производство этой партии или оприходуйте товар '
+                            f'приходом — после этого выдача пройдёт.'
+                        ),
+                        'code': 'not_enough_stock',
+                        'required': str(order.quantity),
+                        'available': str(max(available, 0)),
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            order.status = Order.Status.DELIVERED
+            order.save(update_fields=['status'])
+            order.client.recalculate_financials()
+            # Архив только при полной оплате — клиент с долгом остаётся активным.
+            if order.payment_status == Order.PaymentStatus.PAID:
+                order.client.auto_archive()
+            else:
+                notify_staff(
+                    order.company_id,
+                    Notification.NotificationType.UNPAID_CLIENT,
+                    'Мижоз тўлов қилмади',
+                    f'Буюртма #{order.id}, мижоз: {order.client.name}',
+                    order=order,
                 )
-            except DRFValidationError:
-                # Считаем доступное ДО возврата резерва: резерв этого же заказа
-                # иначе занизил бы цифру в сообщении — он отложен как раз под него.
-                order.product.refresh_from_db()
-                available = order.product.quantity - (order.product.reserved_for_orders or 0)
-                # Не хватило товара — возвращаем резерв и не выдаём: иначе
-                # остаток ушёл бы в минус, а клиент получил бы то, чего нет.
-                order.reserve_product()
-                # Сообщение из record_outgoing говорит про «списание» и
-                # «резерв» — на выдаче это непонятно. Особенно когда клиент
-                # уже оплатил и пришёл забирать раньше срока: он видит отказ
-                # и не понимает, что делать. Объясняем ситуацию по-человечески.
-                return Response({
-                    'detail': (
-                        f'На складе недостаточно товара «{order.product.name}»: '
-                        f'нужно {order.quantity}, доступно {max(available, 0)}. '
-                        f'Подтвердите производство этой партии или оприходуйте товар '
-                        f'приходом — после этого выдача пройдёт.'
-                    ),
-                    'code': 'not_enough_stock',
-                    'required': str(order.quantity),
-                    'available': str(max(available, 0)),
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-        order.status = Order.Status.DELIVERED
-        order.save(update_fields=['status'])
-        order.client.recalculate_financials()
-        # Архив только при полной оплате — клиент с долгом остаётся активным.
-        if order.payment_status == Order.PaymentStatus.PAID:
-            order.client.auto_archive()
-        else:
-            notify_staff(
-                order.company_id,
-                Notification.NotificationType.UNPAID_CLIENT,
-                'Мижоз тўлов қилмади',
-                f'Буюртма #{order.id}, мижоз: {order.client.name}',
-                order=order,
-            )
         write_audit_log(
             action=AuditLog.Action.UPDATE,
             actor=request.user,

@@ -79,7 +79,7 @@ class FinishedProductsComponent {
             listEl.innerHTML = products.map((p) => `
                 <div class="list-row" data-id="${p.id}">
                     <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-                        <div class="thumb">${p.photo ? `<img src="${p.photo}" alt="">` : '🪟'}</div>
+                        <div class="thumb">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="">` : '🪟'}</div>
                         <div style="min-width:0;">
                             <div style="font-size:14px;font-weight:600;">${window.ui.escape(p.name)}</div>
                             <div class="text-sm text-muted">
@@ -119,7 +119,7 @@ class FinishedProductsComponent {
 
         const modal = window.ui.modal('warehouse.finished_title', `
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-                <div class="thumb" style="width:56px;height:56px;">${p.photo ? `<img src="${p.photo}" alt="">` : '🪟'}</div>
+                <div class="thumb" style="width:56px;height:56px;">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="">` : '🪟'}</div>
                 <div>
                     <div style="font-weight:600;font-size:16px;">${window.ui.escape(p.name)}</div>
                     <div class="text-sm text-muted">${window.ui.escape(p.category || '')}</div>

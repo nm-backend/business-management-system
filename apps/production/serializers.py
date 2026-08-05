@@ -87,7 +87,7 @@ class WorkRecordSerializer(serializers.ModelSerializer):
         model = WorkRecord
         fields = [
             'id', 'task', 'worker', 'worker_name',
-            'product', 'product_name', 'quantity', 'defect_quantity', 'unit',
+            'product', 'product_name', 'operation', 'quantity', 'defect_quantity', 'unit',
             'photo', 'photos', 'comment', 'status',
             'confirmed_by', 'confirmed_by_name', 'confirmed_at',
             'rejection_reason', 'labor_cost',
@@ -116,7 +116,7 @@ class WorkRecordLimitedSerializer(serializers.ModelSerializer):
         model = WorkRecord
         fields = [
             'id', 'task', 'worker', 'worker_name',
-            'product', 'product_name', 'quantity', 'defect_quantity', 'unit',
+            'product', 'product_name', 'operation', 'quantity', 'defect_quantity', 'unit',
             'photo', 'photos', 'comment', 'status',
             'confirmed_by', 'confirmed_by_name', 'confirmed_at',
             'rejection_reason',
@@ -146,7 +146,7 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkRecord
         fields = [
-            'task', 'worker', 'product', 'quantity', 'defect_quantity', 'unit',
+            'task', 'worker', 'product', 'operation', 'quantity', 'defect_quantity', 'unit',
             'photo', 'uploaded_photos', 'comment'
         ]
         extra_kwargs = {'worker': {'required': False}}

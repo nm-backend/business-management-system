@@ -5,6 +5,7 @@ Views for clients API.
 Оплаты - только владельцу; создание оплаты обновляет заказ и долг клиента.
 """
 from django.db.models import Exists, OuterRef
+from django.db import transaction
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
@@ -148,8 +149,13 @@ class PaymentViewSet(CompanyScopedViewSet):
             return Payment.objects.none()
         return super().get_queryset().select_related('client', 'order', 'received_by')
 
+    @transaction.atomic
     def perform_create(self, serializer):
         # Оплату можно завести только на клиента своей компании.
+        # Транзакция оборачивает и создание Payment, и apply_payment_amount:
+        # раньше при ошибке (переплата, оплата отменённого заказа) Payment
+        # уже был сохранён — деньги записывались в кассу, а долг и paid_amount
+        # не менялись («сирота»).
         company = self.request.user.company
         client = serializer.validated_data.get('client')
         order = serializer.validated_data.get('order')

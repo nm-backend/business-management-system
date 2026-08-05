@@ -45,10 +45,11 @@ def record_incoming(*, target, quantity, price_per_unit=None, arrival_date=None,
     locked.quantity = previous_quantity + quantity
     updated_fields = ['quantity', 'updated_at']
 
+    if arrival_date:
+        locked.arrival_date = arrival_date
+        updated_fields.append('arrival_date')
+
     if is_material:
-        if arrival_date:
-            locked.arrival_date = arrival_date
-            updated_fields.append('arrival_date')
         if price > 0:
             new_total = previous_quantity + quantity
             if new_total > 0:
@@ -59,6 +60,16 @@ def record_incoming(*, target, quantity, price_per_unit=None, arrival_date=None,
             # Последняя закупочная цена — то, по чему пришла эта партия.
             locked.purchase_price = price
             updated_fields.append('purchase_price')
+    elif price > 0:
+        # У готовой продукции та же себестоимость, что у сырья — средневзвешенная.
+        # Раньше блок цены стоял под if is_material, и приход продукции молча
+        # терял cost_price и дату поступления (поле показывается владельцу).
+        new_total = previous_quantity + quantity
+        if new_total > 0:
+            locked.cost_price = (
+                (previous_quantity * locked.cost_price + quantity * price) / new_total
+            ).quantize(Decimal('0.01'))
+            updated_fields.append('cost_price')
 
     locked.save(update_fields=updated_fields)
 

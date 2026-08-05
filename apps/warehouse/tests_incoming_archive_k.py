@@ -110,6 +110,40 @@ class IncomingTests(_Base):
         self.assertTrue(StockMovement.objects.filter(
             product=self.product, movement_type=StockMovement.MovementType.INCOMING).exists())
 
+    def test_finished_product_incoming_stores_price_and_date(self):
+        """Полный аудит: блок цены/даты был под if is_material — приход готовой
+        продукции молча терял себестоимость (cost_price) и дату поступления."""
+        today = timezone.localdate()
+        r = self.api.post(f'{PRODUCTS}{self.product.id}/incoming/',
+                          {'quantity': '3', 'price_per_unit': '200',
+                           'arrival_date': today.isoformat()}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.quantity, Decimal('5.000'))
+        self.assertEqual(self.product.arrival_date, today,
+                         'дата поступления обязана сохраняться')
+        self.assertEqual(self.product.cost_price, Decimal('120.00'),
+                         'себестоимость обязана пересчитаться')
+
+    def test_finished_product_weighted_average_cost(self):
+        """2 по 100 + 2 по 300 -> (2*100 + 2*300) / 4 = 200."""
+        self.product.cost_price = Decimal('100')
+        self.product.save(update_fields=['cost_price'])
+        r = self.api.post(f'{PRODUCTS}{self.product.id}/incoming/',
+                          {'quantity': '2', 'price_per_unit': '300'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.cost_price, Decimal('200.00'))
+
+    def test_finished_product_incoming_without_price_keeps_cost(self):
+        self.product.cost_price = Decimal('100')
+        self.product.save(update_fields=['cost_price'])
+        r = self.api.post(f'{PRODUCTS}{self.product.id}/incoming/',
+                          {'quantity': '3'}, format='json')
+        self.assertEqual(r.status_code, 200, r.content[:200])
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.cost_price, Decimal('100.00'))
+
     def test_admin_may_receive_but_does_not_touch_prices(self):
         """Цена — финансовое поле владельца; приход админа её не меняет."""
         r = self.as_(self.admin).post(f'{MATERIALS}{self.material.id}/incoming/',

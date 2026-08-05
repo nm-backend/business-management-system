@@ -19,7 +19,7 @@ from apps.accounts.models import User
 from apps.companies.models import Company
 from apps.finance.models import LaborRate
 from apps.production.models import WorkRecord
-from apps.warehouse.models import FinishedProduct, StockMovement
+from apps.warehouse.models import FinishedProduct, RawMaterial, Recipe, RecipeItem, StockMovement
 
 WORKS = '/api/v1/production/works/'
 PRODUCTS = '/api/v1/warehouse/finished-products/'
@@ -101,6 +101,99 @@ class ConfirmRequiresLaborRateTests(TestCase):
         dash = self.api.get('/api/v1/reports/analytics/owner/', {'period': 'year'}).json()
         self.assertEqual(Decimal(str(dash['worker_debts'])), Decimal('5000'),
                          'дашборд обязан показывать тот же долг')
+
+
+class LaborRateOperationTests(TestCase):
+    """
+    Полный аудит: работа не знала свою операцию, и начисление брало ставку
+    по алфавиту (order_by('operation') -> 'cutting'). У товара с несколькими
+    ставками работник получал деньги за чужую операцию. Теперь операцию
+    указывает работник, а ставка выбирается по ней.
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name='OpCo', is_active=True)
+        self.owner = User.objects.create_user(username='op_owner', password='p',
+                                              role=User.Role.OWNER, company=self.company)
+        self.worker = User.objects.create_user(username='op_worker', password='p',
+                                               role=User.Role.WORKER, company=self.company)
+        self.product = FinishedProduct.objects.create(
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+        self.material = RawMaterial.objects.create(
+            company=self.company, name='Гранит', quantity=Decimal('100'), unit='m2')
+        self.recipe = Recipe.objects.create(company=self.company, product=self.product, name='R')
+        RecipeItem.objects.create(recipe=self.recipe, material=self.material,
+                                  quantity_required=Decimal('1'))
+        self.api = APIClient()
+        self.api.force_authenticate(self.owner)
+
+    def _work(self, **kwargs):
+        defaults = dict(
+            company=self.company, worker=self.worker, product=self.product,
+            quantity=Decimal('5'), unit='dona',
+            status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION)
+        defaults.update(kwargs)
+        return WorkRecord.objects.create(**defaults)
+
+    def _rates(self):
+        LaborRate.objects.create(company=self.company, product=self.product,
+                                 operation=LaborRate.OperationType.CUTTING,
+                                 rate_per_unit=Decimal('50'), unit='dona')
+        LaborRate.objects.create(company=self.company, product=self.product,
+                                 operation=LaborRate.OperationType.POLISHING,
+                                 rate_per_unit=Decimal('70'), unit='dona')
+
+    def test_work_uses_rate_of_its_operation(self):
+        """Полировка должна начислить по ставке полировки, а не по «алфавитной» резке."""
+        self._rates()
+        work = self._work(operation=LaborRate.OperationType.POLISHING)
+        resp = self.api.post(f'{WORKS}{work.id}/confirm/')
+        self.assertEqual(resp.status_code, 200, resp.content[:200])
+        work.refresh_from_db()
+        self.assertEqual(work.labor_cost, Decimal('350.00'), '5 * 70 (полировка)')
+
+    def test_cutting_uses_cutting_rate(self):
+        self._rates()
+        work = self._work(operation=LaborRate.OperationType.CUTTING)
+        self.assertEqual(self.api.post(f'{WORKS}{work.id}/confirm/').status_code, 200)
+        work.refresh_from_db()
+        self.assertEqual(work.labor_cost, Decimal('250.00'), '5 * 50 (резка)')
+
+    def test_work_without_operation_uses_single_rate(self):
+        """Одна ставка на товар и работа без операции — как раньше."""
+        LaborRate.objects.create(company=self.company, product=self.product,
+                                 operation=LaborRate.OperationType.OTHER,
+                                 rate_per_unit=Decimal('1500'), unit='dona')
+        work = self._work()
+        resp = self.api.post(f'{WORKS}{work.id}/confirm/')
+        self.assertEqual(resp.status_code, 200, resp.content[:200])
+        work.refresh_from_db()
+        self.assertEqual(work.labor_cost, Decimal('7500.00'))
+
+    def test_multiple_rates_without_operation_are_not_guessed(self):
+        """Несколько ставок и операция не указана — начислять нельзя наугад."""
+        self._rates()
+        work = self._work()
+        resp = self.api.post(f'{WORKS}{work.id}/confirm/')
+        self.assertEqual(resp.status_code, 400, resp.content[:200])
+        self.assertEqual(resp.json().get('code'), 'labor_rate_missing')
+        work.refresh_from_db()
+        self.assertEqual(work.status, WorkRecord.WorkStatus.AWAITING_CONFIRMATION)
+
+    def test_operation_saved_on_work_create(self):
+        resp = self.api.post(WORKS, {
+            'worker': self.worker.id, 'product': self.product.id,
+            'operation': 'polishing', 'quantity': '2', 'unit': 'dona',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201, resp.content[:200])
+        work = WorkRecord.objects.get(pk=resp.json()['id'])
+        self.assertEqual(work.operation, LaborRate.OperationType.POLISHING)
+
+    def test_rates_can_be_filtered_by_product(self):
+        self._rates()
+        rows = self.api.get('/api/v1/finance/labor-rates/', {'product': self.product.id}).json()
+        rows = rows['results'] if isinstance(rows, dict) else rows
+        self.assertEqual(len(rows), 2)
 
 
 class LaborRateOnProductCardTests(TestCase):

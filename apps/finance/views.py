@@ -11,6 +11,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.accounts.models import User
 from apps.core.permissions import IsCompanyMember, FinancialDataPermission
@@ -85,6 +86,10 @@ class LaborRateViewSet(CompanyScopedViewSet):
     """
     queryset = LaborRate.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember, FinancialDataPermission]
+    # Форма «Ишни якунлаш» подтягивает ставки выбранного товара, чтобы
+    # показать работнику список операций.
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['product']
 
     def get_serializer_class(self):
         """

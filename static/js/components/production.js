@@ -107,8 +107,8 @@ class ProductionComponent {
         return `
             <div class="work-photo-strip" style="margin-top:8px;">
                 ${shown.map((p) => `
-                    <a class="work-photo-thumb" href="${p.image}" target="_blank" rel="noopener">
-                        <img src="${p.image}" alt="" loading="lazy">
+                    <a class="work-photo-thumb" href="${window.ui.escape(p.image)}" target="_blank" rel="noopener">
+                        <img src="${window.ui.escape(p.image)}" alt="" loading="lazy">
                     </a>`).join('')}
                 ${rest > 0 ? `<span class="work-photo-more">+${rest}</span>` : ''}
             </div>`;
@@ -259,6 +259,11 @@ class ProductionComponent {
                         <option value="" data-i18n="common.select"></option>
                         ${products.map((p) => `<option value="${p.id}">${window.ui.escape(p.name)}</option>`).join('')}
                     </select></div>
+                <div class="form-group" id="work-operation-group" style="display:none;">
+                    <label data-i18n="production.operation"></label>
+                    <select name="operation" id="work-operation" class="form-control"></select>
+                    <small class="text-muted" data-i18n="production.operation_hint"></small>
+                </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div class="form-group"><label data-i18n="production.quantity"></label>
                         <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
@@ -279,6 +284,34 @@ class ProductionComponent {
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="production.send_for_confirmation"></button>
             </form>
         `);
+
+        // Операция работы: подтягиваем ставки выбранного товара и предлагаем
+        // выбрать операцию — по ней при подтверждении начислится оплата
+        // (раньше бралась ставка «по алфавиту» из всех ставок товара).
+        const productSelect = modal.querySelector('select[name=product]');
+        const operationGroup = modal.querySelector('#work-operation-group');
+        const operationSelect = modal.querySelector('#work-operation');
+        const loadOperations = async () => {
+            const pid = productSelect.value;
+            if (!pid) {
+                operationGroup.style.display = 'none';
+                return;
+            }
+            try {
+                const resp = await window.api.request(`/finance/labor-rates/?product=${pid}`);
+                const rates = resp.results || resp;
+                const ops = [...new Set(rates.map((r) => r.operation))];
+                operationSelect.innerHTML = ops
+                    .map((op) => `<option value="${op}" data-i18n="operations.${op}"></option>`)
+                    .join('');
+                window.i18n.applyTranslations();
+                operationSelect.required = ops.length > 1;
+                operationGroup.style.display = ops.length ? '' : 'none';
+            } catch (error) {
+                operationGroup.style.display = 'none';
+            }
+        };
+        productSelect.addEventListener('change', loadOperations);
 
         // Превью выбранных снимков с крестиком, как на макете «Ишни якунлаш».
         const photoInputEl = modal.querySelector('input[name=uploaded_photos]');

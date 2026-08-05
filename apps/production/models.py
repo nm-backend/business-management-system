@@ -10,6 +10,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from apps.core.models import TimestampedModel
 from apps.core.validators import validate_file_size
+from apps.finance.models import LaborRate
 from apps.warehouse.models import UnitChoices
 
 
@@ -214,6 +215,12 @@ class WorkRecord(TimestampedModel):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='work_records', null=True, blank=True, verbose_name='Задача')
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='work_records', verbose_name='Работник')
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.SET_NULL, null=True, blank=True, related_name='work_records', verbose_name='Товар')
+    # Какая операция выполнялась: по ней выбирается ставка. Раньше операции
+    # в работе не было, и начисление брало ставку «по алфавиту» (order_by
+    # 'operation') — у товара с несколькими ставками работник получал деньги
+    # за чужую операцию.
+    operation = models.CharField(max_length=20, choices=LaborRate.OperationType.choices,
+                                 null=True, blank=True, verbose_name='Операция')
     quantity = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Количество')
     # Брак по макету «Ишни якунлаш»: рабочий указывает его отдельно от годного.
     # Сырьё расходуется и на брак тоже, а на склад готовой продукции попадает

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from apps.clients.models import Client
+from apps.clients.models import Client, Payment
 from apps.orders.models import Order
 
 
@@ -168,3 +168,59 @@ class ClientArchiveAfterPaymentTests(TestCase):
         self.assertEqual(resp.status_code, 201, resp.content[:300])
         self.client_obj.refresh_from_db()
         self.assertFalse(self.client_obj.is_archived)
+
+
+class PaymentAtomicityTests(TestCase):
+    """
+    Полный аудит: PaymentViewSet.perform_create создавал Payment (serializer.save)
+    ДО проверки переплаты (apply_payment_amount). При ошибке — переплата или
+    оплата отменённого заказа — клиент получал 400, но Payment оставался в базе:
+    «сирота», деньги записаны, а долг и paid_amount не изменились.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.accounts.models import User
+        from apps.companies.models import Company
+        from rest_framework.test import APIClient
+
+        self.company = Company.objects.create(name='AtomCo')
+        self.owner = User.objects.create_user(
+            username='atm_owner', password='p', role=User.Role.OWNER, company=self.company)
+        self.client_obj = Client.objects.create(company=self.company, name='Клиент')
+        self.api = APIClient()
+        self.api.force_authenticate(self.owner)
+        self.order = Order.objects.create(
+            company=self.company, client=self.client_obj,
+            custom_product_name='Столешница', quantity=Decimal('1'), unit='sht',
+            deadline=timezone.now() + timedelta(days=10),
+            total_amount=Decimal('100'), status=Order.Status.DELIVERED,
+        )
+
+    def _pay(self, amount):
+        return self.api.post('/api/v1/clients/payments/', {
+            'client': self.client_obj.id, 'order': self.order.id,
+            'amount': amount, 'payment_method': 'cash',
+            'payment_date': '2026-08-03T12:00:00Z',
+        }, format='json')
+
+    def test_overpayment_leaves_no_orphan_payment(self):
+        resp = self._pay('150')
+        self.assertEqual(resp.status_code, 400, resp.content[:300])
+        self.assertEqual(Payment.objects.filter(order=self.order).count(), 0,
+                         'СИРОТА: Payment остался в базе после 400')
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.paid_amount, Decimal('0'))
+
+    def test_payment_for_cancelled_order_leaves_no_orphan(self):
+        self.order.status = Order.Status.CANCELLED
+        self.order.save(update_fields=['status'])
+        resp = self._pay('50')
+        self.assertEqual(resp.status_code, 400, resp.content[:300])
+        self.assertEqual(Payment.objects.filter(order=self.order).count(), 0,
+                         'СИРОТА: Payment остался в базе после 400')
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.paid_amount, Decimal('0'))

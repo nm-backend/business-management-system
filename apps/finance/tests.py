@@ -75,6 +75,19 @@ class FinanceCreateAPITests(TestCase):
         self.assertEqual(pay.company, self.company)
         self.assertEqual(pay.created_by, self.owner)
 
+    def test_worker_payment_future_date_rejected(self):
+        """Полный аудит: у Expense будущая дата запрещена (validate_not_future),
+        у WorkerPayment — нет: выплата будущим числом искажала расчёты
+        (прибыль, кассу) и походила на предоплату без контроля."""
+        from django.utils import timezone
+        future = (timezone.localdate() + datetime.timedelta(days=30)).isoformat()
+        resp = self.api.post('/api/v1/finance/worker-payments/', {
+            'worker': self.worker.id, 'amount': '100000',
+            'payment_date': future, 'payment_type': 'salary',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertEqual(WorkerPayment.objects.count(), 0)
+
     def test_owner_creates_labor_rate(self):
         product = FinishedProduct.objects.create(name='Slab', company=self.company)
         resp = self.api.post('/api/v1/finance/labor-rates/', {

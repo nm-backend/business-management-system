@@ -309,7 +309,7 @@ class WarehouseComponent {
         return `
             <div class="list-row" data-id="${m.id}">
                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-                    <div class="thumb">${m.photo ? `<img src="${m.photo}" alt="">` : '🪨'}</div>
+                    <div class="thumb">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="">` : '🪨'}</div>
                     <div style="min-width:0;">
                         <div style="font-size:14px;font-weight:600;">${window.ui.escape(m.name)}</div>
                         <div class="text-sm text-muted">${window.ui.escape([m.stone_type, m.size].filter(Boolean).join(' · ') || '-')}</div>
@@ -329,7 +329,7 @@ class WarehouseComponent {
         const canEdit = user.is_owner || user.is_admin;
         const modal = window.ui.modal('warehouse.title', `
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-                <div class="thumb" style="width:56px;height:56px;">${m.photo ? `<img src="${m.photo}" alt="">` : '🪨'}</div>
+                <div class="thumb" style="width:56px;height:56px;">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="">` : '🪨'}</div>
                 <div>
                     <div style="font-weight:600;font-size:16px;">${window.ui.escape(m.name)}</div>
                     <div class="text-sm text-muted">${window.ui.escape(m.stone_type || '')}</div>

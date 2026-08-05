@@ -85,7 +85,14 @@ class MissingLaborRateError(Exception):
 
 def calculate_labor_cost(work):
     """
-    Начислено = количество работы x ставка за единицу (по ставке товара).
+    Начислено = количество работы x ставка за единицу.
+
+    Ставка выбирается по операции, которую указал работник (work.operation):
+    у товара может быть несколько ставок — по одной на операцию. Раньше бралась
+    ставка «по алфавиту» (order_by('operation')), и работник получал деньги
+    за чужую операцию. Если операция не указана, ставка берётся только когда
+    она одна; при нескольких ставках без операции угадывать нельзя — работа
+    отклоняется, админ видит товар и понимает, что нужно указать операцию.
 
     Ноль возвращается только когда ставка действительно нулевая: отсутствие
     ставки — это не «бесплатно», а незаполненный справочник, и такую работу
@@ -94,8 +101,16 @@ def calculate_labor_cost(work):
     from apps.finance.models import LaborRate
     if not work.product:
         raise MissingLaborRateError('')
-    rate = LaborRate.objects.filter(product=work.product).order_by('operation').first()
-    if not rate:
+    rates = list(LaborRate.objects.filter(product=work.product))
+    if not rates:
+        raise MissingLaborRateError(work.product.name)
+    if work.operation:
+        rate = next((r for r in rates if r.operation == work.operation), None)
+        if rate is None:
+            raise MissingLaborRateError(work.product.name)
+    elif len(rates) == 1:
+        rate = rates[0]
+    else:
         raise MissingLaborRateError(work.product.name)
     return rate.rate_per_unit * work.quantity
 

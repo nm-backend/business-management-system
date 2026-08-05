@@ -233,7 +233,9 @@ class WorkerPayment(TimestampedModel):
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='payments', verbose_name='Работник')
     amount = models.DecimalField(max_digits=15, decimal_places=2,
                                  validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Сумма')
-    payment_date = models.DateField(db_index=True, verbose_name='Дата оплаты')
+    # Будущая дата запрещена, как у Expense: выплата будущим числом искажает
+    # расчёты (прибыль, кассу) и ничем не контролируется.
+    payment_date = models.DateField(db_index=True, validators=[validate_not_future], verbose_name='Дата оплаты')
     payment_type = models.CharField(max_length=20, choices=PaymentType.choices, default=PaymentType.SALARY, verbose_name='Вид выплаты')
     comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
     created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='created_payments', verbose_name='Кем добавлено')
