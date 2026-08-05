@@ -73,97 +73,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Регистрация Service Worker
     registerServiceWorker();
 
-    // Запускаем WebSocket для уведомлений в реальном времени
-    connectWebSocket();
+    // Real-time уведомления: единое соединение через тикет (ChatSocket).
+    // Раньше здесь жил connectWebSocket() с access-токеном в query-строке:
+    // после перевода бэкенда на тикеты он умирал с 4401 и переподключался
+    // по кругу, капая токеном в логи прокси. Соединение теперь одно.
+    window.chatSocket.setBroadcastHandler(onRealtimeMessage);
+    window.chatSocket.connect();
     refreshNotificationBadge();
     setInterval(refreshNotificationBadge, 60000);
 });
 
 /**
- * WebSocket-соединение для real-time уведомлений.
- * Переподключается при разрыве с exponential backoff.
+ * Глобальный обработчик real-time событий (вызывается на любой странице).
+ * Активный чат обрабатывает сообщения сам через свой handler; здесь — бейдж,
+ * звук, SW-уведомление и тост для сообщений, пришедших мимо открытого чата.
  */
-let ws = null;
-let wsReconnectTimer = null;
-let wsReconnectAttempts = 0;
-
-function connectWebSocket() {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-    const tokens = window.api.getTokens();
-    const token = tokens.access;
-    if (!token) return;
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/ws/chat/?token=${token}`;
-
-    try {
-        ws = new WebSocket(url);
-    } catch (e) {
-        scheduleReconnect();
-        return;
+function onRealtimeMessage(msg) {
+    if (!msg || msg.sender === undefined) return;
+    refreshNotificationBadge();
+    playNotificationSound();
+    sendSWNotification({
+        title: `✉️ ${msg.sender_name || 'Сообщение'}`,
+        body: (msg.content || '').slice(0, 120),
+        tag: 'chat_message',
+        data: { url: '#/messages' },
+    });
+    // Тост — только для чужих сообщений и когда чат неактивен: в чате
+    // сообщение уже вставлено в ленту, тост продублировал бы его.
+    const mine = window.currentUser && msg.sender === window.currentUser.id;
+    if (!mine && !window.chatSocket.handler) {
+        window.toast.info(`✉️ ${msg.sender_name}: ${(msg.content || '').slice(0, 60)}`);
     }
-
-    ws.onopen = () => {
-        wsReconnectAttempts = 0;
-    };
-
-    ws.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'message') {
-                // Новое сообщение — обновляем бейдж
-                refreshNotificationBadge();
-                // Воспроизводим звук уведомления
-                playNotificationSound();
-                // Фоновое уведомление через Service Worker
-                sendSWNotification({
-                    title: `✉️ ${data.message?.sender_name || 'Сообщение'}`,
-                    body: (data.message?.content || '').slice(0, 120),
-                    tag: 'chat_message',
-                    data: { url: '#/messages' },
-                });
-                // Показываем тост
-                const msg = data.message || {};
-                if (msg.sender_name) {
-                    window.toast.info(`✉️ ${msg.sender_name}: ${(msg.content || '').slice(0, 60)}`);
-                }
-            } else if (data.type === 'notification') {
-                // Системное уведомление (новая задача, подтверждение и т.д.)
-                refreshNotificationBadge();
-                playNotificationSound();
-                sendSWNotification({
-                    title: `🔔 ${data.title || 'Уведомление'}`,
-                    body: data.body || '',
-                    tag: 'system_notification',
-                    data: { url: data.url || '#/messages?tab=notifications' },
-                });
-                if (data.title) {
-                    window.toast.info(`🔔 ${data.title}`);
-                }
-            }
-        } catch (e) {
-            // ignore parse errors
-        }
-    };
-
-    ws.onclose = () => {
-        ws = null;
-        scheduleReconnect();
-    };
-
-    ws.onerror = () => {
-        // onclose будет вызван следом
-    };
-}
-
-function scheduleReconnect() {
-    if (wsReconnectTimer) return;
-    const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), 30000);
-    wsReconnectAttempts++;
-    wsReconnectTimer = setTimeout(() => {
-        wsReconnectTimer = null;
-        connectWebSocket();
-    }, delay);
 }
 
 /** ── Service Worker registration ── */

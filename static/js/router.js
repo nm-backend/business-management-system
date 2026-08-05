@@ -91,7 +91,7 @@ class Router {
             <div class="card route-error">
                 <p class="eyebrow">404</p>
                 <h1 data-i18n="common.page_not_found">Саҳифа топилмади</h1>
-                <p><strong>${path}</strong></p>
+                <p><strong>${window.ui.escape(path)}</strong></p>
                 <a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard">Бош панел</a>
             </div>`;
         window.i18n.applyTranslations();

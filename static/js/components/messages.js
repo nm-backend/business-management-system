@@ -14,6 +14,7 @@ class ChatSocket {
     constructor() {
         this.ws = null;
         this.handler = null;         // колбэк(message) активной вкладки чата
+        this.broadcastHandler = null; // глобальный колбэк (бейдж/тосты/звук)
         this.reconnectDelay = 1000;
         this.pingTimer = null;
         this.shouldRun = false;
@@ -21,6 +22,9 @@ class ChatSocket {
 
     /** Устанавливает обработчик входящих сообщений (или null). */
     setHandler(fn) { this.handler = fn; }
+
+    /** Устанавливает глобальный обработчик, срабатывающий всегда. */
+    setBroadcastHandler(fn) { this.broadcastHandler = fn; }
 
     connect() {
         this.shouldRun = true;
@@ -62,8 +66,9 @@ class ChatSocket {
         this.ws.onmessage = (event) => {
             let data;
             try { data = JSON.parse(event.data); } catch (e) { return; }
-            if (data.type === 'message' && this.handler) {
-                this.handler(data.message);
+            if (data.type === 'message') {
+                if (this.broadcastHandler) this.broadcastHandler(data.message);
+                if (this.handler) this.handler(data.message);
             }
         };
         this.ws.onclose = (event) => {
