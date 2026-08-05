@@ -37,7 +37,7 @@ class ChatSocket {
         const api = window.api;
         if (!api.getTokens().access) return;
         try {
-            const data = await api.request('/api/v1/messaging/ws-ticket/', { method: 'GET' });
+            const data = await api.request('/messaging/ws-ticket/', { method: 'GET' });
             this._open(data.ticket);
         } catch (e) {
             this._scheduleReconnect();
