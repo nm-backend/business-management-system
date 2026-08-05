@@ -169,7 +169,7 @@ class LaborRate(TimestampedModel):
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.CASCADE, related_name='labor_rates', verbose_name='Товар')
     operation = models.CharField(max_length=20, choices=OperationType.choices, verbose_name='Операция')
     rate_per_unit = models.DecimalField(max_digits=15, decimal_places=2,
-                                        validators=[MinValueValidator(Decimal('0'))], verbose_name='Ставка за единицу')
+                                        validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Ставка за единицу')
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, verbose_name='Единица измерения')
 
     class Meta:

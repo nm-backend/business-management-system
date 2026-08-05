@@ -66,6 +66,18 @@ class FinanceCreateAPITests(TestCase):
         self.assertEqual(exp.created_by, self.owner)
 
     def test_owner_creates_worker_payment(self):
+        # Зарплата — это выплата заработанного: без начислений (labor_cost
+        # подтверждённых работ) salary не провести, поэтому сначала
+        # начисляем работнику работу на 400 000.
+        from apps.production.models import WorkRecord
+        from apps.warehouse.models import FinishedProduct
+        product = FinishedProduct.objects.create(
+            company=self.company, name='Плита', quantity=Decimal('0'), unit='dona')
+        WorkRecord.objects.create(
+            company=self.company, worker=self.worker, product=product,
+            quantity=Decimal('1'), unit='dona', labor_cost=Decimal('400000'),
+            status=WorkRecord.WorkStatus.CONFIRMED,
+        )
         resp = self.api.post('/api/v1/finance/worker-payments/', {
             'worker': self.worker.id, 'amount': '300000',
             'payment_date': '2026-07-13', 'payment_type': 'salary',

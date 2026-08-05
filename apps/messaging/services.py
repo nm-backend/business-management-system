@@ -10,7 +10,7 @@ from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
 
-from .models import ChatMessage, Conversation, ConversationParticipant, Notification
+from .models import ChatMessage, Conversation, ConversationParticipant, Notification, WsTicket
 
 
 # ─────────────────────────── Уведомления ───────────────────────────
@@ -137,6 +137,32 @@ def get_or_create_direct(company, user_a, user_b):
             ConversationParticipant(conversation=conversation, user=user_b),
         ])
     return conversation, True
+
+
+# ─────────────────────────── WS-тикеты ───────────────────────────
+
+WS_TICKET_TTL_SECONDS = 60
+
+
+def issue_ws_ticket(user):
+    """
+    Выдаёт одноразовый тикет для WebSocket-соединения чата.
+
+    Тикет короткоживущий (60 секунд) и привязан к пользователю. Он заменяет
+    передачу access-токена в query-строке WebSocket-URL (токен оседал бы
+    в логах прокси и балансировщиков).
+    """
+    import secrets
+
+    from datetime import timedelta
+
+    ticket = WsTicket.objects.create(
+        company_id=user.company_id,
+        user=user,
+        ticket=secrets.token_urlsafe(32),
+        expires_at=timezone.now() + timedelta(seconds=WS_TICKET_TTL_SECONDS),
+    )
+    return ticket.ticket
 
 
 def unread_count(conversation, user):

@@ -389,3 +389,25 @@ class AccessKey(TimestampedModel):
         if self.status == self.Status.ACTIVE and self.is_expired:
             return 'expired'
         return self.status
+
+
+class SetupGate(models.Model):
+    """
+    Заглушка-блокировка первичной настройки системы (единственная запись).
+
+    POST /setup/owner/ проверяет существование супер-администратора и создаёт
+    его. Два параллельных запроса с разными username оба могли пройти проверку
+    «суперадмина ещё нет» до того, как любой из них закоммитится, — и в системе
+    появлялось два суперадмина. Здесь единственная строка (pk=1) берётся в
+    SELECT ... FOR UPDATE: второй запрос ждёт коммита первого, после чего видит
+    уже созданного суперадмина и получает 403.
+    """
+    id = models.PositiveIntegerField(primary_key=True, default=1, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создана')
+
+    class Meta:
+        verbose_name = 'Заглушка первичной настройки'
+        verbose_name_plural = 'Заглушки первичной настройки'
+
+    def __str__(self):
+        return 'Setup gate'

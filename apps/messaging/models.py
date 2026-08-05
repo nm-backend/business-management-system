@@ -241,3 +241,34 @@ class Notification(TimestampedModel):
             bool - True если is_read == False
         """
         return not self.is_read
+
+
+class WsTicket(TimestampedModel):
+    """
+    Одноразовый тикет для WebSocket-соединения чата.
+
+    Access-токен нельзя передавать в query-строке WebSocket-URL: он попадает
+    в логи прокси/балансировщика и течёт с них. Поэтому клиент запрашивает
+    короткоживущий тикет (TTL ~60 секунд) по REST с обычным заголовком
+    Authorization, а WebSocket открывает только с тикетом.
+
+    Тикет одноразовый: middleware проверяет и сразу помечает использованным,
+    поэтому украденный тикет не пригоден для второго соединения.
+    """
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='ws_tickets', verbose_name='Компания'
+    )
+    user = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE, related_name='ws_tickets', verbose_name='Пользователь'
+    )
+    ticket = models.CharField(max_length=64, unique=True, db_index=True, verbose_name='Тикет')
+    expires_at = models.DateTimeField(db_index=True, verbose_name='Действует до')
+    used = models.BooleanField(default=False, verbose_name='Использован')
+
+    class Meta:
+        verbose_name = 'WS тикет'
+        verbose_name_plural = 'WS тикеты'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'WS ticket {self.user_id} ({"used" if self.used else "active"})'

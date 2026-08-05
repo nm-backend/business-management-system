@@ -2,8 +2,9 @@
 ASGI-конфигурация SkladPro.
 
 HTTP обслуживается стандартным Django-приложением, а WebSocket —
-через Django Channels: JWTAuthMiddleware аутентифицирует по токену,
-URLRouter направляет на консьюмеры чата.
+через Django Channels: TicketAuthMiddleware аутентифицирует по одноразовому
+тикету (access-токен в query-строку не передаётся — он оседал бы в логах
+прокси), URLRouter направляет на консьюмеры чата.
 """
 import os
 
@@ -18,11 +19,11 @@ from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 from channels.security.websocket import AllowedHostsOriginValidator  # noqa: E402
 
 from apps.messaging.routing import websocket_urlpatterns  # noqa: E402
-from apps.messaging.ws_auth import JWTAuthMiddleware  # noqa: E402
+from apps.messaging.ws_auth import TicketAuthMiddleware  # noqa: E402
 
 application = ProtocolTypeRouter({
     'http': django_asgi_app,
     'websocket': AllowedHostsOriginValidator(
-        JWTAuthMiddleware(URLRouter(websocket_urlpatterns))
+        TicketAuthMiddleware(URLRouter(websocket_urlpatterns))
     ),
 })

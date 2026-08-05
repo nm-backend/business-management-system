@@ -7,7 +7,7 @@ Core models - базовые абстрактные модели для всег
 from decimal import Decimal
 
 from django.core.validators import MinValueValidator
-from django.db import models
+from django.db import IntegrityError, models, transaction
 
 
 class TimestampedModel(models.Model):
@@ -111,10 +111,24 @@ class Currency(TimestampedModel):
         Если устанавливается is_default=True, автоматически сбрасывает этот флаг
         у всех других валют. Это гарантирует, что всегда будет только одна
         валюта по умолчанию в системе.
+
+        Параллельные записи защищены частичным уникальным индексом
+        (core_currency_single_default): при одновременной вставке двух валют
+        с is_default=True одна ловится вставкой и повторяет сброс после того,
+        как вторая уже закоммитилась.
         """
         if self.is_default:
-            Currency.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
-        super().save(*args, **kwargs)
+            try:
+                with transaction.atomic():
+                    Currency.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+                    super().save(*args, **kwargs)
+            except IntegrityError:
+                if not self.pk:
+                    self.pk = None  # вставка не прошла — пробуем ещё раз
+                Currency.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+                super().save(*args, **kwargs)
+        else:
+            super().save(*args, **kwargs)
 
 class ExchangeRate(TimestampedModel):
     """

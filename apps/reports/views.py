@@ -92,6 +92,11 @@ def parse_period(request):
         date_from = parse_date_param(request.query_params['date_from'], 'date_from')
     if request.query_params.get('date_to'):
         date_to = parse_date_param(request.query_params['date_to'], 'date_to')
+    if date_from > date_to:
+        raise ValidationError({
+            'date_from': 'Дата начала позже даты конца периода.',
+            'date_to': 'Дата конца раньше даты начала периода.',
+        })
     return date_from, date_to
 
 
@@ -519,6 +524,23 @@ def xlsx_response(rows, filename, sheet_title):
     return response
 
 
+def csv_response(rows, filename):
+    """Собирает CSV из списка строк и возвращает как HTTP ответ.
+
+    CSV с разделителем «;» — Excel открывает его сразу без ручного выбора
+    разделителя. Раньше запрос ?format=csv молча отдавал xlsx (иного формата
+    в этих вьюхах не было) — теперь формат честно поддерживается.
+    """
+    import csv
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=';')
+    writer.writerows([[str(cell) if cell is not None else '' for cell in row] for row in rows])
+    response = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
 def register_report_font():
     """
     Регистрирует Unicode-шрифт с кириллицей кроссплатформенно и возвращает его имя.
@@ -625,6 +647,8 @@ class OwnerFinanceExportView(APIView):
         ]
         if request.query_params.get('format') == 'pdf':
             return pdf_response('SkladPro.Nod - Молиявий ҳисобот', rows, 'finance-report.pdf')
+        if request.query_params.get('format') == 'csv':
+            return csv_response(rows, 'finance-report.csv')
         return xlsx_response(rows, 'finance-report.xlsx', 'Finance')
 
 
@@ -649,6 +673,8 @@ class AdminStockExportView(APIView):
             ])
         if request.query_params.get('format') == 'pdf':
             return pdf_response('SkladPro.Nod - Омбор қолдиқлари', rows, 'stock-report.pdf')
+        if request.query_params.get('format') == 'csv':
+            return csv_response(rows, 'stock-report.csv')
         return xlsx_response(rows, 'stock-report.xlsx', 'Stock')
 
 
@@ -689,6 +715,8 @@ class AdminOrdersExportView(APIView):
             rows.append(row)
         if request.query_params.get('format') == 'pdf':
             return pdf_response('SkladPro.Nod - Буюртмалар', rows, 'orders-report.pdf')
+        if request.query_params.get('format') == 'csv':
+            return csv_response(rows, 'orders-report.csv')
         return xlsx_response(rows, 'orders-report.xlsx', 'Orders')
 
 
@@ -726,6 +754,8 @@ class AdminWorkExportView(APIView):
             rows.append(line)
         if request.query_params.get('format') == 'pdf':
             return pdf_response('SkladPro.Nod - Ишчилар иши', rows, 'work-report.pdf')
+        if request.query_params.get('format') == 'csv':
+            return csv_response(rows, 'work-report.csv')
         return xlsx_response(rows, 'work-report.xlsx', 'Work')
 
 
@@ -752,5 +782,7 @@ class ExportReportAPIView(APIView):
             format_type = request.query_params.get('format_type', 'xlsx')
             if format_type == 'pdf':
                 return pdf_response('SkladPro.Nod - Материал етишмовчилиги', rows, 'shortage-report.pdf')
+            if format_type == 'csv':
+                return csv_response(rows, 'shortage-report.csv')
             return xlsx_response(rows, 'shortage-report.xlsx', 'Shortage')
         return Response({"error": "Unsupported report type"}, status=400)

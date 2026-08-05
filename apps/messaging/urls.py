@@ -9,6 +9,7 @@ from .views import (
     ConversationViewSet,
     EmployeeViewSet,
     NotificationViewSet,
+    WsTicketView,
 )
 
 router = DefaultRouter()
@@ -18,5 +19,6 @@ router.register(r'employees', EmployeeViewSet, basename='employee')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 
 urlpatterns = [
+    path('ws-ticket/', WsTicketView.as_view(), name='ws-ticket'),
     path('', include(router.urls)),
 ]

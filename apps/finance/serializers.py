@@ -71,7 +71,55 @@ class LaborRateCreateSerializer(serializers.ModelSerializer):
         ]
 
 
-class WorkerPaymentSerializer(serializers.ModelSerializer):
+class _SalaryCapMixin:
+    """
+    «Зарплата» — это выплата заработанного: сумма не может быть больше
+    начисленного (labor_cost подтверждённых работ) минус уже выданное.
+    Иначе баланс работника на странице расчётов уходит в минус, а владелец
+    мог просто опечататься в сумме в разы. Аванс/премия/прочее — свободные
+    выплаты, им потолка нет (аванс по определению выдаётся ДО работы).
+    """
+    def _validate_salary_cap(self, attrs):
+        from decimal import Decimal
+
+        from django.db.models import Sum
+
+        from apps.production.models import WorkRecord
+
+        from .models import WorkerPayment
+
+        payment_type = attrs.get('payment_type', WorkerPayment.PaymentType.SALARY)
+        if payment_type != WorkerPayment.PaymentType.SALARY:
+            return
+        worker = attrs.get('worker') or (self.instance.worker if self.instance else None)
+        if worker is None:
+            return
+        current = self.instance.amount if self.instance else Decimal('0')
+        accrued = WorkRecord.objects.filter(
+            company_id=worker.company_id, worker=worker, status=WorkRecord.WorkStatus.CONFIRMED,
+        ).aggregate(s=Sum('labor_cost'))['s'] or Decimal('0')
+        paid = (
+            WorkerPayment.objects.filter(company_id=worker.company_id, worker=worker)
+            .exclude(pk=self.instance.pk if self.instance else None)
+            .aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        )
+        balance = Decimal(accrued) - Decimal(paid)
+        amount = attrs.get('amount', current)
+        if amount is None:
+            return
+        # Запрещаем только превышение СВЕРХ уже имеющегося: существующую
+        # переплату не наращиваем, но и не блокируем её сохранение как есть
+        # (например, при смене работника в записи).
+        if Decimal(amount) > max(balance, Decimal('0')) and Decimal(amount) > current:
+            raise serializers.ValidationError({
+                'amount': 'Сумма зарплаты превышает начисленное '
+                          '(начислено {0}, уже выдано {1}). Аванс или премию '
+                          'проводите с соответствующим типом выплаты.'.format(
+                              accrued, paid),
+            })
+
+
+class WorkerPaymentSerializer(_SalaryCapMixin, serializers.ModelSerializer):
     """
     Сериализатор выплаты работнику.
 
@@ -89,8 +137,13 @@ class WorkerPaymentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at', 'updated_at', 'created_by']
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        self._validate_salary_cap(attrs)
+        return attrs
 
-class WorkerPaymentCreateSerializer(serializers.ModelSerializer):
+
+class WorkerPaymentCreateSerializer(_SalaryCapMixin, serializers.ModelSerializer):
     """
     Сериализатор для создания выплаты работнику.
 
@@ -102,3 +155,8 @@ class WorkerPaymentCreateSerializer(serializers.ModelSerializer):
             'worker', 'amount', 'payment_date', 'payment_type', 'comment'
         ]
     # created_by и company проставляет ViewSet.perform_create.
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        self._validate_salary_cap(attrs)
+        return attrs

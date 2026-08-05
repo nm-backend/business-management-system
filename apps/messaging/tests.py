@@ -7,7 +7,7 @@
 - ИЗОЛЯЦИЮ арендаторов и участие в беседе (нельзя достать чужое даже прямым
   запросом; не-участник не видит чужой диалог внутри своей же компании);
 - права (супер-админ без компании не допускается);
-- WebSocket-консьюмер (аутентификация по токену + доставка сообщения).
+- WebSocket-консьюмер (аутентификация по одноразовому тикету + доставка сообщения).
 """
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -15,7 +15,6 @@ from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.accounts.models import User
 from apps.companies.models import Company
@@ -29,10 +28,11 @@ from apps.messaging.routing import websocket_urlpatterns
 from apps.messaging.services import (
     ensure_general_conversation,
     get_or_create_direct,
+    issue_ws_ticket,
     recipient_user_ids,
     unread_count,
 )
-from apps.messaging.ws_auth import JWTAuthMiddleware
+from apps.messaging.ws_auth import TicketAuthMiddleware
 
 
 def make_company(name):
@@ -263,9 +263,9 @@ class ChatPermissionTests(TestCase):
 
 class ChatConsumerTests(TransactionTestCase):
     """
-    Проверяет аутентификацию WebSocket по access-токену и доставку события
-    в персональную группу пользователя. Канальный слой — in-memory (тестовые
-    настройки), поэтому Redis не требуется.
+    Проверяет аутентификацию WebSocket по одноразовому тикету и доставку
+    события в персональную группу пользователя. Канальный слой — in-memory
+    (тестовые настройки), поэтому Redis не требуется.
     """
     def setUp(self):
         import uuid
@@ -274,20 +274,20 @@ class ChatConsumerTests(TransactionTestCase):
         self.user = User.objects.create_user(
             username=f'ws_user_{uid}', password='pw', role=User.Role.OWNER, company=self.company,
         )
-        # JWTAuthMiddleware поверх маршрутов чата (без origin-валидатора для теста).
-        self.application = JWTAuthMiddleware(URLRouter(websocket_urlpatterns))
+        # TicketAuthMiddleware поверх маршрутов чата (без origin-валидатора для теста).
+        self.application = TicketAuthMiddleware(URLRouter(websocket_urlpatterns))
 
     def tearDown(self):
         User.objects.filter(company=self.company).delete()
         Company.objects.filter(pk=self.company.pk).delete()
         super().tearDown()
 
-    def _token(self, user):
-        return str(AccessToken.for_user(user))
+    def _ticket(self, user):
+        return issue_ws_ticket(user)
 
     async def test_authenticated_connection_receives_broadcast(self):
-        token = await self._async_token()
-        communicator = WebsocketCommunicator(self.application, f'/ws/chat/?token={token}')
+        ticket = await self._async_ticket()
+        communicator = WebsocketCommunicator(self.application, f'/ws/chat/?ticket={ticket}')
         connected, _ = await communicator.connect()
         self.assertTrue(connected)
 
@@ -306,15 +306,28 @@ class ChatConsumerTests(TransactionTestCase):
 
         await communicator.disconnect()
 
-    async def test_bad_token_is_rejected(self):
-        communicator = WebsocketCommunicator(self.application, '/ws/chat/?token=not-a-real-token')
+    async def test_bad_ticket_is_rejected(self):
+        communicator = WebsocketCommunicator(self.application, '/ws/chat/?ticket=not-a-real-ticket')
         connected, _ = await communicator.connect()
         self.assertFalse(connected)
         await communicator.disconnect()
 
-    async def _async_token(self):
+    async def test_ticket_is_single_use(self):
+        ticket = await self._async_ticket()
+        # Первое соединение успешно...
+        first = WebsocketCommunicator(self.application, f'/ws/chat/?ticket={ticket}')
+        connected, _ = await first.connect()
+        self.assertTrue(connected)
+        await first.disconnect()
+        # ...а повторное с тем же тикетом — нет.
+        second = WebsocketCommunicator(self.application, f'/ws/chat/?ticket={ticket}')
+        connected2, _ = await second.connect()
+        self.assertFalse(connected2)
+        await second.disconnect()
+
+    async def _async_ticket(self):
         from channels.db import database_sync_to_async
-        return await database_sync_to_async(self._token)(self.user)
+        return await database_sync_to_async(self._ticket)(self.user)
 
 
 # ─────────────────────────── Уведомления ───────────────────────────

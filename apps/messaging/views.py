@@ -20,6 +20,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.core.permissions import IsCompanyMember
+from rest_framework.views import APIView
 
 from .models import ChatMessage, Conversation, ConversationParticipant, Notification
 from .serializers import (
@@ -35,6 +36,7 @@ from .services import (
     ensure_general_conversation,
     ensure_participant,
     get_or_create_direct,
+    issue_ws_ticket,
     notify,
 )
 
@@ -193,6 +195,17 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
                 .select_related('user')
             )
             for participant in recipients:
+                # Уведомление создаём только за ПЕРВОЕ непрочитанное сообщение
+                # беседы. Если у получателя уже есть непрочитанные — он их видит
+                # по счётчику вкладки чата, и каждое следующее сообщение плодило
+                # бы спам из уведомлений (замечание тестировщика).
+                previous_unread = ChatMessage.objects.filter(
+                    conversation=conversation,
+                ).exclude(sender=participant.user).exclude(pk=message.pk)
+                if participant.last_read_at:
+                    previous_unread = previous_unread.filter(created_at__gt=participant.last_read_at)
+                if previous_unread.exists():
+                    continue
                 notify(
                     participant.user,
                     Notification.NotificationType.NEW_MESSAGE,
@@ -202,6 +215,23 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
 
         out = ChatMessageSerializer(message, context={'request': request})
         return Response(out.data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(tags=['Chat'])
+class WsTicketView(APIView):
+    """
+    GET /api/v1/messaging/ws-ticket/ — одноразовый тикет для WebSocket чата.
+
+    Тикет короткоживущий (60 сек), не заменяет собой access-токен: его хватает
+    только на одно соединение. Токен в query-строке WebSocket-URL не передаётся
+    именно потому, что он оседал бы в логах прокси/балансировщиков.
+    """
+    permission_classes = [IsCompanyMember]
+
+    def get(self, request):
+        if request.user.is_superadmin or request.user.company_id is None:
+            return Response({'error': 'Чат доступен только сотрудникам компании.'}, status=status.HTTP_403_FORBIDDEN)
+        return Response({'ticket': issue_ws_ticket(request.user)})
 
 
 @extend_schema(tags=['Chat'])

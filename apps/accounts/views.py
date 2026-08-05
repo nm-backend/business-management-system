@@ -32,7 +32,7 @@ from . import two_factor
 from .access_keys import issue_access_key, redeem_access_key, verify_access_key
 from .push_service import send_push_to_company
 from .token_utils import blacklist_all_tokens
-from .models import AccessKey, PushSubscription, Skill, User
+from .models import AccessKey, PushSubscription, SetupGate, Skill, User
 from .serializers import (
     UserSerializer, UserSelfUpdateSerializer, UserCreateSerializer, UserLimitedSerializer,
     LoginSerializer, ChangePasswordSerializer, SetupOwnerSerializer,
@@ -121,12 +121,22 @@ class SetupOwnerView(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             with transaction.atomic():
+                # Сериализуем параллельные setup-запросы через единственную
+                # строку SetupGate (SELECT ... FOR UPDATE): иначе два запроса
+                # с разными username оба проходят проверку «суперадмина ещё
+                # нет» и создают двух суперадминов.
+                SetupGate.objects.select_for_update().get(pk=1)
                 if User.objects.filter(role=User.Role.SUPERADMIN).exists():
                     return Response(
                         {'error': 'Setup is already complete.'},
                         status=status.HTTP_403_FORBIDDEN,
                     )
                 user = serializer.save()
+        except SetupGate.DoesNotExist:
+            return Response(
+                {'error': 'Setup is not available.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         except IntegrityError:
             return Response(
                 {'error': 'Setup is already complete.'},

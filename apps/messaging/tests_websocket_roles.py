@@ -15,22 +15,22 @@ from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 from django.test import TransactionTestCase
 from rest_framework.test import APIClient
-from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.accounts.models import User
 from apps.companies.models import Company
 from apps.messaging.models import ChatMessage, Conversation, Notification
 from apps.messaging.routing import websocket_urlpatterns
 from apps.messaging.services import (
+    broadcast_message,
     ensure_general_conversation,
     get_or_create_direct,
-    broadcast_message,
+    issue_ws_ticket,
     notify,
     notify_staff,
     unread_count,
 )
 import uuid
-from apps.messaging.ws_auth import JWTAuthMiddleware
+from apps.messaging.ws_auth import TicketAuthMiddleware
 
 
 class WebSocketRoleTests(TransactionTestCase):
@@ -61,7 +61,7 @@ class WebSocketRoleTests(TransactionTestCase):
             can_write_to_owner=False,
         )
         self.rest = APIClient()
-        self.ws_app = JWTAuthMiddleware(URLRouter(websocket_urlpatterns))
+        self.ws_app = TicketAuthMiddleware(URLRouter(websocket_urlpatterns))
 
     def tearDown(self):
         ChatMessage.objects.filter(company=self.company).delete()
@@ -71,12 +71,9 @@ class WebSocketRoleTests(TransactionTestCase):
         Company.objects.filter(pk=self.company.pk).delete()
         super().tearDown()
 
-    def _token(self, user):
-        return str(AccessToken.for_user(user))
-
     @database_sync_to_async
-    def _async_token(self, user):
-        return self._token(user)
+    def _async_ticket(self, user):
+        return issue_ws_ticket(user)
 
     @database_sync_to_async
     def _ensure_general(self):
@@ -130,8 +127,8 @@ class WebSocketRoleTests(TransactionTestCase):
 
     async def _connect_ws(self, user):
         """Подключает WebSocket и возвращает communicator."""
-        token = await self._async_token(user)
-        communicator = WebsocketCommunicator(self.ws_app, f'/ws/chat/?token={token}')
+        ticket = await self._async_ticket(user)
+        communicator = WebsocketCommunicator(self.ws_app, f'/ws/chat/?ticket={ticket}')
         connected, _ = await communicator.connect()
         greeting = await communicator.receive_json_from()
         return connected, greeting, communicator

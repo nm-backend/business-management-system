@@ -1,38 +1,50 @@
 """
-JWT-аутентификация для WebSocket (Django Channels).
+Тикет-аутентификация для WebSocket (Django Channels).
 
-Браузер не может передать заголовок Authorization при открытии WebSocket,
-поэтому access-токен передаётся в query-строке: ws://host/ws/chat/?token=<JWT>.
-Middleware валидирует токен через SimpleJWT и кладёт пользователя в scope.
+Access-токен НЕ передаётся в query-строке WebSocket-URL: он попадает в логи
+прокси/балансировщика и течёт с них. Клиент получает одноразовый коротко-
+живущий тикет (WsTicket) по REST (Authorization-заголовок), а WebSocket
+открывает только с ним. Middleware валидирует тикет, помечает его
+использованным и кладёт пользователя в scope.
 """
 from urllib.parse import parse_qs
 
 from channels.db import database_sync_to_async
 from channels.middleware import BaseMiddleware
 from django.contrib.auth.models import AnonymousUser
+from django.utils import timezone
 
 
 @database_sync_to_async
-def _get_user(token):
-    """Валидирует access-токен и возвращает пользователя или AnonymousUser."""
-    from rest_framework_simplejwt.exceptions import TokenError
-    from rest_framework_simplejwt.tokens import AccessToken
+def _get_user_by_ticket(ticket):
+    """Валидирует одноразовый тикет и возвращает пользователя или AnonymousUser."""
+    from django.db.models import F
 
     from apps.accounts.models import User
 
-    try:
-        access = AccessToken(token)
-        user = User.objects.get(pk=access['user_id'], is_active=True)
-    except (TokenError, KeyError, User.DoesNotExist, Exception):
+    from .models import WsTicket
+
+    if not ticket:
         return AnonymousUser()
+    try:
+        ws_ticket = WsTicket.objects.select_related('user').get(
+            ticket=ticket, used=False, expires_at__gt=timezone.now(),
+        )
+    except WsTicket.DoesNotExist:
+        return AnonymousUser()
+    user = ws_ticket.user
+    if not user.is_active or user.blocked_by_owner:
+        return AnonymousUser()
+    # Одноразовость: помечаем использованным ДО открытия соединения.
+    WsTicket.objects.filter(pk=ws_ticket.pk).update(used=True)
     return user
 
 
-class JWTAuthMiddleware(BaseMiddleware):
-    """Аутентифицирует WebSocket-соединение по access-токену из query-строки."""
+class TicketAuthMiddleware(BaseMiddleware):
+    """Аутентифицирует WebSocket-соединение по одноразовому тикету из query-строки."""
 
     async def __call__(self, scope, receive, send):
         query = parse_qs(scope.get('query_string', b'').decode())
-        token = (query.get('token') or [None])[0]
-        scope['user'] = await _get_user(token) if token else AnonymousUser()
+        ticket = (query.get('ticket') or [None])[0]
+        scope['user'] = await _get_user_by_ticket(ticket)
         return await super().__call__(scope, receive, send)

@@ -27,13 +27,30 @@ class ChatSocket {
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
         }
-        const token = window.api.getTokens().access;
-        if (!token) return;
+        // Access-токен в query-строку WebSocket-URL не передаём (он оседал бы
+        // в логах прокси): сначала получаем одноразовый короткоживущий тикет
+        // по REST с обычным заголовком Authorization.
+        this._fetchTicket();
+    }
+
+    async _fetchTicket() {
+        const api = window.api;
+        if (!api.getTokens().access) return;
+        try {
+            const data = await api.request('/api/v1/messaging/ws-ticket/', { method: 'GET' });
+            this._open(data.ticket);
+        } catch (e) {
+            this._scheduleReconnect();
+        }
+    }
+
+    _open(ticket) {
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const url = `${proto}://${window.location.host}/ws/chat/?token=${encodeURIComponent(token)}`;
+        const url = `${proto}://${window.location.host}/ws/chat/?ticket=${encodeURIComponent(ticket)}`;
         try {
             this.ws = new WebSocket(url);
         } catch (e) {
+            this._scheduleReconnect();
             return;
         }
 
@@ -49,18 +66,27 @@ class ChatSocket {
                 this.handler(data.message);
             }
         };
-        this.ws.onclose = async (event) => {
+        this.ws.onclose = (event) => {
             clearInterval(this.pingTimer);
             if (!this.shouldRun) return;
-            // 4401 — токен протух: пробуем обновить, затем переподключаемся.
+            // 4401 — тикет протух или токен истёк: пробуем обновить токен,
+            // затем переподключаемся за свежим тикетом.
             if (event.code === 4401) {
                 const tokens = window.api.getTokens();
-                if (tokens.refresh) await window.api.refreshToken(tokens.refresh);
+                if (tokens.refresh) window.api.refreshToken(tokens.refresh).finally(() => this._scheduleReconnect());
+                else this._scheduleReconnect();
+            } else {
+                this._scheduleReconnect();
             }
-            setTimeout(() => this.connect(), this.reconnectDelay);
-            this.reconnectDelay = Math.min(this.reconnectDelay * 2, 15000);
         };
         this.ws.onerror = () => { try { this.ws.close(); } catch (e) { /* ignore */ } };
+    }
+
+    _scheduleReconnect() {
+        clearInterval(this.pingTimer);
+        if (!this.shouldRun) return;
+        setTimeout(() => this.connect(), this.reconnectDelay);
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 15000);
     }
 
     send(obj) {
