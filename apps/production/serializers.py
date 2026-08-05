@@ -71,7 +71,36 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         fields = ['order', 'worker', 'is_self_assigned']
 
 
-class WorkRecordSerializer(serializers.ModelSerializer):
+class _ConfirmedWorkGuardMixin:
+    """
+    Защита подтверждённой работы от правки количества/брака через PATCH.
+
+    confirm_work уже списал сырьё и приходовал товар по (quantity + defect_quantity)
+    и начислил labor_cost. Прямая правка этих полей после подтверждения
+    рассинхронизировала бы склад и заработок: склад остался по старым значениям,
+    а цифры в карточке показали бы новые.
+    """
+    _CONFIRMED_LOCKED_FIELDS = ('quantity', 'defect_quantity')
+
+    def validate(self, attrs):
+        instance = self.instance
+        if instance and instance.status == WorkRecord.WorkStatus.CONFIRMED:
+            for field in self._CONFIRMED_LOCKED_FIELDS:
+                if field in attrs and attrs[field] != getattr(instance, field):
+                    raise serializers.ValidationError({
+                        field: 'Количество подтверждённой работы изменить нельзя.',
+                    })
+        return attrs
+
+    def validate_quantity(self, value):
+        # Та же защита, что у Create-сериализатора: отрицательное количество
+        # при PATCH до подтверждения испортило бы расчёты confirm_work.
+        if value is None or value <= 0:
+            raise serializers.ValidationError('Количество работы должно быть больше нуля.')
+        return value
+
+
+class WorkRecordSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSerializer):
     """
     Сериализатор записи о работе с финансовыми данными.
 
@@ -100,7 +129,7 @@ class WorkRecordSerializer(serializers.ModelSerializer):
         ]
 
 
-class WorkRecordLimitedSerializer(serializers.ModelSerializer):
+class WorkRecordLimitedSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSerializer):
     """
     Сериализатор записи о работе без финансовых данных.
 
