@@ -136,15 +136,32 @@ class FinishedProductOwnerSerializer(FinishedProductSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        rate = instance.labor_rates.order_by('operation').first()
-        data['labor_rate'] = str(rate.rate_per_unit) if rate else None
+        data['labor_rate'] = str(self._card_rate(instance).rate_per_unit) if self._card_rate(instance) else None
         return data
 
-    def _save_labor_rate(self, product, value):
-        """Одна ставка на товар: правим существующую или заводим первую."""
+    @staticmethod
+    def _card_rate(product):
+        """Ставка, которую видит и правит владелец в карточке товара.
+
+        Раньше бралась ставка «по алфавиту» (order_by('operation')), а расчёт
+        платит по операции работы (production.services.calculate_labor_cost).
+        При нескольких операциях поле в карточке правило чужую ставку — владелец
+        менял «резку», а работник получал по «полировке». Показываем ставку
+        операции OTHER («другое»), а если её нет — единственную ставку товара.
+        """
         from apps.finance.models import LaborRate
 
-        rate = product.labor_rates.order_by('operation').first()
+        rates = list(product.labor_rates.all())
+        rate = next((r for r in rates if r.operation == LaborRate.OperationType.OTHER), None)
+        if rate is None and len(rates) == 1:
+            rate = rates[0]
+        return rate
+
+    def _save_labor_rate(self, product, value):
+        """Одна ставка на товар: правим карточную или заводим первую."""
+        from apps.finance.models import LaborRate
+
+        rate = self._card_rate(product)
         if rate:
             rate.rate_per_unit = value
             rate.save(update_fields=['rate_per_unit', 'updated_at'])
