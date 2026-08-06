@@ -111,6 +111,23 @@ class WorkRecordSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSerializer
     product_name = serializers.CharField(source='product.name', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
     photos = WorkPhotoSerializer(many=True, read_only=True)
+    labor_rate = serializers.SerializerMethodField()
+
+    def get_labor_rate(self, obj):
+        """Ставка за единицу по операции работы (та же логика, что в calculate_labor_cost)."""
+        from apps.finance.models import LaborRate
+        if not obj.product:
+            return None
+        rates = list(obj.product.labor_rates.all())
+        if not rates:
+            return None
+        if obj.operation:
+            rate = next((r for r in rates if r.operation == obj.operation), None)
+        elif len(rates) == 1:
+            rate = rates[0]
+        else:
+            rate = None
+        return str(rate.rate_per_unit) if rate else None
 
     class Meta:
         model = WorkRecord
@@ -119,7 +136,7 @@ class WorkRecordSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSerializer
             'product', 'product_name', 'operation', 'quantity', 'defect_quantity', 'unit',
             'photo', 'photos', 'comment', 'status',
             'confirmed_by', 'confirmed_by_name', 'confirmed_at',
-            'rejection_reason', 'labor_cost',
+            'rejection_reason', 'labor_cost', 'labor_rate',
             'is_confirmed', 'created_at', 'updated_at'
         ]
         # status/labor_cost/worker меняются ТОЛЬКО через confirm/reject, а не PATCH.
@@ -140,6 +157,22 @@ class WorkRecordLimitedSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSer
     product_name = serializers.CharField(source='product.name', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
     photos = WorkPhotoSerializer(many=True, read_only=True)
+    labor_rate = serializers.SerializerMethodField()
+
+    def get_labor_rate(self, obj):
+        from apps.finance.models import LaborRate
+        if not obj.product:
+            return None
+        rates = list(obj.product.labor_rates.all())
+        if not rates:
+            return None
+        if obj.operation:
+            rate = next((r for r in rates if r.operation == obj.operation), None)
+        elif len(rates) == 1:
+            rate = rates[0]
+        else:
+            rate = None
+        return str(rate.rate_per_unit) if rate else None
 
     class Meta:
         model = WorkRecord
@@ -148,7 +181,7 @@ class WorkRecordLimitedSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSer
             'product', 'product_name', 'operation', 'quantity', 'defect_quantity', 'unit',
             'photo', 'photos', 'comment', 'status',
             'confirmed_by', 'confirmed_by_name', 'confirmed_at',
-            'rejection_reason',
+            'rejection_reason', 'labor_rate',
             'is_confirmed', 'created_at', 'updated_at'
         ]
         # Админ видит работы без денег и не может менять статус прямым PATCH.

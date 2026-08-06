@@ -218,7 +218,8 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return WorkRecord.objects.none()
-        queryset = super().get_queryset().select_related('worker', 'product', 'confirmed_by', 'task')
+        queryset = super().get_queryset().select_related('worker', 'product', 'confirmed_by', 'task') \
+            .prefetch_related('product__labor_rates')
         if self.request.user.is_worker:
             queryset = queryset.filter(worker=self.request.user)
         status_filter = self.request.query_params.get('status')

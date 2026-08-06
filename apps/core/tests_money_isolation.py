@@ -90,10 +90,27 @@ class MoneyLeakTests(TestCase):
         for user in (self.admin, self.worker):
             api = self._api(user)
             for url in ['/api/v1/finance/expenses/', '/api/v1/finance/worker-payments/',
-                        '/api/v1/finance/labor-rates/', '/api/v1/reports/analytics/owner/',
+                        '/api/v1/reports/analytics/owner/',
                         '/api/v1/reports/export/finance/']:
                 with self.subTest(role=user.role, url=url):
                     self.assertEqual(api.get(url).status_code, 403)
+
+    def test_labor_rates_readable_but_not_editable(self):
+        """Ставки читаются admin/worker (форма сдачи работы), изменить нельзя."""
+        from apps.finance.models import LaborRate
+        from apps.warehouse.models import FinishedProduct
+        LaborRate.objects.get_or_create(
+            company=self.company,
+            product=FinishedProduct.objects.get(name='P'),
+            operation=LaborRate.OperationType.OTHER,
+            defaults={'rate_per_unit': Decimal('500'), 'unit': 'dona'})
+        for user in (self.admin, self.worker):
+            api = self._api(user)
+            self.assertEqual(api.get('/api/v1/finance/labor-rates/').status_code, 200)
+            self.assertEqual(api.post('/api/v1/finance/labor-rates/', {
+                'product': FinishedProduct.objects.get(name='P').id,
+                'operation': 'cutting', 'rate_per_unit': '999', 'unit': 'dona',
+            }, format='json').status_code, 403)
 
     def test_worker_cannot_see_other_workers_earnings(self):
         """Работник видит СВОЙ заработок, но не чужой."""

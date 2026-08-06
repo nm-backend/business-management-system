@@ -264,6 +264,7 @@ class ProductionComponent {
                     <select name="operation" id="work-operation" class="form-control"></select>
                     <small class="text-muted" data-i18n="production.operation_hint"></small>
                 </div>
+                <div id="work-pay-info" class="alert-box alert-box-info" style="display:none;"></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div class="form-group"><label data-i18n="production.quantity"></label>
                         <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
@@ -291,27 +292,66 @@ class ProductionComponent {
         const productSelect = modal.querySelector('select[name=product]');
         const operationGroup = modal.querySelector('#work-operation-group');
         const operationSelect = modal.querySelector('#work-operation');
+        const payInfo = modal.querySelector('#work-pay-info');
+        const quantityInput = modal.querySelector('input[name=quantity]');
+        let currentRates = [];
+        const renderPayInfo = () => {
+            if (!productSelect.value) {
+                payInfo.style.display = 'none';
+                return;
+            }
+            if (!currentRates.length) {
+                // Ставки нет: работа уйдёт на подтверждение, но не «бесплатная» —
+                // владелец задаст ставку или назначит сумму вручную.
+                payInfo.className = 'alert-box alert-box-warning';
+                payInfo.textContent = window.ui.t('production.no_labor_rate');
+                payInfo.style.display = '';
+                return;
+            }
+            const op = operationSelect.value;
+            const rate = op
+                ? currentRates.find((r) => r.operation === op)
+                : currentRates.length === 1 ? currentRates[0] : null;
+            if (!rate) {
+                payInfo.style.display = 'none';
+                return;
+            }
+            const qty = Number(quantityInput.value) || 0;
+            const total = (Number(rate.rate_per_unit) * qty).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+            payInfo.className = 'alert-box alert-box-info';
+            payInfo.textContent = window.ui.t('production.expected_pay')
+                .replace('{rate}', window.ui.qty(rate.rate_per_unit))
+                .replace('{total}', total);
+            payInfo.style.display = '';
+        };
         const loadOperations = async () => {
             const pid = productSelect.value;
             if (!pid) {
                 operationGroup.style.display = 'none';
+                currentRates = [];
+                renderPayInfo();
                 return;
             }
             try {
                 const resp = await window.api.request(`/finance/labor-rates/?product=${pid}`);
-                const rates = resp.results || resp;
-                const ops = [...new Set(rates.map((r) => r.operation))];
+                currentRates = resp.results || resp;
+                const ops = [...new Set(currentRates.map((r) => r.operation))];
                 operationSelect.innerHTML = ops
                     .map((op) => `<option value="${op}" data-i18n="operations.${op}"></option>`)
                     .join('');
                 window.i18n.applyTranslations();
                 operationSelect.required = ops.length > 1;
                 operationGroup.style.display = ops.length ? '' : 'none';
+                renderPayInfo();
             } catch (error) {
                 operationGroup.style.display = 'none';
+                currentRates = [];
+                renderPayInfo();
             }
         };
         productSelect.addEventListener('change', loadOperations);
+        operationSelect.addEventListener('change', renderPayInfo);
+        quantityInput.addEventListener('input', renderPayInfo);
 
         // Превью выбранных снимков с крестиком, как на макете «Ишни якунлаш».
         const photoInputEl = modal.querySelector('input[name=uploaded_photos]');
@@ -398,6 +438,13 @@ class ProductionComponent {
         window.api.request(`/production/works/${id}/`).then((w) => {
             if (!modal.isConnected) return;
             const details = modal.querySelector('#confirm-work-details');
+            const payRow = w.labor_rate
+                ? `<div class="text-sm font-bold" style="margin-top:6px;">${window.ui.escape(
+                    window.ui.t('production.pay_calc')
+                        .replace('{rate}', window.ui.qty(w.labor_rate))
+                        .replace('{qty}', window.ui.qty(w.quantity))
+                        .replace('{total}', window.ui.qty(Number(w.labor_rate) * Number(w.quantity))))}</div>`
+                : `<div class="alert-box alert-box-warning" style="margin-bottom:0;margin-top:8px;" data-i18n="production.confirm_no_rate_hint"></div>`;
             details.innerHTML = `
                 <div class="card" style="box-shadow:none;border:1px solid #efeff4;margin-bottom:12px;padding:12px;">
                     <div class="text-sm font-bold">${window.ui.escape(w.product_name || '-')} × ${window.ui.qty(w.quantity)} <span data-i18n="units.${w.unit}"></span></div>
@@ -406,6 +453,7 @@ class ProductionComponent {
                         <div class="text-sm text-danger" style="margin-top:4px;"><span data-i18n="production.defect_quantity"></span>: ${window.ui.qty(w.defect_quantity)}</div>` : ''}
                     ${this.photoStrip(w)}
                     ${w.comment ? `<div class="text-sm" style="margin-top:6px;">${window.ui.escape(w.comment)}</div>` : ''}
+                    ${payRow}
                 </div>`;
             window.i18n.applyTranslations();
         }).catch(() => {

@@ -509,6 +509,8 @@ textarea.form-control { resize: vertical; min-height: 60px; }
     margin-bottom: 14px;
 }
 .alert-success { background: var(--success-soft); color: var(--success); }
+.alert-box-info { background: var(--info-soft, rgba(30, 111, 255, .12)); color: var(--info, #1e6fff); }
+.alert-box-warning { background: var(--warning-soft, rgba(255, 152, 0, .12)); color: var(--warning, #b26a00); }
 
 /* ---------- Chip tabs ---------- */
 .tabs {

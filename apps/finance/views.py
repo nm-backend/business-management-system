@@ -10,6 +10,7 @@ from django.db.models import Sum
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -113,14 +114,36 @@ class ExpenseViewSet(CompanyScopedViewSet):
         instance.delete()
 
 
+class LaborRateReadPermission(BasePermission):
+    """
+    Ставки оплаты труда: owner управляет полностью, а работник и админ
+    только читают (list/retrieve).
+
+    Работник в форме «Ишни якунлаш» выбирает операцию по списку ставок
+    товара — иначе при нескольких ставках подтверждение падает с
+    labor_rate_missing, а рабочему непонятно почему. Ставка — не «тайна»
+    для работника: он видит свой labor_cost в подтверждённых работах.
+    Изменение ставок — по-прежнему только owner.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_owner:
+            return True
+        if view.action in ('list', 'retrieve'):
+            return request.user.is_worker or request.user.is_admin
+        return False
+
+
 class LaborRateViewSet(CompanyScopedViewSet):
     """
     ViewSet для управления ставками оплаты труда.
 
-    Доступен только владельцу (owner).
+    Полный доступ — владельцу (owner); работник и админ читают ставки,
+    чтобы видеть операцию и расчёт в форме сдачи работы.
     """
     queryset = LaborRate.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
-    permission_classes = [IsCompanyMember, FinancialDataPermission]
+    permission_classes = [IsCompanyMember, LaborRateReadPermission]
     # Форма «Ишни якунлаш» подтягивает ставки выбранного товара, чтобы
     # показать работнику список операций.
     filter_backends = [DjangoFilterBackend]

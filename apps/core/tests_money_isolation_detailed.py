@@ -15,7 +15,7 @@
 - /api/v1/production/works/
 - /api/v1/production/tasks/
 - /api/v1/finance/expenses/
-- /api/v1/finance/labor-rates/
+- /api/v1/finance/labor-rates/ (только чтение для admin/worker)
 - /api/v1/finance/worker-payments/
 - /api/v1/reports/analytics/owner/
 - /api/v1/reports/analytics/admin/
@@ -426,7 +426,6 @@ class DetailedMoneyIsolationTests(TestCase):
 
     OWNER_ONLY_ENDPOINTS = [
         '/api/v1/finance/expenses/',
-        '/api/v1/finance/labor-rates/',
         '/api/v1/finance/worker-payments/',
         '/api/v1/reports/analytics/owner/',
         '/api/v1/reports/export/finance/',
@@ -447,6 +446,17 @@ class DetailedMoneyIsolationTests(TestCase):
                 resp = self._api(self.worker).get(url)
                 self.assertEqual(resp.status_code, 403,
                                  f'Worker должен получать 403 на {url}')
+
+    def test_19b_labor_rates_readable_for_admin_and_worker(self):
+        """Ставки открыты на чтение (форма сдачи работы), но не на изменение."""
+        for user in (self.admin, self.worker):
+            api = self._api(user)
+            with self.subTest(role=user.role):
+                self.assertEqual(api.get('/api/v1/finance/labor-rates/').status_code, 200)
+                self.assertEqual(api.post('/api/v1/finance/labor-rates/', {
+                    'product': self.product.id,
+                    'operation': 'cutting', 'rate_per_unit': '999', 'unit': 'dona',
+                }, format='json').status_code, 403)
 
     def test_20_owner_can_access_finance(self):
         """Owner получает 200 на все финансовые эндпоинты."""
