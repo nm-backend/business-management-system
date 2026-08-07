@@ -247,7 +247,6 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
             queryset = queryset.filter(payment_date__gte=parse_date_param(date_from, 'date_from'))
         if date_to:
             queryset = queryset.filter(payment_date__lte=parse_date_param(date_to, 'date_to'))
-
         return queryset
 
     @action(detail=False, methods=['get'])
@@ -332,6 +331,10 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         worker = serializer.validated_data.get('worker')
         if worker and worker.company_id != self.request.user.company_id:
             raise PermissionDenied('Worker must belong to your company')
+        # Смена работника обходит потолок зарплаты: выплата создавалась под
+        # начисление одного, а перевешивалась на другого с пустым балансом.
+        if worker and worker.id != serializer.instance.worker_id:
+            raise PermissionDenied('Worker cannot be changed after the payment is created')
         from apps.audit.models import AuditLog
         from apps.audit.services import collect_model_changes, write_audit_log
         changes = collect_model_changes(serializer.instance, serializer.validated_data)

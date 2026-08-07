@@ -159,15 +159,35 @@ class Task(TimestampedModel):
             self.order.save(update_fields=['status'])
 
     def confirm(self, confirmed_by):
-        """Администратор/владелец подтверждает задачу; заказ становится готовым."""
+        """Администратор/владелец подтверждает задачу; заказ становится готовым.
+
+        Готовым заказ становится только когда товара на складе хватает под весь
+        заказ. Раньше подтверждение частичной сдачи (сделано 1 из 4) помечало
+        заказ READY, и выдача падала с not_enough_stock — «готов», а товара
+        нет. Заказ остаётся в awaiting_confirmation до тех пор, пока партия
+        не произведена целиком (повторная сдача доделки переводит в READY).
+        """
         from django.utils import timezone
+        from apps.warehouse.models import FinishedProduct
         self.status = TaskStatus.CONFIRMED
         self.confirmed_at = timezone.now()
         self.confirmed_by = confirmed_by
         self.save(update_fields=['status', 'confirmed_at', 'confirmed_by'])
         if self.order:
-            self.order.status = self.order.Status.READY
-            self.order.save(update_fields=['status'])
+            order = self.order
+            ready = True
+            if order.product_id:
+                product = FinishedProduct.objects.select_for_update().get(pk=order.product_id)
+                # Доступно = остаток минус резервы ДРУГИХ заказов: свой резерв
+                # снимаем из формулы (выдача делает то же до списания, иначе
+                # собственный резерв занизил бы доступное).
+                available = product.quantity - (
+                    (product.reserved_for_orders or Decimal('0')) - order.quantity
+                )
+                ready = available >= order.quantity
+            if ready:
+                order.status = order.Status.READY
+                order.save(update_fields=['status'])
 
 
 class WorkRecord(TimestampedModel):

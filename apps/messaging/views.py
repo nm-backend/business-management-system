@@ -93,6 +93,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                 ),
             )
             .distinct()
+            .order_by('-updated_at')
         )
 
     def list(self, request, *args, **kwargs):
@@ -287,7 +288,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         if is_read is not None:
             queryset = queryset.filter(is_read=is_read.lower() == 'true')
 
-        return queryset
+        # Пагинация требует детерминированного порядка: без order_by Django
+        # предупреждает UnorderedObjectListWarning, а страницы «плавают».
+        return queryset.order_by('-created_at')
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

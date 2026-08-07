@@ -14,7 +14,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
-from rest_framework import filters, viewsets, status
+from rest_framework import filters, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -30,7 +30,6 @@ from apps.core.validators import parse_int_param
 from core.permissions import IsOwner, IsOwnerOrAdmin
 from . import two_factor
 from .access_keys import issue_access_key, redeem_access_key, verify_access_key
-from .push_service import send_push_to_company
 from .token_utils import blacklist_all_tokens
 from .models import AccessKey, PushSubscription, SetupGate, Skill, User
 from .serializers import (
@@ -966,27 +965,41 @@ class PushSubscriptionView(APIView):
             )
         # Лимит подписок на пользователя: сломанный клиент, плодящий подписки
         # при каждом входе, иначе раздувал рассылку (send_push_to_company идёт
-        # по ВСЕМ подпискам компании).
-        active_count = PushSubscription.objects.filter(
-            user=request.user, is_active=True,
-        ).count()
-        if active_count >= 5:
-            return Response(
-                {'error': 'Push subscription limit reached (5). Unsubscribe old devices first.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        sub, created = PushSubscription.objects.update_or_create(
-            user=request.user,
-            endpoint=endpoint,
-            defaults={
-                'company': request.user.company,
-                'p256dh_key': keys['p256dh'],
-                'auth_key': keys['auth'],
-                'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
-                'is_active': True,
-            },
-        )
+        # по ВСЕМ подпискам компании). Проверка и вставка — в одной транзакции
+        # под блокировкой строки пользователя: параллельные запросы иначе
+        # проскакивали мимо лимита (count, потом insert — два потока видели 4).
+        # Повторная подписка УЖЕ существующего endpoint лимит не считает: новая
+        # строка не создалась бы, а обновление устройства — штатный сценарий.
+        defaults = {
+            'company': request.user.company,
+            'p256dh_key': keys['p256dh'],
+            'auth_key': keys['auth'],
+            'user_agent': request.META.get('HTTP_USER_AGENT', '')[:500],
+            'is_active': True,
+        }
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=request.user.pk)
+            existing = PushSubscription.objects.filter(
+                user=request.user, endpoint=endpoint,
+            ).first()
+            if existing is not None:
+                for field, value in defaults.items():
+                    setattr(existing, field, value)
+                existing.save()
+                sub, created = existing, False
+            else:
+                active_count = PushSubscription.objects.filter(
+                    user=request.user, is_active=True,
+                ).count()
+                if active_count >= 5:
+                    return Response(
+                        {'error': 'Push subscription limit reached (5). Unsubscribe old devices first.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                sub = PushSubscription.objects.create(
+                    user=request.user, endpoint=endpoint, **defaults,
+                )
+                created = True
         return Response(PushSubscriptionSerializer(sub).data,
                         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 

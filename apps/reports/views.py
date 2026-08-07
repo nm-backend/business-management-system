@@ -391,7 +391,7 @@ class RevenueTimelineView(APIView):
             Order.objects.filter(
                 company_id=company_id,
                 status=Order.Status.DELIVERED,
-                delivered_at__gte=six_months_ago,
+                delivered_at__date__gte=six_months_ago,
                 product__isnull=False,
             )
             .annotate(month=TruncMonth('delivered_at'))

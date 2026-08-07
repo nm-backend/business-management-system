@@ -6,9 +6,10 @@ Views for clients API.
 """
 from django.db.models import Exists, OuterRef
 from django.db import transaction
-from rest_framework import filters, viewsets
+from rest_framework import filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
@@ -46,7 +47,7 @@ class ClientViewSet(CompanyScopedViewSet):
     # («Gulnora» -> «Гулнора»). Для этого строим OR-фильтр по вариантам
     # запроса сами (apps/core/translit.py).
     filterset_fields = ['is_archived']
-    ordering_fields = ['name', 'created_at']
+    ordering_fields = ['name', 'created_at', 'debt', 'total_orders_amount']
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
@@ -98,6 +99,7 @@ class ClientViewSet(CompanyScopedViewSet):
 
     def perform_destroy(self, instance):
         """Удаление запрещено - клиент архивируется."""
+        self._assert_no_debt(instance)
         instance.archive()
         write_audit_log(
             action=AuditLog.Action.ARCHIVE,
@@ -106,6 +108,15 @@ class ClientViewSet(CompanyScopedViewSet):
             request=self.request,
         )
 
+    def _assert_no_debt(self, client):
+        # Клиент с долгом исчезал из активного учёта: архивные клиенты
+        # исключаются из отчётов, и долг «пропадал» без следа.
+        if (client.debt or 0) > 0:
+            raise DRFValidationError({
+                'detail': 'У клиента есть долг — архивировать нельзя. '
+                          'Сначала закройте долг оплатой.',
+            })
+
     # Вкладка «Архив» была только на чтение: положить туда клиента или вернуть
     # его из интерфейса было нечем, наполнялась она лишь автоматическим
     # auto_archive() после оплаты. Идём через archive()/restore(), а не через
@@ -113,6 +124,7 @@ class ClientViewSet(CompanyScopedViewSet):
     @action(detail=True, methods=['post'])
     def archive(self, request, pk=None):
         client = self.get_object()
+        self._assert_no_debt(client)
         client.archive()
         write_audit_log(
             action=AuditLog.Action.ARCHIVE,

@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Sum
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -99,13 +100,21 @@ class Order(TimestampedModel, SoftDeleteModel):
         )
 
     def update_payment_status(self):
-        """Синхронизирует payment_status с суммами total_amount/paid_amount."""
-        if self.paid_amount <= 0:
-            self.payment_status = self.PaymentStatus.UNPAID
-        elif self.is_paid:
+        """
+        Синхронизирует payment_status с суммами total_amount/paid_amount.
+
+        Первым делом проверяется is_paid (paid >= total): заказ с нулевой
+        суммой (total_amount=0 — бесплатный заказ или незаполненная цена
+        админом, который сумм не видит) при нулевой оплате не имеет долга,
+        а раньше помечался «не оплачено» — ложная тревога в канбане и в
+        фильтре неоплаченных.
+        """
+        if self.is_paid:
             self.payment_status = self.PaymentStatus.PAID
-        else:
+        elif self.paid_amount > 0:
             self.payment_status = self.PaymentStatus.PARTIAL
+        else:
+            self.payment_status = self.PaymentStatus.UNPAID
         self.save(update_fields=['payment_status', 'updated_at'])
 
     def reserve_product(self):
@@ -191,18 +200,42 @@ class Order(TimestampedModel, SoftDeleteModel):
 
         product_id/quantity — явно, для пересчёта при смене товара/количества.
         Резерв не уходит в минус (заказы до фичи резерва не имели).
+
+        Подтверждение производства (confirm_work) уже списало сырьё И сняло его
+        резерв. Повторное снятие здесь (выдача, отмена) снимало бы и чужой
+        резерв: у заказа B с параллельным заказом A резерв «крался» вдвое.
+        Вычитаем уже израсходованное подтверждёнными работами по этому заказу.
         """
         if not self.product_id and not product_id:
             return
         from django.db import transaction
-        from apps.warehouse.models import RawMaterial
+        from apps.warehouse.models import RawMaterial, StockMovement
+
+        # Сколько сырья по каждому материалу уже списано подтверждёнными
+        # работами заказа (PRODUCTION_OUT) — их резерв уже снят при confirm.
+        consumed_by_material = {}
+        if self.id:
+            consumed_qs = StockMovement.objects.filter(
+                movement_type=StockMovement.MovementType.PRODUCTION_OUT,
+                related_order_id=self.id,
+                material__isnull=False,
+            )
+            consumed_qs = consumed_qs.values('material_id').annotate(
+                total=Sum('quantity'),
+            )
+            for row in consumed_qs:
+                consumed_by_material[row['material_id']] = row['total'] or Decimal('0')
 
         with transaction.atomic():
             # Тот же фиксированный порядок блокировок, что и в reserve_raw_materials.
             for material, required in sorted(self._recipe_requirements(product_id, quantity), key=lambda item: item[0].pk):
                 locked = RawMaterial.objects.select_for_update().get(pk=material.pk)
+                already = consumed_by_material.get(material.pk, Decimal('0'))
+                remaining = required - already
+                if remaining <= 0:
+                    continue
                 locked.reserved_for_orders = max(
-                    (locked.reserved_for_orders or Decimal('0')) - required, Decimal('0')
+                    (locked.reserved_for_orders or Decimal('0')) - remaining, Decimal('0')
                 )
                 locked.save(update_fields=['reserved_for_orders', 'updated_at'])
 
@@ -222,7 +255,6 @@ class Order(TimestampedModel, SoftDeleteModel):
         """
         from django.db import transaction
 
-        from rest_framework.exceptions import ValidationError
 
         with transaction.atomic():
             locked = Order.objects.select_for_update().get(pk=self.pk)

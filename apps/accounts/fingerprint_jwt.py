@@ -135,6 +135,25 @@ class FingerprintTokenRefreshView(BaseTokenRefreshView):
                         )
                     if not token.check_fingerprint(fingerprint):
                         return self._handle_theft(token)
+                # Деактивированная компания: токены должны умереть вместе с
+                # доступом. Логин (serializers.UserLoginSerializer) проверяет
+                # is_active, а refresh раньше выдавал свежий access навсегда —
+                # блокировка компании через toggle_active не отключала сессии.
+                user_id = token.payload.get('user_id')
+                if user_id:
+                    from django.contrib.auth import get_user_model
+                    User = get_user_model()
+                    user = User.objects.filter(pk=user_id).first()
+                    if user is None or not user.is_active or not user.company_id:
+                        return Response(
+                            {'detail': 'Account is inactive or invalid'},
+                            status=status.HTTP_401_UNAUTHORIZED,
+                        )
+                    if not user.company.is_active:
+                        return Response(
+                            {'detail': 'Company is inactive'},
+                            status=status.HTTP_401_UNAUTHORIZED,
+                        )
             except (InvalidToken, TokenError):
                 return Response(
                     {'detail': 'Token is invalid or expired'},

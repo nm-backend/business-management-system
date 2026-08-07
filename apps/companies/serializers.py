@@ -27,7 +27,10 @@ class CompanySerializer(serializers.ModelSerializer):
             'id', 'name', 'is_active', 'owner_username', 'owner_full_name',
             'users_count', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        # is_active меняется ТОЛЬКО через действие toggle_active (он деактивирует
+        # сотрудников и пишет audit). Прямой PATCH is_active обходил каскад:
+        # компания «блокировалась», а её refresh-токены продолжали работать.
+        read_only_fields = ['is_active', 'created_at', 'updated_at']
 
     def _owner(self, obj):
         # CompanyViewSet префетчит владельцев в obj._owner_list (без доп. запросов).

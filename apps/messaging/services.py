@@ -7,7 +7,7 @@ Messaging services — уведомления и операции корпора
 участникам мгновенно.
 """
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from .models import ChatMessage, Conversation, ConversationParticipant, Notification, WsTicket
@@ -156,12 +156,34 @@ def issue_ws_ticket(user):
 
     from datetime import timedelta
 
+    now = timezone.now()
+    # Чистка при каждой выдаче: использованные, истёкшие и старые тикеты
+    # удаляются. Раньше GET /ws-ticket/ плодил строку на КАЖДЫЙ вызов, а
+    # WsTicket нигде не чистился — таблица росла бесконечно (страница чата
+    # запрашивает тикет при каждом открытии вкладки).
+    WsTicket.objects.filter(user=user).filter(
+        Q(used=True) | Q(expires_at__lt=now) | Q(created_at__lt=now - timedelta(hours=1)),
+    ).delete()
+
     ticket = WsTicket.objects.create(
         company_id=user.company_id,
         user=user,
         ticket=secrets.token_urlsafe(32),
-        expires_at=timezone.now() + timedelta(seconds=WS_TICKET_TTL_SECONDS),
+        expires_at=now + timedelta(seconds=WS_TICKET_TTL_SECONDS),
     )
+
+    # Лимит одновременно активных тикетов на пользователя: клиент мог
+    # накопить десятки неиспользованных (каждое открытие чата — новый тикет,
+    # старый протухает через 60 секунд, но до этого момента «активен»).
+    # Оставляем не больше 5 свежих — остальные отзываем.
+    active = list(
+        WsTicket.objects.filter(user=user, used=False, expires_at__gt=now)
+        .order_by('-created_at')
+        .values_list('id', flat=True)
+    )
+    if len(active) > 5:
+        WsTicket.objects.filter(id__in=active[5:]).delete()
+
     return ticket.ticket
 
 

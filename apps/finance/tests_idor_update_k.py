@@ -49,7 +49,8 @@ class WorkerPaymentUpdateIDORTests(_FinanceTwoCompanies):
         wp.refresh_from_db()
         self.assertEqual(wp.worker_id, self.worker_a.id)  # не перепривязано к чужому
 
-    def test_patch_worker_to_own_company_ok(self):
+    def test_patch_worker_to_own_company_rejected(self):
+        """Смена worker в выплате запрещена даже внутри компании (БАГ 7)."""
         w2 = User.objects.create_user(username='k_fwa2', password='p',
                                       role=User.Role.WORKER, company=self.a)
         wp = WorkerPayment.objects.create(
@@ -59,9 +60,9 @@ class WorkerPaymentUpdateIDORTests(_FinanceTwoCompanies):
         resp = self.api(self.owner_a).patch(
             f'/api/v1/finance/worker-payments/{wp.id}/',
             {'worker': w2.id}, format='json')
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 403)
         wp.refresh_from_db()
-        self.assertEqual(wp.worker_id, w2.id)
+        self.assertEqual(wp.worker_id, self.worker_a.id)
 
 
 class LaborRateUpdateIDORTests(_FinanceTwoCompanies):

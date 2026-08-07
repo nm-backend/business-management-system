@@ -46,24 +46,44 @@ class BackupConfigView(APIView):
 
     def patch(self, request):
         config, _ = BackupConfig.objects.get_or_create(company=None)
-        allowed_fields = [
+        # Валидация ДО записи: сырые значения из PATCH раньше доходили до БД —
+        # keep_last='abc' ронял сохранение в 500, а schedule='hourly' молча
+        # сохранялся и в _sync_beat_schedule превращался в ЕЖЕЧАСНЫЙ бэкап
+        # (маппинг по умолчанию MINUTES/1440).
+        updates = {}
+        for field in [
             'is_enabled', 'schedule', 'storage', 'keep_last',
             's3_endpoint', 's3_region', 's3_bucket', 's3_path_prefix',
             'telegram_chat_id',
-        ]
-        # S3 ключи обновляем только если переданы явно (не пустые)
-        if 's3_access_key' in request.data and request.data['s3_access_key']:
-            allowed_fields.append('s3_access_key')
-        if 's3_secret_key' in request.data and request.data['s3_secret_key']:
-            allowed_fields.append('s3_secret_key')
-        if 'telegram_bot_token' in request.data and request.data['telegram_bot_token']:
-            allowed_fields.append('telegram_bot_token')
+        ]:
+            if field not in request.data:
+                continue
+            value = request.data[field]
+            if field == 'schedule' and value not in BackupConfig.Schedule.values:
+                return Response({'error': f'Invalid schedule: {value!r}'}, status=status.HTTP_400_BAD_REQUEST)
+            if field == 'storage' and value not in BackupConfig.Storage.values:
+                return Response({'error': f'Invalid storage: {value!r}'}, status=status.HTTP_400_BAD_REQUEST)
+            if field == 'keep_last':
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    return Response({'error': 'keep_last must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+                if not 1 <= value <= 365:
+                    return Response({'error': 'keep_last must be between 1 and 365'}, status=status.HTTP_400_BAD_REQUEST)
+            if field == 'is_enabled' and value not in (True, False):
+                return Response({'error': 'is_enabled must be a boolean'}, status=status.HTTP_400_BAD_REQUEST)
+            updates[field] = value
 
-        for field in allowed_fields:
-            if field in request.data:
-                setattr(config, field, request.data[field])
+        # Секреты обновляем только если переданы явно (не пустые).
+        for field in ('s3_access_key', 's3_secret_key', 'telegram_bot_token'):
+            value = request.data.get(field)
+            if value:
+                updates[field] = value
 
-        config.save(update_fields=allowed_fields + ['updated_at'])
+        if updates:
+            for field, value in updates.items():
+                setattr(config, field, value)
+            config.save(update_fields=list(updates) + ['updated_at'])
 
         # Синхронизируем с Celery Beat
         self._sync_beat_schedule(config)

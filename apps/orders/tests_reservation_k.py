@@ -146,10 +146,7 @@ class OrderReservationAPITests(TestCase):
 
     def test_update_delivered_order_does_not_reserve_again(self):
         """
-        Правка выданного заказа не должна воскрешать резерв.
-
-        deliver уже снял резерв; повторное резервирование (по количеству) оставило
-        бы stale-резерв навсегда — статус read-only, но количество менять можно.
+        Выданный заказ нельзя редактировать (БАГ 6) — 400, резерв не воскресает.
         """
         order_id = self._create_order(self.product, '2')
         self.api().post(f'/api/v1/orders/orders/{order_id}/deliver/')
@@ -158,7 +155,7 @@ class OrderReservationAPITests(TestCase):
 
         resp = self.api().patch(f'/api/v1/orders/orders/{order_id}/',
                                 {'quantity': '5'}, format='json')
-        self.assertEqual(resp.status_code, 200, resp.content[:300])
+        self.assertEqual(resp.status_code, 400, resp.content[:300])
         self.product.refresh_from_db()
         self.assertEqual(self.product.reserved_for_orders, Decimal('0'),
                          'выданный заказ не должен резервировать при правке')

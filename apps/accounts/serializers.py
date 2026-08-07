@@ -8,7 +8,6 @@ Serializers for User model and authentication.
 ВАЖНО: Финансовые и административные поля исключаются для non-owner пользователей.
 """
 from rest_framework import serializers
-from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.core.validators import validate_image_upload
@@ -284,17 +283,24 @@ class LoginSerializer(serializers.Serializer):
         Исключения:
             ValidationError - если username/password неверны или аккаунт деактивирован
         """
-        user = authenticate(
-            username=data['username'],
-            password=data['password']
-        )
+        # authenticate() не возвращает НЕАКТИВНЫХ пользователей вообще
+        # (ModelBackend.user_can_authenticate), поэтому проверки is_active и
+        # компании ниже были мёртвым кодом: заблокированный аккаунт и аккаунт
+        # заблокированной компании отвечали одинаковым «Invalid username or
+        # password», и сотрудник не понимал, что его заблокировали. Ищем
+        # пользователя сами и проверяем статусы ДО проверки пароля.
+        user = User.objects.filter(username=data['username']).first()
         if user is None:
             raise serializers.ValidationError('Invalid username or password')
-        if not user.is_active:
-            raise serializers.ValidationError('Account is deactivated')
-        # Пользователь заблокированной компании не может войти.
+        # Сначала компания: при блокировке компании её сотрудники получают
+        # is_active=False каскадом, и оба сообщения формально верны, но
+        # «Company is deactivated» объясняет причину лучше.
         if user.company_id is not None and not user.company.is_active:
             raise serializers.ValidationError('Company is deactivated')
+        if not user.is_active:
+            raise serializers.ValidationError('Account is deactivated')
+        if not user.check_password(data['password']):
+            raise serializers.ValidationError('Invalid username or password')
         data['user'] = user
         return data
 

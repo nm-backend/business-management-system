@@ -152,7 +152,9 @@ class WorkerPaymentCreateSerializer(_SalaryCapMixin, serializers.ModelSerializer
     class Meta:
         model = WorkerPayment
         fields = [
-            'worker', 'amount', 'payment_date', 'payment_type', 'comment'
+            # id в ответе создания: без него клиент не мог сразу PATCH/удалить
+            # только что созданную выплату (перезагрузка списка вручную).
+            'id', 'worker', 'amount', 'payment_date', 'payment_type', 'comment'
         ]
     # created_by и company проставляет ViewSet.perform_create.
 

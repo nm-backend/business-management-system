@@ -89,13 +89,18 @@ def record_incoming(*, target, quantity, price_per_unit=None, arrival_date=None,
 
 @transaction.atomic
 def record_outgoing(*, target, quantity, movement_type=None, outgoing_date=None,
-                    document_number=None, user=None, reason=''):
+                    document_number=None, user=None, reason='', ignore_reserved=False):
     """
     Расход/списание сырья со склада с записью движения.
 
     Материал, зарезервированный под заказы (reserved_for_orders), списать
     нельзя: он уже пообещан заказу. Списание ограничено available_quantity
     (quantity - reserved_for_orders).
+
+    ignore_reserved=True — только для выдачи заказа (deliver): собственный
+    резерв заказа уже снят, и чужие НЕобеспеченные обещания (reserved больше
+    физического остатка) не должны блокировать выдачу физически имеющегося
+    товара. Проверяется лишь не уход остатка в минус.
     """
     from rest_framework.exceptions import ValidationError
 
@@ -113,7 +118,10 @@ def record_outgoing(*, target, quantity, movement_type=None, outgoing_date=None,
         # ещё на входе, но сервис защищается и сам (дефенс-ин-депс).
         raise ValidationError({'movement_type': 'Недопустимый тип расхода.'})
 
-    available = locked.quantity - locked.reserved_for_orders
+    if ignore_reserved:
+        available = locked.quantity
+    else:
+        available = locked.quantity - locked.reserved_for_orders
     if quantity > available:
         raise ValidationError({
             'quantity': (

@@ -118,6 +118,10 @@ def calculate_labor_cost(work):
 class AlreadyProcessedError(Exception):
     """Работа уже подтверждена или отклонена другим запросом."""
 
+    def __init__(self, message=None):
+        self.message = message
+        super().__init__(message or 'Work is already processed')
+
 
 @transaction.atomic
 def confirm_work(work, confirmed_by, labor_cost=None, request=None):
@@ -132,6 +136,11 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
     work = WorkRecord.objects.select_for_update().get(pk=work.pk)
     if work.status != WorkRecord.WorkStatus.AWAITING_CONFIRMATION:
         raise AlreadyProcessedError()
+    # Зомби-задача: заказ отменён после сдачи работы (или сдан по отменённому
+    # заказу в обход валидации). Подтверждение воскрешало бы заказ в READY и
+    # приходовало товар по отменённой сделке.
+    if work.task and work.task.order and work.task.order.status == work.task.order.Status.CANCELLED:
+        raise AlreadyProcessedError('Заказ отменён - работу подтвердить нельзя')
 
     product = work.product
     # Сырьё уходит и на брак: рабочий его уже израсходовал, годным оно не
@@ -156,6 +165,12 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
         locked_materials.append((material, required))
     if shortages:
         raise MaterialShortageError(shortages)
+
+    # Сумму труда считаем здесь (после проверки сырья, до прихода товара):
+    # она входит в себестоимость партии, а порядок ошибок сохранён —
+    # нехватка сырья важнее отсутствующей ставки.
+    if labor_cost is None:
+        labor_cost = calculate_labor_cost(work)
 
     # 3. Списание сырья. Заодно снимаем резерв под заказ: сырьё физически
     # израсходовано, обещание заказу исполнено — reserved_for_orders падает.
@@ -182,8 +197,28 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
     # 4. Приход готового товара (блокируем строку от параллельного read-modify-write).
     if product:
         product = type(product).objects.select_for_update().get(pk=product.pk)
-        product.quantity += work.quantity
-        product.save(update_fields=['quantity', 'updated_at'])
+        previous_quantity = product.quantity or Decimal('0')
+        previous_cost = product.cost_price or Decimal('0')
+        product.quantity = previous_quantity + work.quantity
+        # Себестоимость партии = сырьё по рецепту (по средней закупочной цене)
+        # + оплата труда. Раньше cost_price после производства не трогался и
+        # оставался нулём (обновлялся только при закупке через record_incoming):
+        # себестоимость продаж в аналитике и отчётах была 0, и прибыль
+        # «дорисовывалась». Брак считается в стоимости партии: материал на
+        # брак уже списан со склада, это реальные затраты производства.
+        if work.quantity > 0:
+            materials_cost = sum(
+                (required * (material.avg_cost_price or Decimal('0')))
+                for material, required in locked_materials
+            )
+            unit_batch_cost = (
+                (materials_cost + labor_cost) / work.quantity
+            ).quantize(Decimal('0.01'))
+            new_total = previous_quantity + work.quantity
+            product.cost_price = (
+                (previous_quantity * previous_cost + work.quantity * unit_batch_cost) / new_total
+            ).quantize(Decimal('0.01'))
+        product.save(update_fields=['quantity', 'cost_price', 'updated_at'])
         StockMovement.objects.create(
             company_id=work.company_id,
             movement_type=StockMovement.MovementType.PRODUCTION_IN,
@@ -196,8 +231,6 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
         )
 
     # 5. Начисление работнику.
-    if labor_cost is None:
-        labor_cost = calculate_labor_cost(work)
     work.status = WorkRecord.WorkStatus.CONFIRMED
     work.confirmed_by = confirmed_by
     work.confirmed_at = timezone.now()

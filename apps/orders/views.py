@@ -4,7 +4,7 @@ Views for orders API.
 Заказы создают владелец и администратор. Работник видит только заказы,
 назначенные ему. Owner дополнительно видит суммы заказа.
 """
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -19,6 +19,7 @@ from apps.messaging.services import notify_staff
 from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin
 from apps.warehouse.services import record_incoming, record_outgoing
+from apps.production.models import Task, TaskStatus
 from .models import Order
 from .serializers import OrderSerializer, OrderOwnerSerializer
 from apps.core.views import CompanyScopedViewSet
@@ -96,6 +97,11 @@ class OrderViewSet(CompanyScopedViewSet):
         # дубликаты. Теперь сбой откатывает создание целиком.
         with transaction.atomic():
             order = serializer.save(company=company)
+            # Сразу синхронизируем payment_status: дефолт модели — 'unpaid',
+            # и заказ с нулевой суммой (бесплатный, или заведённый админом,
+            # который сумм не видит) до первой правки/оплаты «не оплачен»
+            # при нулевом долге.
+            order.update_payment_status()
             # Товар и сырьё по его рецепту резервируются под заказ сразу при создании.
             order.reserve_product()
             order.reserve_raw_materials()
@@ -123,6 +129,22 @@ class OrderViewSet(CompanyScopedViewSet):
         # total_amount в гонке с apply_payment_amount позволял оплату сверх долга.
         with transaction.atomic():
             locked = Order.objects.select_for_update().get(pk=serializer.instance.pk)
+            # Выданный заказ уже списал товар и снял резервы. Правка количества
+            # раньше проходила: заказ «становился» 5 шт, а склад был списан на 2 —
+            # COGS, журнал и отчёты расходились.
+            if locked.status == Order.Status.DELIVERED:
+                raise DRFValidationError({
+                    'detail': 'Выданный заказ нельзя редактировать — оформите '
+                              'возврат расходом, если товар вернули.',
+                })
+            # Оплаты привязаны к клиенту: смена клиента оставляла Payment на
+            # старом клиенте, а долг нового считался без уже принятых денег.
+            if 'client' in serializer.validated_data:
+                from apps.clients.models import Payment
+                if Payment.objects.filter(order=locked).exists():
+                    raise DRFValidationError({
+                        'client': 'По заказу есть оплаты — сменить клиента нельзя.',
+                    })
             old_product_id = locked.product_id
             old_quantity = locked.quantity
             old_client_id = locked.client_id
@@ -198,6 +220,16 @@ class OrderViewSet(CompanyScopedViewSet):
             locked.release_raw_materials()
             locked.status = Order.Status.CANCELLED
             locked.save(update_fields=['status'])
+            # Задача — продолжение заказа: после отмены она превращалась в «зомби».
+            # Работник сдавал по ней работу, confirm_work приходовал товар, а заказ
+            # «воскресал» в awaiting_confirmation -> READY — отменённый заказ выдавал
+            # себя сам. Отменяем только живые задачи (в работе); подтверждённые и
+            # отклонённые остаются историей.
+            Task.objects.filter(
+                order_id=locked.pk,
+                status__in=(TaskStatus.PENDING, TaskStatus.ACCEPTED,
+                            TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED),
+            ).update(status=TaskStatus.CANCELLED)
             locked.client.recalculate_financials()
             # Синхронизируем переданный инстанс, чтобы ответ сериализатора
             # показывал актуальный статус.
@@ -316,6 +348,11 @@ class OrderViewSet(CompanyScopedViewSet):
                         quantity=order.quantity,
                         user=request.user,
                         reason=f'Выдача заказа #{order.id}',
+                        # Собственный резерв уже снят (release_product выше);
+                        # чужие НЕобеспеченные обещания (reserved > остатка)
+                        # иначе блокировали бы выдачу физически имеющегося
+                        # товара (см. record_outgoing).
+                        ignore_reserved=True,
                     )
                 except DRFValidationError:
                     # Считаем доступное ДО возврата резерва: резерв этого же заказа
@@ -348,10 +385,10 @@ class OrderViewSet(CompanyScopedViewSet):
             order.status = Order.Status.DELIVERED
             order.save(update_fields=['status'])
             order.client.recalculate_financials()
-            # Архив только при полной оплате — клиент с долгом остаётся активным.
-            if order.payment_status == Order.PaymentStatus.PAID:
-                order.client.auto_archive()
-            else:
+            # «Не оплатил» — только когда долг реально есть. Клиент, оплативший
+            # авансом (оплата без привязки к заказу), при выдаче имел долг 0,
+            # но получал ложную тревогу «Мижоз тўлов қилмади» и не архивировался.
+            if order.client.debt > 0:
                 notify_staff(
                     order.company_id,
                     Notification.NotificationType.UNPAID_CLIENT,
@@ -359,6 +396,8 @@ class OrderViewSet(CompanyScopedViewSet):
                     f'Буюртма #{order.id}, мижоз: {order.client.name}',
                     order=order,
                 )
+            else:
+                order.client.auto_archive()
         write_audit_log(
             action=AuditLog.Action.UPDATE,
             actor=request.user,

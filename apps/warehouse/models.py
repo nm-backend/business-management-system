@@ -403,7 +403,13 @@ class RecipeItem(models.Model):
     """
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='items', verbose_name='Рецепт')
     material = models.ForeignKey(RawMaterial, on_delete=models.RESTRICT, verbose_name='Материал')
-    quantity_required = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Требуемое количество')
+    # Минимум строго больше нуля: отрицательная норма превращала требования по
+    # рецепту в отрицательные, confirm_work «дорисовывал» материал из воздуха.
+    quantity_required = models.DecimalField(
+        max_digits=15, decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))],
+        verbose_name='Требуемое количество',
+    )
     unit = models.CharField(max_length=20, choices=UnitChoices.choices, default=UnitChoices.SHT, verbose_name='Единица измерения')
 
     class Meta:

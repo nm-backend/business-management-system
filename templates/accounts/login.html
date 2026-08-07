@@ -25,8 +25,17 @@
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
             </form>
-            <div style="margin-top: 16px;">
-                <a href="#" id="show-access-key" class="text-sm" style="font-weight: 500;" data-i18n="auth.have_access_key"></a>
+            <button type="button" id="show-access-key" class="btn btn-block login-secondary-btn" data-i18n="auth.have_access_key"></button>
+
+            <div class="login-trust" role="note">
+                <p class="login-trust-row">
+                    <span class="login-trust-icon" aria-hidden="true">🔒</span>
+                    <span data-i18n="auth.trust_secure">Ваши данные защищены</span>
+                </p>
+                <p class="login-trust-row">
+                    <span class="login-trust-icon" aria-hidden="true">💬</span>
+                    <span data-i18n="auth.trust_support">Проблемы со входом? Обратитесь к администратору</span>
+                </p>
             </div>
         </div>
 
@@ -53,9 +62,7 @@
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.activate"></button>
             </form>
 
-            <div style="margin-top: 16px;">
-                <a href="#" id="show-login" class="text-sm" style="font-weight: 500;" data-i18n="auth.back_to_login"></a>
-            </div>
+            <button type="button" id="show-login" class="btn btn-block login-secondary-btn" data-i18n="auth.back_to_login"></button>
         </div>
 
         <div style="margin-top: 24px;">

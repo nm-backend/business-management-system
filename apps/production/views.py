@@ -13,6 +13,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.mixins import CreateModelMixin
 
 from apps.core.permissions import IsCompanyMember, IsOwnerOrAdmin, IsOwnerOrAdminOrWorker
@@ -91,8 +92,24 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             raise PermissionDenied('Worker must belong to your company')
         if order and order.company_id != user.company_id:
             raise PermissionDenied('Order must belong to your company')
+        # Зомби-заказ: задача по выданному/отменённому заказу раньше молча
+        # переводила его обратно в sent_to_worker — товар уже списан при
+        # выдаче или возвращён при отмене, резервы сняты, а заказ «воскресал»
+        # в производство. Та же проверка, что у сдачи работы (WorkRecord).
+        if order and order.status in (order.Status.CANCELLED, order.Status.DELIVERED):
+            raise DRFValidationError({
+                'order': 'Заказ отменён или выдан клиенту — задачу по нему создать нельзя.',
+            })
         if user.is_worker:
             # Работник может создать только самостоятельную работу для себя.
+            # Привязка к заказу позволяла миновать назначение (order.worker
+            # остаётся пустым), а сдача работы по такой задаче двигала
+            # неназначенный заказ в awaiting_confirmation -> READY.
+            if order:
+                raise DRFValidationError({
+                    'order': 'Работник может создать только самостоятельную '
+                             'задачу без привязки к заказу.',
+                })
             task = serializer.save(company=user.company, worker=user, assigned_by=user,
                                    is_self_assigned=True, status=TaskStatus.ACCEPTED)
         else:
@@ -142,6 +159,15 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             return Response({'detail': 'reason is required',
                              'allowed': RefusalReason.values},
                             status=status.HTTP_400_BAD_REQUEST)
+        # Отказ — решение работника ДО принятия задачи (в интерфейсе кнопка
+        # отказа только у pending). Раньше refuse принимался и у сданной
+        # задачи: работа висела на подтверждении, а заказ откатывался в
+        # worker_refused. Принимался он и повторно у уже отказанной задачи:
+        # владелец вернул заказ в new, повторный отказ снова отбросил его в
+        # worker_refused — заказ «прыгал» между статусами.
+        if task.status != TaskStatus.PENDING:
+            return Response({'detail': 'Task is not pending'},
+                            status=status.HTTP_400_BAD_REQUEST)
         task.refuse(reason, request.data.get('comment', ''))
         notify_staff(
             task.company_id,
@@ -159,8 +185,27 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         if not (request.user.is_owner or request.user.is_admin):
             raise PermissionDenied('Only owner or admin can cancel tasks')
         task = self.get_object()
+        # Завершённые стадии задачи — история, её не отменяют. Особенно
+        # COMPLETED: работа уже сдана на подтверждение, и cancel «убивал»
+        # задачу, а заказ зависал в awaiting_confirmation; затем confirm_work
+        # молча воскрешал задачу из CANCELLED обратно в CONFIRMED. Сданную
+        # работу отменяют через reject.
+        if task.status not in (TaskStatus.PENDING, TaskStatus.ACCEPTED,
+                               TaskStatus.IN_PROGRESS):
+            return Response({'detail': 'Task is already finished'},
+                            status=status.HTTP_400_BAD_REQUEST)
         task.status = TaskStatus.CANCELLED
         task.save(update_fields=['status'])
+        # Заказ без задачи — тупик: из sent_to_worker/accepted/in_progress
+        # обратного перехода нет, а задача отменена — заказ застревал навсегда.
+        # Возвращаем его в очередь (new) и снимаем исполнителя.
+        if task.order and task.order.status in (
+                task.order.Status.SENT_TO_WORKER,
+                task.order.Status.ACCEPTED,
+                task.order.Status.IN_PROGRESS):
+            task.order.status = task.order.Status.NEW
+            task.order.worker = None
+            task.order.save(update_fields=['status', 'worker'])
         notify(
             task.worker,
             Notification.NotificationType.TASK_CANCELLED,
@@ -249,6 +294,29 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         work_worker = worker or user
         if task and task.worker_id != work_worker.id:
             raise PermissionDenied("Task must belong to the work's worker")
+        # Зомби-задача: заказ отменён/выдан, а задача осталась живой. Сдача
+        # работы по ней «воскрешала» бы заказ в awaiting_confirmation.
+        if task and task.order and task.order.status in (
+                task.order.Status.CANCELLED, task.order.Status.DELIVERED):
+            raise PermissionDenied('Order is cancelled or delivered - cannot submit work')
+        # Заказ с товаром требует работы по ЭТОМУ товару: работа без товара
+        # раньше создавалась, а подтверждение падало с labor_rate_missing —
+        # заказ застревал в awaiting_confirmation, и единственным выходом был
+        # reject. Ошибка видна сразу, работник сдаёт работу заново с товаром.
+        if (task and task.order and task.order.product_id and not product):
+            raise DRFValidationError({
+                'product': f'По заказу №{task.order.id} производится товар '
+                           f'«{task.order.product.name}» — укажите его в работе.',
+            })
+        # Работа про товар НЕ из заказа подтверждалась и «производила» чужой
+        # товар: заказ на столешницу, а на склад приходовался подоконник
+        # (заказ оставался без партии, READY не наступал). Требуем совпадения.
+        if (task and task.order and task.order.product_id and product
+                and product.id != task.order.product_id):
+            raise DRFValidationError({
+                'product': f'По заказу №{task.order.id} производится товар '
+                           f'«{task.order.product.name}» — укажите в работе его.',
+            })
         # Owner/admin не может записать работу на сотрудника чужой компании.
         if worker and worker.company_id != user.company_id:
             raise PermissionDenied('Worker must belong to your company')
@@ -266,6 +334,26 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         )
         if work.task and work.task.worker_id == work.worker_id:
             work.task.complete()
+
+    def perform_update(self, serializer):
+        # Обновление обязано пройти те же проверки, что и создание: PATCH product
+        # раньше мог перепривязать работу к товару ДРУГОЙ компании, а confirm_work
+        # затем списывал чужое сырьё и приходовал чужой склад (IDOR-запись).
+        user = self.request.user
+        product = serializer.validated_data.get('product')
+        task = serializer.validated_data.get('task') or serializer.instance.task
+        if product and product.company_id != user.company_id:
+            raise PermissionDenied('Product must belong to your company')
+        if task and task.company_id != user.company_id:
+            raise PermissionDenied('Task must belong to your company')
+        # Работа по заказу с товаром обязана быть про ЭТОТ товар (как при создании).
+        if task and task.order and task.order.product_id and product:
+            if product.id != task.order.product_id:
+                raise DRFValidationError({
+                    'product': f'По заказу №{task.order.id} производится товар '
+                               f'«{task.order.product.name}» — укажите в работе его.',
+                })
+        serializer.save()
 
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):
@@ -318,9 +406,10 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
                 ), 'code': 'labor_rate_missing'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except services.AlreadyProcessedError:
-            return Response({'detail': 'Work has already been processed'},
-                            status=status.HTTP_409_CONFLICT)
+        except services.AlreadyProcessedError as error:
+            return Response(
+                {'detail': error.message or 'Work has already been processed'},
+                status=status.HTTP_409_CONFLICT)
         return Response(self.get_serializer(work).data)
 
     @action(detail=True, methods=['post'])

@@ -45,6 +45,71 @@
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 0 20px 20px; }
 .confirmation-message { color: var(--text-secondary); line-height: 1.5; }
 
+/* ---------- Login screen ----------
+   Экран входа — первое впечатление: вторичный вход должен быть
+   самостоятельной кнопкой (фокус/hover/active/ripple как у основных),
+   а блок доверия — спокойным «дорогим» элементом под кнопками. */
+.login-secondary-btn {
+    height: 44px;
+    margin-top: 16px;
+    background: var(--surface-card);
+    border: 1px solid #0D6E7E;
+    color: #0D6E7E;
+}
+.login-secondary-btn:hover {
+    background: var(--primary-soft);
+    border-color: #0A5966;
+    color: #0A5966;
+}
+.login-secondary-btn:active {
+    background: var(--primary-soft);
+}
+
+.login-trust {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+}
+.login-trust-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    line-height: 22px;
+    color: #5F5F5F;
+}
+.login-trust-icon {
+    font-size: 15px;
+    line-height: 22px;
+    flex-shrink: 0;
+}
+
+/* Тёмная тема: #0D6E7E на тёмном фоне не проходит AA — используем
+   --primary темы, контраст которого задан дизайн-системой. */
+body.theme-dark .login-secondary-btn {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+body.theme-dark .login-secondary-btn:hover {
+    background: var(--primary-soft);
+    border-color: var(--primary-hover);
+    color: var(--primary-hover);
+}
+body.theme-dark .login-trust-row {
+    color: var(--text-secondary);
+}
+
+/* Мобильный: цель касания 48px — WCAG 2.5.8 (Target Size Minimum). */
+@media (max-width: 519px) {
+    .login-secondary-btn {
+        height: 48px;
+    }
+}
+
 /* ---------- Server error pages (403 / 404 / 500) ---------- */
 .error-page {
     max-width: 480px;
