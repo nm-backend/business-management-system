@@ -298,7 +298,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         notification = self.get_object()
         if notification.user != request.user:
             return Response(
-                {'detail': 'You can only mark your own notifications as read'},
+                {'detail': 'Можно отмечать только свои уведомления.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
         notification.is_read = True
