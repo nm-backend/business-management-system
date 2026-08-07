@@ -327,7 +327,7 @@ class RecipeViewSet(CompanyScopedViewSet):
     def _check_product_company(self, serializer):
         product = serializer.validated_data.get('product')
         if product and product.company_id != self.request.user.company_id:
-            raise PermissionDenied('Product must belong to your company')
+            raise PermissionDenied('Товар должен принадлежать вашей компании')
 
     def perform_create(self, serializer):
         self._check_product_company(serializer)
@@ -383,7 +383,7 @@ class RecipeItemViewSet(CompanyScopedViewSet):
         recipe = serializer.validated_data.get('recipe')
         material = serializer.validated_data.get('material')
         if (recipe and recipe.company_id != company_id) or (material and material.company_id != company_id):
-            raise PermissionDenied('Recipe and material must belong to your company')
+            raise PermissionDenied('Рецепт и материал должны принадлежать вашей компании')
         recipe_item = serializer.save()
         write_audit_log(
             action=AuditLog.Action.CREATE,
@@ -399,7 +399,7 @@ class RecipeItemViewSet(CompanyScopedViewSet):
         recipe = serializer.validated_data.get('recipe')
         material = serializer.validated_data.get('material')
         if (recipe and recipe.company_id != company_id) or (material and material.company_id != company_id):
-            raise PermissionDenied('Recipe and material must belong to your company')
+            raise PermissionDenied('Рецепт и материал должны принадлежать вашей компании')
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
         recipe_item = serializer.save()
         if changes:

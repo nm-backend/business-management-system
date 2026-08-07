@@ -409,7 +409,7 @@ class ChangePasswordView(APIView):
             target=request.user,
             request=request,
         )
-        return Response({'message': 'Password changed successfully'})
+        return Response({'message': 'Пароль успешно изменён'})
 
 
 class ChangeLanguageView(APIView):
@@ -576,7 +576,7 @@ class AccessKeyRedeemView(APIView):
             new_password=serializer.validated_data['new_password'],
         )
         if error == 'company_inactive':
-            return Response({'detail': 'Company is deactivated'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Компания деактивирована'}, status=status.HTTP_400_BAD_REQUEST)
         if error or user is None:
             return Response(
                 {'detail': 'Invalid, expired or already used access key'},
@@ -747,9 +747,9 @@ class UserViewSet(CompanyScopedViewSet):
         if user.is_admin:
             # Администратор может создавать только workers своей компании.
             if not user.can_create_workers:
-                raise PermissionDenied('You do not have permission to create workers')
+                raise PermissionDenied('Нет прав на создание работников')
             if requested_role != User.Role.WORKER:
-                raise PermissionDenied('Administrators can create only worker accounts')
+                raise PermissionDenied('Администраторы могут создавать только аккаунты работников')
             created_user = serializer.save(
                 company=user.company,
                 role=User.Role.WORKER,
@@ -766,7 +766,7 @@ class UserViewSet(CompanyScopedViewSet):
             )
             return
 
-        raise PermissionDenied('You do not have permission to create accounts')
+        raise PermissionDenied('Нет прав на создание аккаунтов')
 
     def perform_update(self, serializer):
         """
@@ -834,7 +834,7 @@ class UserViewSet(CompanyScopedViewSet):
         with transaction.atomic():
             user = User.objects.select_for_update().get(pk=user.pk)
             if user.role == 'owner':
-                return Response({'error': 'Cannot deactivate owner account'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Нельзя деактивировать аккаунт владельца'}, status=status.HTTP_400_BAD_REQUEST)
             user.is_active = not user.is_active
             # Помечаем индивидуальную блокировку, чтобы разблокировка КОМПАНИИ её
             # не сняла молча (blocked_by_owner=True сохраняется через company-каскад).
@@ -869,12 +869,12 @@ class UserViewSet(CompanyScopedViewSet):
             {"new_password": "string"} (минимум 8 символов)
 
         Возвращает:
-            {'message': 'Password reset successfully'}
+            {'message': 'Пароль успешно сброшен'}
         """
         user = self.get_object()
         new_password = request.data.get('new_password')
         if not new_password or len(new_password) < 8:
-            return Response({'error': 'Password must be at least 8 characters'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Пароль должен содержать минимум 8 символов'}, status=status.HTTP_400_BAD_REQUEST)
         user.set_password(new_password)
         user.save()
         # Принудительный сброс пароля выгоняет все активные сессии сотрудника.
@@ -885,7 +885,7 @@ class UserViewSet(CompanyScopedViewSet):
             target=user,
             request=request,
         )
-        return Response({'message': 'Password reset successfully'})
+        return Response({'message': 'Пароль успешно сброшен'})
 
     @extend_schema(request=AccessKeyIssueSerializer, responses=AccessKeySerializer)
     @action(detail=True, methods=['get', 'post'], permission_classes=[IsOwnerOrAdmin])

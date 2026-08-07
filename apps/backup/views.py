@@ -133,7 +133,7 @@ class BackupTriggerView(APIView):
     def post(self, request):
         config, _ = BackupConfig.objects.get_or_create(company=None)
         if not config.is_enabled:
-            return Response({'error': 'Backup is not enabled'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Бэкап не включён'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Запускаем Celery задачу асинхронно
         run_backup_task.delay(

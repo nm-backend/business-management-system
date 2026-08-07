@@ -291,16 +291,16 @@ class LoginSerializer(serializers.Serializer):
         # пользователя сами и проверяем статусы ДО проверки пароля.
         user = User.objects.filter(username=data['username']).first()
         if user is None:
-            raise serializers.ValidationError('Invalid username or password')
+            raise serializers.ValidationError('Неверное имя пользователя или пароль')
         # Сначала компания: при блокировке компании её сотрудники получают
         # is_active=False каскадом, и оба сообщения формально верны, но
         # «Company is deactivated» объясняет причину лучше.
         if user.company_id is not None and not user.company.is_active:
-            raise serializers.ValidationError('Company is deactivated')
+            raise serializers.ValidationError('Компания деактивирована')
         if not user.is_active:
-            raise serializers.ValidationError('Account is deactivated')
+            raise serializers.ValidationError('Аккаунт деактивирован')
         if not user.check_password(data['password']):
-            raise serializers.ValidationError('Invalid username or password')
+            raise serializers.ValidationError('Неверное имя пользователя или пароль')
         data['user'] = user
         return data
 

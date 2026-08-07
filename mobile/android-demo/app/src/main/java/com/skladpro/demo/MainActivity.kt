@@ -72,7 +72,6 @@ class MainActivity : AppCompatActivity() {
         loadWithOverviewMode = true
         useWideViewPort = true
         cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-        allowFileAccess = true
 
         binding.webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(

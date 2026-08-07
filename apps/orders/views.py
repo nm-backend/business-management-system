@@ -83,10 +83,11 @@ class OrderViewSet(CompanyScopedViewSet):
         # update. Раньше worker вообще не проверялся, а update не проверял ничего:
         # можно было привязать заказ к сотруднику/клиенту/товару чужой компании.
         company_id = self.request.user.company_id
+        labels = {'client': 'Клиент', 'product': 'Товар', 'worker': 'Работник'}
         for field in ('client', 'product', 'worker'):
             obj = validated_data.get(field)
             if obj is not None and obj.company_id != company_id:
-                raise PermissionDenied(f'{field.capitalize()} must belong to your company')
+                raise PermissionDenied(f'{labels.get(field, field)} должен принадлежать вашей компании')
 
     def perform_create(self, serializer):
         company = self.request.user.company
@@ -322,13 +323,13 @@ class OrderViewSet(CompanyScopedViewSet):
         with transaction.atomic():
             order = Order.objects.select_for_update().get(pk=order.pk)
             if order.status == Order.Status.CANCELLED:
-                return Response({'detail': 'Order is cancelled'},
+                return Response({'detail': 'Заказ отменён'},
                                 status=status.HTTP_400_BAD_REQUEST)
             # Повторная выдача блокируется: заказ уже отдан клиенту, второй раз
             # списать резерв/начислить долг нельзя (раньше выдачу можно было
             # дёргать сколько угодно — дубли в audit и лишний пересчёт финансов).
             if order.status == Order.Status.DELIVERED:
-                return Response({'detail': 'Order is already delivered'},
+                return Response({'detail': 'Заказ уже доставлен'},
                                 status=status.HTTP_400_BAD_REQUEST)
             # Товар и сырьё ушли — резервы снимаем.
             # Резерв снимаем ДО списания: record_outgoing разрешает списывать

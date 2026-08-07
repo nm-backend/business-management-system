@@ -9,7 +9,7 @@ Views for production API.
 from decimal import Decimal, InvalidOperation
 
 from django.db.models import Sum
-from rest_framework import status, viewsets
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
@@ -89,9 +89,9 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         worker = serializer.validated_data.get('worker')
         order = serializer.validated_data.get('order')
         if worker and worker.company_id != user.company_id:
-            raise PermissionDenied('Worker must belong to your company')
+            raise PermissionDenied('Работник должен принадлежать вашей компании')
         if order and order.company_id != user.company_id:
-            raise PermissionDenied('Order must belong to your company')
+            raise PermissionDenied('Заказ должен принадлежать вашей компании')
         # Зомби-заказ: задача по выданному/отменённому заказу раньше молча
         # переводила его обратно в sent_to_worker — товар уже списан при
         # выдаче или возвращён при отмене, резервы сняты, а заказ «воскресал»
@@ -132,10 +132,10 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         """Работник принимает задачу. POST /production/tasks/{id}/accept/"""
         task = self.get_object()
         if task.worker != request.user:
-            return Response({'detail': 'You can only accept your own tasks'},
+            return Response({'detail': 'Вы можете принимать только свои задачи'},
                             status=status.HTTP_403_FORBIDDEN)
         if task.status != TaskStatus.PENDING:
-            return Response({'detail': 'Task is not pending'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Задача не в статусе «ожидает»'}, status=status.HTTP_400_BAD_REQUEST)
         task.accept()
         if task.assigned_by and task.assigned_by != request.user:
             notify(
@@ -152,7 +152,7 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         """Работник отказывается: {"reason": "no_time", "comment": "..."}."""
         task = self.get_object()
         if task.worker != request.user:
-            return Response({'detail': 'You can only refuse your own tasks'},
+            return Response({'detail': 'Вы можете отклонять только свои задачи'},
                             status=status.HTTP_403_FORBIDDEN)
         reason = request.data.get('reason')
         if reason not in RefusalReason.values:
@@ -166,7 +166,7 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         # владелец вернул заказ в new, повторный отказ снова отбросил его в
         # worker_refused — заказ «прыгал» между статусами.
         if task.status != TaskStatus.PENDING:
-            return Response({'detail': 'Task is not pending'},
+            return Response({'detail': 'Задача не в статусе «ожидает»'},
                             status=status.HTTP_400_BAD_REQUEST)
         task.refuse(reason, request.data.get('comment', ''))
         notify_staff(
@@ -183,7 +183,7 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
     def cancel(self, request, pk=None):
         """Владелец/админ отменяет задачу."""
         if not (request.user.is_owner or request.user.is_admin):
-            raise PermissionDenied('Only owner or admin can cancel tasks')
+            raise PermissionDenied('Отменять задачи может только владелец или администратор')
         task = self.get_object()
         # Завершённые стадии задачи — история, её не отменяют. Особенно
         # COMPLETED: работа уже сдана на подтверждение, и cancel «убивал»
@@ -192,7 +192,7 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         # работу отменяют через reject.
         if task.status not in (TaskStatus.PENDING, TaskStatus.ACCEPTED,
                                TaskStatus.IN_PROGRESS):
-            return Response({'detail': 'Task is already finished'},
+            return Response({'detail': 'Задача уже завершена'},
                             status=status.HTTP_400_BAD_REQUEST)
         task.status = TaskStatus.CANCELLED
         task.save(update_fields=['status'])
@@ -284,21 +284,21 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         task = serializer.validated_data.get('task')
         worker = serializer.validated_data.get('worker')
         if product and product.company_id != user.company_id:
-            raise PermissionDenied('Product must belong to your company')
+            raise PermissionDenied('Товар должен принадлежать вашей компании')
         if task and task.company_id != user.company_id:
-            raise PermissionDenied('Task must belong to your company')
+            raise PermissionDenied('Задача должна принадлежать вашей компании')
         # Задача привязана к конкретному работнику; работа — к исполнителю.
         # Работник A, привязавший работу к задаче B, при подтверждении
         # «завершал» бы чужую задачу (заказ уходил в READY), а деньги получал
         # сам. Проверка после подстановки worker (для работника это он сам).
         work_worker = worker or user
         if task and task.worker_id != work_worker.id:
-            raise PermissionDenied("Task must belong to the work's worker")
+            raise PermissionDenied("Задача должна принадлежать работнику")
         # Зомби-задача: заказ отменён/выдан, а задача осталась живой. Сдача
         # работы по ней «воскрешала» бы заказ в awaiting_confirmation.
         if task and task.order and task.order.status in (
                 task.order.Status.CANCELLED, task.order.Status.DELIVERED):
-            raise PermissionDenied('Order is cancelled or delivered - cannot submit work')
+            raise PermissionDenied('Заказ отменён или доставлен — нельзя подать работу')
         # Заказ с товаром требует работы по ЭТОМУ товару: работа без товара
         # раньше создавалась, а подтверждение падало с labor_rate_missing —
         # заказ застревал в awaiting_confirmation, и единственным выходом был
@@ -319,7 +319,7 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             })
         # Owner/admin не может записать работу на сотрудника чужой компании.
         if worker and worker.company_id != user.company_id:
-            raise PermissionDenied('Worker must belong to your company')
+            raise PermissionDenied('Работник должен принадлежать вашей компании')
         if user.is_worker:
             work = serializer.save(company=user.company, worker=user)
         else:
@@ -343,9 +343,9 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         product = serializer.validated_data.get('product')
         task = serializer.validated_data.get('task') or serializer.instance.task
         if product and product.company_id != user.company_id:
-            raise PermissionDenied('Product must belong to your company')
+            raise PermissionDenied('Товар должен принадлежать вашей компании')
         if task and task.company_id != user.company_id:
-            raise PermissionDenied('Task must belong to your company')
+            raise PermissionDenied('Задача должна принадлежать вашей компании')
         # Работа по заказу с товаром обязана быть про ЭТОТ товар (как при создании).
         if task and task.order and task.order.product_id and product:
             if product.id != task.order.product_id:
@@ -363,11 +363,11 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         POST /production/works/{id}/confirm/  Body: {"labor_cost": 1000} (только owner)
         """
         if not (request.user.is_owner or request.user.is_admin):
-            return Response({'detail': 'Only owner or admin can confirm work'},
+            return Response({'detail': 'Подтверждать работу может только владелец или администратор'},
                             status=status.HTTP_403_FORBIDDEN)
         work = self.get_object()
         if work.status != WorkRecord.WorkStatus.AWAITING_CONFIRMATION:
-            return Response({'detail': 'Work is not awaiting confirmation'},
+            return Response({'detail': 'Работа не ожидает подтверждения'},
                             status=status.HTTP_400_BAD_REQUEST)
         # Защита склада: при quantity <= 0 требования по рецепту стали бы
         # отрицательными, проверка нехватки сырья не сработала бы, и склад бы
@@ -408,7 +408,7 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             )
         except services.AlreadyProcessedError as error:
             return Response(
-                {'detail': error.message or 'Work has already been processed'},
+                {'detail': error.message or 'Работа уже обработана'},
                 status=status.HTTP_409_CONFLICT)
         return Response(self.get_serializer(work).data)
 
@@ -416,16 +416,16 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
     def reject(self, request, pk=None):
         """Отклоняет работу (склад не меняется). Body: {"reason": "..."}."""
         if not (request.user.is_owner or request.user.is_admin):
-            return Response({'detail': 'Only owner or admin can reject work'},
+            return Response({'detail': 'Отклонять работу может только владелец или администратор'},
                             status=status.HTTP_403_FORBIDDEN)
         work = self.get_object()
         if work.status != WorkRecord.WorkStatus.AWAITING_CONFIRMATION:
-            return Response({'detail': 'Work is not awaiting confirmation'},
+            return Response({'detail': 'Работа не ожидает подтверждения'},
                             status=status.HTTP_400_BAD_REQUEST)
         try:
             work = services.reject_work(work, request.user, request.data.get('reason', ''), request=request)
         except services.AlreadyProcessedError:
-            return Response({'detail': 'Work has already been processed'},
+            return Response({'detail': 'Работа уже обработана'},
                             status=status.HTTP_409_CONFLICT)
         return Response(self.get_serializer(work).data)
 
@@ -433,7 +433,7 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
     def my_earnings(self, request):
         """Заработок текущего работника: подтверждённые работы и сумма."""
         if not request.user.is_worker and not request.user.is_owner:
-            raise PermissionDenied('Earnings are visible to the worker himself')
+            raise PermissionDenied('Заработок виден только самому работнику')
         confirmed = WorkRecord.objects.filter(
             worker=request.user, status=WorkRecord.WorkStatus.CONFIRMED,
         )

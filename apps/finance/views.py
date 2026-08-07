@@ -7,7 +7,6 @@ Views for finance API.
 from decimal import Decimal
 
 from django.db.models import Sum
-from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
@@ -168,7 +167,7 @@ class LaborRateViewSet(CompanyScopedViewSet):
     def perform_create(self, serializer):
         product = serializer.validated_data.get('product')
         if product and product.company_id != self.request.user.company_id:
-            raise PermissionDenied('Product must belong to your company')
+            raise PermissionDenied('Товар должен принадлежать вашей компании')
         rate = serializer.save(company=self.request.user.company)
         from apps.audit.models import AuditLog
         from apps.audit.services import write_audit_log
@@ -184,7 +183,7 @@ class LaborRateViewSet(CompanyScopedViewSet):
         # компании (IDOR-запись + утечка чужого product_name в ответе).
         product = serializer.validated_data.get('product')
         if product and product.company_id != self.request.user.company_id:
-            raise PermissionDenied('Product must belong to your company')
+            raise PermissionDenied('Товар должен принадлежать вашей компании')
         from apps.audit.models import AuditLog
         from apps.audit.services import collect_model_changes, write_audit_log
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
@@ -313,7 +312,7 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
     def perform_create(self, serializer):
         worker = serializer.validated_data.get('worker')
         if worker and worker.company_id != self.request.user.company_id:
-            raise PermissionDenied('Worker must belong to your company')
+            raise PermissionDenied('Работник должен принадлежать вашей компании')
         payment = serializer.save(created_by=self.request.user, company=self.request.user.company)
         from apps.audit.models import AuditLog
         from apps.audit.services import write_audit_log
@@ -330,11 +329,11 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         # начинал видеть выплату в своих my_earnings).
         worker = serializer.validated_data.get('worker')
         if worker and worker.company_id != self.request.user.company_id:
-            raise PermissionDenied('Worker must belong to your company')
+            raise PermissionDenied('Работник должен принадлежать вашей компании')
         # Смена работника обходит потолок зарплаты: выплата создавалась под
         # начисление одного, а перевешивалась на другого с пустым балансом.
         if worker and worker.id != serializer.instance.worker_id:
-            raise PermissionDenied('Worker cannot be changed after the payment is created')
+            raise PermissionDenied('Работника нельзя изменить после создания выплаты')
         from apps.audit.models import AuditLog
         from apps.audit.services import collect_model_changes, write_audit_log
         changes = collect_model_changes(serializer.instance, serializer.validated_data)

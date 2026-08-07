@@ -32,7 +32,7 @@ class MaterialShortageError(Exception):
 
     def __init__(self, shortages):
         self.shortages = shortages  # [{material, required, available}, ...]
-        super().__init__('Not enough raw material to confirm the work')
+        super().__init__('Недостаточно сырья для подтверждения работы')
 
 
 def get_recipe_requirements(product, quantity):
@@ -120,7 +120,7 @@ class AlreadyProcessedError(Exception):
 
     def __init__(self, message=None):
         self.message = message
-        super().__init__(message or 'Work is already processed')
+        super().__init__(message or 'Работа уже обработана')
 
 
 @transaction.atomic

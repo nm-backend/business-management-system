@@ -75,7 +75,7 @@ class LocaleView(APIView):
     def get(self, request, lang_code):
         allowed_languages = ['uz_cyrl', 'ru', 'ky']
         if lang_code not in allowed_languages:
-            return JsonResponse({'error': 'Language not supported'}, status=400)
+            return JsonResponse({'error': 'Язык не поддерживается'}, status=400)
 
         data = get_locale(lang_code)
         return JsonResponse(data, json_dumps_params={'ensure_ascii': False})

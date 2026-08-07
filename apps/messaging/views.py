@@ -312,4 +312,4 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         request.user.notifications.filter(is_read=False).update(
             is_read=True, read_at=timezone.now(),
         )
-        return Response({'detail': 'All notifications marked as read'})
+        return Response({'detail': 'Все уведомления отмечены прочитанными'})

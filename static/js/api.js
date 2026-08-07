@@ -97,51 +97,71 @@ class APIClient {
             headers['Authorization'] = `Bearer ${tokens.access}`;
         }
 
+        // Таймаут: fetch() без сигнала висит вечно, если сервер принял
+        // соединение, но не отвечает (или сеть зависла). Обрываем сами.
+        // Форма-загрузки (фото/файлы) могут идти дольше — опция options.timeout.
+        const timeout = options.timeout ?? 30000;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeout);
+
         const config = {
             ...options,
-            headers
+            headers,
+            signal: options.signal || controller.signal,
         };
 
-        let response = await fetch(url, config);
+        try {
+            let response = await fetch(url, config);
 
-        // Автоматическое обновление токена при 401
-        if (response.status === 401 && tokens.refresh && !options.isRetry) {
-            const newAccess = await this.refreshToken(tokens.refresh);
-            if (newAccess) {
-                headers['Authorization'] = `Bearer ${newAccess}`;
-                config.isRetry = true;
-                response = await fetch(url, config);
-            } else {
-                // Проверяем, не кража ли это токена
-                const errorBody = await response.clone().json().catch(() => ({}));
-                this.expireSession(!!errorBody.token_theft);
-                throw new Error('Authentication required');
+            // Автоматическое обновление токена при 401
+            if (response.status === 401 && tokens.refresh && !options.isRetry) {
+                const newAccess = await this.refreshToken(tokens.refresh);
+                if (newAccess) {
+                    headers['Authorization'] = `Bearer ${newAccess}`;
+                    config.isRetry = true;
+                    response = await fetch(url, config);
+                } else {
+                    // Проверяем, не кража ли это токена
+                    const errorBody = await response.clone().json().catch(() => ({}));
+                    this.expireSession(!!errorBody.token_theft);
+                    throw new Error('Authentication required');
+                }
             }
-        }
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw { status: response.status, data: errorData };
-        }
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw { status: response.status, data: errorData };
+            }
 
-        // 204 No Content и 205 Reset Content приходят с пустым телом —
-        // не пытаемся разбирать JSON (иначе SyntaxError в консоли).
-        if (response.status === 204 || response.status === 205) {
-            return null;
-        }
+            // 204 No Content и 205 Reset Content приходят с пустым телом —
+            // не пытаемся разбирать JSON (иначе SyntaxError в консоли).
+            if (response.status === 204 || response.status === 205) {
+                return null;
+            }
 
-        return response.json();
+            return response.json();
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                throw { status: 0, data: { detail: 'Request timed out' } };
+            }
+            throw e;
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     // ── Token refresh with fingerprint ─────────────────────────────
 
     async refreshToken(refresh) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
         try {
             const fingerprint = this.getFingerprint();
             const response = await fetch(`${this.baseUrl}/accounts/token/refresh/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh, fingerprint })
+                body: JSON.stringify({ refresh, fingerprint }),
+                signal: controller.signal,
             });
 
             if (response.ok) {
@@ -158,6 +178,8 @@ class APIClient {
             }
         } catch (error) {
             console.error('Token refresh failed', error);
+        } finally {
+            clearTimeout(timer);
         }
         return null;
     }

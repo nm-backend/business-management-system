@@ -1,4 +1,4 @@
-"""
+﻿"""
 Логин: сообщения о причинах отказа (мёртвые ветки LoginSerializer).
 
 authenticate() не возвращает НЕАКТИВНЫХ пользователей (ModelBackend
@@ -34,31 +34,31 @@ class LoginMessageTests(TestCase):
     def test_wrong_password_is_generic(self):
         resp = self._login('msg_worker', 'WrongPass123!')
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('Invalid username or password', str(resp.data))
+        self.assertIn('Неверное имя пользователя или пароль', str(resp.data))
 
     def test_unknown_user_is_generic(self):
         resp = self._login('no_such_user', 'Whatever123!')
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('Invalid username or password', str(resp.data))
+        self.assertIn('Неверное имя пользователя или пароль', str(resp.data))
 
     def test_deactivated_account_message(self):
         self.worker.is_active = False
         self.worker.save(update_fields=['is_active'])
         resp = self._login('msg_worker', 'WorkerPass123!')
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('Account is deactivated', str(resp.data))
+        self.assertIn('Аккаунт деактивирован', str(resp.data))
 
     def test_blocked_company_message(self):
-        # Блокировка компании каскадно гасит сотрудников (is_active=False) —
-        # оба сообщения формально верны, но пользователь должен понять, что
-        # дело в компании.
+        # Р‘Р»РѕРєРёСЂРѕРІРєР° РєРѕРјРїР°РЅРёРё РєР°СЃРєР°РґРЅРѕ РіР°СЃРёС‚ СЃРѕС‚СЂСѓРґРЅРёРєРѕРІ (is_active=False) вЂ”
+        # РѕР±Р° СЃРѕРѕР±С‰РµРЅРёСЏ С„РѕСЂРјР°Р»СЊРЅРѕ РІРµСЂРЅС‹, РЅРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РґРѕР»Р¶РµРЅ РїРѕРЅСЏС‚СЊ, С‡С‚Рѕ
+        # РґРµР»Рѕ РІ РєРѕРјРїР°РЅРёРё.
         self.company.is_active = False
         self.company.save(update_fields=['is_active'])
         self.worker.is_active = False
         self.worker.save(update_fields=['is_active'])
         resp = self._login('msg_worker', 'WorkerPass123!')
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('Company is deactivated', str(resp.data))
+        self.assertIn('Компания деактивирована', str(resp.data))
 
     def test_blocked_company_owner_gets_company_message(self):
         self.company.is_active = False
@@ -67,9 +67,10 @@ class LoginMessageTests(TestCase):
         self.owner.save(update_fields=['is_active'])
         resp = self._login('msg_owner', 'OwnerPass123!')
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('Company is deactivated', str(resp.data))
+        self.assertIn('Компания деактивирована', str(resp.data))
 
     def test_valid_login_still_works(self):
         resp = self._login('msg_worker', 'WorkerPass123!')
         self.assertEqual(resp.status_code, 200)
         self.assertIn('tokens', resp.data)
+

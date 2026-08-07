@@ -28,7 +28,7 @@ class IsCompanyMember(permissions.BasePermission):
     пользователям owner/admin/worker, у которых задана company. Супер-админ
     (company=None) к данным компаний не допускается.
     """
-    message = 'You must belong to a company to access this resource.'
+    message = 'Вы должны принадлежать компании, чтобы получить доступ к этому ресурсу.'
 
     def has_permission(self, request, view):
         user = request.user
