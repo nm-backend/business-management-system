@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "SkladPro.Nod",
-    "tagline": "Бизнес башкаруу системасы"
+    "tagline": "Бизнес башкаруу системасы",
+    "brand_short": "SkladPro"
   },
   "auth": {
     "login": "Кирүү",
@@ -124,7 +125,11 @@
     "active_employees": "Активдүү кызматкерлер",
     "overdue_percentage": "Мөөнөтү өткөн буйрутмалар",
     "low_stock_count": "Аз запастагы товарлар",
-    "tasks_label": "Тапшырмалар"
+    "tasks_label": "Тапшырмалар",
+    "welcome_owner": "Компания жөнүндө кыскача",
+    "owner_overview": "Финансылык статус",
+    "open_orders": "Буйрутмаларга ўтиш",
+    "worker_overview": "Сизнинг вазифаларингиз ва даромадингиз"
   },
   "warehouse": {
     "title": "Чийки зат кампасы",
@@ -369,7 +374,8 @@
     "paid_out": "Төлөндү",
     "labor_rate_per_unit": "Бирдик үчүн эмгек акы",
     "labor_rate_hint": "Бир бирдик продукция үчүн жумушчуга ушунча эсептелет",
-    "labor_rate_missing": "коюлган эмес"
+    "labor_rate_missing": "коюлган эмес",
+    "open_finance": "Финансыга ўтиш"
   },
   "payment_types": {
     "salary": "Эмгек акы",

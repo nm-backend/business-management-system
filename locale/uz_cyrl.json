@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "SkladPro.Nod",
-    "tagline": "Бизнесни бошқариш тизими"
+    "tagline": "Бизнесни бошқариш тизими",
+    "brand_short": "SkladPro"
   },
   "auth": {
     "login": "Кириш",
@@ -124,7 +125,11 @@
     "active_employees": "Фаол ходимлар",
     "overdue_percentage": "Муддати ўтган буюртмалар",
     "low_stock_count": "Кам запасли товарлар",
-    "tasks_label": "Вазифалар"
+    "tasks_label": "Вазифалар",
+    "welcome_owner": "Компания ҳақида қисқача",
+    "owner_overview": "Молиявий ҳолат",
+    "open_orders": "Буюртмаларга ўтиш",
+    "worker_overview": "Сизнинг вазифаларингиз ва даромадингиз"
   },
   "warehouse": {
     "title": "Хом ашё омбори",
@@ -369,7 +374,8 @@
     "paid_out": "Тўланди",
     "labor_rate_per_unit": "Бир бирлик учун иш ҳақи",
     "labor_rate_hint": "Бир бирлик маҳсулот учун ишчига шунча ҳисобланади",
-    "labor_rate_missing": "белгиланмаган"
+    "labor_rate_missing": "белгиланмаган",
+    "open_finance": "Финансларга ўтиш"
   },
   "payment_types": {
     "salary": "Иш ҳақи",

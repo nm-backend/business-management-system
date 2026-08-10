@@ -167,6 +167,11 @@ body.authenticated .bottom-nav { display: flex; }
     z-index: 20;
     border-bottom: 1px solid var(--border);
 }
+.top-bar-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
 .top-bar h1 {
     font-family: var(--font-display);
     font-size: 20px;
@@ -176,7 +181,43 @@ body.authenticated .bottom-nav { display: flex; }
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.page-badge {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--text-muted);
+    font-weight: 700;
+}
 .top-bar .actions { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
+
+/* ---------- Page hero ---------- */
+.page-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 18px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.page-hero h2 {
+    font-size: clamp(24px, 2.4vw, 30px);
+    line-height: 1.1;
+    font-weight: 700;
+    margin: 0;
+}
+.card-minimal {
+    border: 1px solid transparent;
+    background: var(--surface-card);
+    box-shadow: var(--shadow-sm);
+}
+.list-group-compact .list-row {
+    padding: 10px 12px;
+    gap: 10px;
+}
+.list-group-compact .list-row + .list-row {
+    border-top: 1px solid var(--border);
+}
 
 /* ---------- Main content ---------- */
 /* Прокручивается ДОКУМЕНТ, а не этот блок.

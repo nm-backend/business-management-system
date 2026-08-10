@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "SkladPro.Nod",
-    "tagline": "Система управления бизнесом"
+    "tagline": "Система управления бизнесом",
+    "brand_short": "SkladPro"
   },
   "auth": {
     "login": "Вход",
@@ -124,7 +125,12 @@
     "active_employees": "Активные сотрудники",
     "overdue_percentage": "Просроченные заказы",
     "low_stock_count": "Товары с низким остатком",
-    "tasks_label": "Задачи"
+    "tasks_label": "Задачи",
+    "welcome_owner": "Обзор компании",
+    "owner_overview": "Краткая финансовая сводка",
+    "overdue_orders": "Просрочено",
+    "open_orders": "Перейти в заказы",
+    "worker_overview": "Ваши задачи и заработок"
   },
   "warehouse": {
     "title": "Склад сырья",
@@ -369,7 +375,8 @@
     "paid_out": "Выплачено",
     "labor_rate_per_unit": "Оплата труда за единицу",
     "labor_rate_hint": "Столько начисляется работнику за единицу продукции",
-    "labor_rate_missing": "не задана"
+    "labor_rate_missing": "не задана",
+    "open_finance": "Перейти в финансы"
   },
   "payment_types": {
     "salary": "Зарплата",

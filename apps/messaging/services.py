@@ -109,7 +109,7 @@ def get_or_create_direct(company, user_a, user_b):
     # второй поток после блокировки увидит диалог, созданный первым.
     from apps.accounts.models import User
     with transaction.atomic():
-        User.objects.select_for_update().filter(pk__in=[user_a.pk, user_b.pk]).order_by('pk').first()
+        list(User.objects.select_for_update().filter(pk__in=[user_a.pk, user_b.pk]).order_by('pk'))
         convs_with_a = ConversationParticipant.objects.filter(
             user=user_a,
             conversation__company_id=company_id,

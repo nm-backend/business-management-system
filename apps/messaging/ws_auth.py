@@ -18,6 +18,7 @@ from django.utils import timezone
 @database_sync_to_async
 def _get_user_by_ticket(ticket):
     """Валидирует одноразовый тикет и возвращает пользователя или AnonymousUser."""
+    from django.db import transaction
     from django.db.models import F
 
     from apps.accounts.models import User
@@ -27,17 +28,19 @@ def _get_user_by_ticket(ticket):
     if not ticket:
         return AnonymousUser()
     try:
-        ws_ticket = WsTicket.objects.select_related('user').get(
-            ticket=ticket, used=False, expires_at__gt=timezone.now(),
-        )
+        with transaction.atomic():
+            ws_ticket = WsTicket.objects.select_for_update().select_related('user').get(
+                ticket=ticket, used=False, expires_at__gt=timezone.now(),
+            )
+            user = ws_ticket.user
+            if not user.is_active or user.blocked_by_owner:
+                return AnonymousUser()
+            # Одноразовость: помечаем использованным ДО открытия соединения.
+            ws_ticket.used = True
+            ws_ticket.save(update_fields=['used'])
+            return user
     except WsTicket.DoesNotExist:
         return AnonymousUser()
-    user = ws_ticket.user
-    if not user.is_active or user.blocked_by_owner:
-        return AnonymousUser()
-    # Одноразовость: помечаем использованным ДО открытия соединения.
-    WsTicket.objects.filter(pk=ws_ticket.pk).update(used=True)
-    return user
 
 
 class TicketAuthMiddleware(BaseMiddleware):

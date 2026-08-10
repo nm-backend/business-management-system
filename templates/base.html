@@ -44,7 +44,7 @@
       <aside class="app-sidebar" id="app-sidebar">
         <a href="#/" class="sidebar-brand">
           <img class="sidebar-brand-mark" src="{% static 'img/logo.svg' %}"
-               width="26" height="26" alt="" aria-hidden="true">
+               width="28" height="28" alt="" aria-hidden="true">
           <span>SkladPro</span>
         </a>
         <nav class="sidebar-nav">
@@ -54,32 +54,20 @@
           <a href="#/orders" class="sidebar-link" data-nav="orders">
             <span class="nav-icon">📋</span><span data-i18n="nav.orders">Буюртмалар</span>
           </a>
-          <a href="#/orders/kanban" class="sidebar-link" data-nav="kanban" data-role="staff">
-            <span class="nav-icon">🔄</span><span>Kanban</span>
-          </a>
           <a href="#/warehouse" class="sidebar-link" data-nav="warehouse">
-            <span class="nav-icon">📦</span><span data-i18n="nav.raw_materials">Хом ашё омбори</span>
-          </a>
-          <a href="#/finished-products" class="sidebar-link" data-nav="warehouse" data-role="staff">
-            <span class="nav-icon">🪟</span><span data-i18n="nav.finished_products">Тайёр маҳсулот</span>
+            <span class="nav-icon">📦</span><span data-i18n="nav.warehouse">Омбор</span>
           </a>
           <a href="#/production" class="sidebar-link" data-nav="production" data-role="staff-worker">
             <span class="nav-icon">🛠️</span><span data-i18n="nav.production">Ишлаб чиқариш</span>
           </a>
-          <a href="#/clients" class="sidebar-link" data-nav="clients" data-role="staff">
-            <span class="nav-icon">👥</span><span data-i18n="nav.clients">Мижозлар</span>
-          </a>
           <a href="#/finance" class="sidebar-link" data-nav="finance" data-role="owner">
             <span class="nav-icon">💰</span><span data-i18n="nav.analytics">Молия</span>
           </a>
+          <a href="#/clients" class="sidebar-link" data-nav="clients" data-role="staff">
+            <span class="nav-icon">👥</span><span data-i18n="nav.clients">Мижозлар</span>
+          </a>
           <a href="#/messages" class="sidebar-link" data-nav="messages">
             <span class="nav-icon">✉️</span><span data-i18n="messages_section.title">Хабарлар</span>
-          </a>
-          <a href="#/companies" class="sidebar-link" data-nav="companies" data-role="superadmin">
-            <span class="nav-icon">🏢</span><span data-i18n="companies.title">Компаниялар</span>
-          </a>
-          <a href="#/audit" class="sidebar-link" data-nav="audit" data-role="owner">
-            <span class="nav-icon">📋</span><span data-i18n="settings.audit_log">Аудит</span>
           </a>
           <a href="#/settings" class="sidebar-link" data-nav="settings">
             <span class="nav-icon">⚙️</span><span data-i18n="settings.title">Созламалар</span>
@@ -94,7 +82,10 @@
       <div class="app-body">
         <!-- Top App Bar -->
         <header class="top-bar" id="app-top-bar">
-          <h1 id="page-title">SkladPro</h1>
+          <div class="top-bar-left">
+            <div class="page-badge" data-i18n="app.brand_short">SkladPro</div>
+            <h1 id="page-title">SkladPro</h1>
+          </div>
           <div class="actions">
             <button class="icon-btn" id="notifications-btn" type="button" aria-label="Notifications">
               🔔

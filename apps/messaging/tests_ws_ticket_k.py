@@ -62,6 +62,20 @@ class WsTicketApiTests(TransactionTestCase):
         resp = self.api.get(TICKET_URL)
         self.assertEqual(resp.status_code, 401)
 
+    async def test_ticket_cannot_be_reused(self):
+        ticket = await self._ticket(self.owner)
+
+        communicator1 = WebsocketCommunicator(self.ws_app, f'/ws/chat/?ticket={ticket}')
+        connected1, _ = await communicator1.connect()
+        self.assertTrue(connected1)
+
+        communicator2 = WebsocketCommunicator(self.ws_app, f'/ws/chat/?ticket={ticket}')
+        connected2, _ = await communicator2.connect()
+        self.assertFalse(connected2)
+
+        await communicator1.disconnect()
+        await communicator2.disconnect()
+
     async def test_blocked_user_cannot_connect(self):
         worker = await self._make_blocked_user()
         ticket = await self._ticket(worker)

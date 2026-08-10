@@ -6,9 +6,10 @@ Views for finance API.
 """
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Sum
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -313,15 +314,47 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         worker = serializer.validated_data.get('worker')
         if worker and worker.company_id != self.request.user.company_id:
             raise PermissionDenied('Работник должен принадлежать вашей компании')
-        payment = serializer.save(created_by=self.request.user, company=self.request.user.company)
+
         from apps.audit.models import AuditLog
         from apps.audit.services import write_audit_log
-        write_audit_log(
-            action=AuditLog.Action.CREATE,
-            actor=self.request.user,
-            target=payment,
-            request=self.request,
-        )
+        from apps.production.models import WorkRecord
+        from .models import WorkerPayment
+        from django.db.models import Sum
+        from apps.accounts.models import User
+
+        with transaction.atomic():
+            if serializer.validated_data.get('payment_type') == WorkerPayment.PaymentType.SALARY:
+                # Сериализуем concurrent salary payments одного работника;
+                # Revalidate после захвата блокировки, иначе два параллельных
+                # запроса могут оба пройти на старых данных.
+                User.objects.select_for_update().get(pk=worker.pk)
+                accrued = WorkRecord.objects.filter(
+                    company_id=worker.company_id,
+                    worker=worker,
+                    status=WorkRecord.WorkStatus.CONFIRMED,
+                ).aggregate(s=Sum('labor_cost'))['s'] or 0
+                paid = WorkerPayment.objects.filter(
+                    company_id=worker.company_id,
+                    worker=worker,
+                    payment_type=WorkerPayment.PaymentType.SALARY,
+                ).aggregate(s=Sum('amount'))['s'] or 0
+                amount = serializer.validated_data.get('amount')
+                debt = Decimal(accrued) - Decimal(paid)
+                if Decimal(amount) > max(debt, Decimal('0')):
+                    raise ValidationError({
+                        'amount': (
+                            f'Сумма зарплаты превышает начисленное (начислено {accrued}, уже выдано {paid}). '
+                            'Аванс или премию проводите с соответствующим типом выплаты.'
+                        )
+                    })
+
+            payment = serializer.save(created_by=self.request.user, company=self.request.user.company)
+            write_audit_log(
+                action=AuditLog.Action.CREATE,
+                actor=self.request.user,
+                target=payment,
+                request=self.request,
+            )
 
     def perform_update(self, serializer):
         # Без этой проверки PATCH мог перепривязать выплату к worker ЧУЖОЙ
@@ -336,8 +369,37 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
             raise PermissionDenied('Работника нельзя изменить после создания выплаты')
         from apps.audit.models import AuditLog
         from apps.audit.services import collect_model_changes, write_audit_log
+        from apps.production.models import WorkRecord
+        from .models import WorkerPayment
+
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
-        payment = serializer.save()
+        payment_type = serializer.validated_data.get('payment_type', serializer.instance.payment_type)
+        if payment_type == WorkerPayment.PaymentType.SALARY:
+            with transaction.atomic():
+                User.objects.select_for_update().get(pk=serializer.instance.worker_id)
+                accrued = WorkRecord.objects.filter(
+                    company_id=serializer.instance.worker.company_id,
+                    worker=serializer.instance.worker,
+                    status=WorkRecord.WorkStatus.CONFIRMED,
+                ).aggregate(s=Sum('labor_cost'))['s'] or Decimal('0')
+                paid = WorkerPayment.objects.filter(
+                    company_id=serializer.instance.worker.company_id,
+                    worker=serializer.instance.worker,
+                    payment_type=WorkerPayment.PaymentType.SALARY,
+                ).exclude(pk=serializer.instance.pk).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+                amount = serializer.validated_data.get('amount', serializer.instance.amount)
+                debt = Decimal(accrued) - Decimal(paid)
+                if Decimal(amount) > max(debt, Decimal('0')):
+                    raise ValidationError({
+                        'amount': (
+                            f'Сумма зарплаты превышает начисленное (начислено {accrued}, уже выдано {paid}). '
+                            'Аванс или премию проводите с соответствующим типом выплаты.'
+                        )
+                    })
+                payment = serializer.save()
+        else:
+            payment = serializer.save()
+
         if changes:
             write_audit_log(
                 action=AuditLog.Action.UPDATE,
