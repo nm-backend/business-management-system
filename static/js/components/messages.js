@@ -114,20 +114,26 @@ class MessagesComponent {
 
         container.innerHTML = `
             <div class="chat-page">
-                <div class="chat-tabs">
-                    <button class="chat-tab ${this.tab === 'chat' ? 'active' : ''}" data-tab="chat" data-i18n="chat.tab_chat"></button>
-                    <button class="chat-tab ${this.tab === 'notifications' ? 'active' : ''}" data-tab="notifications">
+                <div class="chat-tabs" role="tablist" aria-label="Messages tabs">
+                    <button class="chat-tab ${this.tab === 'chat' ? 'active' : ''}" data-tab="chat" id="messages-tab-chat" role="tab" aria-selected="${this.tab === 'chat' ? 'true' : 'false'}" aria-controls="chat-tab-body" data-i18n="chat.tab_chat"></button>
+                    <button class="chat-tab ${this.tab === 'notifications' ? 'active' : ''}" data-tab="notifications" id="messages-tab-notifications" role="tab" aria-selected="${this.tab === 'notifications' ? 'true' : 'false'}" aria-controls="chat-tab-body">
                         <span data-i18n="chat.tab_notifications"></span>
                     </button>
                 </div>
-                <div class="chat-tab-body" id="chat-tab-body"></div>
+                <div class="chat-tab-body" id="chat-tab-body" role="tabpanel" aria-labelledby="messages-tab-${this.tab}"></div>
             </div>`;
 
         container.querySelectorAll('.chat-tab').forEach((btn) => {
             btn.addEventListener('click', () => {
                 if (this.tab === btn.dataset.tab) return;
                 this.tab = btn.dataset.tab;
-                container.querySelectorAll('.chat-tab').forEach((b) => b.classList.toggle('active', b === btn));
+                container.querySelectorAll('.chat-tab').forEach((b) => {
+                    const active = b === btn;
+                    b.classList.toggle('active', active);
+                    b.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
+                const panel = this.bodyEl;
+                if (panel) panel.setAttribute('aria-labelledby', `messages-tab-${this.tab}`);
                 this.loadTab();
             });
         });

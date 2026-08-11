@@ -43,13 +43,31 @@ window.ui = {
      * Открывает модальное окно. bodyHtml - разметка тела,
      * возвращает элемент modal (закрытие: крестик, клик по фону, ui.closeModal).
      */
+    _openModalCount: 0,
+
+    _incrementModalCount() {
+        this._openModalCount += 1;
+        if (this._openModalCount === 1) {
+            document.body.classList.add('modal-open');
+        }
+    },
+
+    _decrementModalCount() {
+        if (this._openModalCount <= 0) return;
+        this._openModalCount -= 1;
+        if (this._openModalCount === 0) {
+            document.body.classList.remove('modal-open');
+        }
+    },
+
     modal(titleKey, bodyHtml) {
         const modal = document.createElement('div');
         modal.className = 'modal';
+        const titleId = `skp-modal-title-${Math.random().toString(36).slice(2)}`;
         modal.innerHTML = `
-            <div class="modal-content" role="dialog" aria-modal="true">
+            <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
                 <div class="modal-header">
-                    <h3 data-i18n="${titleKey}"></h3>
+                    <h3 id="${titleId}" data-i18n="${titleKey}"></h3>
                     <button class="close" type="button" aria-label="Close">&times;</button>
                 </div>
                 <div class="modal-body">${bodyHtml}</div>
@@ -58,6 +76,7 @@ window.ui = {
         modal.querySelector('.close').addEventListener('click', close);
         modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
         document.body.appendChild(modal);
+        this._incrementModalCount();
 
         // Окно занимает СВОЮ запись в истории (адрес не меняется). Тогда «Назад»
         // на телефоне закрывает карточку, а не уводит на другую страницу.
@@ -99,6 +118,7 @@ window.ui = {
         modal.dataset.skpClosing = '1';
         const ownsHistoryEntry = modal.dataset.skpHistory === '1';
         modal.remove();
+        this._decrementModalCount();
         if (ownsHistoryEntry && history.state && history.state.skpModal) {
             this._pendingHistoryRelease += 1;
             history.back();
@@ -116,6 +136,7 @@ window.ui = {
         top.dataset.skpHistory = '';   // запись истории уже израсходована
         top.dataset.skpClosing = '1';
         top.remove();
+        this._decrementModalCount();
         return true;
     },
 

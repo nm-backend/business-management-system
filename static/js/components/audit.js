@@ -52,9 +52,7 @@ class AuditComponent {
                         <th data-i18n="orders.product"></th>
                         <th data-i18n="common.details"></th>
                     </tr></thead>
-                    <tbody id="audit-tbody">
-                        <tr><td colspan="6"><div class="list-state list-state-loading"><span class="spinner"></span></div></td></tr>
-                    </tbody>
+                    <tbody id="audit-tbody"></tbody>
                 </table>
             </div>
             <div class="pagination" id="audit-pagination" style="display:none;"></div>
@@ -72,13 +70,14 @@ class AuditComponent {
             this.load();
         });
 
+        const tbody = this.container.querySelector('#audit-tbody');
+        window.listStates.tableLoading(tbody, 6, window.ui.t('common.loading'));
         try {
             const response = await window.api.request(`/audit/logs/?${params}`);
             const rows = response.results || [];
-            const tbody = this.container.querySelector('#audit-tbody');
 
             if (!rows.length) {
-                tbody.innerHTML = `<tr><td colspan="6"><div class="list-state list-state-empty"><span>${window.ui.t('common.no_data')}</span></div></td></tr>`;
+                window.listStates.tableEmpty(tbody, 6, window.ui.t('common.no_data'));
                 return;
             }
 
@@ -104,9 +103,9 @@ class AuditComponent {
 
             // Пагинация
             const pagination = this.container.querySelector('#audit-pagination');
-            const pageSize = response.results?.length || 20;
-            const totalPages = Math.ceil(response.count / pageSize);
-            if (totalPages > 1) {
+            const pageSize = response.page_size || response.results?.length || 20;
+            const totalPages = response.count ? Math.max(1, Math.ceil(response.count / pageSize)) : 1;
+            if (response.count && totalPages > 1) {
                 pagination.style.display = 'flex';
                 pagination.innerHTML = `
                     <button class="btn btn-sm btn-secondary" ${this.page <= 1 ? 'disabled' : ''} id="audit-prev">← ${window.ui.t('common.previous')}</button>
@@ -120,8 +119,7 @@ class AuditComponent {
             }
             window.i18n.applyTranslations();
         } catch (e) {
-            this.container.querySelector('#audit-tbody').innerHTML = `
-                <tr><td colspan="6"><div class="list-state list-state-error">${window.ui.t('common.error_loading')}</div></td></tr>`;
+            window.listStates.tableError(tbody, 6, window.ui.t('common.error_loading'), () => this.load());
         }
     }
 }

@@ -39,6 +39,7 @@
     {% block chart_css %}{% endblock %}
   </head>
   <body>
+    <a class="skip-link" href="#app-content">Skip to main content</a>
     <div class="app-container">
       <!-- Desktop Sidebar -->
       <aside class="app-sidebar" id="app-sidebar">
@@ -47,7 +48,7 @@
                width="28" height="28" alt="" aria-hidden="true">
           <span>SkladPro</span>
         </a>
-        <nav class="sidebar-nav">
+        <nav class="sidebar-nav" role="navigation" aria-label="Primary navigation">
           <a href="#/" class="sidebar-link" data-nav="dashboard">
             <span class="nav-icon">🏠</span><span data-i18n="nav.dashboard">Бош панел</span>
           </a>
@@ -95,7 +96,7 @@
         </header>
 
 <!-- Main Content -->
-<main class="main-content">
+<main class="main-content" role="main" aria-labelledby="page-title">
     <div id="app-content">
         {% block content %}{% endblock %}
     </div>
@@ -127,7 +128,7 @@
 </footer>
 </main>
       <!-- Mobile Bottom Navigation -->
-      <nav class="bottom-nav" id="app-bottom-nav">
+      <nav class="bottom-nav" id="app-bottom-nav" role="navigation" aria-label="Primary navigation">
         <a href="#/" class="nav-item" id="nav-dashboard" data-nav="dashboard">
           <span class="nav-icon">🏠</span>
           <span data-i18n="nav.dashboard">Бош панел</span>
@@ -136,7 +137,7 @@
           <span class="nav-icon">📋</span>
           <span data-i18n="nav.orders">Буюртмалар</span>
         </a>
-        <a href="#/production" class="nav-item" id="nav-production" data-nav="production" style="display: none">
+        <a href="#/production" class="nav-item" id="nav-production" data-nav="production" data-role="staff-worker">
           <span class="nav-icon">🛠️</span>
           <span data-i18n="nav.my_tasks_short">Вазифалар</span>
         </a>
@@ -144,7 +145,7 @@
           <span class="nav-icon">📦</span>
           <span data-i18n="nav.warehouse_short">Омбор</span>
         </a>
-        <a href="#/clients" class="nav-item" id="nav-clients" data-nav="clients">
+        <a href="#/clients" class="nav-item" id="nav-clients" data-nav="clients" data-role="staff">
           <span class="nav-icon">👥</span>
           <span data-i18n="nav.clients">Мижозлар</span>
         </a>

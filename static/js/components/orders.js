@@ -36,20 +36,27 @@ class OrdersComponent {
             : s === '__unpaid__' ? 'payment_statuses.unpaid' : 'statuses.' + s;
 
         container.innerHTML = `
-            <div class="tabs">
+            <div class="page-hero">
+                <div>
+                    <div class="eyebrow" data-i18n="orders.title"></div>
+                    <h2>${window.ui.t('orders.title')}</h2>
+                </div>
+                ${canEdit ? `<button class="btn btn-primary btn-sm" id="add-order-btn" data-i18n="orders.new_order"></button>` : ''}
+            </div>
+            <div class="tabs" role="tablist" aria-label="Order status filter">
                 ${statuses.map((s) => `
-                    <button class="tab-btn ${s === this.currentStatus ? 'active' : ''}" data-status="${s}"
+                    <button class="tab-btn ${s === this.currentStatus ? 'active' : ''}" role="tab" aria-selected="${s === this.currentStatus ? 'true' : 'false'}" data-status="${s}"
                         data-i18n="${labelKey(s)}"></button>`).join('')}
             </div>
             ${this.clientFilter ? `
                 <div class="filter-chip" style="display:inline-flex;align-items:center;gap:8px;background:var(--secondary-bg, #f0f0f3);border-radius:16px;padding:6px 14px;margin-bottom:10px;font-size:14px;">
                     <span>👤 ${window.ui.escape(clientName)}</span>
-                    <button type="button" id="clear-client-filter" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;" aria-label="${window.ui.t('common.clear_filter')}">✕</button>                </div>` : ''}
+                    <button type="button" id="clear-client-filter" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;" aria-label="${window.ui.t('common.clear_filter')}">✕</button>
+                </div>` : ''}
             <div class="search-box">
                 <span class="search-icon">🔍</span>
                 <input type="text" id="order-search" class="form-control" data-i18n="orders.search">
             </div>
-            ${canEdit ? `<button class="btn btn-primary btn-block" id="add-order-btn" style="margin-bottom:12px;" data-i18n="orders.new_order"></button>` : ''}
             <div id="orders-list" class="card-grid"></div>
         `;
 
@@ -66,8 +73,11 @@ class OrdersComponent {
 
         container.querySelectorAll('.tab-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
-                container.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-                btn.classList.add('active');
+                container.querySelectorAll('.tab-btn').forEach((b) => {
+                    const active = b === btn;
+                    b.classList.toggle('active', active);
+                    b.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
                 this.currentStatus = btn.dataset.status;
                 // Вкладка «Не оплачено» — отдельный фильтр: при переходе на
                 // любой статус он сбрасывается (вкладки взаимоисключающие).
@@ -122,6 +132,12 @@ class OrdersComponent {
                     const order = this.orders.find((o) => o.id === Number(card.dataset.id));
                     this.openDetail(order);
                 });
+                card.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        card.click();
+                    }
+                });
             });
             window.i18n.applyTranslations();
         } catch (e) {
@@ -132,7 +148,7 @@ class OrdersComponent {
     renderCard(o) {
         const danger = o.has_material_shortage || o.has_product_shortage || o.payment_status === 'unpaid';
         return `
-            <div class="card" data-id="${o.id}" style="cursor:pointer;${danger ? 'border-left:4px solid var(--danger-color);' : ''}">
+            <div class="card card-interactive" role="button" tabindex="0" data-id="${o.id}" style="${danger ? 'border-left:4px solid var(--danger-color);' : ''}">
                 <div class="card-title" style="margin-bottom:4px;">
                     <span>#${o.id} ${window.ui.escape(o.client_name)}</span>
                     ${window.ui.orderBadge(o.status)}

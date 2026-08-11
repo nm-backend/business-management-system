@@ -73,7 +73,7 @@ class SettingsComponent {
 
             <div class="section-title" data-i18n="settings.notifications"></div>
             <div class="list-group">
-                <div class="list-row" id="notif-permission-row" style="cursor:pointer;">
+                <div class="list-row" id="notif-permission-row" role="button" tabindex="0" style="cursor:pointer;">
                     <span>🔔 <span data-i18n="settings.push_notifications"></span></span>
                     <span class="badge ${notifStatus === 'granted' ? 'badge-ready' : notifStatus === 'denied' ? 'badge-cancel' : 'badge-progress'}" id="notif-status-badge">${notifLabel}</span>
                 </div>
@@ -89,30 +89,30 @@ class SettingsComponent {
             ${user.is_owner || user.is_admin ? `
                 <div class="section-title" data-i18n="settings.export"></div>
                 <div class="list-group">
-                    <div class="list-row" data-export="/reports/export/stock/" data-file="stock-report.xlsx">
+                    <div class="list-row" data-export="/reports/export/stock/" data-file="stock-report.xlsx" role="button" tabindex="0">
                         <span>📦 <span data-i18n="export.stock"></span></span><span>Excel</span>
                     </div>
-                    <div class="list-row" data-export="/reports/export/orders/" data-file="orders-report.xlsx">
+                    <div class="list-row" data-export="/reports/export/orders/" data-file="orders-report.xlsx" role="button" tabindex="0">
                         <span>📋 <span data-i18n="export.orders"></span></span><span>Excel</span>
                     </div>
-                    <div class="list-row" data-export="/reports/export/work/" data-file="work-report.xlsx">
+                    <div class="list-row" data-export="/reports/export/work/" data-file="work-report.xlsx" role="button" tabindex="0">
                         <span>🛠️ <span data-i18n="export.work"></span></span><span>Excel</span>
                     </div>
                     ${user.is_owner ? `
-                        <div class="list-row" data-export="/reports/export/finance/" data-file="finance-report.xlsx">
+                        <div class="list-row" data-export="/reports/export/finance/" data-file="finance-report.xlsx" role="button" tabindex="0">
                             <span>💰 <span data-i18n="export.finance"></span></span><span>Excel</span>
                         </div>` : ''}
                 </div>` : ''}
 
             <div class="section-title" data-i18n="settings.security"></div>
             <div class="list-group">
-                <div class="list-row" id="change-password-row">
+                <div class="list-row" id="change-password-row" role="button" tabindex="0">
                     <span>🔑 <span data-i18n="auth.change_password"></span></span><span>›</span>
                 </div>
-                <div class="list-row" id="about-row">
+                <div class="list-row" id="about-row" role="button" tabindex="0">
                     <span>ℹ️ <span data-i18n="about.title"></span></span><span>›</span>
                 </div>
-                <div class="list-row" id="logout-row">
+                <div class="list-row" id="logout-row" role="button" tabindex="0">
                     <span class="text-danger">🚪 <span data-i18n="auth.logout"></span></span>
                 </div>
             </div>
@@ -135,7 +135,7 @@ class SettingsComponent {
         // Push notifications permission
         const notifRow = container.querySelector('#notif-permission-row');
         if (notifRow) {
-            notifRow.addEventListener('click', async () => {
+            const requestPermission = async () => {
                 const result = await window.requestNotificationPermission();
                 const badge = container.querySelector('#notif-status-badge');
                 if (result === 'granted') {
@@ -147,21 +147,46 @@ class SettingsComponent {
                     badge.className = 'badge badge-cancel';
                     window.toast.info(window.ui.t('settings.notifications_blocked'));
                 }
+            };
+            notifRow.addEventListener('click', requestPermission);
+            notifRow.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    requestPermission();
+                }
             });
         }
 
         container.querySelectorAll('.lang-option').forEach((el) => {
             el.addEventListener('click', () => this.changeLanguage(el.dataset.lang));
         });
-        container.querySelector('#change-password-row').addEventListener('click', () => this.openChangePassword());
-        container.querySelector('#about-row').addEventListener('click', () => this.openAbout());
-        container.querySelector('#logout-row').addEventListener('click', async () => {
+        const bindActionRow = (selector, action) => {
+            const el = container.querySelector(selector);
+            if (!el) return;
+            el.addEventListener('click', action);
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    action();
+                }
+            });
+        };
+
+        bindActionRow('#change-password-row', () => this.openChangePassword());
+        bindActionRow('#about-row', () => this.openAbout());
+        bindActionRow('#logout-row', async () => {
             if (await window.confirmation.confirm(window.ui.t('auth.logout_confirm'), window.ui.t('auth.logout'))) {
                 window.api.logout();
             }
         });
         container.querySelectorAll('[data-export]').forEach((row) => {
             row.addEventListener('click', () => this.download(row.dataset.export, row.dataset.file));
+            row.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this.download(row.dataset.export, row.dataset.file);
+                }
+            });
         });
 
         if (user.is_owner || user.is_admin) {

@@ -11,14 +11,20 @@ class FinishedProductsComponent {
         // Архив отдаётся API только владельцу — у остальных вкладка была бы пуста.
         this.tab = 'active';
         container.innerHTML = `
-            <div class="tabs">
-                <button class="tab-btn" id="tab-materials" data-i18n="warehouse.title"></button>
-                <button class="tab-btn active" data-i18n="warehouse.finished_title"></button>
+            <div class="page-hero">
+                <div>
+                    <div class="eyebrow" data-i18n="warehouse.finished_title"></div>
+                    <h2>${window.ui.t('warehouse.finished_title')}</h2>
+                </div>
+            </div>
+            <div class="tabs" role="tablist" aria-label="Warehouse sections">
+                <button class="tab-btn" role="tab" aria-selected="false" id="tab-materials" data-i18n="warehouse.title"></button>
+                <button class="tab-btn active" role="tab" aria-selected="true" data-i18n="warehouse.finished_title"></button>
             </div>
             ${user.is_owner ? `
-                <div class="tabs" id="product-subtabs">
-                    <button class="tab-btn active" data-ptab="active" data-i18n="common.active"></button>
-                    <button class="tab-btn" data-ptab="archive" data-i18n="common.archive"></button>
+                <div class="tabs" id="product-subtabs" role="tablist" aria-label="Finished products filters">
+                    <button class="tab-btn active" role="tab" aria-selected="true" data-ptab="active" data-i18n="common.active"></button>
+                    <button class="tab-btn" role="tab" aria-selected="false" data-ptab="archive" data-i18n="common.archive"></button>
                 </div>` : ''}
             <div class="search-box">
                 <span class="search-icon">🔍</span>
@@ -32,8 +38,11 @@ class FinishedProductsComponent {
 
         container.querySelectorAll('[data-ptab]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                container.querySelectorAll('[data-ptab]').forEach((b) => b.classList.remove('active'));
-                btn.classList.add('active');
+                container.querySelectorAll('[data-ptab]').forEach((b) => {
+                    const active = b === btn;
+                    b.classList.toggle('active', active);
+                    b.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
                 this.tab = btn.dataset.ptab;
                 const addBtn = container.querySelector('#add-product-btn');
                 if (addBtn) addBtn.style.display = this.tab === 'archive' ? 'none' : '';
@@ -77,7 +86,7 @@ class FinishedProductsComponent {
                 return;
             }
             listEl.innerHTML = products.map((p) => `
-                <div class="list-row" data-id="${p.id}">
+                <div class="list-row" role="button" tabindex="0" data-id="${p.id}">
                     <div style="display:flex;align-items:center;gap:12px;min-width:0;">
                         <div class="thumb">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="">` : '🪟'}</div>
                         <div style="min-width:0;">
@@ -100,6 +109,12 @@ class FinishedProductsComponent {
                 row.addEventListener('click', () => {
                     const product = products.find((p) => p.id === Number(row.dataset.id));
                     this.openDetail(product);
+                });
+                row.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        row.click();
+                    }
                 });
             });
             window.i18n.applyTranslations();

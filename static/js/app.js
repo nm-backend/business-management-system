@@ -36,17 +36,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Мобильное нижнее меню по ролям: работник вместо клиентов видит задачи,
-    // менеджер видит и клиентов, и производство.
-    if (user.is_worker) {
-        document.getElementById('nav-clients').style.display = 'none';
-    }
-    if (user.is_worker || user.is_manager) {
-        document.getElementById('nav-production').style.display = 'flex';
-    }
-
     document.getElementById('notifications-btn').addEventListener('click', () => {
         window.location.hash = '#/messages?tab=notifications';
+    });
+
+    // Ensure the nav state is stable before route processing.
+    document.querySelectorAll('#app-bottom-nav .nav-item, .sidebar-link').forEach((link) => {
+        if (!link.dataset.nav) return;
+        link.classList.remove('active');
+        link.removeAttribute('aria-current');
     });
 
     // Маршруты SPA
@@ -64,6 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.router.addRoute('/backup', window.SettingsComponent);
 
     window.router.handleRoute();
+    setupBottomNav(user);
 
     // Загрузка тёмной темы
     if (localStorage.getItem('theme') === 'dark') {
@@ -274,8 +273,27 @@ function setupSidebar(user) {
             show = user.is_owner;
         } else if (role === 'staff') {
             show = user.is_owner || user.is_admin || user.is_manager;
+        } else if (role === 'staff-worker') {
+            show = user.is_worker || user.is_manager;
         }
-        link.style.display = show ? '' : 'none';
+        link.hidden = !show;
+        link.setAttribute('aria-hidden', show ? 'false' : 'true');
+    });
+}
+
+function setupBottomNav(user) {
+    document.querySelectorAll('#app-bottom-nav .nav-item').forEach((link) => {
+        let show = true;
+        const navKey = link.dataset.nav;
+        if (user.is_superadmin) {
+            show = ['dashboard', 'settings'].includes(navKey);
+        } else if (navKey === 'production') {
+            show = user.is_worker || user.is_manager;
+        } else if (navKey === 'clients') {
+            show = !user.is_worker;
+        }
+        link.hidden = !show;
+        link.setAttribute('aria-hidden', show ? 'false' : 'true');
     });
 }
 

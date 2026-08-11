@@ -34,7 +34,9 @@ class DashboardComponent {
                     <div class="eyebrow" data-i18n="dashboard.welcome_owner"></div>
                     <h2 data-i18n="dashboard.owner_overview"></h2>
                 </div>
-                <a class="btn btn-primary btn-sm" href="#/finance" data-i18n="finance.open_finance"></a>
+                <div class="tabs" role="tablist" aria-label="Dashboard period">
+                    ${['today', 'week', 'month', 'quarter', 'year'].map((p) => `<button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>`).join('')}
+                </div>
             </div>
 
             <div class="stat-grid">
@@ -46,28 +48,26 @@ class DashboardComponent {
             </div>
 
             ${data.stock.low_stock_materials > 0 ? `
-                <a class="alert-box" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
+                <a class="alert-box alert-box-warning" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
                     <span>${window.icon('alert-triangle', 16)} <span data-i18n="warehouse.low_stock_warning"></span> (${data.stock.low_stock_materials})</span>
                     <span>›</span>
                 </a>` : ''}
 
-            <div class="dash-2col">
-                <div>
-                    <div class="section-title" data-i18n="finance.expenses"></div>
-                    <div class="card card-minimal">
-                        ${window.ui.donutChart(this.expenseSegments(data), { centerLabel: window.ui.t('finance.expenses') })}
-                    </div>
+            <div class="card-grid">
+                <div class="card card-minimal">
+                    <div class="card-title" data-i18n="finance.expenses"></div>
+                    ${window.ui.donutChart(this.expenseSegments(data), { centerLabel: window.ui.t('finance.expenses') })}
                 </div>
-                <div>
+                <div class="card card-minimal">
+                    <div class="card-title" data-i18n="finance.top_selling"></div>
                     ${data.top_products.length ? `
-                        <div class="section-title" data-i18n="finance.top_selling"></div>
                         <div class="list-group list-group-compact">
                             ${data.top_products.slice(0, 3).map((p) => `
                                 <div class="list-row" style="cursor:default;">
                                     <span>${window.ui.escape(p.name)}</span>
                                     <span class="font-bold">${window.ui.qty(p.total_quantity)}</span>
                                 </div>`).join('')}
-                        </div>` : ''}
+                        </div>` : `<div class="list-state list-state-empty" data-i18n="common.no_data"></div>`}
                     ${data.most_active_worker ? `
                         <div class="section-title" data-i18n="finance.most_active_worker"></div>
                         <div class="list-row" style="cursor:default; justify-content: space-between;">

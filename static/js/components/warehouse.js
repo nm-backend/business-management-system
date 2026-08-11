@@ -13,14 +13,20 @@ class WarehouseComponent {
         // у остальных вкладка была бы всегда пустой.
         this.tab = 'active';
         container.innerHTML = `
-            <div class="tabs">
-                <button class="tab-btn active" id="tab-materials" data-i18n="warehouse.title"></button>
-                <button class="tab-btn" id="tab-products" data-i18n="warehouse.finished_title"></button>
+            <div class="page-hero">
+                <div>
+                    <div class="eyebrow" data-i18n="warehouse.title"></div>
+                    <h2>${window.ui.t('warehouse.title')}</h2>
+                </div>
             </div>
-            <div class="tabs" id="warehouse-subtabs">
-                <button class="tab-btn active" data-wtab="active" data-i18n="common.active"></button>
-                ${user.is_owner ? `<button class="tab-btn" data-wtab="archive" data-i18n="common.archive"></button>` : ''}
-                ${canEdit ? `<button class="tab-btn" data-wtab="history" data-i18n="warehouse.stock_movement"></button>` : ''}
+            <div class="tabs" role="tablist" aria-label="Warehouse sections">
+                <button class="tab-btn active" role="tab" aria-selected="true" id="tab-materials" data-i18n="warehouse.title"></button>
+                <button class="tab-btn" role="tab" aria-selected="false" id="tab-products" data-i18n="warehouse.finished_title"></button>
+            </div>
+            <div class="tabs" id="warehouse-subtabs" role="tablist" aria-label="Warehouse filters">
+                <button class="tab-btn active" role="tab" aria-selected="true" data-wtab="active" data-i18n="common.active"></button>
+                ${user.is_owner ? `<button class="tab-btn" role="tab" aria-selected="false" data-wtab="archive" data-i18n="common.archive"></button>` : ''}
+                ${canEdit ? `<button class="tab-btn" role="tab" aria-selected="false" data-wtab="history" data-i18n="warehouse.stock_movement"></button>` : ''}
             </div>
             <div class="warehouse-summary" id="warehouse-summary" style="display:none;gap:10px;margin-bottom:10px;">
                 <div class="card" style="flex:1;margin:0;">
@@ -58,10 +64,14 @@ class WarehouseComponent {
             container.querySelector('#tab-materials').classList.toggle('active', active);
         };
         const showMaterials = () => {
-            container.querySelectorAll('[data-wtab]').forEach((b) => b.classList.remove('active'));
-            const activeBtn = container.querySelector('[data-wtab="active"]');
-            if (activeBtn) activeBtn.classList.add('active');
+            container.querySelectorAll('[data-wtab]').forEach((b) => {
+                const active = b.dataset.wtab === 'active';
+                b.classList.toggle('active', active);
+                b.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
             setMaterialsTabActive(true);
+            container.querySelector('#tab-materials')?.setAttribute('aria-selected', 'true');
+            container.querySelector('#tab-products')?.setAttribute('aria-selected', 'false');
             this.tab = 'active';
             container.querySelector('.search-box').style.display = '';
             const addBtn = container.querySelector('#add-material-btn');
@@ -72,8 +82,11 @@ class WarehouseComponent {
 
         container.querySelectorAll('[data-wtab]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                container.querySelectorAll('[data-wtab]').forEach((b) => b.classList.remove('active'));
-                btn.classList.add('active');
+                container.querySelectorAll('[data-wtab]').forEach((b) => {
+                    const active = b === btn;
+                    b.classList.toggle('active', active);
+                    b.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
                 this.tab = btn.dataset.wtab;
                 setMaterialsTabActive(this.tab === 'active');
                 // Поиск и «добавить» относятся к списку материалов, в истории они лишние.
@@ -297,6 +310,12 @@ class WarehouseComponent {
                 row.addEventListener('click', () => {
                     const material = materials.find((m) => m.id === Number(row.dataset.id));
                     this.openDetail(material);
+                });
+                row.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        row.click();
+                    }
                 });
             });
             window.i18n.applyTranslations();

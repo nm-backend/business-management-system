@@ -19,13 +19,19 @@ class FinanceComponent {
 
         this.tab = 'analytics';
         container.innerHTML = `
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="analytics" data-i18n="nav.analytics"></button>
-                <button class="tab-btn" data-tab="expenses" data-i18n="finance.expenses"></button>
-                <button class="tab-btn" data-tab="payments" data-i18n="nav.worker_payments"></button>
-                <button class="tab-btn" data-tab="rates" data-i18n="finance.labor_rates"></button>
+            <div class="page-hero">
+                <div>
+                    <div class="eyebrow" data-i18n="finance.title"></div>
+                    <h2>${window.ui.escape(user.full_name || user.username)}</h2>
+                </div>
             </div>
-            <div id="finance-content"></div>
+            <div class="tabs" role="tablist" aria-label="Finance sections">
+                <button class="tab-btn active" data-tab="analytics" role="tab" aria-selected="true" data-i18n="nav.analytics"></button>
+                <button class="tab-btn" data-tab="expenses" role="tab" aria-selected="false" data-i18n="finance.expenses"></button>
+                <button class="tab-btn" data-tab="payments" role="tab" aria-selected="false" data-i18n="nav.worker_payments"></button>
+                <button class="tab-btn" data-tab="rates" role="tab" aria-selected="false" data-i18n="finance.labor_rates"></button>
+            </div>
+            <div id="finance-content" role="tabpanel" aria-live="polite"></div>
         `;
 
         container.querySelectorAll('.tab-btn').forEach((btn) => {
@@ -71,23 +77,35 @@ class FinanceComponent {
                     <span class="text-sm font-bold ${cls}">${window.ui.money(value)}</span>
                 </div>`;
 
+            const metricCard = (labelKey, value, color = 'blue') => `
+                <div class="metric-card ${color}">
+                    <div class="metric-title" data-i18n="${labelKey}"></div>
+                    <div class="metric-value">${window.ui.money(value)}</div>
+                </div>`;
+
             el.innerHTML = `
-                <div class="tabs">
-                    ${periods.map((p) => `<button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>`).join('')}
+                <div class="metrics-grid">
+                    ${metricCard('finance.revenue', data.revenue, 'blue')}
+                    ${metricCard('finance.cost_of_goods', data.cost_of_goods, 'yellow')}
+                    ${metricCard('finance.gross_profit', data.gross_profit, data.net_profit >= 0 ? 'green' : 'red')}
+                    ${metricCard('finance.expenses', data.expenses_total, 'purple')}
                 </div>
-                <div class="list-group">
-                    ${row('finance.revenue', data.revenue)}
-                    ${row('finance.cost_of_goods', data.cost_of_goods)}
-                    ${row('finance.gross_profit', data.gross_profit)}
-                    ${row('finance.expenses', data.expenses_total)}
-                    ${row('finance.salaries', data.salaries)}
-                    ${row('finance.taxes', data.taxes)}
-                    ${row('finance.losses', data.losses)}
-                    ${row('finance.owner_withdrawal', data.owner_withdrawal)}
-                    ${row('finance.net_profit', data.net_profit, data.net_profit < 0 ? 'text-danger' : 'text-success')}
-                    ${row('finance.cash_in_register', data.cash)}
-                    ${row('finance.client_debts', data.client_debts, data.client_debts > 0 ? 'text-danger' : '')}
-                    ${row('finance.worker_debts', data.worker_debts)}
+                <div class="card">
+                    <div class="card-title" data-i18n="finance.analytics_breakdown"></div>
+                    <div class="list-group">
+                        ${row('finance.revenue', data.revenue)}
+                        ${row('finance.cost_of_goods', data.cost_of_goods)}
+                        ${row('finance.gross_profit', data.gross_profit)}
+                        ${row('finance.expenses', data.expenses_total)}
+                        ${row('finance.salaries', data.salaries)}
+                        ${row('finance.taxes', data.taxes)}
+                        ${row('finance.losses', data.losses)}
+                        ${row('finance.owner_withdrawal', data.owner_withdrawal)}
+                        ${row('finance.net_profit', data.net_profit, data.net_profit < 0 ? 'text-danger' : 'text-success')}
+                        ${row('finance.cash_in_register', data.cash)}
+                        ${row('finance.client_debts', data.client_debts, data.client_debts > 0 ? 'text-danger' : '')}
+                        ${row('finance.worker_debts', data.worker_debts)}
+                    </div>
                 </div>
                 <div class="section-title" data-i18n="settings.export"></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
