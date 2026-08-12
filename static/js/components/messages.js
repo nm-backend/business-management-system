@@ -17,6 +17,7 @@ class ChatSocket {
         this.broadcastHandler = null; // глобальный колбэк (бейдж/тосты/звук)
         this.reconnectDelay = 1000;
         this.pingTimer = null;
+        this.reconnectTimer = null;
         this.shouldRun = false;
     }
 
@@ -28,6 +29,8 @@ class ChatSocket {
 
     connect() {
         this.shouldRun = true;
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
         }
@@ -89,9 +92,20 @@ class ChatSocket {
 
     _scheduleReconnect() {
         clearInterval(this.pingTimer);
+        clearTimeout(this.reconnectTimer);
         if (!this.shouldRun) return;
-        setTimeout(() => this.connect(), this.reconnectDelay);
+        this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelay);
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, 15000);
+    }
+
+    /** Полная остановка: гасит пинг, реконнект и само соединение. */
+    disconnect() {
+        this.shouldRun = false;
+        clearInterval(this.pingTimer);
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+        try { if (this.ws) this.ws.close(); } catch (e) { /* ignore */ }
+        this.ws = null;
     }
 
     send(obj) {
@@ -165,7 +179,7 @@ class MessagesComponent {
             <div class="chat" id="chat-root">
                 <div class="chat-aside">
                     <div class="chat-aside-head">
-                        <input type="text" class="chat-search" id="chat-search" data-i18n-attr="placeholder" data-i18n="chat.search_placeholder">
+                        <input type="text" class="chat-search" id="chat-search" data-i18n-attr="placeholder,aria-label" data-i18n="chat.search_placeholder">
                     </div>
                     <div class="chat-list" id="chat-list"></div>
                 </div>
@@ -176,12 +190,11 @@ class MessagesComponent {
         this.applyPlaceholders();
 
         const search = this.bodyEl.querySelector('#chat-search');
-        let searchTimer = null;
-        search.addEventListener('input', () => {
-            clearTimeout(searchTimer);
+        search.addEventListener('input', window.ui.debounce(() => {
             const q = search.value.trim();
-            searchTimer = setTimeout(() => (q ? this.searchEmployees(q) : this.renderList()), 220);
-        });
+            if (q) this.searchEmployees(q);
+            else this.renderList();
+        }, 220));
 
         // Подключаем WebSocket и вешаем обработчик входящих сообщений.
         window.chatSocket.setHandler((m) => this.onIncoming(m));
@@ -223,6 +236,8 @@ class MessagesComponent {
 
     renderList() {
         const listEl = this.bodyEl.querySelector('#chat-list');
+        // Пользователь мог уйти со страницы, пока шёл отложенный поиск/рендер.
+        if (window.listStates.gone(listEl)) return;
         if (!this.conversations.length) {
             listEl.innerHTML = `<div class="chat-empty" style="min-height:120px;"><span data-i18n="chat.no_conversations"></span></div>`;
             window.i18n.applyTranslations();
@@ -266,6 +281,8 @@ class MessagesComponent {
 
     async searchEmployees(query) {
         const listEl = this.bodyEl.querySelector('#chat-list');
+        // Отложенный вызов из дебаунса: страница могла смениться.
+        if (window.listStates.gone(listEl)) return;
         try {
             const resp = await window.api.request(`/messaging/employees/?search=${encodeURIComponent(query)}`);
             const employees = resp.results || resp;
@@ -322,7 +339,7 @@ class MessagesComponent {
             : (conv && conv.other_user ? (window.i18n.translate('roles.' + conv.other_user.role)) : '');
         mainEl.innerHTML = `
             <div class="chat-main-head">
-                <button class="chat-back" id="chat-back" aria-label="Back">‹</button>
+                <button class="chat-back" id="chat-back" data-i18n-attr="aria-label" data-i18n="chat.back">‹</button>
                 <div class="${conv && conv.kind === 'general' ? 'chat-avatar general' : 'chat-avatar'}"
                      ${conv && conv.kind === 'general' ? '' : `style="background:${this.avatarColor(title || '')}"`}>
                     ${conv && conv.kind === 'general' ? '#' : this.initials(title || '?')}
@@ -332,10 +349,10 @@ class MessagesComponent {
                     <div class="chat-main-sub">${window.ui.escape(sub || '')}</div>
                 </div>
             </div>
-            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-messages" id="chat-messages" aria-live="polite"></div>
             <div class="chat-input">
                 <textarea id="chat-textarea" rows="1" data-i18n-attr="placeholder" data-i18n="chat.type_message"></textarea>
-                <button class="chat-send" id="chat-send" aria-label="Send">
+                <button class="chat-send" id="chat-send" data-i18n-attr="aria-label" data-i18n="chat.send">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 </button>
             </div>`;

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Производство.
  * Worker: мои задачи (принять/отказаться), мои работы, добавить работу, заработок.
  * Owner/Admin: задачи работников и подтверждение работ (меняет склад).
@@ -446,7 +446,7 @@ class ProductionComponent {
                         .replace('{total}', window.ui.qty(Number(w.labor_rate) * Number(w.quantity))))}</div>`
                 : `<div class="alert-box alert-box-warning" style="margin-bottom:0;margin-top:8px;" data-i18n="production.confirm_no_rate_hint"></div>`;
             details.innerHTML = `
-                <div class="card" style="box-shadow:none;border:1px solid #efeff4;margin-bottom:12px;padding:12px;">
+                <div class="card" style="box-shadow:none;border:1px solid var(--border);margin-bottom:12px;padding:12px;">
                     <div class="text-sm font-bold">${window.ui.escape(w.product_name || '-')} × ${window.ui.qty(w.quantity)} <span data-i18n="units.${w.unit}"></span></div>
                     <div class="text-sm text-muted" style="margin-top:4px;">${window.ui.escape(w.worker_name)} · ${window.ui.datetime(w.created_at)}</div>
                     ${Number(w.defect_quantity) > 0 ? `

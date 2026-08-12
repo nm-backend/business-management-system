@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Готовая продукция: список с резервами, низкие остатки красным,
  * добавление/редактирование (owner/admin), цены видит только owner.
  */
@@ -51,14 +51,10 @@ class FinishedProductsComponent {
         });
 
         const searchInput = container.querySelector('#product-search');
-        let timer;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                this.search = searchInput.value;
-                this.loadProducts();
-            }, 300);
-        });
+        searchInput.addEventListener('input', window.ui.debounce(() => {
+            this.search = searchInput.value;
+            this.loadProducts();
+        }, 300));
 
         if (canEdit) {
             container.querySelector('#add-product-btn').addEventListener('click', () => this.openForm());
@@ -82,7 +78,12 @@ class FinishedProductsComponent {
             const products = response.results || response;
 
             if (!products.length) {
-                window.listStates.empty(listEl, window.ui.t('common.no_data'));
+                const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
+                const cta = canEdit ? `<button type="button" class="btn btn-primary btn-sm" id="empty-add-product" data-i18n="warehouse.add_product"></button>` : '';
+                window.listStates.empty(listEl, window.ui.t('common.no_data'), cta);
+                const btn = listEl.querySelector('#empty-add-product');
+                if (btn) btn.addEventListener('click', () => this.openForm());
+                window.i18n.applyTranslations();
                 return;
             }
             listEl.innerHTML = products.map((p) => `
@@ -140,7 +141,7 @@ class FinishedProductsComponent {
                     <div class="text-sm text-muted">${window.ui.escape(p.category || '')}</div>
                 </div>
             </div>
-            <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
                 ${row('warehouse.quantity', `${window.ui.qty(p.quantity)} ${window.ui.t('units.' + p.unit)}`, p.is_low_stock)}
                 ${row('warehouse.reserved', window.ui.qty(p.reserved_for_orders))}
                 ${row('warehouse.min_stock', window.ui.qty(p.min_stock))}
@@ -315,7 +316,7 @@ class FinishedProductsComponent {
                     <span>${window.ui.escape(r.name || r.product_name || '-')}</span>
                     ${r.is_active ? `<span class="badge badge-ready" data-i18n="common.active"></span>` : ''}
                 </div>
-                ${items ? `<div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">${items}</div>` : ''}
+                ${items ? `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">${items}</div>` : ''}
                 <div style="display:flex;gap:10px;margin-top:10px;">
                     <button class="btn btn-secondary btn-sm" style="flex:1;" data-edit-recipe="${r.id}" data-i18n="common.edit"></button>
                     ${r.is_active ? '' : `<button class="btn btn-success btn-sm" style="flex:1;" data-activate-recipe="${r.id}" data-i18n="warehouse.recipe_activate"></button>`}

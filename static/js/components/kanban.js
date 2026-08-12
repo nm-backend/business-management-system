@@ -14,7 +14,7 @@ class KanbanComponent {
         // на kanban висел «Молиявий таҳлил» вместо «Kanban»).
         const title = document.getElementById('page-title');
         title.removeAttribute('data-i18n');
-        title.textContent = '🔄 Kanban';
+        title.textContent = '🔄 ' + window.ui.t('orders.view_kanban');
         this.container = container;
         await this.loadOrders();
     }
@@ -34,11 +34,14 @@ class KanbanComponent {
     }
 
     async loadOrders() {
+        // Пользователь мог уйти со страницы, пока шёл запрос (в т.ч. в 300-мс
+        // таймере после move): контейнера больше нет, рисовать некуда.
+        if (window.listStates.gone(this.container)) return;
         try {
             const response = await window.api.request('/orders/orders/?ordering=-created_at');
             this.orders = response.results || response;
         } catch (e) {
-            this.container.innerHTML = `<div class="card list-state list-state-error">${window.ui.t('common.error_loading')}</div>`;
+            window.listStates.error(this.container, window.ui.t('common.error'), () => this.loadOrders());
             return;
         }
         this.renderBoard();
@@ -47,9 +50,9 @@ class KanbanComponent {
     renderBoard() {
         this.container.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-                <div class="tabs" style="margin-bottom:0;">
-                    <button class="tab-btn active" id="kanban-view-btn">🔄 Kanban</button>
-                    <a class="tab-btn" href="#/orders" style="text-decoration:none;">📋 ${window.ui.t('common.all')}</a>
+                <div class="tabs" style="margin-bottom:0;" role="tablist" aria-label="Orders view switch">
+                    <a class="tab-btn" href="#/orders" style="text-decoration:none;" role="tab" aria-selected="false" data-i18n="orders.view_list"></a>
+                    <span class="tab-btn active" role="tab" aria-selected="true" data-i18n="orders.view_kanban"></span>
                 </div>
                 <button class="btn btn-sm btn-primary" id="kanban-refresh" style="width:auto;padding:8px 14px;" data-i18n="common.retry">🔄</button>
             </div>
@@ -118,6 +121,8 @@ class KanbanComponent {
         const card = document.createElement('div');
         card.className = 'kanban-card';
         card.draggable = canDrag;
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
         card.dataset.id = o.id;
 
         if (o.has_material_shortage || o.payment_status === 'unpaid') {
@@ -144,6 +149,13 @@ class KanbanComponent {
         card.addEventListener('click', (e) => {
             if (this.draggedId) return;
             this.openOrderDetail(o);
+        });
+        card.addEventListener('keydown', (e) => {
+            if (this.draggedId) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.openOrderDetail(o);
+            }
         });
 
         // Content
@@ -186,7 +198,10 @@ class KanbanComponent {
 
         const allowed = validTransitions[order.status] || [];
         if (!allowed.includes(newStatus)) {
-            window.toast.error(`Нельзя переместить из «${window.ui.t('statuses.' + order.status)}» в «${window.ui.t('statuses.' + newStatus)}»`);
+            window.toast.error(window.ui.t('orders.cannot_move', {
+                from: window.ui.t('statuses.' + order.status),
+                to: window.ui.t('statuses.' + newStatus),
+            }));
             this.loadOrders();
             return;
         }

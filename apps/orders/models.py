@@ -62,6 +62,14 @@ class Order(TimestampedModel, SoftDeleteModel):
     # поздний платёж задним числом переносил прибыль между месяцами.
     delivered_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name='Выдан клиенту')
 
+    # Снимок себестоимости товара на момент выдачи. Раньше COGS в отчётах
+    # брался живым product__cost_price: последующая переоценка товара (новый
+    # приход, пересчёт по рецепту) задним числом меняла прибыль уже выданных
+    # заказов, а ручные позиции (custom_product_name) приносили COGS=0 и
+    # завышали прибыль. Снимок фиксируется один раз — при переходе в DELIVERED.
+    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                     verbose_name='Себестоимость на момент выдачи')
+
     class Meta:
         verbose_name = 'Заказ'
         verbose_name_plural = 'Заказы'
@@ -78,9 +86,23 @@ class Order(TimestampedModel, SoftDeleteModel):
         # неожиданному расширению update_fields (добавится 'delivered_at').
         if self.status == self.Status.DELIVERED and self.delivered_at is None:
             self.delivered_at = timezone.now()
+            # Снимок себестоимости в тот же единственный момент перехода.
+            # Условие delivered_at is None означает первую выдачу: повторные
+            # save() (поздняя оплата и т.п.) снимок не переписывают.
+            extra = []
+            if self.product_id and not self.cost_price:
+                self.cost_price = self.product.cost_price or Decimal('0')
+                extra.append('cost_price')
+            # Копируем kwargs, чтобы не мутировать исходный словарь: если
+            # вызывающий код переиспользует один dict для нескольких save(),
+            # мутация приведёт к неожиданному расширению update_fields.
             uf = kwargs.get('update_fields')
-            if uf is not None and 'delivered_at' not in uf:
-                kwargs = {**kwargs, 'update_fields': list(uf) + ['delivered_at']}
+            if uf is not None:
+                uf = list(uf)
+                for field in ['delivered_at'] + extra:
+                    if field not in uf:
+                        uf.append(field)
+                        kwargs = {**kwargs, 'update_fields': uf}
         super().save(*args, **kwargs)
 
     @property

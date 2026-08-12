@@ -10,6 +10,8 @@ API views for authentication and user management.
 Все действия записываются в audit log для безопасности и отслеживания.
 """
 from django.conf import settings as django_settings
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
@@ -873,8 +875,13 @@ class UserViewSet(CompanyScopedViewSet):
         """
         user = self.get_object()
         new_password = request.data.get('new_password')
-        if not new_password or len(new_password) < 8:
-            return Response({'error': 'Пароль должен содержать минимум 8 символов'}, status=status.HTTP_400_BAD_REQUEST)
+        # Раньше проверялась только длина: пароль «aaaaaaaa» проходил, хотя
+        # change-password и access-key-redeem (validate_password) его резали —
+        # обходной путь ослабить чужой аккаунт паролем «из коробки».
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as e:
+            return Response({'error': e.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
         user.set_password(new_password)
         user.save()
         # Принудительный сброс пароля выгоняет все активные сессии сотрудника.

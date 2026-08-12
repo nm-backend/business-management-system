@@ -34,7 +34,7 @@ window.listStates = {
         element.innerHTML = `<div class="list-state list-state-empty" role="status">
             <span class="list-state-icon" aria-hidden="true" style="font-size:28px;opacity:.5;display:block;margin-bottom:4px;">—</span>
             <span style="font-weight:500;">${msg}</span>
-            ${action ? `<span class="text-sm" style="margin-top:4px;color:var(--text-secondary)">${action}</span>` : ''}
+            ${action ? `<div style="margin-top:12px;">${action}</div>` : ''}
         </div>`;
     },
     /** Ошибка загрузки: показываем кнопку повтора всегда. */

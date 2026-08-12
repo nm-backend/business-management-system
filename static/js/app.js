@@ -2,6 +2,22 @@
  * App bootstrap: авторизация, роль, навигация (сайдбар для десктопа,
  * нижнее меню для мобильных), маршруты SPA, WebSocket уведомления.
  */
+
+// Глобальные ловушки: непойманные ошибки не должны молча умирать в консоли —
+// в проде это единственный способ заметить их из UI (тост + console).
+window.addEventListener('error', (event) => {
+    console.error('Uncaught error:', event.error || event.message);
+    try {
+        window.toast.error(window.ui?.t('common.error') || 'Ошибка');
+    } catch (e) { /* toast недоступен на странице логина */ }
+});
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled rejection:', event.reason);
+    try {
+        window.toast.error(window.ui?.t('common.error') || 'Ошибка');
+    } catch (e) { /* toast недоступен на странице логина */ }
+});
+
 document.addEventListener('DOMContentLoaded', async () => {
     if (!window.api.isAuthenticated()) {
         window.location.href = '/accounts/login/';
@@ -79,7 +95,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.chatSocket.setBroadcastHandler(onRealtimeMessage);
     window.chatSocket.connect();
     refreshNotificationBadge();
-    setInterval(refreshNotificationBadge, 60000);
+    // Таймер храним в window: api.logout() очищает его, чтобы бейдж не
+    // долбил неавторизованные запросы после выхода.
+    window.notificationBadgeTimer = setInterval(refreshNotificationBadge, 60000);
 });
 
 /**
@@ -92,7 +110,7 @@ function onRealtimeMessage(msg) {
     refreshNotificationBadge();
     playNotificationSound();
     sendSWNotification({
-        title: `✉️ ${msg.sender_name || 'Сообщение'}`,
+        title: `✉️ ${msg.sender_name || window.ui?.t('notifications.message_default') || 'Сообщение'}`,
         body: (msg.content || '').slice(0, 120),
         tag: 'chat_message',
         data: { url: '#/messages' },
@@ -143,7 +161,7 @@ async function requestNotificationPermission() {
         // Тест-уведомление
         sendSWNotification({
             title: 'SkladPro.Nod',
-            body: 'Уведомления включены! 🎉',
+            body: window.i18n.translate('notifications.enabled'),
             tag: 'welcome',
         });
         // Подписываемся на VAPID push

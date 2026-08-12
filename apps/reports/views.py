@@ -122,7 +122,7 @@ def _period_financials(company_id, date_from, date_to):
     cost_of_goods = money(
         Order.objects.filter(company_id=company_id, status=Order.Status.DELIVERED,
                              delivered_at__date__range=(date_from, date_to))
-        .aggregate(s=Sum(ExpressionWrapper(F('quantity') * F('product__cost_price'), output_field=MONEY)))['s']
+        .aggregate(s=Sum(ExpressionWrapper(F('quantity') * F('cost_price'), output_field=MONEY)))['s']
     )
     expenses_total = money(
         Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
@@ -157,7 +157,7 @@ def owner_analytics_data(company_id, date_from, date_to):
         delivered_at__date__range=(date_from, date_to),
     ).select_related('product')
     cost_of_goods = money(delivered.aggregate(
-        s=Sum(ExpressionWrapper(F('quantity') * F('product__cost_price'), output_field=MONEY)),
+        s=Sum(ExpressionWrapper(F('quantity') * F('cost_price'), output_field=MONEY)),
     )['s'])
 
     expenses_qs = Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
@@ -392,13 +392,12 @@ class RevenueTimelineView(APIView):
                 company_id=company_id,
                 status=Order.Status.DELIVERED,
                 delivered_at__date__gte=six_months_ago,
-                product__isnull=False,
             )
             .annotate(month=TruncMonth('delivered_at'))
             .values('month')
             .annotate(
                 cogs=Sum(ExpressionWrapper(
-                    F('quantity') * F('product__cost_price'), output_field=MONEY
+                    F('quantity') * F('cost_price'), output_field=MONEY
                 ))
             )
             .order_by('month')

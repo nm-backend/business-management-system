@@ -59,17 +59,26 @@ class I18nManager {
         return value;
     }
 
-    translate(key) {
+    translate(key, params) {
         let value = this.lookup(this.translations, key);
         if (value === undefined) {
             value = this.lookup(this.fallbackTranslations, key); // fallback на uz_cyrl
         }
-        return value !== undefined ? value : key;
+        if (value === undefined) return key;
+        // Плейсхолдеры вида «{from}»/«{to}»: перевод подставляет значения,
+        // как в orders.cannot_move. Если параметр не передан — ключ остаётся.
+        if (params) {
+            for (const [name, val] of Object.entries(params)) {
+                value = value.split(`{${name}}`).join(String(val ?? ''));
+            }
+        }
+        return value;
     }
 
     applyTranslations() {
         const elements = document.querySelectorAll('[data-i18n]');
         elements.forEach(el => {
+            if (el.hasAttribute('data-i18n-attr')) return; // атрибутный перевод — второй проход
             const key = el.getAttribute('data-i18n');
             const translation = this.translate(key);
             if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
@@ -77,6 +86,16 @@ class I18nManager {
             } else {
                 el.textContent = translation;
             }
+        });
+        // data-i18n-attr="attr1,attr2" — перевод атрибутов (aria-label, title,
+        // placeholder) по ключу data-i18n, не трогая содержимое элемента.
+        document.querySelectorAll('[data-i18n-attr]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (!key) return;
+            const translation = this.translate(key);
+            el.getAttribute('data-i18n-attr').split(',').forEach(attr => {
+                el.setAttribute(attr.trim(), translation);
+            });
         });
     }
 

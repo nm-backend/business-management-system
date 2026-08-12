@@ -54,8 +54,9 @@ class OwnerFinanceMathTests(TestCase):
             quantity=Decimal('3'), unit='dona', total_amount=Decimal('150000'),
             deadline=timezone.now() + datetime.timedelta(days=3))
         order.status = Order.Status.DELIVERED
-        order.delivered_at = timezone.now()
-        order.save(update_fields=['status', 'delivered_at'])
+        # save-хук сам проставляет delivered_at и снимок себестоимости:
+        # ручная установка delivered_at в обход хука оставила бы cost_price=0.
+        order.save(update_fields=['status'])
 
         Expense.objects.create(company=self.company, category=ExpenseCategory.RENT,
                                amount=Decimal('20000'), date=self.today)

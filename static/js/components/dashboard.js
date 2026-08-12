@@ -110,7 +110,7 @@ class DashboardComponent {
         wrap.className = 'revenue-chart-wrap';
         wrap.innerHTML = `
             <div class="section-title" data-i18n="dashboard.revenue_by_period"></div>
-            <div class="card" style="padding:12px;">
+            <div class="card" style="padding:18px;">
                 <canvas id="revenue-chart-canvas" height="200"></canvas>
             </div>
         `;
@@ -132,25 +132,25 @@ class DashboardComponent {
                     datasets: [{
                         label: window.ui.t('dashboard.revenue'),
                         data: chartData.revenues,
-                        borderColor: '#197387',
-                        backgroundColor: 'rgba(25, 115, 135, 0.08)',
+                        borderColor: '#0071e3',
+                        backgroundColor: 'rgba(0, 113, 227, 0.08)',
                         borderWidth: 2.5,
                         fill: true,
                         tension: 0.3,
                         pointRadius: 4,
                         pointHoverRadius: 6,
-                        pointBackgroundColor: '#197387',
+                        pointBackgroundColor: '#0071e3',
                     }, {
                         label: window.ui.t('finance.net_profit'),
                         data: chartData.net_profits,
-                        borderColor: '#3d8662',
-                        backgroundColor: 'rgba(61, 134, 98, 0.06)',
+                        borderColor: '#34c759',
+                        backgroundColor: 'rgba(52, 199, 89, 0.06)',
                         borderWidth: 2,
                         fill: true,
                         tension: 0.3,
                         pointRadius: 3,
                         pointHoverRadius: 5,
-                        pointBackgroundColor: '#3d8662',
+                        pointBackgroundColor: '#34c759',
                         borderDash: [5, 3],
                     }]
                 },

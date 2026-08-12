@@ -10,13 +10,28 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: skladpro_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: "pip"
 
       - name: Install dependencies
@@ -24,9 +39,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests (SQLite)
+      - name: Run tests (PostgreSQL)
         run: |
-          python manage.py test --settings=skladpro.dev_sqlite_settings
+          python manage.py test --settings=skladpro.ci_settings
         env:
           SECRET_KEY: ci-secret-key
           LOG_LEVEL: ERROR
+
+      - name: Run Django system checks (--deploy)
+        run: |
+          python manage.py check --deploy --settings=skladpro.settings.production
+        env:
+          SECRET_KEY: ci-secret-key-that-is-longer-than-fifty-characters-for-production-checks
+          ALLOWED_HOSTS: ci.example.com
+          DB_NAME: skladpro_test
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_HOST: localhost
+          DB_PORT: "5432"

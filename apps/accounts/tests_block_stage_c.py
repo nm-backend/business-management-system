@@ -127,6 +127,16 @@ class TokenInvalidationTests(_Base):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(self.refresh_rejected(refresh))
 
+    def test_password_reset_rejects_weak_password(self):
+        """Сброс пароля обязан проходить те же валидаторы, что и смена."""
+        for weak in ('aaaaaaaa', '12345678', 'password'):
+            resp = self.api(self.owner).post(
+                f'/api/v1/accounts/users/{self.worker.id}/reset_password/',
+                {'new_password': weak}, format='json')
+            self.assertEqual(resp.status_code, 400, f'слабый пароль {weak} прошёл: {resp.content[:200]}')
+        self.worker.refresh_from_db()
+        self.assertTrue(self.worker.check_password('p'), 'пароль изменился при отклонённом сбросе')
+
     def test_block_user_blacklists_refresh(self):
         refresh = RefreshToken.for_user(self.worker)
         resp = self.api(self.owner).post(

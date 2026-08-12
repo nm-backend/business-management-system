@@ -80,7 +80,7 @@ class Router {
         const bottomKey = ['finance', 'messages', 'companies'].includes(navKey) ? 'settings' : navKey;
         this.setActiveNav(navKey, bottomKey);
 
-        appElement.innerHTML = '<div class="list-state list-state-loading"><span class="spinner"></span><span data-i18n="common.loading">Юкланмоқда...</span></div>';
+        appElement.innerHTML = '<div class="list-state list-state-loading"><span class="spinner"></span><span data-i18n="common.loading">…</span></div>';
         window.i18n.applyTranslations();
 
         try {

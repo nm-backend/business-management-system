@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Склад сырья: список с поиском, низкие остатки красным,
  * добавление/редактирование (owner/admin), закупочные цены видит только owner.
  */
@@ -41,10 +41,10 @@ class WarehouseComponent {
             </div>
             <div class="search-box search-box--with-action">
                 <div class="search-field">
-                    <span class="search-icon">🔍</span>
-                    <input type="text" id="material-search" class="form-control" data-i18n="warehouse.search">
+                    <span class="search-icon" aria-hidden="true">🔍</span>
+                    <input type="text" id="material-search" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="warehouse.search">
                 </div>
-                <button class="btn btn-secondary" id="scan-barcode-btn" type="button"
+                <button class="btn btn-secondary" id="scan-barcode-btn" type="button" data-i18n-attr="aria-label" data-i18n="warehouse.scan_barcode"
                         style="padding:8px 12px;font-size:18px;">📷</button>
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;margin-top:10px;" data-i18n="warehouse.add_material"></button>` : ''}
@@ -100,14 +100,10 @@ class WarehouseComponent {
         });
 
         const searchInput = container.querySelector('#material-search');
-        let timer;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                this.search = searchInput.value;
-                this.loadMaterials();
-            }, 300);
-        });
+        searchInput.addEventListener('input', window.ui.debounce(() => {
+            this.search = searchInput.value;
+            this.loadMaterials();
+        }, 300));
 
         if (canEdit) {
             container.querySelector('#add-material-btn').addEventListener('click', () => this.openForm());
@@ -168,7 +164,7 @@ class WarehouseComponent {
                 </div>
                 <input type="file" id="scanner-file" accept="image/*" style="display:none;">
                 <form id="scanner-manual" style="display:flex;gap:8px;margin-top:14px;">
-                    <input name="code" class="form-control" data-i18n="warehouse.scan_manual" style="flex:1 1 auto;min-width:0;">
+                    <input name="code" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="warehouse.scan_manual" style="flex:1 1 auto;min-width:0;">
                     <button type="submit" class="btn btn-primary btn-sm" style="flex:0 0 auto;" data-i18n="common.search"></button>
                 </form>
             </div>
@@ -302,7 +298,12 @@ class WarehouseComponent {
             const materials = response.results || response;
 
             if (!materials.length) {
-                window.listStates.empty(listEl, window.ui.t('common.no_data'));
+                const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
+                const cta = canEdit ? `<button type="button" class="btn btn-primary btn-sm" id="empty-add-material" data-i18n="warehouse.add_material"></button>` : '';
+                window.listStates.empty(listEl, window.ui.t('common.no_data'), cta);
+                const btn = listEl.querySelector('#empty-add-material');
+                if (btn) btn.addEventListener('click', () => this.openForm());
+                window.i18n.applyTranslations();
                 return;
             }
             listEl.innerHTML = materials.map((m) => this.renderRow(m)).join('');
@@ -326,7 +327,7 @@ class WarehouseComponent {
 
     renderRow(m) {
         return `
-            <div class="list-row" data-id="${m.id}">
+            <div class="list-row" role="button" tabindex="0" data-id="${m.id}">
                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
                     <div class="thumb">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="">` : '🪨'}</div>
                     <div style="min-width:0;">
@@ -354,7 +355,7 @@ class WarehouseComponent {
                     <div class="text-sm text-muted">${window.ui.escape(m.stone_type || '')}</div>
                 </div>
             </div>
-            <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
                 ${this.detailRow('warehouse.quantity', `${window.ui.qty(m.quantity)} ${window.ui.t('units.' + m.unit)}`, m.is_low_stock)}
                 ${this.detailRow('warehouse.reserved', window.ui.qty(m.reserved_for_orders))}
                 ${this.detailRow('warehouse.available', window.ui.qty(m.available_quantity))}

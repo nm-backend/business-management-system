@@ -11,19 +11,27 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-    outline: 2px solid var(--primary, #197387);
+    outline: 3px solid rgba(var(--primary-rgb), 0.45);
     outline-offset: 2px;
-    border-radius: 6px;
 }
 
 /* ── Микро-анимации кнопок ── */
 .btn {
-    transition: transform .12s ease, box-shadow .15s ease,
-                background-color .15s ease, opacity .15s ease;
+    transition: transform .2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow .2s ease,
+                background-color .2s cubic-bezier(0.4, 0, 0.2, 1), opacity .2s ease;
 }
 .btn:hover:not(:disabled) { transform: translateY(-1px); }
-.btn:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.97); }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Вход страницы: мягкое появление контента (как на iOS) */
+#app-content > * {
+    animation: app-enter .3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes app-enter {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
 
 /* Мягкий hover */
 .list-row { transition: background-color .12s ease; }
@@ -60,7 +68,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* ── Плавный карточный lift на десктопе ── */
 @media (min-width: 1024px) {
     .card, .metric-card, .stat-card {
-        transition: transform .2s ease, box-shadow .2s ease;
+        transition: transform .25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow .25s ease;
+    }
+    .card:hover, .stat-card:hover {
+        box-shadow: var(--shadow-md);
+    }
+    .card-interactive:hover,
+    .stat-card.clickable:hover {
+        transform: translateY(-2px);
     }
     .card-clickable, [data-id], [style*="cursor:pointer"] {
         cursor: pointer;

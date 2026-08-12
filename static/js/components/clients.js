@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Клиенты: активные / архив, красная карточка при долге,
  * owner видит суммы и историю оплат, admin - только статусы.
  */
@@ -14,8 +14,8 @@ class ClientsComponent {
                 <button class="tab-btn" data-tab="archive" data-i18n="clients.archive"></button>
             </div>
             <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="client-search" class="form-control" data-i18n="clients.search_hint">
+                <span class="search-icon" aria-hidden="true">🔍</span>
+                <input type="text" id="client-search" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="clients.search_hint">
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-client-btn" style="margin-bottom:12px;" data-i18n="clients.add_client"></button>` : ''}
             <div id="clients-list" class="card-grid"></div>
@@ -31,11 +31,9 @@ class ClientsComponent {
         });
 
         const searchInput = container.querySelector('#client-search');
-        let timer;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(timer);
-            timer = setTimeout(() => this.loadClients(searchInput.value), 300);
-        });
+        searchInput.addEventListener('input', window.ui.debounce(() => {
+            this.loadClients(searchInput.value);
+        }, 300));
 
         if (canEdit) {
             container.querySelector('#add-client-btn').addEventListener('click', () => this.openForm());
@@ -58,7 +56,12 @@ class ClientsComponent {
             this.clients = response.results || response;
 
             if (!this.clients.length) {
-                window.listStates.empty(listEl, window.ui.t('common.no_data'));
+                const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
+                const cta = canEdit ? `<button type="button" class="btn btn-primary btn-sm" id="empty-add-client" data-i18n="clients.add_client"></button>` : '';
+                window.listStates.empty(listEl, window.ui.t('common.no_data'), cta);
+                const btn = listEl.querySelector('#empty-add-client');
+                if (btn) btn.addEventListener('click', () => this.openForm());
+                window.i18n.applyTranslations();
                 return;
             }
             listEl.innerHTML = this.clients.map((c) => this.renderCard(c)).join('');
@@ -66,6 +69,12 @@ class ClientsComponent {
                 card.addEventListener('click', () => {
                     const client = this.clients.find((c) => c.id === Number(card.dataset.id));
                     this.openDetail(client);
+                });
+                card.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        card.click();
+                    }
                 });
             });
             window.i18n.applyTranslations();
@@ -79,7 +88,7 @@ class ClientsComponent {
             ? `<div style="font-size:16px;font-weight:700;margin-top:4px;" class="text-danger">${window.ui.money(c.debt)}</div>`
             : '';
         return `
-            <div class="card" data-id="${c.id}" style="cursor:pointer;border-left:4px solid ${c.has_debt ? 'var(--danger-color)' : 'var(--success-color)'};">
+            <div class="card" role="button" tabindex="0" data-id="${c.id}" style="cursor:pointer;border-left:4px solid ${c.has_debt ? 'var(--danger-color)' : 'var(--success-color)'};">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
                     <div style="min-width:0;">
                         <div style="font-size:15px;font-weight:600;">${window.ui.escape(c.name)}</div>
@@ -109,7 +118,7 @@ class ClientsComponent {
 
         const modal = window.ui.modal('clients.title', `
             ${c.has_debt ? `<div class="alert-box">⚠️ <span data-i18n="clients.not_paid_warning"></span></div>` : ''}
-            <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
                 ${row('clients.name', window.ui.escape(c.name))}
                 ${row('clients.phone', window.ui.escape(c.phone || ''))}
                 ${row('clients.address', window.ui.escape(c.address || ''))}
@@ -121,7 +130,7 @@ class ClientsComponent {
             </div>
             ${user.is_owner && payments ? `
                 <div class="section-title" data-i18n="clients.payment_history"></div>
-                <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">${payments}</div>` : ''}
+                <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">${payments}</div>` : ''}
             <div style="display:flex;gap:10px;margin-top:14px;">
                 ${canEdit ? `<button class="btn btn-secondary btn-sm" id="edit-client" style="flex:1;" data-i18n="common.edit"></button>` : ''}
                 <button class="btn btn-primary btn-sm" id="client-orders" style="flex:1;" data-i18n="clients.orders"></button>

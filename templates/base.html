@@ -17,7 +17,7 @@
     <link rel="icon" type="image/svg+xml" href="{% static 'img/logo.svg' %}" />
     <link rel="apple-touch-icon" href="{% static 'img/logo.svg' %}" />
     <link rel="manifest" href="{% static 'manifest.json' %}" />
-    <meta name="theme-color" content="#197387" />
+    <meta name="theme-color" content="#0071e3" />
     <!-- apple-mobile-web-app-capable устарел и ругался в консоли на каждой
          загрузке; стандартный тег — mobile-web-app-capable. Оставляем оба:
          старые версии iOS понимают только apple-вариант. -->
@@ -27,7 +27,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght,SOFT@9..144,300..800,0..100&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="{% static 'css/base.css' %}?v={{ ASSET_VERSION }}" />
@@ -107,23 +107,9 @@
     </div>
 
     <div class="footer-bottom">
-        <span>Built by</span>
-
-        <a
-            href="https://github.com/nm-backend"
-            target="_blank"
-            rel="noopener noreferrer"
-        >
-            Nurullo Musajanov
-        </a>
-
+        <span>© {% now "Y" %}</span>
         <span>•</span>
-
-        <span>Nodirbek Rakhmanov</span>
-
-        <span>•</span>
-
-        <span>Coming soon...</span>
+        <span data-i18n="footer.version"></span>
     </div>
 </footer>
 </main>

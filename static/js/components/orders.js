@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Заказы: список с фильтром по статусу, красные карточки при нехватке
  * материала или неоплате, создание (owner/admin), карточка заказа с
  * действиями: отправить работнику, выдать, отменить, принять оплату (owner).
@@ -43,6 +43,10 @@ class OrdersComponent {
                 </div>
                 ${canEdit ? `<button class="btn btn-primary btn-sm" id="add-order-btn" data-i18n="orders.new_order"></button>` : ''}
             </div>
+            <div class="tabs" style="margin-bottom:12px;" role="tablist" aria-label="Orders view switch">
+                <button class="tab-btn active" role="tab" aria-selected="true" type="button" data-i18n="orders.view_list"></button>
+                <a class="tab-btn" href="#/orders/kanban" style="text-decoration:none;" role="tab" aria-selected="false" data-i18n="orders.view_kanban"></a>
+            </div>
             <div class="tabs" role="tablist" aria-label="Order status filter">
                 ${statuses.map((s) => `
                     <button class="tab-btn ${s === this.currentStatus ? 'active' : ''}" role="tab" aria-selected="${s === this.currentStatus ? 'true' : 'false'}" data-status="${s}"
@@ -54,22 +58,18 @@ class OrdersComponent {
                     <button type="button" id="clear-client-filter" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;" aria-label="${window.ui.t('common.clear_filter')}">✕</button>
                 </div>` : ''}
             <div class="search-box">
-                <span class="search-icon">🔍</span>
-                <input type="text" id="order-search" class="form-control" data-i18n="orders.search">
+                <span class="search-icon" aria-hidden="true">🔍</span>
+                <input type="text" id="order-search" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="orders.search">
             </div>
             <div id="orders-list" class="card-grid"></div>
         `;
 
         // Поиск с задержкой: не дёргаем API на каждое нажатие.
         const searchInput = container.querySelector('#order-search');
-        let searchTimer = null;
-        searchInput.addEventListener('input', () => {
-            clearTimeout(searchTimer);
-            searchTimer = setTimeout(() => {
-                this.search = searchInput.value.trim();
-                this.loadOrders();
-            }, 350);
-        });
+        searchInput.addEventListener('input', window.ui.debounce(() => {
+            this.search = searchInput.value.trim();
+            this.loadOrders();
+        }, 350));
 
         container.querySelectorAll('.tab-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -123,7 +123,12 @@ class OrdersComponent {
             this.orders = response.results || response;
 
             if (!this.orders.length) {
-                window.listStates.empty(listEl, window.ui.t('common.no_data'));
+                const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
+                const cta = canEdit ? `<a class="btn btn-primary btn-sm" href="#/orders" id="empty-create-order" data-i18n="orders.new_order"></a>` : '';
+                window.listStates.empty(listEl, window.ui.t('common.no_data'), cta);
+                const btn = listEl.querySelector('#empty-create-order');
+                if (btn) btn.addEventListener('click', (e) => { e.preventDefault(); this.openForm(); });
+                window.i18n.applyTranslations();
                 return;
             }
             listEl.innerHTML = this.orders.map((o) => this.renderCard(o)).join('');
@@ -200,7 +205,7 @@ class OrdersComponent {
             </div>
             ${shortages}
             ${productShortage}
-            <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;">
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
                 ${row('orders.product', window.ui.escape(o.product_name || o.custom_product_name || '-'))}
                 ${row('orders.quantity', `${window.ui.qty(o.quantity)} <span data-i18n="units.${o.unit}"></span>`)}
                 ${row('orders.deadline', o.deadline ? window.ui.datetime(o.deadline) : '')}
@@ -229,9 +234,7 @@ class OrdersComponent {
                         <button class="btn btn-danger btn-sm" id="cancel-order" data-i18n="common.cancel"></button>` : ''}
                 </div>
                 ${!['delivered', 'cancelled'].includes(o.status) && Number(o.paid_amount || 0) > 0 ? `
-                    <p class="text-xs text-muted" style="margin-top:8px;">
-                        По заказу есть оплата — отмена недоступна. Возврат оформите расходом «Возврат клиенту».
-                    </p>` : ''}` : ''}
+                    <p class="text-xs text-muted" style="margin-top:8px;" data-i18n="orders.cancel_blocked_by_payment"></p>` : ''}` : ''}
         `);
 
         const bind = (id, handler) => {
@@ -350,7 +353,6 @@ class OrdersComponent {
         const quantityInput = modal.querySelector('[name=quantity]');
         const unitSelect = modal.querySelector('[name=unit]');
         const availabilityBox = modal.querySelector('#product-availability');
-        const unitOptions = unitSelect.innerHTML;
 
         function syncUnitForProduct() {
             const p = productById.get(productSelect.value);

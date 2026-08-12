@@ -26,5 +26,11 @@ test_media/
 *.log
 scratchpad/
 
+# Локальные данные инструментов и дампы — в образ не попадают (см. также .gitignore)
+.freebuff/
+backups/
+.playwright-mcp/
+
 # Документация не нужна в образе для сборки
 *.md
+docs/

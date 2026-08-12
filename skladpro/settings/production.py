@@ -2,7 +2,10 @@ from .base import *
 from decouple import config
 
 DEBUG = False
-USE_X_FORWARDED_FOR = True
+
+# X-Forwarded-For для определения IP клиента обрабатывает ScopedIPThrottle
+# (см. apps/core/throttling.py): Django 5.1 удалил USE_X_FORWARDED_FOR и
+# TRUSTED_PROXIES, а за reverse-proxy иначе все клиенты — один IP гейта.
 
 # Channels: в production канальный слой должен быть общим для всех воркеров —
 # используем Redis (pub/sub-бэкенд). Задайте REDIS_URL в окружении.
@@ -90,3 +93,10 @@ CSRF_COOKIE_HTTPONLY = True
 VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
 VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
 VAPID_SUBJECT = config('VAPID_SUBJECT', default='mailto:admin@skladpro.nod')
+
+# Загруженные файлы (фото работ и т.п.) в production не раздаются ни Django
+# (static() подключён только при DEBUG), ни WhiteNoise (он обслуживает только
+# статику). На PaaS без nginx/Caddy это даёт 404 на все файлы в /media/.
+# Включите MEDIA_SERVE=True, если фронтенд-прокси нет (Railway/Render);
+# при наличии nginx/Caddy задайте False и отдавайте /media/ с него.
+MEDIA_SERVE = config('MEDIA_SERVE', default=False, cast=bool)

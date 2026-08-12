@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import subprocess
+import tarfile
 import tempfile
 import time
 from datetime import datetime
@@ -63,6 +64,27 @@ def _run_dump(db_config):
         raise RuntimeError('pg_dump not found. Install PostgreSQL client tools.')
     except subprocess.TimeoutExpired:
         raise RuntimeError('pg_dump timed out after 5 minutes.')
+
+
+def _bundle_backup(filepath, filename, media_root=None):
+    """
+    Собирает единый tar.gz: дамп БД + media-файлы (фото заказов и т.п.).
+
+    Раньше бэкапилась только БД: медиа лежали только на диске сервера, и после
+    падения/переезда фото заказов терялись безвозвратно. Внутри архива:
+    dump.sql.gz и media/ (если папка существует и не пуста).
+    """
+    bundle = Path(filepath).with_suffix('.tar.gz')
+    bundle_name = bundle.name
+
+    with tarfile.open(bundle, 'w:gz') as tar:
+        tar.add(filepath, arcname='dump.sql.gz')
+        if media_root and Path(media_root).exists():
+            media_dir = Path(media_root)
+            if any(media_dir.iterdir()):
+                tar.add(media_root, arcname='media', recursive=True)
+
+    return str(bundle), bundle_name
 
 
 def _upload_to_s3(filepath, filename, config):
@@ -126,6 +148,21 @@ def _redact_secrets(message, config):
     return message
 
 
+def _backup_error_action(self, exc):
+    """
+    Готовит сообщение об ошибке и решает, нужен ли автоповтор.
+
+    Возвращает (error_message, should_retry). Вынесено из задачи отдельной
+    функцией, чтобы ретрай-логику можно было тестировать без брокера Celery.
+    """
+    retries = getattr(self.request, 'retries', 0) if self.request else 0
+    message = str(exc)
+    should_retry = retries < self.max_retries
+    if should_retry:
+        message = f'{message} | retry #{retries + 1} через {self.default_retry_delay}s'
+    return message, should_retry
+
+
 def _cleanup_old_backups(config):
     """Удаляет старые backup-файлы (keep_last = 7 по умолчанию)."""
     from .models import BackupLog
@@ -187,8 +224,9 @@ def run_backup_task(self, company_id, user_id=None):
     company_name = config.company.name if config.company else ''
 
     try:
-        # 1. Создать дамп
+        # 1. Создать дамп и собрать бандл с media-файлами.
         filepath, filename = _run_dump(settings.DATABASES['default'])
+        filepath, filename = _bundle_backup(filepath, filename, settings.MEDIA_ROOT)
         file_size = os.path.getsize(filepath)
         log.file_name = filename
         log.file_size = file_size
@@ -213,7 +251,12 @@ def run_backup_task(self, company_id, user_id=None):
         # Сообщения об ошибках сохраняются в БД и отдаются через API. Ошибки
         # requests включают полный URL, а он содержит токен Telegram-бота
         # (https://api.telegram.org/bot<TOKEN>/...) — вырезаем его.
-        log.error_message = _redact_secrets(str(e), config)
+        message, should_retry = _backup_error_action(self, e)
+        log.error_message = _redact_secrets(message, config)
+        # Автоповтор транзиентных сбоев (S3/Telegram/сеть): без self.retry()
+        # max_retries был мёртвой конфигурацией, и задача падала с первого раза.
+        if should_retry:
+            raise self.retry(exc=e, countdown=self.default_retry_delay)
 
     finally:
         log.duration_seconds = round(time.time() - start_time, 1)

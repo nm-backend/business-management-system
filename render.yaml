@@ -42,6 +42,70 @@ services:
     plan: free
     ipAllowList: []                  # только внутренняя сеть Render
 
+  # ── Celery worker: автобэкап БД, фоновые задачи ──────────────────────────
+  # Без него backups/tasks.py молча не выполняются (периодические бэкапы,
+  # уведомления). SKIP_INIT=1 — миграции/статику делает web при старте.
+  - type: worker
+    name: skladpro-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    dockerCommand: celery -A skladpro worker -l info
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: SKIP_INIT
+        value: "1"
+      - key: SECURE_SSL_REDIRECT
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: worker.internal
+      - key: DB_HOST
+        fromDatabase: { name: skladpro-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: skladpro-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: skladpro-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: skladpro-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: skladpro-db, property: password }
+      - key: REDIS_URL
+        fromService: { type: redis, name: skladpro-redis, property: connectionString }
+
+  # ── Celery beat: расписание периодических задач (автобэкап) ──────────────
+  - type: worker
+    name: skladpro-beat
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    dockerCommand: celery -A skladpro beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: SKIP_INIT
+        value: "1"
+      - key: SECURE_SSL_REDIRECT
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: beat.internal
+      - key: DB_HOST
+        fromDatabase: { name: skladpro-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: skladpro-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: skladpro-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: skladpro-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: skladpro-db, property: password }
+      - key: REDIS_URL
+        fromService: { type: redis, name: skladpro-redis, property: connectionString }
+
   # ── ОПЦИОНАЛЬНО: ежедневное уведомление о просроченных долгах ──────────────
   # Раскомментируйте, чтобы Render по расписанию запускал команду
   # `notify_overdue_debts` (создаёт уведомления OVERDUE_DEBT владельцу/админам).

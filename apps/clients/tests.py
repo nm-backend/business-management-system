@@ -224,3 +224,47 @@ class PaymentAtomicityTests(TestCase):
                          'СИРОТА: Payment остался в базе после 400')
         self.order.refresh_from_db()
         self.assertEqual(self.order.paid_amount, Decimal('0'))
+
+
+class ClientPhoneApiValidationTests(TestCase):
+    """
+    validate_phone работал только в админке: DRF не подхватывает field-валидаторы
+    с модели, и через API телефон «привет» сохранялся без ошибок.
+    """
+
+    def setUp(self):
+        from apps.accounts.models import User
+        from apps.companies.models import Company
+        from rest_framework.test import APIClient
+
+        self.company = Company.objects.create(name='PhCo')
+        self.owner = User.objects.create_user(
+            username='ph_owner', password='p', role=User.Role.OWNER, company=self.company)
+        self.client_obj = Client.objects.create(company=self.company, name='Клиент')
+        self.api = APIClient()
+        self.api.force_authenticate(self.owner)
+
+    def test_create_with_invalid_phone_rejected(self):
+        resp = self.api.post('/api/v1/clients/clients/', {
+            'name': 'Новый', 'phone': 'не телефон',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400, resp.content[:300])
+        self.assertIn('phone', resp.json())
+
+    def test_patch_with_invalid_phone_rejected(self):
+        resp = self.api.patch(f'/api/v1/clients/clients/{self.client_obj.id}/', {
+            'phone': 'abc',
+        }, format='json')
+        self.assertEqual(resp.status_code, 400, resp.content[:300])
+
+    def test_valid_phone_accepted(self):
+        resp = self.api.post('/api/v1/clients/clients/', {
+            'name': 'Звонкий', 'phone': '+996 (555) 12-34-56',
+        }, format='json')
+        self.assertEqual(resp.status_code, 201, resp.content[:300])
+
+    def test_blank_phone_still_allowed(self):
+        resp = self.api.patch(f'/api/v1/clients/clients/{self.client_obj.id}/', {
+            'phone': '',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.content[:300])

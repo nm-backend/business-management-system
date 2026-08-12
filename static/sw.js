@@ -42,6 +42,29 @@ self.addEventListener('message', (event) => {
   }
 });
 
+// ── Fetch: офлайн-кэш для статики (stale-while-revalidate) ──
+// Раньше кэш наполнялся в install, но fetch-обработчика не было — кэш
+// никогда не читался, офлайн не работал. API-запросы и навигация не
+// кэшируются (SPA требует живого сервера).
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/') || url.pathname === '/') return;
+
+  event.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cached = await cache.match(request);
+      const network = fetch(request).then((response) => {
+        if (response && response.ok) cache.put(request, response.clone());
+        return response;
+      }).catch(() => cached);
+      return cached || network;
+    })
+  );
+});
+
 // ── Notification click: фокусируем или открываем приложение ──
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

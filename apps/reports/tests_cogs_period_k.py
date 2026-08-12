@@ -71,3 +71,23 @@ class CogsPeriodAttributionTests(TestCase):
 
         # Июньский COGS не изменился.
         self.assertEqual(self._june_cogs(), Decimal('1000'))
+
+    def test_cogs_snapshot_frozen_at_delivery(self):
+        """Переоценка товара после выдачи не переписывает COGS выданного заказа."""
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.cost_price, Decimal('1000'))
+        # Товар переоценили после выдачи (новый приход, пересчёт по рецепту).
+        self.product.cost_price = Decimal('9000')
+        self.product.save(update_fields=['cost_price'])
+        # COGS за июнь всё ещё по снимку на момент выдачи.
+        self.assertEqual(self._june_cogs(), Decimal('1000'))
+
+    def test_custom_product_contributes_zero_cogs(self):
+        """Ручная позиция без товара не завышает прибыль: COGS по ней 0."""
+        Order.objects.create(
+            company=self.company, client=self.cli,
+            custom_product_name='Кованые ворота', quantity=Decimal('2'),
+            unit='dona', total_amount=Decimal('4000'),
+            status=Order.Status.DELIVERED)
+        # В июне: 1 товарный заказ (снимок 1000) + 1 ручной (0).
+        self.assertEqual(self._june_cogs(), Decimal('1000'))

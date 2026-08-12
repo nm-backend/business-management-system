@@ -207,9 +207,13 @@ REST_FRAMEWORK = {
     # Ограничение частоты запросов (защита от перебора кодов и паролей).
     # ScopedRateThrottle действует только на view с заданным throttle_scope,
     # поэтому остальные эндпоинты работают как прежде.
+    # ScopedIPThrottle вместо ScopedRateThrottle: за reverse-proxy Django 5.1
+    # не разворачивает X-Forwarded-For (USE_X_FORWARDED_FOR удалён из 4.1),
+    # и все клиенты выглядели одним IP гейта. Кастомный троттл доверяет XFF
+    # только от приватных прокси (см. apps/core/throttling.py).
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.UserRateThrottle',
-        'rest_framework.throttling.ScopedRateThrottle',
+        'apps.core.throttling.ScopedIPThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'user': '300/minute',
@@ -250,7 +254,9 @@ USE_TZ = True  # Включить поддержку часовых поясов
 LOCALE_PATHS = [BASE_DIR / 'locale']  # Директория с файлами переводов
 
 # Настройки статических файлов (CSS, JS, изображения)
-STATIC_URL = 'static/'  # URL для статических файлов
+# Ведущий слэш обязателен: с относительным 'static/' hard-reload на
+# подстранице SPA (/orders/123/) резолвил стили в /orders/123/static/ — 404.
+STATIC_URL = '/static/'  # URL для статических файлов
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # Директория для collectstatic
 STATICFILES_DIRS = [BASE_DIR / 'static']  # Директория с исходными статическими файлами
 
@@ -318,8 +324,6 @@ SPECTACULAR_SETTINGS = {
         'persistAuthorization': True,
     },
 }
-
-USE_X_FORWARDED_FOR = False
 
 # ── Celery Configuration ──
 # Брокер сообщений (Redis)

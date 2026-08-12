@@ -6,6 +6,8 @@ ClientAdminSerializer - для администратора: только бул
 """
 from rest_framework import serializers
 
+from apps.core.validators import validate_phone
+
 from .models import Client, Payment
 
 
@@ -24,6 +26,10 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 class ClientAdminSerializer(serializers.ModelSerializer):
     has_debt = serializers.BooleanField(read_only=True)
+    # DRF не подхватывает field-валидаторы с модели: без явного валидатора
+    # телефон «привет» спокойно сохранялся через API (в админке ModelForm
+    # валидировал), и по контакту нельзя было позвонить.
+    phone = serializers.CharField(validators=[validate_phone], required=False, allow_blank=True)
     # Читаем аннотацию active_orders_exists (см. ClientViewSet.get_queryset) вместо
     # свойства has_active_orders, которое делало .exists() на каждого клиента (N+1).
     # Формат ответа не меняется: ключ в JSON остаётся has_active_orders.

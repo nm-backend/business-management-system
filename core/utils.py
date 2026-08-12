@@ -7,8 +7,12 @@ Core utility functions.
 """
 import json
 from pathlib import Path
-from functools import lru_cache
 from django.conf import settings
+
+# Кэш с проверкой mtime: словарь перезагружается, когда файл локали меняется.
+# Раньше здесь был lru_cache — после правки перевода приходилось
+# перезапускать сервер, иначе браузеры продолжали получать старый словарь.
+_locale_cache = {}
 
 
 def deep_merge(base, override):
@@ -39,7 +43,25 @@ def deep_merge(base, override):
     return result
 
 
-@lru_cache(maxsize=10)
+def _read_locale_file(path):
+    """Читает файл локали, переиспользуя кэш, пока файл не изменился."""
+    key = str(path)
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return None
+    cached = _locale_cache.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    _locale_cache[key] = (mtime, data)
+    return data
+
+
 def get_locale(lang_code='uz_cyrl'):
     """
     Загружает файл локализации и возвращает как словарь.
@@ -63,14 +85,11 @@ def get_locale(lang_code='uz_cyrl'):
     locale_file = locale_dir / f'{lang_code}.json'
     fallback_file = locale_dir / 'uz_cyrl.json'
 
-    data = {}
-    if fallback_file.exists():
-        with open(fallback_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+    data = _read_locale_file(fallback_file) or {}
 
-    if lang_code != 'uz_cyrl' and locale_file.exists():
-        with open(locale_file, 'r', encoding='utf-8') as f:
-            lang_data = json.load(f)
+    if lang_code != 'uz_cyrl':
+        lang_data = _read_locale_file(locale_file)
+        if lang_data is not None:
             data = deep_merge(data, lang_data)
 
     return data

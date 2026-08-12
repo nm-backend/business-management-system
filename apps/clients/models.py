@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db import transaction
 from django.db.models import Sum
 
 from apps.core.validators import validate_not_future, validate_phone
@@ -62,18 +63,25 @@ class Client(TimestampedModel, SoftDeleteModel):
         Оплаты и суммы считаются по одному и тому же набору заказов (не отменённых
         и не архивных). Оплата по отменённому заказу не гасит долг по другим заказам;
         платежи без привязки к заказу (order=None) считаются как аванс клиента.
-        """
-        active_orders = self.orders.filter(is_archived=False).exclude(status='cancelled')
-        orders_total = active_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-        active_ids = list(active_orders.values_list('id', flat=True))
-        paid = self.payments.filter(
-            models.Q(order_id__in=active_ids) | models.Q(order__isnull=True),
-        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
 
-        self.total_orders_amount = orders_total
-        self.total_paid = paid
-        self.debt = max(self.total_orders_amount - self.total_paid, Decimal('0'))
-        self.save(update_fields=['total_orders_amount', 'total_paid', 'debt', 'updated_at'])
+        Строка клиента блокируется (select_for_update): два параллельных события
+        (оплата + изменение заказа) иначе читали одни и те же агрегаты и последний
+        перезаписывал итоги первого — долг «проседал» на сумму промежуточного
+        изменения.
+        """
+        with transaction.atomic():
+            locked = type(self).objects.select_for_update().get(pk=self.pk)
+            active_orders = locked.orders.filter(is_archived=False).exclude(status='cancelled')
+            orders_total = active_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+            active_ids = list(active_orders.values_list('id', flat=True))
+            paid = locked.payments.filter(
+                models.Q(order_id__in=active_ids) | models.Q(order__isnull=True),
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+
+            locked.total_orders_amount = orders_total
+            locked.total_paid = paid
+            locked.debt = max(orders_total - paid, Decimal('0'))
+            locked.save(update_fields=['total_orders_amount', 'total_paid', 'debt', 'updated_at'])
 
     def auto_archive(self):
         """Переводит клиента в архив, когда нет долга и активных заказов (правило ТЗ)."""

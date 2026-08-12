@@ -113,12 +113,15 @@ class APIClient {
         try {
             let response = await fetch(url, config);
 
-            // Автоматическое обновление токена при 401
+            // Автоматическое обновление токена при 401. Флаг ретрая пишем в
+            // options (не в config — это его spread-копия, правка копии не
+            // видна следующей проверке; иначе при устойчивом 401 получался
+            // бесконечный цикл refresh).
             if (response.status === 401 && tokens.refresh && !options.isRetry) {
+                options.isRetry = true;
                 const newAccess = await this.refreshToken(tokens.refresh);
                 if (newAccess) {
                     headers['Authorization'] = `Bearer ${newAccess}`;
-                    config.isRetry = true;
                     response = await fetch(url, config);
                 } else {
                     // Проверяем, не кража ли это токена
@@ -211,6 +214,16 @@ class APIClient {
         }
         this.clearTokens();
         this.clearFingerprint();
+        // Глушим real-time соединение: иначе чат-сокет жил после выхода
+        // и переподключался бесконечно (пока жил access-токен в памяти).
+        if (window.chatSocket && typeof window.chatSocket.disconnect === 'function') {
+            window.chatSocket.disconnect();
+        }
+        // Останавливаем фоновый опрос бейджа уведомлений (app.js).
+        if (window.notificationBadgeTimer) {
+            clearInterval(window.notificationBadgeTimer);
+            window.notificationBadgeTimer = null;
+        }
         window.location.href = '/accounts/login/';
     }
 

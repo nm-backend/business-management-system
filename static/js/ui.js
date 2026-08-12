@@ -4,8 +4,8 @@
  */
 window.ui = {
     /** Переводит ключ через i18n. */
-    t(key) {
-        return window.i18n.translate(key);
+    t(key, params) {
+        return window.i18n.translate(key, params);
     },
 
     /** Формат денег: 1250000 -> "1 250 000 сўм". */
@@ -230,7 +230,7 @@ window.ui = {
      * segments: [{ label, value, color }]. Возвращает разметку графика + легенды.
      */
     donutChart(segments, opts = {}) {
-        const palette = ['#1c64d9', '#16a34a', '#f59e0b', '#8b5cf6', '#e5484d', '#0ea5e9', '#64748b', '#ec4899'];
+        const palette = ['#0071e3', '#34c759', '#ff9500', '#af52de', '#ff2d55', '#5ac8fa', '#8e8e93', '#ffcc00'];
         const data = (segments || []).filter((s) => Number(s.value) > 0);
         const total = data.reduce((sum, s) => sum + Number(s.value), 0);
         if (!total) {

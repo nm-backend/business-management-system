@@ -220,10 +220,11 @@ __marimo__/
 # Служебные данные инструментов и артефакты прогонов — не исходный код.
 # desktop.db весит 27 МБ и менялся при каждой сессии, раздувая историю.
 # Документацию в .freebuff (run.md, docs/) НЕ игнорируем — она нужна в репозитории.
-.freebuff/desktop.db
-.freebuff/desktop.db-shm
-.freebuff/desktop.db-wal
+.freebuff/*.db
+.freebuff/*.db-shm
+.freebuff/*.db-wal
 .freebuff/worktrees/
+.freebuff/settings.json
 .playwright-mcp/
 
 # Локальные базы разработки (боевая — PostgreSQL).

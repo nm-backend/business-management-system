@@ -22,7 +22,7 @@ class FinanceComponent {
             <div class="page-hero">
                 <div>
                     <div class="eyebrow" data-i18n="finance.title"></div>
-                    <h2>${window.ui.escape(user.full_name || user.username)}</h2>
+                    <h2 data-i18n="nav.analytics"></h2>
                 </div>
             </div>
             <div class="tabs" role="tablist" aria-label="Finance sections">
@@ -84,6 +84,9 @@ class FinanceComponent {
                 </div>`;
 
             el.innerHTML = `
+                <div class="tabs" role="tablist" aria-label="Finance analytics period">
+                    ${periods.map((p) => `<button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>`).join('')}
+                </div>
                 <div class="metrics-grid">
                     ${metricCard('finance.revenue', data.revenue, 'blue')}
                     ${metricCard('finance.cost_of_goods', data.cost_of_goods, 'yellow')}

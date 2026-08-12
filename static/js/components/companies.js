@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Компании (экран платформенного супер-администратора).
  *
  * Супер-админ создаёт компании вместе с их владельцами, блокирует/разблокирует.
@@ -94,7 +94,7 @@ class CompaniesComponent {
                 <span class="badge ${c.is_active ? 'badge-ready' : 'badge-cancel'}"
                     data-i18n="${c.is_active ? 'common.active' : 'settings.blocked'}"></span>
             </div>
-            <div class="list-group" style="box-shadow:none;border:1px solid #efeff4;margin-bottom:14px;">
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);margin-bottom:14px;">
                 <div class="list-row" style="cursor:default;">
                     <span class="text-sm text-muted" data-i18n="companies.owner"></span>
                     <span class="text-sm font-bold">${window.ui.escape(c.owner_full_name || c.owner_username || '-')}</span>

@@ -66,16 +66,26 @@ handler403 = "skladpro.error_views.error_403"
 handler404 = "skladpro.error_views.error_404"
 handler500 = "skladpro.error_views.error_500"
 
+# static()/media-паттерны должны идти РАНЬШЕ SPA-fallback (re_path ^.*$ в
+# template_urls): иначе fallback матчится первым и кидает 404, а файлы не
+# раздаются ни в dev (DEBUG), ни на PaaS (MEDIA_SERVE).
 if settings.DEBUG:
-    urlpatterns += static(
-        settings.MEDIA_URL,
-        document_root=settings.MEDIA_ROOT,
-    )
-    urlpatterns += static(
-        settings.STATIC_URL,
-        document_root=(
-            settings.STATICFILES_DIRS[0]
-            if settings.STATICFILES_DIRS
-            else settings.STATIC_ROOT
+    urlpatterns = [
+        *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
+        *static(
+            settings.STATIC_URL,
+            document_root=(
+                settings.STATICFILES_DIRS[0]
+                if settings.STATICFILES_DIRS
+                else settings.STATIC_ROOT
+            ),
         ),
-    )
+        *urlpatterns,
+    ]
+elif getattr(settings, 'MEDIA_SERVE', False):
+    # PaaS без nginx/Caddy (Railway/Render): /media/ отдаёт Django.
+    # Опция MEDIA_SERVE задаётся в production.py из переменной окружения.
+    urlpatterns = [
+        *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
+        *urlpatterns,
+    ]
