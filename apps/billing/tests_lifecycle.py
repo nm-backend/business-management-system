@@ -243,12 +243,42 @@ class SubscriptionLifecycleTests(TestCase):
             type=Notification.NotificationType.SUBSCRIPTION_RENEWED,
         ).exists())
 
+        # Смена тарифа free → pro зафиксирована в истории.
+        self.assertTrue(
+            SubscriptionEvent.objects.filter(
+                subscription=self.sub, action='plan_changed',
+            ).exists(),
+        )
+
         # Идемпотентность confirm: повторный вызов не ломает.
         resp3 = self.api.post(
             f'/api/v1/billing/subscriptions/{self.sub.pk}/confirm_payment/',
             {'invoice_id': invoice_id}, format='json',
         )
         self.assertEqual(resp3.status_code, 200)
+
+    def test_confirm_same_plan_does_not_record_plan_changed(self):
+        """
+        Продление на тот же тариф (счёт без смены плана) не пишет
+        plan_changed в историю (воспроизведено: free → free записывало
+        «Тариф изменён», хотя тариф не менялся).
+        """
+        self._auth(self.owner)
+        resp = self.api.post('/api/v1/billing/subscription/renew/', format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.api.force_authenticate(user=self.superadmin)
+        resp = self.api.post(
+            f'/api/v1/billing/subscriptions/{self.sub.pk}/confirm_payment/',
+            {'invoice_id': resp.data['id']}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.plan, Subscription.Plan.FREE)
+        self.assertFalse(
+            SubscriptionEvent.objects.filter(
+                subscription=self.sub, action='plan_changed',
+            ).exists(),
+        )
 
     def test_renew_after_freeze_restores_company(self):
         self._expire()

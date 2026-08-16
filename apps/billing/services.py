@@ -196,6 +196,29 @@ def activate_subscription(sub, *, days=None, actor=None, request=None, note=''):
                        actor=actor, request=request, note=note)
 
 
+def quick_renew_subscription(sub, *, actor=None, request=None, note=''):
+    """
+    Быстрое продление одним кликом из админки (+30 дней).
+
+    Решение «активировать свежий период / продлить от текущего срока»
+    принимается ПОД блокировкой строки: между чтением статуса и записью
+    не может вклиниться Celery-заморозка. Раньше выбор делался в view по
+    is_blocked вне select_for_update — гонка с check_expired_subscriptions
+    могла привести к EXTENDED-событию вместо ACTIVATED (безобидно по сроку,
+    но сбивало историю). Возвращает (sub, action).
+    """
+    days = settings.SUBSCRIPTION_DAYS
+    with transaction.atomic():
+        sub = Subscription.objects.select_for_update().get(pk=sub.pk)
+        if sub.is_blocked:
+            _extend(sub, days, SubscriptionEvent.Action.ACTIVATED,
+                    actor=actor, request=request, note=note)
+            return sub, SubscriptionEvent.Action.ACTIVATED
+        _extend(sub, days, SubscriptionEvent.Action.EXTENDED,
+                actor=actor, request=request, note=note)
+        return sub, SubscriptionEvent.Action.EXTENDED
+
+
 def freeze_subscription(sub, *, actor=None, request=None):
     """
     Заморозка: active → expired → frozen (два события, одна транзакция).
@@ -329,7 +352,10 @@ def confirm_invoice_paid(invoice, *, actor=None, request=None):
 
         metadata = invoice.metadata if isinstance(invoice.metadata, dict) else {}
         plan = metadata.get('plan')
-        if plan in Subscription.Plan.values:
+        # plan_changed — только при реальной смене тарифа: продление на тот же
+        # тариф не должно писать «Тариф изменён» в историю (воспроизведено:
+        # счёт на free записывал plan_changed, хотя тариф не менялся).
+        if plan in Subscription.Plan.values and plan != sub.plan:
             sub.plan = plan
             _record_event(sub, SubscriptionEvent.Action.PLAN_CHANGED, old_status, old_expires,
                           actor=actor, note=f'Тариф → {plan} (счёт #{invoice.pk})')

@@ -6,14 +6,23 @@
   - список всех подписок и все изменяющие операции — только супер-админ;
   - владелец не может продлить/заморозить/подтвердить счёт чужой компании.
 """
-from django.test import TestCase
+from datetime import timedelta
+
+from channels.db import database_sync_to_async
+from channels.routing import URLRouter
+from channels.testing import WebsocketCommunicator
+from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.companies.models import Company
+from apps.messaging.routing import websocket_urlpatterns
+from apps.messaging.services import issue_ws_ticket
+from apps.messaging.ws_auth import TicketAuthMiddleware
 
 from .models import Invoice, Subscription
-from .services import create_invoice
+from .services import create_invoice, freeze_subscription
 
 
 class BillingPermissionTests(TestCase):
@@ -143,3 +152,77 @@ class BillingPermissionTests(TestCase):
         resp = self.api.get('/api/v1/warehouse/raw-materials/')
         self.assertEqual(resp.status_code, 403)
         self.assertNotEqual(resp.data.get('code'), 'subscription_expired')
+
+    def test_frozen_company_cannot_issue_ws_ticket(self):
+        """
+        Выдача WS-тикета (чат) — бизнес-функция: замороженная компания
+        получает subscription_expired, а не тикет.
+
+        Gate — middleware и видит только настоящий JWT в Authorization
+        (force_authenticate его обходит), поэтому логинимся по-настоящему.
+        """
+        resp = self.api.post('/api/v1/accounts/login/', {
+            'username': self.owner_a.username, 'password': 'pw',
+            'fingerprint': 'x' * 32,
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        token = resp.data['tokens']['access']
+        self.api.force_authenticate(user=None)
+        self.api.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+
+        # До заморозки тикет выдаётся.
+        self.assertEqual(self.api.get('/api/v1/messaging/ws-ticket/').status_code, 200)
+
+        # Заморозка → тикет больше не выдаётся (бизнес-функция).
+        Subscription.objects.filter(pk=self.sub_a.pk).update(
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+        self.sub_a.refresh_from_db()
+        self.assertTrue(freeze_subscription(self.sub_a))
+        resp = self.api.get('/api/v1/messaging/ws-ticket/')
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()['code'], 'subscription_expired')
+
+        # А вот статус подписки и продление — whitelist, работают.
+        self.assertEqual(self.api.get('/api/v1/billing/subscription/').status_code, 200)
+
+
+class BillingWsGateTests(TransactionTestCase):
+    """
+    WebSocket-чат для замороженной компании не открывается даже по тикету,
+    выданному до заморозки (тикет живёт до 60 секунд).
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name='WsFrozenCo')
+        self.owner = User.objects.create_user(
+            username='ws_frozen_owner', password='pw',
+            role=User.Role.OWNER, company=self.company,
+        )
+        self.sub = Subscription.objects.get(company=self.company)
+        self.ws_app = TicketAuthMiddleware(URLRouter(websocket_urlpatterns))
+
+    async def test_ws_rejected_for_frozen_company(self):
+        ticket = await database_sync_to_async(issue_ws_ticket)(self.owner)
+        # Заморозка после выдачи тикета.
+        await database_sync_to_async(self._expire_and_freeze)()
+        communicator = WebsocketCommunicator(self.ws_app, f'/ws/chat/?ticket={ticket}')
+        connected, _ = await communicator.connect()
+        self.assertFalse(connected)
+        await communicator.disconnect()
+
+    async def test_ws_ok_for_active_company(self):
+        ticket = await database_sync_to_async(issue_ws_ticket)(self.owner)
+        communicator = WebsocketCommunicator(self.ws_app, f'/ws/chat/?ticket={ticket}')
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        await communicator.disconnect()
+
+    def _expire_and_freeze(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        Subscription.objects.filter(pk=self.sub.pk).update(
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+        self.sub.refresh_from_db()
+        freeze_subscription(self.sub)
