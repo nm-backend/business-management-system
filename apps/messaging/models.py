@@ -194,6 +194,9 @@ class Notification(TimestampedModel):
         NEW_MESSAGE = 'new_message', 'Янги хабар'
         WORK_ACCRUED = 'work_accrued', 'Шахсий иш ҳисобланди'
         MATERIAL_SHORTAGE = 'material_shortage', 'Материал етишмовчилиги'
+        SUBSCRIPTION_EXPIRING = 'subscription_expiring', 'Подписка скоро истечёт'
+        SUBSCRIPTION_FROZEN = 'subscription_frozen', 'Подписка истекла'
+        SUBSCRIPTION_RENEWED = 'subscription_renewed', 'Подписка продлена'
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='notifications', null=True, verbose_name='Компания')
     user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='notifications', verbose_name='Пользователь')

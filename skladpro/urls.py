@@ -44,6 +44,7 @@ urlpatterns = [
     path("api/v1/messaging/", include("apps.messaging.urls")),
     path("api/v1/reports/", include("apps.reports.urls")),
     path("api/v1/backup/", include("apps.backup.urls")),
+    path("api/v1/billing/", include("apps.billing.urls")),
 
     # OpenAPI
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),

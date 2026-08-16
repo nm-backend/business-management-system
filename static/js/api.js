@@ -133,6 +133,11 @@ class APIClient {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                // Подписка компании истекла/заморожена: показываем экран
+                // «Подписка истекла» (вход и профиль остаются доступными).
+                if (errorData.code === 'subscription_expired' && window.showFrozenScreen) {
+                    window.showFrozenScreen();
+                }
                 throw { status: response.status, data: errorData };
             }
 

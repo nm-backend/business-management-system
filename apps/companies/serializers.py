@@ -11,6 +11,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import User
+from apps.billing.serializers import SubscriptionSummarySerializer
 from .models import Company
 
 
@@ -20,12 +21,14 @@ class CompanySerializer(serializers.ModelSerializer):
     owner_full_name = serializers.SerializerMethodField()
     # Значение приходит из annotate(users_count=Count('users')) в CompanyViewSet.
     users_count = serializers.IntegerField(read_only=True)
+    # Сводка подписки (select_related('subscription') в CompanyViewSet).
+    subscription = SubscriptionSummarySerializer(read_only=True)
 
     class Meta:
         model = Company
         fields = [
             'id', 'name', 'is_active', 'owner_username', 'owner_full_name',
-            'users_count', 'created_at', 'updated_at',
+            'users_count', 'subscription', 'created_at', 'updated_at',
         ]
         # is_active меняется ТОЛЬКО через действие toggle_active (он деактивирует
         # сотрудников и пишет audit). Прямой PATCH is_active обходил каскад:

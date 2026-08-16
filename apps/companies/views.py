@@ -34,6 +34,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         return (
             Company.objects.all()
             .annotate(users_count=Count('users'))
+            .select_related('subscription')  # сводка подписки без N+1
             .prefetch_related(Prefetch(
                 'users',
                 queryset=User.objects.filter(role=User.Role.OWNER),

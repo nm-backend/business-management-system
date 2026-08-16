@@ -79,6 +79,13 @@ class AuditLog(TimestampedModel):
             'two_factor_recovery_regenerated', 'Резервные коды перевыпущены',
         )
         TOKEN_THEFT_DETECTED = 'token_theft_detected', 'Обнаружена кража токена'
+        SUBSCRIPTION_ACTIVATED = 'subscription_activated', 'Подписка активирована'
+        SUBSCRIPTION_RENEWED = 'subscription_renewed', 'Подписка продлена'
+        SUBSCRIPTION_EXTENDED = 'subscription_extended', 'Подписка продлена супер-админом'
+        SUBSCRIPTION_EXPIRED = 'subscription_expired', 'Подписка истекла'
+        SUBSCRIPTION_FROZEN = 'subscription_frozen', 'Компания заморожена'
+        SUBSCRIPTION_UNFROZEN = 'subscription_unfrozen', 'Компания разморожена'
+        INVOICE_PAID = 'invoice_paid', 'Счёт оплачен'
 
     company = models.ForeignKey(
         'companies.Company',
