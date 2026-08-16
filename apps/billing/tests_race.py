@@ -17,7 +17,9 @@ from apps.companies.models import Company
 from apps.core.tests_race import run_parallel
 
 from .models import Invoice, Subscription, SubscriptionEvent
-from .services import create_invoice, freeze_subscription, renew_subscription
+from .services import (
+    create_invoice, freeze_subscription, quick_renew_subscription, renew_subscription,
+)
 
 
 @skipUnlessDBFeature('has_select_for_update')
@@ -95,3 +97,79 @@ class SubscriptionRaceTests(TransactionTestCase):
             ).count(),
             1,
         )
+
+    def test_quick_renew_vs_freeze_no_lost_update(self):
+        """
+        Гонка «быстрое продление из админки» против Celery-заморозки.
+
+        Раньше выбор «активировать/продлить» делался в view по is_blocked ВНЕ
+        блокировки строки — между чтением и записью могла вклиниться заморозка,
+        и итог зависел от порядка коммитов. Теперь quick_renew_subscription
+        решает ПОД select_for_update; оба исхода консистентны:
+          - renew первый → freeze повторно проверяет срок и пропускает;
+          - freeze первый → quick_renew видит заморозку и активирует.
+        В любом случае: статус ACTIVE, срок в будущем, ровно ОДНО событие
+        продления (activated; extended невозможен — подписка истекла) и
+        ноль потерянных обновлений.
+        """
+        self._expire()
+        results = run_parallel(
+            lambda i: (
+                freeze_subscription(self.sub) if i % 2 == 0
+                else quick_renew_subscription(self.sub, actor=self.owner)
+            ),
+            n=2,
+        )
+        self.assertFalse(
+            [r for r in results if isinstance(r, str) and r.startswith('EXC:')],
+            f'Исключения в гонке: {results}',
+        )
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, Subscription.Status.ACTIVE)
+        self.assertGreater(self.sub.expires_at, timezone.now() + timedelta(days=29))
+        self.assertIsNone(self.sub.frozen_at)
+        events = list(
+            SubscriptionEvent.objects.filter(subscription=self.sub)
+            .values_list('action', flat=True)
+        )
+        self.assertEqual(
+            events.count('activated'), 1,
+            f'Продление должно сработать ровно один раз: {events}',
+        )
+        self.assertEqual(
+            events.count('extended'), 0,
+            'Подписка истекла — quick_renew обязан активировать, а не продлевать',
+        )
+        self.assertLessEqual(
+            events.count('frozen'), 1,
+            f'Заморозка возможна максимум один раз: {events}',
+        )
+
+    def test_concurrent_quick_renew_accumulates_days(self):
+        """
+        8 параллельных quick_renew без гонки: ни одно продление не теряется
+        (lost update) — срок растёт на 8×30 дней, событий ровно 8.
+        """
+        self._expire()
+        results = run_parallel(
+            lambda i: quick_renew_subscription(self.sub, actor=self.owner)[0].pk,
+            n=8,
+        )
+        self.assertFalse(
+            [r for r in results if isinstance(r, str) and r.startswith('EXC:')],
+            f'Исключения в гонке: {results}',
+        )
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, Subscription.Status.ACTIVE)
+        # Первый активирует (свежие 30 дней), остальные 7 продлевают +30
+        # от текущего срока → суммарно ~240 дней, ничего не потеряно.
+        self.assertGreater(
+            self.sub.expires_at, timezone.now() + timedelta(days=239),
+            f'Потеряно продление: expires_at={self.sub.expires_at}',
+        )
+        events = list(
+            SubscriptionEvent.objects.filter(subscription=self.sub)
+            .values_list('action', flat=True)
+        )
+        self.assertEqual(events.count('activated'), 1, events)
+        self.assertEqual(events.count('extended'), 7, events)

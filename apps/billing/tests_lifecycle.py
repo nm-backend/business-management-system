@@ -27,6 +27,7 @@ from apps.companies.models import Company
 from apps.messaging.models import Notification
 
 from .models import Invoice, Subscription, SubscriptionEvent
+from .services import freeze_subscription, quick_renew_subscription
 from .tasks import check_expired_subscriptions, notify_expiring_subscriptions
 
 
@@ -313,6 +314,27 @@ class SubscriptionLifecycleTests(TestCase):
         self.assertTrue(AuditLog.objects.filter(
             action=AuditLog.Action.SUBSCRIPTION_ACTIVATED, object_id=str(self.sub.pk),
         ).exists())
+
+    def test_quick_renew_then_freeze_is_skipped(self):
+        """
+        Один из порядков гонки renew/freeze (последовательно): если быстрое
+        продление из админки успело ДО Celery, заморозка повторно проверяет
+        срок под блокировкой и пропускает компанию (иначе она вернулась бы
+        в заморозку сразу после активации). Обратный порядок покрыт
+        tests_admin.test_quick_extend_activates_frozen_subscription, а
+        настоящая конкурентная гонка — tests_race на PostgreSQL.
+        """
+        self._expire()
+        quick_renew_subscription(self.sub, actor=self.superadmin)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, Subscription.Status.ACTIVE)
+        self.assertFalse(self.sub.is_blocked)
+        # Celery приходит после продления — срок в будущем, морозить нечего.
+        self.assertFalse(freeze_subscription(self.sub))
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, Subscription.Status.ACTIVE)
+        self.assertFalse(self.sub.is_blocked)
+        self.assertIsNone(self.sub.frozen_at)
 
     def test_unfreeze_requires_future_expiry(self):
         self._expire()
