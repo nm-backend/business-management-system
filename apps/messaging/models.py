@@ -203,6 +203,8 @@ class Notification(TimestampedModel):
         MATERIAL_SHORTAGE = 'material_shortage', 'Материал етишмовчилиги'
         SUBSCRIPTION_EXPIRING_SOON = 'subscription_expiring_soon', 'Обуна 7 кундан сўнг тугайди'
         SUBSCRIPTION_EXPIRING = 'subscription_expiring', 'Обуна 1 кундан сўнг тугайди'
+        SUBSCRIPTION_FROZEN = 'subscription_frozen', 'Подписка истекла'
+        SUBSCRIPTION_RENEWED = 'subscription_renewed', 'Подписка продлена'
         SUBSCRIPTION_RENEWAL_REQUEST = 'subscription_renewal_request', 'Обунани узайтириш сўрови'
         SUBSCRIPTION_EXTENDED = 'subscription_extended', 'Обуна узайтирилди'
         SUBSCRIPTION_GRACE_STARTED = 'subscription_grace_started', 'Имтиёзли давр бошланди'

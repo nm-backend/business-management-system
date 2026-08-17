@@ -81,7 +81,8 @@ class AuditLog(TimestampedModel):
         )
         TOKEN_THEFT_DETECTED = 'token_theft_detected', 'Обнаружена кража токена'
         SUBSCRIPTION_ACTIVATED = 'subscription_activated', 'Подписка активирована'
-        SUBSCRIPTION_EXTENDED = 'subscription_extended', 'Подписка продлена'
+        SUBSCRIPTION_RENEWED = 'subscription_renewed', 'Подписка продлена'
+        SUBSCRIPTION_EXTENDED = 'subscription_extended', 'Подписка продлена супер-админом'
         SUBSCRIPTION_END_SET = 'subscription_end_set', 'Срок подписки изменён'
         SUBSCRIPTION_GRACE_STARTED = 'subscription_grace_started', 'Льготный период начался'
         SUBSCRIPTION_FROZEN = 'subscription_frozen', 'Компания заморожена'
@@ -89,6 +90,7 @@ class AuditLog(TimestampedModel):
         SUBSCRIPTION_EXPIRED = 'subscription_expired', 'Подписка истекла'
         SUBSCRIPTION_PLAN_CHANGED = 'subscription_plan_changed', 'Тариф изменён'
         SUBSCRIPTION_RENEWAL_REQUESTED = 'subscription_renewal_requested', 'Запрошено продление подписки'
+        INVOICE_PAID = 'invoice_paid', 'Счёт оплачен'
 
     company = models.ForeignKey(
         'companies.Company',

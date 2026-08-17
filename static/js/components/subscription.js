@@ -1,146 +1,108 @@
 /**
- * «Подписка» — собственная подписка компании для владельца и администратора.
+ * Подписка (SaaS billing): модалка для владельца — статус, срок, тарифы,
+ * история, продление; используется из настроек и с экрана «Подписка истекла».
  *
- * Показывает состояние подписки (статус, начало/окончание, остаток дней),
- * историю изменений и кнопку «Запросить продление»: запрос уходит суперадмину
- * в колокольчик (уведомление + push), менять подписку сам владелец не может.
- *
- * Компания берётся из /companies/my-subscription/ (сервер сам подставляет
- * компанию текущего пользователя — чужую указать невозможно).
+ * Данные: GET /billing/subscription/ (owner). Продление создаёт счёт через
+ * payment adapter; пока провайдер manual — счёт ждёт подтверждения
+ * супер-админа, после чего подписка продлевается автоматически.
  */
-class SubscriptionComponent {
-    async render(container) {
-        const user = window.currentUser;
-        if (!user || user.is_superadmin || !user.company_name) {
-            window.location.hash = '#/';
-            return;
-        }
-        document.getElementById('page-title').setAttribute('data-i18n', 'subscription.page_title');
-        this.container = container;
-        container.innerHTML = `<div class="list-state list-state-loading"><span class="spinner"></span></div>`;
+class SubscriptionUI {
+    async openModal() {
+        const modal = window.ui.modal(
+            'subscription.title',
+            '<div class="list-state list-state-loading"><span class="spinner"></span></div>',
+        );
         try {
-            const data = await window.api.request('/companies/my-subscription/');
-            this.renderData(container, data);
+            const data = await window.api.request('/billing/subscription/');
+            this.render(modal, data);
         } catch (e) {
-            window.listStates.error(
-                container,
-                window.ui.errorText ? window.ui.errorText(e) : window.ui.t('common.error'),
-                () => this.render(container),
-            );
+            window.ui.closeModal(modal);
+            window.toast.error(window.ui.errorText(e));
         }
     }
 
-    renderData(container, data) {
-        const status = data.subscription_status || 'active';
-        const badgeClass = status === 'active' ? 'badge-ready'
-            : (status === 'frozen' || status === 'grace') ? 'badge-progress'
-            : 'badge-cancel';
-        const isGrace = status === 'grace';
-        const daysText = isGrace
-            ? `${data.grace_days_left ?? 0} ${window.ui.t('subscription.grace_days_left')}`
-            : (data.days_left === null || data.days_left === undefined
-                ? '—'
-                : `${data.days_left} ${window.ui.t('subscription.days_short')}`);
+    render(modal, data) {
+        const body = modal.querySelector('.modal-body');
+        const t = (k, p) => window.ui.t(k, p);
+        const statusBadge = data.is_blocked
+            ? '<span class="badge badge-cancel" data-i18n="subscription.frozen"></span>'
+            : '<span class="badge badge-ready" data-i18n="subscription.active"></span>';
 
-        const trialBadge = data.is_trial
-            ? `<span class="badge badge-new" data-i18n="subscription.trial_badge"></span>`
-            : '';
+        const historyRows = (data.history || []).map((ev) => `
+            <div class="list-row" style="cursor:default;">
+                <span class="text-sm">${window.ui.escape(this.eventLabel(ev))}</span>
+                <span class="text-xs text-muted">${window.ui.escape((ev.created_at || '').slice(0, 10))}</span>
+            </div>`).join('')
+            || '<div class="list-state list-state-empty" data-i18n="common.no_data"></div>';
 
-        const graceAlert = isGrace ? `
-            <div class="alert-box" style="margin-top:14px;">
-                <div style="font-weight:600;" data-i18n="subscription.grace_title"></div>
-                <p class="text-sm text-muted" style="margin-top:4px;" data-i18n="subscription.grace_text"></p>
-                ${data.grace_end ? `<p class="text-sm font-bold" style="margin-top:6px;">${window.ui.escape(window.ui.t('subscription.grace_deadline'))}: ${window.ui.datetime(data.grace_end)}</p>` : ''}
-            </div>` : '';
+        const planOptions = (data.plans || []).map((p) => `
+            <label class="list-row" style="cursor:pointer;">
+                <span>
+                    <span class="font-bold">${window.ui.escape(p.label)}</span>
+                    ${p.note ? `<span class="text-sm text-muted"> · ${window.ui.escape(p.note)}</span>` : ''}
+                </span>
+                <input type="radio" name="sub-plan" value="${window.ui.escape(p.key)}" ${p.key === data.plan ? 'checked' : ''}>
+            </label>`).join('');
 
-        container.innerHTML = `
-            <div class="card" style="padding:20px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-                    <div>
-                        <div style="font-weight:600;font-size:16px;">${window.ui.escape(data.company_name)}</div>
-                        <div class="text-sm text-muted" data-i18n="subscription.page_subtitle"></div>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                        ${trialBadge}
-                        <span class="badge ${badgeClass}">${window.ui.escape(data.subscription_status_display || status)}</span>
-                    </div>
+        const pendingInvoice = (data.invoices || []).find((i) => i.status === 'pending');
+
+        body.innerHTML = `
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:14px;">
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm text-muted" data-i18n="subscription.plan"></span>
+                    <span class="text-sm font-bold">${window.ui.escape(data.plan)} ${statusBadge}</span>
                 </div>
-                ${graceAlert}
-                <div class="list-group" style="box-shadow:none;border:1px solid var(--border);margin-top:16px;">
-                    <div class="list-row" style="cursor:default;">
-                        <span class="text-sm text-muted" data-i18n="subscription.plan"></span>
-                        <span class="text-sm font-bold">${window.ui.escape(data.plan_name || '—')}</span>
-                    </div>
-                    <div class="list-row" style="cursor:default;">
-                        <span class="text-sm text-muted" data-i18n="subscription.current_status"></span>
-                        <span class="text-sm font-bold">${window.ui.escape(data.subscription_status_display || status)}</span>
-                    </div>
-                    <div class="list-row" style="cursor:default;">
-                        <span class="text-sm text-muted" data-i18n="subscription.start_date"></span>
-                        <span class="text-sm font-bold">${data.subscription_start ? window.ui.datetime(data.subscription_start) : '—'}</span>
-                    </div>
-                    <div class="list-row" style="cursor:default;">
-                        <span class="text-sm text-muted" data-i18n="subscription.end_date"></span>
-                        <span class="text-sm font-bold">${data.subscription_end ? window.ui.datetime(data.subscription_end) : '—'}</span>
-                    </div>
-                    <div class="list-row" style="cursor:default;">
-                        <span class="text-sm text-muted">${isGrace ? window.ui.t('subscription.grace_deadline') : window.ui.t('subscription.days_left_label')}</span>
-                        <span class="text-sm font-bold">${daysText}</span>
-                    </div>
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm text-muted" data-i18n="subscription.expires"></span>
+                    <span class="text-sm font-bold">${window.ui.escape((data.expires_at || '').slice(0, 10)) || '—'}</span>
                 </div>
-                <button class="btn ${data.renewal_request_pending ? 'btn-secondary' : 'btn-primary'} btn-block" id="sub-request-renewal"
-                        style="margin-top:16px;" ${data.renewal_request_pending ? 'disabled' : ''}
-                        data-i18n="${data.renewal_request_pending ? 'subscription.request_pending' : 'subscription.request_renewal'}"></button>
-                <p class="text-sm text-muted" style="margin-top:8px;text-align:center;" data-i18n="subscription.renew_hint"></p>
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm text-muted" data-i18n="subscription.days_left_label"></span>
+                    <span class="text-sm font-bold">${t('subscription.days_left', { days: data.days_left })}</span>
+                </div>
             </div>
-
+            ${data.is_blocked ? '<p class="text-sm text-danger" data-i18n="subscription.frozen_hint"></p>' : ''}
+            ${pendingInvoice ? `<p class="text-sm" data-i18n="subscription.invoice_pending"></p>` : ''}
+            <div class="section-title" data-i18n="subscription.choose_plan"></div>
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">${planOptions}</div>
+            <button class="btn btn-primary btn-block" id="subscription-renew" style="margin-top:14px;" data-i18n="subscription.renew"></button>
             <div class="section-title" data-i18n="subscription.history"></div>
-            <div class="list-group" id="sub-history" style="box-shadow:none;border:1px solid var(--border);"></div>
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">${historyRows}</div>
         `;
-
-        container.querySelector('#sub-request-renewal').addEventListener('click', () => this.requestRenewal());
-
-        const historyEl = container.querySelector('#sub-history');
-        if (!data.history || !data.history.length) {
-            historyEl.innerHTML = `<div class="list-state list-state-empty" data-i18n="companies.no_history"></div>`;
-        } else {
-            const actionLabels = {
-                activated: 'companies.activate', extended: 'companies.extend_30',
-                end_set: 'companies.set_end', grace_started: 'subscription.grace_title',
-                frozen: 'companies.freeze', unfrozen: 'companies.unfreeze',
-                expired: 'companies.subscription_expired',
-                plan_changed: 'companies.plan_change',
-                cancelled: 'companies.status_cancelled',
-            };
-            historyEl.innerHTML = data.history.map((h) => `
-                <div class="list-row" style="cursor:default;font-size:12px;">
-                    <div>
-                        <div style="font-weight:600;" data-i18n="${actionLabels[h.action] || 'common.details'}"></div>
-                        <div class="text-sm text-muted">
-                            ${window.ui.escape(h.actor)} · ${window.ui.datetime(h.created_at)}
-                            ${h.days_added ? ` · +${h.days_added} ${window.ui.t('subscription.days_short')}` : ''}
-                            ${h.old_plan || h.new_plan ? ` · ${window.ui.escape(h.old_plan || '—')} → ${window.ui.escape(h.new_plan || '—')}` : ''}
-                        </div>
-                    </div>
-                    <div class="text-sm" style="white-space:nowrap;color:var(--text-muted);">
-                        ${h.old_status || '—'} → ${h.new_status || '—'}
-                    </div>
-                </div>`).join('');
-        }
         window.i18n.applyTranslations();
+
+        const renewBtn = body.querySelector('#subscription-renew');
+        renewBtn.addEventListener('click', () => this.renew(modal, data, renewBtn));
     }
 
-    async requestRenewal() {
+    eventLabel(ev) {
+        const action = window.ui.t(`subscription.event.${ev.action}`);
+        const who = ev.actor_name && ev.actor_name !== 'system'
+            ? ` · ${ev.actor_name}` : '';
+        return `${action}${who}${ev.note ? ` — ${ev.note}` : ''}`;
+    }
+
+    async renew(modal, data, btn) {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        const plan = (modal.querySelector('input[name="sub-plan']:checked') || {}).value || data.plan;
         try {
-            const resp = await window.api.request('/companies/my-subscription/request-renewal/', {
-                method: 'POST', body: JSON.stringify({}),
+            await window.api.request('/billing/subscription/renew/', {
+                method: 'POST',
+                body: JSON.stringify({ plan }),
             });
-            window.toast.success(window.ui.t(resp.created ? 'subscription.request_sent' : 'subscription.request_already'));
-            this.render(this.container);
+            window.toast.success(window.ui.t('subscription.renew_requested'));
+            const fresh = await window.api.request('/billing/subscription/');
+            this.render(modal, fresh);
         } catch (e) {
-            window.toast.error(window.ui.errorText ? window.ui.errorText(e) : window.ui.t('common.error'));
+            btn.disabled = false;
+            window.toast.error(window.ui.errorText(e));
         }
     }
 }
 
-window.SubscriptionComponent = new SubscriptionComponent();
+        }
+    }
+}
+
+window.subscriptionUI = new SubscriptionUI();

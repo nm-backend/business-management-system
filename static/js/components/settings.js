@@ -24,6 +24,15 @@ class SettingsComponent {
                 </div>
             </div>
 
+            ${user.is_owner ? `
+            <div class="section-title" data-i18n="subscription.title"></div>
+            <div class="list-group">
+                <div class="list-row" id="subscription-row" role="button" tabindex="0" style="cursor:pointer;">
+                    <span>💳 <span data-i18n="subscription.my"></span></span>
+                    <span class="badge badge-progress" id="subscription-badge">…</span>
+                </div>
+            </div>` : ''}
+
             ${!user.is_superadmin ? `
             <div class="section-title" data-i18n="nav.menu"></div>
             <div class="list-group">
@@ -176,6 +185,19 @@ class SettingsComponent {
             });
         };
 
+        if (user.is_owner) {
+            const subRow = container.querySelector('#subscription-row');
+            if (subRow) {
+                subRow.addEventListener('click', () => window.subscriptionUI.openModal());
+                subRow.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        window.subscriptionUI.openModal();
+                    }
+                });
+            }
+            this.loadSubscriptionBadge();
+        }
         bindActionRow('#change-password-row', () => this.openChangePassword());
         bindActionRow('#about-row', () => this.openAbout());
         bindActionRow('#logout-row', async () => {
@@ -198,6 +220,23 @@ class SettingsComponent {
             this.loadUsers();
         }
         window.i18n.applyTranslations();
+    }
+
+    async loadSubscriptionBadge() {
+        const badge = this.container.querySelector('#subscription-badge');
+        if (!badge) return;
+        try {
+            const data = await window.api.request('/billing/subscription/');
+            if (data.is_blocked) {
+                badge.textContent = window.ui.t('subscription.frozen');
+                badge.className = 'badge badge-cancel';
+            } else {
+                badge.textContent = window.ui.t('subscription.days_left', { days: data.days_left });
+                badge.className = data.days_left <= 3 ? 'badge badge-progress' : 'badge badge-ready';
+            }
+        } catch (e) {
+            badge.textContent = '—';
+        }
     }
 
     async changeLanguage(lang) {

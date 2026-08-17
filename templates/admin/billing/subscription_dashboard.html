@@ -1,0 +1,113 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<style>
+  .skp-stats { display: flex; gap: 14px; flex-wrap: wrap; margin: 0 0 24px; }
+  .skp-card { flex: 1; min-width: 150px; background: #fff; border: 1px solid #d0d7de;
+              border-radius: 12px; padding: 16px 20px; }
+  .skp-card .skp-num { font-size: 28px; font-weight: 800; line-height: 1.1; }
+  .skp-card .skp-lbl { color: #5a6472; font-size: 12px; margin-top: 4px; letter-spacing: .4px; }
+  .skp-section { margin: 26px 0 10px; font-weight: 700; font-size: 15px; }
+  .skp-hint { color: #5a6472; font-size: 12px; margin: -6px 0 12px; }
+  .skp-table { width: 100%; border-collapse: collapse; background: #fff;
+               border: 1px solid #d0d7de; border-radius: 12px; overflow: hidden; }
+  .skp-table th { background: #f6f8fa; text-align: left; padding: 10px 14px;
+                  font-size: 12px; color: #5a6472; border-bottom: 1px solid #d0d7de; }
+  .skp-table td { padding: 10px 14px; border-bottom: 1px solid #eef0f2; font-size: 13px;
+                  vertical-align: middle; }
+  .skp-table tr:last-child td { border-bottom: none; }
+  .skp-actions form { display: inline; }
+  .skp-actions .button { margin-right: 6px; }
+  .skp-empty { color: #8a919e; padding: 14px; background: #fff; border: 1px solid #d0d7de;
+               border-radius: 12px; font-size: 13px; }
+</style>
+
+<div style="max-width:1100px;">
+  <h1 style="margin-bottom:2px;">Дашборд подписок</h1>
+  <p style="color:#5a6472;margin-top:0;">Истекающие и замороженные компании + быстрое продление одним кликом.</p>
+
+  <div class="skp-stats">
+    <div class="skp-card">
+      <div class="skp-num">{{ stats.total }}</div>
+      <div class="skp-lbl">Всего компаний</div>
+    </div>
+    <div class="skp-card">
+      <div class="skp-num" style="color:#1a7f37;">{{ stats.active }}</div>
+      <div class="skp-lbl">Активных подписок</div>
+    </div>
+    <div class="skp-card">
+      <div class="skp-num" style="color:#9a5b00;">{{ stats.expiring }}</div>
+      <div class="skp-lbl">Истекают за {{ horizon_days }} дней</div>
+    </div>
+    <div class="skp-card">
+      <div class="skp-num" style="color:#c9372c;">{{ stats.blocked }}</div>
+      <div class="skp-lbl">Заморожено / истекло</div>
+    </div>
+  </div>
+
+  <div class="skp-section">⏳ Истекают в течение {{ horizon_days }} дней</div>
+  <div class="skp-hint">Продлите заранее — компания продолжит работу без заморозки.</div>
+  {% if expiring %}
+  <table class="skp-table">
+    <thead>
+      <tr><th>Компания</th><th>Тариф</th><th>Действует до</th><th>Осталось</th><th>Действия</th></tr>
+    </thead>
+    <tbody>
+      {% for sub in expiring %}
+      <tr>
+        <td>
+          <a href="{% url 'admin:companies_company_change' sub.company_id %}">{{ sub.company.name }}</a>
+        </td>
+        <td>{{ sub.get_plan_display }}</td>
+        <td>{{ sub.expires_at|date:"d.m.Y H:i" }}</td>
+        <td><strong>{{ sub.days_left }} дн.</strong></td>
+        <td class="skp-actions">
+          <form method="post" action="{% url 'admin:billing_subscription_quick_extend' sub.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="button" title="Продлить от текущего срока +30 дней">Продлить +30 дней</button>
+          </form>
+          <a class="button" style="background:#6c757d;" href="{% url 'admin:billing_subscription_change' sub.pk %}">Открыть</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="skp-empty">В ближайшие {{ horizon_days }} дней ничего не истекает.</div>
+  {% endif %}
+
+  <div class="skp-section">🧊 Заморожены / истекли</div>
+  <div class="skp-hint">Одним кликом — активация свежего периода на 30 дней.</div>
+  {% if blocked %}
+  <table class="skp-table">
+    <thead>
+      <tr><th>Компания</th><th>Тариф</th><th>Статус</th><th>Действует до</th><th>Действия</th></tr>
+    </thead>
+    <tbody>
+      {% for sub in blocked %}
+      <tr>
+        <td>
+          <a href="{% url 'admin:companies_company_change' sub.company_id %}">{{ sub.company.name }}</a>
+        </td>
+        <td>{{ sub.get_plan_display }}</td>
+        <td><span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;background:#fbe9e9;color:#c9372c;">{{ sub.get_status_display }}</span></td>
+        <td>{{ sub.expires_at|date:"d.m.Y H:i" }}</td>
+        <td class="skp-actions">
+          <form method="post" action="{% url 'admin:billing_subscription_quick_extend' sub.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="button default" title="Новый период 30 дней с сегодня">Активировать +30 дней</button>
+          </form>
+          <a class="button" style="background:#6c757d;" href="{% url 'admin:billing_subscription_change' sub.pk %}">Открыть</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="skp-empty">Замороженных компаний нет.</div>
+  {% endif %}
+
+  <div style="margin-top:24px;">
+    <a class="button" href="{% url 'admin:billing_subscription_changelist' %}">← К списку подписок</a>
+  </div>
+</div>
+{% endblock %}

@@ -305,6 +305,23 @@ class LogoutView(APIView):
         return Response(status=status.HTTP_205_RESET_CONTENT)
 
 
+def _subscription_summary(user):
+    """Краткая сводка подписки для /accounts/me/ (фронтенд строит по ней
+    экран «Подписка истекла» для всех ролей компании)."""
+    if user.company_id is None:
+        return None
+    from apps.billing.models import Subscription
+    sub = Subscription.objects.filter(company_id=user.company_id).first()
+    if sub is None:
+        return {'status': 'frozen', 'is_frozen': True, 'plan': 'free', 'expires_at': None}
+    return {
+        'status': sub.status,
+        'is_frozen': sub.is_blocked,  # включает «истекла, но ещё не заморожена Celery»
+        'plan': sub.plan,
+        'expires_at': sub.expires_at.isoformat() if sub.expires_at else None,
+    }
+
+
 class MeView(APIView):
     """
     API для получения и обновления профиля текущего пользователя.
@@ -340,6 +357,7 @@ class MeView(APIView):
         serializer = UserSerializer(request.user)
         data = serializer.data
         data['vapid_public_key'] = getattr(django_settings, 'VAPID_PUBLIC_KEY', '')
+        data['subscription'] = _subscription_summary(request.user)
         return Response(data)
 
     def patch(self, request):

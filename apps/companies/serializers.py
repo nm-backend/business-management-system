@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import User
+from apps.billing.serializers import SubscriptionSummarySerializer
 from .models import Company
 from .subscriptions import activate_for_new_company
 
@@ -49,6 +50,8 @@ class CompanySerializer(serializers.ModelSerializer):
     days_left = serializers.SerializerMethodField()
     grace_end = serializers.SerializerMethodField()
     logo_url = serializers.SerializerMethodField()
+    # Сводка подписки (select_related('subscription') в CompanyViewSet).
+    subscription = SubscriptionSummarySerializer(read_only=True)
 
     class Meta:
         model = Company
@@ -60,7 +63,7 @@ class CompanySerializer(serializers.ModelSerializer):
             'subscription_status', 'subscription_status_display',
             'subscription_start', 'subscription_end',
             'days_left', 'grace_end',
-            'last_activity', 'has_renewal_request',
+            'last_activity', 'has_renewal_request', 'subscription',
             'created_at', 'updated_at',
         ]
         # is_active меняется ТОЛЬКО через действие toggle_active (он деактивирует

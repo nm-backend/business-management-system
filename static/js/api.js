@@ -138,6 +138,12 @@ class APIClient {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                // Подписка компании истекла/заморожена: показываем экран
+                // «Подписка истекла» (вход и профиль остаются доступными).
+                if (errorData.code === 'subscription_expired' && window.showFrozenScreen) {
+                    window.showFrozenScreen();
+                    throw { status: response.status, data: errorData };
+                }
                 // SaaS gate: 403 с сообщением о подписке означает, что компанию
                 // заморозили или подписка истекла прямо во время работы.
                 // Перезагрузка запустит bootstrap и покажет ограниченный экран.
@@ -152,6 +158,7 @@ class APIClient {
                     sessionStorage.setItem('sub_blocked_reload', '1');
                     window.location.reload();
                     throw { status: 403, data: errorData };
+                }
                 }
                 throw { status: response.status, data: errorData };
             }

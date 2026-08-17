@@ -42,11 +42,17 @@ def _resolve_user_by_ticket(ticket):
             user = ws_ticket.user
             if not user.is_active or user.blocked_by_owner:
                 return AnonymousUser()
-            # SaaS gate: замороженной/истёкшей компании чат тоже недоступен —
-            # SPA всё равно не откроет соединение, но и прямое подключение
-            # в обход UI не должно работать.
-            if user.company_id is not None and not user.company.is_subscription_active:
-                return AnonymousUser()
+            # Замороженная компания: чат — бизнес-функция, WebSocket не
+            # открываем. REST-эндпоинт выдачи тикета уже режется subscription
+            # gate, но тикет, выданный до заморозки, живёт до 60 секунд —
+            # без этой проверки замороженная компания открыла бы чат по
+            # «протухающему» тикету (вход и профиль остаются доступными,
+            # чат — нет).
+            from apps.billing.models import Subscription
+            if user.company_id is not None:
+                sub = Subscription.objects.filter(company_id=user.company_id).first()
+                if sub is None or sub.is_blocked:
+                    return AnonymousUser()
             # Одноразовость: помечаем использованным ДО открытия соединения.
             ws_ticket.used = True
             ws_ticket.save(update_fields=['used'])

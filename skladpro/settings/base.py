@@ -60,7 +60,8 @@ INSTALLED_APPS = [
     'apps.reports',  # Аналитика и экспорт отчетов
     'apps.audit',  # Система аудита действий
     'apps.backup',  # Резервное копирование (Celery Beat)
-
+    'apps.billing',  # Подписки (SaaS billing)
+    
     'drf_spectacular',  # Автоматическая генерация OpenAPI схемы
     'django_celery_beat',  # Celery Beat scheduler
     # Бэкенд результатов задач в БД. Без этого приложения CELERY_RESULT_BACKEND
@@ -82,6 +83,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',  # Сообщения
     'django.middleware.clickjacking.XFrameOptionsMiddleware',  # Защита от clickjacking
     'apps.core.middleware.SecurityHeadersMiddleware',  # CSP + Permissions-Policy
+    # Единый subscription gate: 403 subscription_expired для бизнес-запросов
+    # компаний с замороженной/истёкшей подпиской (whitelist — в самом модуле).
+    'apps.billing.gate.SubscriptionGateMiddleware',
 ]
 
 ROOT_URLCONF = 'skladpro.urls'
@@ -340,6 +344,22 @@ CELERY_RESULT_SERIALIZER = 'json'
 # Часовой пояс для Beat
 CELERY_TIMEZONE = 'Asia/Bishkek'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# ── Подписки (SaaS billing) ──
+# Длительность периода подписки в днях: 30 дней с момента создания компании.
+SUBSCRIPTION_DAYS = 30
+# За сколько дней до окончания отправляем напоминание владельцу.
+SUBSCRIPTION_GRACE_NOTIFY_DAYS = 3
+# Валюта счетов.
+SUBSCRIPTION_CURRENCY = 'UZS'
+# Платёжный провайдер: 'manual' (подтверждение супер-админом) — сейчас;
+# позже 'payme' / 'click' (см. apps.billing.payments).
+SUBSCRIPTION_PAYMENT_PROVIDER = config('SUBSCRIPTION_PAYMENT_PROVIDER', default='manual')
+# Каталог тарифов. price пока 0 — реальная оплата подключается вместе с провайдером.
+SUBSCRIPTION_PLANS = [
+    {'key': 'free', 'label': 'Free', 'price': 0, 'note': ''},
+    {'key': 'pro', 'label': 'Pro', 'price': 0, 'note': 'Полный доступ к аналитике и отчётам'},
+]
 
 # Логирование: пишем в stdout (12-factor: удобно для Docker/облака, где логи
 # собираются из потока вывода). Уровень настраивается через LOG_LEVEL.

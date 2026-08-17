@@ -222,25 +222,7 @@ class CompaniesComponent {
         }
     }
 
-    renderPagination(response) {
-        const pagination = this.container.querySelector('#companies-pagination');
-        const totalPages = Math.max(1, Math.ceil(this.totalCount / (response.page_size || 20)));
-        if (totalPages <= 1) {
-            pagination.style.display = 'none';
-            return;
-        }
-        pagination.style.display = 'flex';
-        pagination.innerHTML = `
-            <button class="btn btn-sm btn-secondary" ${this.page <= 1 ? 'disabled' : ''} id="companies-prev">← ${window.ui.t('common.previous')}</button>
-            <span style="padding:8px 12px;font-weight:600;">${this.page} / ${totalPages}</span>
-            <button class="btn btn-sm btn-secondary" ${this.page >= totalPages ? 'disabled' : ''} id="companies-next">${window.ui.t('common.next')} →</button>
-        `;
-        pagination.querySelector('#companies-prev')?.addEventListener('click', () => { this.page--; this.loadCompanies(); });
-        pagination.querySelector('#companies-next')?.addEventListener('click', () => { this.page++; this.loadCompanies(); });
-    }
-
-    /** Карточка компании: общая информация, подписка, действия, история. */
-    openDetail(c) {
+    async openDetail(c) {
         const modal = window.ui.modal('companies.title', `
             <div class="card-title">
                 <span>${window.ui.escape(c.name)}</span>
@@ -325,34 +307,12 @@ class CompaniesComponent {
             <div id="sub-history" style="margin-bottom:8px;">
                 <div class="list-state list-state-loading"><span class="spinner"></span></div>
             </div>
+            <div class="section-title" data-i18n="subscription.title"></div>
+            <div id="sub-panel"><div class="list-state list-state-loading"><span class="spinner"></span></div></div>
+            <button class="btn ${c.is_active ? 'btn-danger' : 'btn-success'} btn-block" id="toggle-company"
+                data-i18n="${c.is_active ? 'companies.block' : 'companies.unblock'}"></button>
         `);
-
-        // Обработка запроса на продление: +30 дней. Backend закрывает запрос
-        // (дедупликация сбрасывается) и уведомляет владельца о продлении.
-        const handleRequestBtn = modal.querySelector('#sub-handle-request');
-        if (handleRequestBtn) {
-            handleRequestBtn.addEventListener('click', () => {
-                this.runAction(`/companies/${c.id}/subscription_extend/`, { days: 30 }, modal, c);
-            });
-        }
-        modal.querySelector('#sub-activate').addEventListener('click', () => {
-            this.runAction(`/companies/${c.id}/subscription_activate/`, {}, modal, c);
-        });
-        modal.querySelector('#sub-extend-30').addEventListener('click', () => {
-            this.runAction(`/companies/${c.id}/subscription_extend/`, { days: 30 }, modal, c);
-        });
-        modal.querySelector('#sub-extend-custom').addEventListener('click', () => this.openExtendModal(c, modal));
-        modal.querySelector('#sub-set-end').addEventListener('click', () => this.openSetEndModal(c, modal));
-        modal.querySelector('#sub-change-plan').addEventListener('click', () => this.openPlanModal(c, modal));
-        modal.querySelector('#sub-freeze').addEventListener('click', async () => {
-            const isFrozen = c.subscription_status === 'frozen';
-            if (!isFrozen) {
-                const ok = await window.confirmation.confirm(
-                    window.ui.t('companies.confirm_freeze_text'), window.ui.t('companies.confirm_freeze'));
-                if (!ok) return;
-            }
-            this.runAction(`/companies/${c.id}/subscription_${isFrozen ? 'unfreeze' : 'freeze'}/`, {}, modal, c);
-        });
+        window.i18n.applyTranslations();
         modal.querySelector('#toggle-company').addEventListener('click', async () => {
             try {
                 await window.api.request(`/companies/${c.id}/toggle_active/`, { method: 'POST' });
@@ -365,6 +325,16 @@ class CompaniesComponent {
             }
         });
 
+        try {
+            const detail = await window.api.request(`/billing/subscriptions/${c.id}/`);
+            if (modal.isConnected) this.renderSubscription(modal, detail);
+        } catch (e) {
+            const panel = modal.querySelector('#sub-panel');
+            if (panel) {
+                panel.innerHTML = `<div class="list-state list-state-empty" data-i18n="subscription.none"></div>`;
+                window.i18n.applyTranslations();
+            }
+        }
         this.loadHistory(c.id, modal);
         window.i18n.applyTranslations();
     }
@@ -504,6 +474,82 @@ class CompaniesComponent {
         } catch (error) {
             window.toast.error(window.ui.errorText(error));
         }
+    }
+
+    /** Панель подписки в карточке компании: статус, срок, действия, счета. */
+    renderSubscription(modal, data) {
+        const panel = modal.querySelector('#sub-panel');
+        if (!panel) return;
+        const t = (k, p) => window.ui.t(k, p);
+        const blocked = data.is_blocked;
+        const statusBadge = blocked
+            ? '<span class="badge badge-cancel" data-i18n="subscription.frozen"></span>'
+            : '<span class="badge badge-ready" data-i18n="subscription.active"></span>';
+
+        const pendingInvoices = (data.invoices || []).filter((i) => i.status === 'pending');
+        const actions = [];
+        if (blocked) {
+            actions.push(`<button class="btn btn-success btn-sm btn-block" data-sub-action="activate">${t('subscription.activate', { days: 30 })}</button>`);
+            actions.push(`<button class="btn btn-secondary btn-sm btn-block" data-sub-action="unfreeze">${t('subscription.unfreeze')}</button>`);
+        } else {
+            actions.push(`<button class="btn btn-secondary btn-sm btn-block" data-sub-action="extend">${t('subscription.extend', { days: 30 })}</button>`);
+            actions.push(`<button class="btn btn-danger btn-sm btn-block" data-sub-action="freeze">${t('subscription.freeze')}</button>`);
+        }
+
+        panel.innerHTML = `
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:10px;">
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm text-muted" data-i18n="subscription.plan"></span>
+                    <span class="text-sm font-bold">${window.ui.escape(data.plan)} ${statusBadge}</span>
+                </div>
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm text-muted" data-i18n="subscription.expires"></span>
+                    <span class="text-sm font-bold">${window.ui.escape((data.expires_at || '').slice(0, 10)) || '—'}</span>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">${actions.join('')}</div>
+            ${pendingInvoices.length ? `
+                <div class="section-title" data-i18n="subscription.invoices"></div>
+                <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:10px;">
+                    ${pendingInvoices.map((i) => `
+                        <div class="list-row" style="cursor:pointer;" data-confirm-invoice="${i.id}">
+                            <span class="text-sm">#${i.id} · ${i.amount} ${i.currency} <span class="badge badge-progress" data-i18n="subscription.pending"></span></span>
+                            <span class="text-sm font-bold" style="color:var(--primary);" data-i18n="subscription.confirm_payment"></span>
+                        </div>`).join('')}
+                </div>` : ''}
+        `;
+        window.i18n.applyTranslations();
+
+        panel.querySelectorAll('[data-sub-action]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const action = btn.dataset.subAction;
+                const body = action === 'extend' ? { days: 30 } : {};
+                try {
+                    await window.api.request(`/billing/subscriptions/${data.id}/${action}/`, {
+                        method: 'POST', body: JSON.stringify(body),
+                    });
+                    window.toast.success(window.ui.t('common.success'));
+                    window.ui.closeModal(modal);
+                    await this.load();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+        panel.querySelectorAll('[data-confirm-invoice]').forEach((row) => {
+            row.addEventListener('click', async () => {
+                try {
+                    await window.api.request(`/billing/subscriptions/${data.id}/confirm_payment/`, {
+                        method: 'POST', body: JSON.stringify({ invoice_id: Number(row.dataset.confirmInvoice) }),
+                    });
+                    window.toast.success(window.ui.t('common.success'));
+                    window.ui.closeModal(modal);
+                    await this.load();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
     }
 
     openForm() {

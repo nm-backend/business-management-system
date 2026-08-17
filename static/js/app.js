@@ -54,6 +54,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         showGraceBanner(user);
     }
 
+    // Замороженная подписка: вместо «хрома» приложения — экран «Подписка истекла».
+    // Вход, профиль и статус подписки доступны (whitelist gate), бизнес-функции — нет.
+    if (user.subscription && user.subscription.is_frozen) {
+        showFrozenScreen(user);
+        return;
+    }
+
     // Показываем «хром» приложения (top-bar + sidebar/bottom-nav через CSS).
     document.body.classList.add('authenticated');
     setupSidebar(user);
@@ -467,6 +474,56 @@ function escapeText(value) {
     div.textContent = value ?? '';
     return div.innerHTML;
 }
+
+/**
+ * Экран «Подписка истекла»: owner может продлить, остальные — обращаются
+ * к владельцу. Вызывается при загрузке (is_frozen из /me/) и при 403
+ * subscription_expired от любого бизнес-запроса (см. api.js).
+ */
+async function showFrozenScreen(user) {
+    if (document.getElementById('frozen-screen')) return; // уже показан
+    try { await window.i18n.init(); } catch (e) { /* i18n уже инициализирован */ }
+    if (!user) {
+        try {
+            user = await window.api.getMe();
+            window.currentUser = user;
+        } catch (e) {
+            return;
+        }
+    }
+
+    // Прячем «хром» приложения: остаётся только карточка.
+    ['app-top-bar', 'app-sidebar', 'app-bottom-nav', 'notifications-btn'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    document.body.classList.remove('authenticated');
+
+    const app = document.getElementById('app-content');
+    app.innerHTML = `
+        <div class="card" id="frozen-screen" style="max-width:420px;margin:6vh auto;text-align:center;padding:28px 24px;">
+            <div style="font-size:44px;line-height:1;">🧊</div>
+            <h2 style="margin:12px 0 6px;" data-i18n="subscription.frozen_title"></h2>
+            <p class="text-sm text-muted" style="margin-bottom:18px;" data-i18n="subscription.frozen_text"></p>
+            ${user.is_owner ? `
+                <button class="btn btn-primary btn-block" id="frozen-renew" data-i18n="subscription.renew"></button>
+                <p class="text-xs text-muted" style="margin-top:10px;" data-i18n="subscription.frozen_hint"></p>` : `
+                <p class="text-sm" data-i18n="subscription.contact_owner"></p>`}
+            <button class="btn btn-secondary btn-block" id="frozen-logout" style="margin-top:14px;" data-i18n="auth.logout"></button>
+        </div>`;
+    window.i18n.applyTranslations();
+
+    const renewBtn = document.getElementById('frozen-renew');
+    if (renewBtn) renewBtn.addEventListener('click', () => window.subscriptionUI.openModal());
+    const logoutBtn = document.getElementById('frozen-logout');
+    if (logoutBtn) logoutBtn.addEventListener('click', async () => {
+        if (!window.confirmation || await window.confirmation.confirm(
+            window.ui.t('auth.logout_confirm'), window.ui.t('auth.logout'))) {
+            window.api.logout();
+        }
+    });
+}
+window.showFrozenScreen = showFrozenScreen;
 
 /* ────────────────────────────────────────────────────────────────
    Клик в зоне нижней навигации по «выглядывающей» строке контента.

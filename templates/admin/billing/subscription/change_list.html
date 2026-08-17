@@ -1,0 +1,5 @@
+{% extends "admin/change_list.html" %}
+{% block object-tools %}
+  <a href="{% url 'admin:billing_subscription_dashboard' %}" class="button" style="margin-right:8px;">📊 Дашборд подписок</a>
+  {{ block.super }}
+{% endblock %}
