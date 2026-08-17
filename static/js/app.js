@@ -1,6 +1,11 @@
 /**
  * App bootstrap: авторизация, роль, навигация (сайдбар для десктопа,
  * нижнее меню для мобильных), маршруты SPA, WebSocket уведомления.
+ *
+ * SaaS GATE: пользователь компании с неактивной подпиской (истёкшей,
+ * замороженной или отменённой) видит только ограниченный экран
+ * «Подписка истекла» — бизнес-маршруты и real-time соединение не запускаются.
+ * Супер-админ (company=None) и сотрудники активных компаний не затрагиваются.
  */
 
 // Глобальные ловушки: непойманные ошибки не должны молча умирать в консоли —
@@ -31,6 +36,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         return; // APIClient сам уводит на логин при истёкшей сессии
     }
     window.currentUser = user;
+    // Флаг каскадной перезагрузки из api.js (403 подписки) сбрасываем всегда:
+    // компания могла быть разморожена, пока шла перезагрузка.
+    sessionStorage.removeItem('sub_blocked_reload');
+
+    // SaaS gate: компания с неактивной подпиской (истёкшей/замороженной/
+    // отменённой) видит только ограниченный экран «Подписка истекла».
+    // Льготный период (grace) НЕ блокирует: бизнес продолжает работать,
+    // сверху показывается предупреждающий баннер с датой блокировки.
+    // Супер-админ (company=None) и сотрудники активных компаний проходят дальше.
+    const blockedStatuses = ['expired', 'frozen', 'cancelled'];
+    if (!user.is_superadmin && user.subscription_status && blockedStatuses.includes(user.subscription_status)) {
+        showSubscriptionBlockedScreen(user);
+        return;
+    }
+    if (!user.is_superadmin && user.subscription_status === 'grace') {
+        showGraceBanner(user);
+    }
 
     // Показываем «хром» приложения (top-bar + sidebar/bottom-nav через CSS).
     document.body.classList.add('authenticated');
@@ -38,7 +60,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Платформенный супер-администратор управляет только компаниями.
     if (user.is_superadmin) {
-        document.getElementById('notifications-btn').style.display = 'none';
+        document.getElementById('notifications-btn').addEventListener('click', () => {
+            window.location.hash = '#/messages?tab=notifications';
+        });
         // Скрываем пункты нижней навигации, недоступные для superadmin
         // (сайдбар фильтруется в setupSidebar через data-role).
         ['nav-orders', 'nav-warehouse', 'nav-clients', 'nav-production'].forEach(function(id) {
@@ -47,8 +71,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         window.router.addRoute('/', window.CompaniesComponent);
         window.router.addRoute('/companies', window.CompaniesComponent);
+        window.router.addRoute('/messages', window.MessagesComponent);
         window.router.addRoute('/settings', window.SettingsComponent);
         window.router.handleRoute();
+
+        // Суперадмину тоже доступны push и колокольчик: подписки компаний
+        // — его прямая зона ответственности.
+        if (localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('theme-dark');
+        }
+        registerServiceWorker();
+        refreshNotificationBadge();
+        window.notificationBadgeTimer = setInterval(refreshNotificationBadge, 60000);
         return;
     }
 
@@ -73,6 +107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.router.addRoute('/production', window.ProductionComponent);
     window.router.addRoute('/finance', window.FinanceComponent);
     window.router.addRoute('/messages', window.MessagesComponent);
+    window.router.addRoute('/subscription', window.SubscriptionComponent);
     window.router.addRoute('/settings', window.SettingsComponent);
     window.router.addRoute('/audit', window.AuditComponent);
     window.router.addRoute('/backup', window.SettingsComponent);
@@ -99,6 +134,116 @@ document.addEventListener('DOMContentLoaded', async () => {
     // долбил неавторизованные запросы после выхода.
     window.notificationBadgeTimer = setInterval(refreshNotificationBadge, 60000);
 });
+
+/**
+ * Ограниченный экран для компании с неактивной подпиской.
+ *
+ * Пользователь замороженной/истёкшей компании НЕ попадает в тупик: он может
+ * войти, увидеть дату окончания, текущий статус, что нужно сделать для
+ * продления, и выйти из системы. Бизнес-навигация и сокеты не запускаются.
+ */
+function showSubscriptionBlockedScreen(user) {
+    // Хром бизнес-приложения скрываем: остаётся только ограниченный экран.
+    const sidebar = document.getElementById('app-sidebar');
+    const bottomNav = document.getElementById('app-bottom-nav');
+    const notifications = document.getElementById('notifications-btn');
+    if (sidebar) sidebar.style.display = 'none';
+    if (bottomNav) bottomNav.style.display = 'none';
+    if (notifications) notifications.style.display = 'none';
+
+    const frozen = user.subscription_status === 'frozen';
+    const titleKey = frozen ? 'subscription.frozen_title' : 'subscription.expired_title';
+    const textKey = frozen ? 'subscription.frozen_text' : 'subscription.expired_text';
+
+    document.getElementById('page-title').setAttribute('data-i18n', titleKey);
+
+    const appElement = document.getElementById('app-content');
+    appElement.innerHTML = `
+        <div class="card subscription-blocked" style="max-width:520px;margin:24px auto;padding:24px;">
+            <div style="text-align:center;font-size:44px;margin-bottom:8px;">${frozen ? '❄️' : '⏳'}</div>
+            <h2 style="text-align:center;" data-i18n="${titleKey}"></h2>
+            <p class="text-muted" data-i18n="${textKey}"></p>
+
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);margin:16px 0;">
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm text-muted" data-i18n="subscription.current_status"></span>
+                    <span class="badge ${frozen ? 'badge-progress' : 'badge-cancel'}">${window.ui.escape(user.subscription_status_display || user.subscription_status || '')}</span>
+                </div>
+                <div class="list-row" style="cursor:default;">
+                    <span class="text-sm text-muted" data-i18n="subscription.end_date"></span>
+                    <span class="text-sm font-bold">${window.ui.datetime(user.subscription_end)}</span>
+                </div>
+            </div>
+
+            <div class="section-title" data-i18n="subscription.what_to_do"></div>
+            <p class="text-muted" data-i18n="subscription.renew_instructions"></p>
+
+            <button class="btn btn-primary btn-block" id="sub-blocked-request" style="margin-top:16px;" data-i18n="subscription.request_renewal"></button>
+            <button class="btn btn-secondary btn-block" id="sub-blocked-logout" style="margin-top:8px;" data-i18n="auth.logout"></button>
+        </div>
+    `;
+
+    // Кнопка «Запросить продление»: замороженная компания не должна
+    // заводить владельца в тупик — запрос уходит суперадмину в колокольчик
+    // (эндпоинт обходит SaaS-гейт: это платформенный контур, не бизнес-данные).
+    const requestBtn = appElement.querySelector('#sub-blocked-request');
+    if (requestBtn) {
+        requestBtn.addEventListener('click', async () => {
+            try {
+                const resp = await window.api.request('/companies/my-subscription/request-renewal/', {
+                    method: 'POST', body: JSON.stringify({}),
+                });
+                window.toast.success(window.ui.t(resp.created ? 'subscription.request_sent' : 'subscription.request_already'));
+                if (resp.created) requestBtn.setAttribute('disabled', '');
+            } catch (e) {
+                window.toast.error(window.ui.errorText ? window.ui.errorText(e) : window.ui.t('common.error'));
+            }
+        });
+    }
+    appElement.querySelector('#sub-blocked-logout').addEventListener('click', () => {
+        window.api.logout();
+    });
+
+    window.i18n.applyTranslations();
+    document.title = `${window.ui.t(titleKey)} · SkladPro`;
+}
+
+/**
+ * Предупреждающий баннер для компании в льготном периоде (grace).
+ *
+ * Бизнес работает, но срок подписки уже истёк: баннер висит над контентом
+ * со ссылкой на страницу «Подписка», пока льготный период не закончился.
+ */
+function showGraceBanner(user) {
+    if (document.getElementById('grace-banner')) return;
+    const main = document.querySelector('main.main-content');
+    const app = document.getElementById('app-content');
+    if (!main || !app) return;
+    const banner = document.createElement('div');
+    banner.id = 'grace-banner';
+    banner.className = 'alert-box';
+    banner.style.cssText = 'margin:0 0 12px;padding:12px 14px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;border-color:var(--warning,#f59e0b);';
+    const deadline = user.subscription_grace_end
+        ? window.ui.datetime(user.subscription_grace_end)
+        : '';
+    banner.innerHTML = `
+        <span style="display:inline-flex;align-items:center;gap:8px;">
+            ⏳ <strong data-i18n="subscription.grace_title"></strong>
+            <span class="text-sm text-muted">${deadline ? ' · ' + window.ui.escape(window.ui.t('subscription.grace_deadline')) + ': ' + deadline : ''}</span>
+        </span>
+        <button class="btn btn-primary btn-sm" id="grace-banner-go" style="width:auto;">
+            <span data-i18n="subscription.request_renewal"></span>
+        </button>
+    `;
+    // Баннер живёт НАД #app-content: роутер переписывает innerHTML контента
+    // при каждой навигации, а предупреждение о льготном периоде должно
+    // оставаться видимым на любой странице, пока период не закончился.
+    main.insertBefore(banner, app);
+    banner.querySelector('#grace-banner-go').addEventListener('click', () => {
+        window.location.hash = '#/subscription';
+    });
+    window.i18n.applyTranslations();
+}
 
 /**
  * Глобальный обработчик real-time событий (вызывается на любой странице).
@@ -289,6 +434,8 @@ function setupSidebar(user) {
             show = false;
         } else if (role === 'owner') {
             show = user.is_owner;
+        } else if (role === 'owner-admin') {
+            show = user.is_owner || user.is_admin;
         } else if (role === 'staff') {
             show = user.is_owner || user.is_admin || user.is_manager;
         } else if (role === 'staff-worker') {

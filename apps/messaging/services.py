@@ -15,15 +15,22 @@ from .models import ChatMessage, Conversation, ConversationParticipant, Notifica
 
 # ─────────────────────────── Уведомления ───────────────────────────
 
-def notify(users, notification_type, title, message, order=None, task=None):
-    """Создаёт уведомление каждому пользователю из users (одному или списку)."""
+def notify(users, notification_type, title, message, order=None, task=None, company=None):
+    """
+    Создаёт уведомление каждому пользователю из users (одному или списку).
+
+    company: явная привязка к компании-источнику. По умолчанию — компания
+    пользователя; нужна платформенным уведомлениям супер-админа (у него
+    своей компании нет, а уведомление должно ссылаться на компанию, о
+    которой речь).
+    """
     if not users:
         return []
     if not hasattr(users, '__iter__'):
         users = [users]
     notifications = [
         Notification(
-            company_id=user.company_id,
+            company_id=(company.id if company is not None else user.company_id),
             user=user,
             type=notification_type,
             title=title,

@@ -5,6 +5,14 @@ Custom permissions for role-based access control.
 реализующие ролевую систему доступа (RBAC) и защиту финансовых данных.
 
 ВАЖНО: Финансовые данные доступны только владельцу (owner).
+
+SaaS GATE: бизнес-доступ требует активной подписки компании. Проверка живёт
+в ДВУХ местах:
+1. IsCompanyMember — базовый permission всех бизнес-эндпоинтов (owner/admin/
+   worker/manager); замороженная/истёкшая компания получает 403 с понятным
+   сообщением, даже если view переопределила permission_classes.
+2. SubscriptionAccessPermission — подключён глобально (DEFAULT_PERMISSION_
+   CLASSES) как страховка для view, которые могли бы его не использовать.
 """
 from rest_framework import permissions
 
@@ -22,22 +30,63 @@ class IsSuperAdmin(permissions.BasePermission):
 
 class IsCompanyMember(permissions.BasePermission):
     """
-    Permission - пользователь состоит в компании (арендаторе).
+    Permission - пользователь состоит в компании (арендаторе) с активной подпиской.
 
     База для всех бизнес-эндпоинтов: доступ только аутентифицированным
-    пользователям owner/admin/worker, у которых задана company. Супер-админ
-    (company=None) к данным компаний не допускается.
+    пользователям owner/admin/worker/manager, у которых задана company.
+    Супер-админ (company=None) к данным компаний не допускается.
+
+    Дополнительно проверяется SaaS-подписка: для замороженной (FROZEN),
+    истёкшей (EXPIRED) или отменённой (CANCELLED) компании доступ к бизнес-
+    данным закрыт на сервере. Аккаунты при этом НЕ деактивируются — владелец
+    может войти и увидеть экран «Подписка истекла».
     """
-    message = 'Вы должны принадлежать компании, чтобы получить доступ к этому ресурсу.'
+    message = 'Подписка компании истекла или приостановлена. Обратитесь к администратору платформы.'
 
     def has_permission(self, request, view):
         user = request.user
-        return bool(
+        if not (
             user
             and user.is_authenticated
             and not user.is_superadmin
             and user.company_id is not None
-        )
+        ):
+            return False
+        return user.company.is_subscription_active
+
+
+class SubscriptionAccessPermission(permissions.BasePermission):
+    """
+    Permission - активная подписка компании (SaaS gate, страховочный слой).
+
+    Подключён глобально (DEFAULT_PERMISSION_CLASSES): срабатывает на эндпоинты,
+    которые по какой-то причине не используют IsCompanyMember. Супер-админ и
+    сервисные эндпоинты (профиль, выход, push) НЕ блокируются: владелец
+    замороженной компании должен иметь возможность войти и увидеть экран
+    «Подписка истекла».
+    """
+    message = 'Подписка компании истекла или приостановлена. Обратитесь к администратору платформы.'
+
+    _ALLOWED_PREFIXES = (
+        '/api/v1/accounts/me',
+        '/api/v1/accounts/logout',
+        '/api/v1/accounts/push/',
+        # Собственная подписка: владелец замороженной компании должен иметь
+        # возможность увидеть состояние и запросить продление (это не
+        # бизнес-данные, а платформенный контур).
+        '/api/v1/companies/my-subscription',
+    )
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return True  # анонимов обрабатывают другие permissions
+        if user.is_superadmin or user.company_id is None:
+            return True
+        if request.path.startswith(self._ALLOWED_PREFIXES):
+            return True
+        # user.company кэшируется select_related('company') в JWT-аутентификации.
+        return user.company.is_subscription_active
 
 
 class IsOwner(permissions.BasePermission):

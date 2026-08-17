@@ -94,6 +94,12 @@ class UserSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
         queryset=Skill.objects.all(),  # сужается по компании в CompanyScopedSkillsMixin
     )
     avatar = serializers.ImageField(required=False, allow_null=True, validators=[validate_image_upload])
+    # SaaS: статус подписки компании — SPA по нему решает, показывать ли
+    # рабочее приложение или экран «Подписка истекла». У супер-админа None.
+    subscription_status = serializers.SerializerMethodField()
+    subscription_status_display = serializers.SerializerMethodField()
+    subscription_end = serializers.SerializerMethodField()
+    subscription_grace_end = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -106,6 +112,8 @@ class UserSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
             'skills', 'skill_ids',
             'is_active', 'can_write_to_owner', 'can_create_workers',
             'can_see_other_workers', 'created_at', 'updated_at',
+            'subscription_status', 'subscription_status_display', 'subscription_end',
+            'subscription_grace_end',
         ]
         read_only_fields = [
             'id', 'role', 'company', 'created_at', 'updated_at', 'display_role',
@@ -115,6 +123,39 @@ class UserSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer):
             # обычным PATCH /users/{id}/.
             'is_active',
         ]
+
+    def _company(self, obj):
+        # user.company подгружается select_related('company') в JWT-аутентификации.
+        return getattr(obj, 'company', None)
+
+    def get_subscription_status(self, obj):
+        company = self._company(obj)
+        if company is None:
+            return None
+        return company.effective_subscription_status
+
+    def get_subscription_status_display(self, obj):
+        company = self._company(obj)
+        if company is None:
+            return None
+        from apps.companies.models import Company as CompanyModel
+        return dict(CompanyModel.SubscriptionStatus.choices).get(
+            company.effective_subscription_status, company.subscription_status,
+        )
+
+    def get_subscription_end(self, obj):
+        company = self._company(obj)
+        if company is None or company.subscription_end is None:
+            return None
+        return company.subscription_end.isoformat()
+
+    def get_subscription_grace_end(self, obj):
+        """Дата окончания льготного периода (для баннера grace в SPA)."""
+        company = self._company(obj)
+        if company is None:
+            return None
+        grace_end = company.grace_end
+        return grace_end.isoformat() if grace_end else None
 
 
 class UserSelfUpdateSerializer(serializers.ModelSerializer):

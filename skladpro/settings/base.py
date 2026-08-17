@@ -60,7 +60,7 @@ INSTALLED_APPS = [
     'apps.reports',  # Аналитика и экспорт отчетов
     'apps.audit',  # Система аудита действий
     'apps.backup',  # Резервное копирование (Celery Beat)
-    
+
     'drf_spectacular',  # Автоматическая генерация OpenAPI схемы
     'django_celery_beat',  # Celery Beat scheduler
     # Бэкенд результатов задач в БД. Без этого приложения CELERY_RESULT_BACKEND
@@ -178,6 +178,9 @@ REST_FRAMEWORK = {
     # Разрешения по умолчанию
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
+        # SaaS gate: бизнес-доступ для компаний с истёкшей/замороженной
+        # подпиской блокируется на сервере независимо от роли пользователя.
+        'apps.core.permissions.SubscriptionAccessPermission',
     ),
 
     # Пагинация

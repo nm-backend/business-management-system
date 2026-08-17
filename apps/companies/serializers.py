@@ -1,8 +1,13 @@
 """
 Сериализаторы компаний (для платформенного супер-администратора).
 
-Создание компании атомарно создаёт её владельца (owner). Владелец далее сам
-управляет своей компанией: складом, заказами, работниками и т.д.
+Создание компании атомарно создаёт её владельца (owner) и выдаёт триал-подписку
+на DEFAULT_SUBSCRIPTION_DAYS дней. Владелец далее сам управляет своей компанией:
+складом, заказами, работниками и т.д.
+
+Подписку видит и меняет ТОЛЬКО супер-администратор: обычные поля сериализатора
+только читаются, все изменения идут через отдельные action'ы
+(activate/extend/set_end/freeze/unfreeze) с записью истории и аудита.
 """
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -12,25 +17,63 @@ from rest_framework import serializers
 
 from apps.accounts.models import User
 from .models import Company
+from .subscriptions import activate_for_new_company
 
 
 class CompanySerializer(serializers.ModelSerializer):
-    """Компания с краткой сводкой по владельцу и числу пользователей."""
+    """
+    Компания с краткой сводкой: владелец, счётчики, состояние подписки.
+
+    Счётчики (users/clients/orders) и последняя активность приходят из
+    annotate() в CompanyViewSet — без отдельных COUNT на каждую компанию.
+    Финансовые данные компаний супер-администратор НЕ получает: здесь только
+    операционные счётчики и статус подписки (управление платформой, а не
+    просмотр чужой бухгалтерии).
+    """
     owner_username = serializers.SerializerMethodField()
     owner_full_name = serializers.SerializerMethodField()
     # Значение приходит из annotate(users_count=Count('users')) в CompanyViewSet.
     users_count = serializers.IntegerField(read_only=True)
+    clients_count = serializers.IntegerField(read_only=True)
+    orders_count = serializers.IntegerField(read_only=True)
+    last_activity = serializers.DateTimeField(read_only=True, allow_null=True)
+    # Флаг «есть непрочитанный запрос на продление» (аннотация в CompanyViewSet).
+    has_renewal_request = serializers.BooleanField(read_only=True, default=False)
+    subscription_status = serializers.SerializerMethodField()
+    subscription_status_display = serializers.SerializerMethodField()
+    # Явно read-only: план меняется ТОЛЬКО через subscription_change_plan
+    # (история + аудит + уведомления), прямой PATCH plan_id был бы
+    # mass-assignment в обход бизнес-логики.
+    plan_id = serializers.IntegerField(read_only=True)
+    plan_name = serializers.SerializerMethodField()
+    days_left = serializers.SerializerMethodField()
+    grace_end = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
         fields = [
-            'id', 'name', 'is_active', 'owner_username', 'owner_full_name',
-            'users_count', 'created_at', 'updated_at',
+            'id', 'name', 'logo', 'logo_url', 'is_active',
+            'owner_username', 'owner_full_name',
+            'users_count', 'clients_count', 'orders_count',
+            'plan_id', 'plan_name', 'is_trial', 'grace_period_days',
+            'subscription_status', 'subscription_status_display',
+            'subscription_start', 'subscription_end',
+            'days_left', 'grace_end',
+            'last_activity', 'has_renewal_request',
+            'created_at', 'updated_at',
         ]
         # is_active меняется ТОЛЬКО через действие toggle_active (он деактивирует
         # сотрудников и пишет audit). Прямой PATCH is_active обходил каскад:
         # компания «блокировалась», а её refresh-токены продолжали работать.
-        read_only_fields = ['is_active', 'created_at', 'updated_at']
+        # Поля подписки (включая план и флаг триала) — ТОЛЬКО через subscription
+        # action'ы (история + аудит).
+        read_only_fields = [
+            'is_active', 'logo', 'logo_url', 'created_at', 'updated_at',
+            'plan', 'is_trial', 'grace_period_days',
+            'subscription_status', 'subscription_start', 'subscription_end',
+            'last_activity',
+        ]
 
     def _owner(self, obj):
         # CompanyViewSet префетчит владельцев в obj._owner_list (без доп. запросов).
@@ -49,6 +92,41 @@ class CompanySerializer(serializers.ModelSerializer):
     def get_owner_full_name(self, obj):
         owner = self._owner(obj)
         return owner.full_name if owner else None
+
+    @extend_schema_field(serializers.CharField())
+    def get_subscription_status(self, obj):
+        # Фактический статус: формальный 'active' может уже быть просроченным
+        # (Celery ещё не отработал) — отдаём effective.
+        return obj.effective_subscription_status
+
+    @extend_schema_field(serializers.CharField())
+    def get_subscription_status_display(self, obj):
+        return dict(Company.SubscriptionStatus.choices).get(
+            obj.effective_subscription_status, obj.subscription_status,
+        )
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_plan_name(self, obj):
+        plan = getattr(obj, 'plan', None)
+        return plan.name if plan else None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_days_left(self, obj):
+        return obj.subscription_days_left
+
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
+    def get_grace_end(self, obj):
+        grace_end = obj.grace_end
+        return grace_end.isoformat() if grace_end else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_logo_url(self, obj):
+        if not obj.logo:
+            return None
+        try:
+            return obj.logo.url
+        except Exception:
+            return None
 
 
 class CompanyCreateSerializer(serializers.ModelSerializer):
@@ -91,4 +169,6 @@ class CompanyCreateSerializer(serializers.ModelSerializer):
         )
         owner.set_password(owner_password)
         owner.save()
+        # SaaS: новая компания сразу получает триал-подписку (30 дней).
+        activate_for_new_company(company)
         return company

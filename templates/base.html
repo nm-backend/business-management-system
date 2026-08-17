@@ -70,6 +70,14 @@
           <a href="#/messages" class="sidebar-link" data-nav="messages">
             <span class="nav-icon">✉️</span><span data-i18n="messages_section.title">Хабарлар</span>
           </a>
+          <!-- Собственная подписка: владелец и администратор (setupSidebar). -->
+          <a href="#/subscription" class="sidebar-link" data-nav="subscription" data-role="owner-admin">
+            <span class="nav-icon">📄</span><span data-i18n="subscription.page_title">Обуна</span>
+          </a>
+          <!-- Управление бизнесами: виден только супер-админу (setupSidebar). -->
+          <a href="#/companies" class="sidebar-link" data-nav="companies" data-role="superadmin">
+            <span class="nav-icon">🏢</span><span data-i18n="companies.title">Компании</span>
+          </a>
           <a href="#/settings" class="sidebar-link" data-nav="settings">
             <span class="nav-icon">⚙️</span><span data-i18n="settings.title">Созламалар</span>
           </a>
@@ -171,6 +179,7 @@
     <script src="{% static 'js/components/settings.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/audit.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/companies.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/subscription.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/app.js' %}?v={{ ASSET_VERSION }}"></script>
     {% endblock %}
   </body>

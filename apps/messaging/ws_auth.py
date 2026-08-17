@@ -15,11 +15,16 @@ from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
 
 
-@database_sync_to_async
-def _get_user_by_ticket(ticket):
-    """Валидирует одноразовый тикет и возвращает пользователя или AnonymousUser."""
+def _resolve_user_by_ticket(ticket):
+    """
+    Валидирует одноразовый тикет (sync-ядро) и возвращает пользователя
+    или AnonymousUser.
+
+    Вынесено в обычную функцию, чтобы логика тестировалась напрямую (без
+    async-прослойки); @database_sync_to_async ниже — тонкий адаптер для
+    middleware.
+    """
     from django.db import transaction
-    from django.db.models import F
 
     from apps.accounts.models import User
 
@@ -29,11 +34,18 @@ def _get_user_by_ticket(ticket):
         return AnonymousUser()
     try:
         with transaction.atomic():
-            ws_ticket = WsTicket.objects.select_for_update().select_related('user').get(
+            ws_ticket = WsTicket.objects.select_for_update().select_related(
+                'user', 'user__company',
+            ).get(
                 ticket=ticket, used=False, expires_at__gt=timezone.now(),
             )
             user = ws_ticket.user
             if not user.is_active or user.blocked_by_owner:
+                return AnonymousUser()
+            # SaaS gate: замороженной/истёкшей компании чат тоже недоступен —
+            # SPA всё равно не откроет соединение, но и прямое подключение
+            # в обход UI не должно работать.
+            if user.company_id is not None and not user.company.is_subscription_active:
                 return AnonymousUser()
             # Одноразовость: помечаем использованным ДО открытия соединения.
             ws_ticket.used = True
@@ -41,6 +53,12 @@ def _get_user_by_ticket(ticket):
             return user
     except WsTicket.DoesNotExist:
         return AnonymousUser()
+
+
+@database_sync_to_async
+def _get_user_by_ticket(ticket):
+    """Async-обёртка для middleware (см. _resolve_user_by_ticket)."""
+    return _resolve_user_by_ticket(ticket)
 
 
 class TicketAuthMiddleware(BaseMiddleware):

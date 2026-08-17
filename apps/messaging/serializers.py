@@ -181,6 +181,9 @@ class NotificationSerializer(serializers.ModelSerializer):
     Используется для всех ролей.
     """
     type_display = serializers.CharField(source='get_type_display', read_only=True)
+    # Компания-источник: для суперадмина это компания, чья подписка истекает,
+    # по ней фронтенд строит переход к разделу «Управление бизнесами».
+    company = serializers.IntegerField(source='company_id', read_only=True)
     # Клиент связанного заказа — для перехода из уведомления о неоплате
     # сразу на неоплаченные заказы этого клиента (#/orders?client=&payment_status=unpaid).
     related_client = serializers.IntegerField(
@@ -190,7 +193,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'id', 'user', 'type', 'type_display', 'title', 'message',
+            'id', 'user', 'company', 'type', 'type_display', 'title', 'message',
             'is_read', 'read_at', 'is_unread',
             'related_order', 'related_task', 'related_client',
             'created_at', 'updated_at'

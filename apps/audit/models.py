@@ -55,6 +55,7 @@ class AuditLog(TimestampedModel):
         RESET_PASSWORD: сброс пароля администратором
         CHANGE_PASSWORD: смена пароля пользователем
         CHANGE_LANGUAGE: смена языка интерфейса
+        SUBSCRIPTION_*: управление подпиской компании (SaaS)
         """
         SETUP_OWNER = 'setup_owner', 'Создание супер-админа'
         LOGIN = 'login', 'Вход'
@@ -79,6 +80,15 @@ class AuditLog(TimestampedModel):
             'two_factor_recovery_regenerated', 'Резервные коды перевыпущены',
         )
         TOKEN_THEFT_DETECTED = 'token_theft_detected', 'Обнаружена кража токена'
+        SUBSCRIPTION_ACTIVATED = 'subscription_activated', 'Подписка активирована'
+        SUBSCRIPTION_EXTENDED = 'subscription_extended', 'Подписка продлена'
+        SUBSCRIPTION_END_SET = 'subscription_end_set', 'Срок подписки изменён'
+        SUBSCRIPTION_GRACE_STARTED = 'subscription_grace_started', 'Льготный период начался'
+        SUBSCRIPTION_FROZEN = 'subscription_frozen', 'Компания заморожена'
+        SUBSCRIPTION_UNFROZEN = 'subscription_unfrozen', 'Компания разморожена'
+        SUBSCRIPTION_EXPIRED = 'subscription_expired', 'Подписка истекла'
+        SUBSCRIPTION_PLAN_CHANGED = 'subscription_plan_changed', 'Тариф изменён'
+        SUBSCRIPTION_RENEWAL_REQUESTED = 'subscription_renewal_requested', 'Запрошено продление подписки'
 
     company = models.ForeignKey(
         'companies.Company',

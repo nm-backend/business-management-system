@@ -186,6 +186,7 @@ def write_audit_log(
     changes=None,
     metadata=None,
     request=None,
+    company=None,
 ):
     """
     Создает запись в audit log.
@@ -204,6 +205,8 @@ def write_audit_log(
         changes: dict - изменения полей (опционально)
         metadata: dict - дополнительная информация (опционально)
         request: HttpRequest - объект запроса для IP и User Agent (опционально)
+        company: Company - принудительная привязка к компании для системных
+                 действий (Celery), где actor=None (опционально)
 
     Возвращает:
         AuditLog - созданная запись аудита
@@ -223,8 +226,11 @@ def write_audit_log(
         actor and getattr(actor, 'is_authenticated', False)
     )
 
+    if company is None:
+        company = getattr(actor, 'company', None) if actor_is_authenticated else None
+
     return AuditLog.objects.create(
-        company=getattr(actor, 'company', None) if actor_is_authenticated else None,
+        company=company,
         actor=actor if actor_is_authenticated else None,
         actor_username=getattr(actor, 'username', '') if actor_is_authenticated else '',
         actor_role=getattr(actor, 'role', '') if actor_is_authenticated else '',

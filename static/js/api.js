@@ -8,6 +8,11 @@
  * его хеш в refresh token. При token refresh сервер проверяет fingerprint —
  * если не совпадает, значит токен украден, и все сессии пользователя
  * инвалидируются.
+ *
+ * SaaS GATE: если компания была заморожена/подписка истекла во время работы,
+ * бизнес-эндпоинты отвечают 403 с сообщением о подписке. Здесь мы перехватываем
+ * такой ответ и перезагружаем страницу — bootstrap (app.js) покажет
+ * ограниченный экран «Подписка истекла» вместо случайных ошибок по компонентам.
  */
 class APIClient {
     constructor() {
@@ -133,6 +138,21 @@ class APIClient {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                // SaaS gate: 403 с сообщением о подписке означает, что компанию
+                // заморозили или подписка истекла прямо во время работы.
+                // Перезагрузка запустит bootstrap и покажет ограниченный экран.
+                // Флаг в sessionStorage защищает от каскада параллельных 403
+                // (несколько запросов одновременно не перезагружают по кругу).
+                if (
+                    response.status === 403 &&
+                    typeof errorData.detail === 'string' &&
+                    /подписк|истекла|приостановлен|обуна|абонент/i.test(errorData.detail) &&
+                    !sessionStorage.getItem('sub_blocked_reload')
+                ) {
+                    sessionStorage.setItem('sub_blocked_reload', '1');
+                    window.location.reload();
+                    throw { status: 403, data: errorData };
+                }
                 throw { status: response.status, data: errorData };
             }
 
@@ -233,4 +253,4 @@ class APIClient {
 }
 
 const api = new APIClient();
-window.api = api;   
+window.api = api;

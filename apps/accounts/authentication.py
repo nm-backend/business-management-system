@@ -9,6 +9,10 @@ API-запросах (сессии нет), поэтому «последнюю 
 Запись троттлится (не чаще раза в ACTIVITY_THROTTLE), а обновление идёт через
 queryset.update(), чтобы не трогать auto_now-поле updated_at и не плодить
 лишние записи в БД на каждый запрос.
+
+Также подгружается компания пользователя (select_related): её статус подписки
+проверяется на каждом запросе (SubscriptionAccessPermission), и без префетча
+это был бы отдельный запрос к БД на каждый API-вызов.
 """
 from datetime import timedelta
 
@@ -21,6 +25,37 @@ ACTIVITY_THROTTLE = timedelta(minutes=5)
 
 class ActivityJWTAuthentication(JWTAuthentication):
     """JWTAuthentication, дополнительно отмечающая last_activity пользователя."""
+
+    def get_user(self, validated_token):
+        """
+        Загружает пользователя вместе с компанией (select_related).
+
+        user.company читается на каждом запросе — статус подписки
+        (SubscriptionAccessPermission), company_name в сериализаторах, ключ
+        изоляции. Без select_related это был бы отдельный запрос к БД на
+        каждый API-вызов.
+        """
+        from rest_framework_simplejwt.exceptions import (
+            AuthenticationFailed, InvalidToken, TokenError,
+        )
+        from rest_framework_simplejwt.settings import api_settings
+
+        try:
+            user_id = validated_token[api_settings.USER_ID_CLAIM]
+        except KeyError:
+            raise InvalidToken('Token contained no recognizable user identification')
+
+        try:
+            user = self.user_model.objects.select_related('company').get(
+                **{api_settings.USER_ID_FIELD: user_id},
+            )
+        except self.user_model.DoesNotExist:
+            raise AuthenticationFailed('User not found', code='user_not_found')
+
+        if not user.is_active:
+            raise AuthenticationFailed('User is inactive', code='user_inactive')
+
+        return user
 
     def authenticate(self, request):
         result = super().authenticate(request)
@@ -38,6 +73,10 @@ class ActivityJWTAuthentication(JWTAuthentication):
         # update() минует auto_now (updated_at) и хеширование — дёшево.
         type(user).objects.filter(pk=user.pk).update(last_activity=now)
         user.last_activity = now  # чтобы значение было актуальным в этом запросе
+        # Последняя активность компании — для dashboard супер-администратора.
+        if user.company_id is not None:
+            from apps.companies.models import Company
+            Company.objects.filter(pk=user.company_id).update(last_activity=now)
 
 
 class ActivityJWTScheme(OpenApiAuthenticationExtension):

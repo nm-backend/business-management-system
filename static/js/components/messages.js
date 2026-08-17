@@ -124,7 +124,11 @@ class MessagesComponent {
     async render(container) {
         document.getElementById('page-title').setAttribute('data-i18n', 'chat.title');
         this.container = container;
-        this.tab = window.router.query.get('tab') === 'notifications' ? 'notifications' : 'chat';
+        // Суперадмин чата не имеет (WsTicketView возвращает ему 403):
+        // колокольчик ведёт сразу на уведомления, вкладку «Чат» скрываем.
+        this.isSuperadmin = !!(window.currentUser && window.currentUser.is_superadmin);
+        this.tab = (this.isSuperadmin || window.router.query.get('tab') === 'notifications')
+            ? 'notifications' : 'chat';
 
         container.innerHTML = `
             <div class="chat-page">
@@ -151,6 +155,11 @@ class MessagesComponent {
                 this.loadTab();
             });
         });
+
+        if (this.isSuperadmin) {
+            const chatTab = container.querySelector('#messages-tab-chat');
+            if (chatTab) chatTab.style.display = 'none';
+        }
 
         window.i18n.applyTranslations();
         await this.loadTab();
@@ -547,6 +556,10 @@ class MessagesComponent {
             task_cancelled: ['🚫', 'red'], work_confirmed: ['✅', 'green'],
             work_rejected: ['✕', 'red'], new_message: ['✉️', 'blue'],
             work_accrued: ['💵', 'green'], material_shortage: ['⚠️', 'orange'],
+            subscription_expiring_soon: ['📅', 'orange'],
+            subscription_expiring: ['⏳', 'red'],
+            subscription_renewal_request: ['🔄', 'blue'],
+            subscription_extended: ['✅', 'green'],
         };
         return map[type] || ['🔔', 'blue'];
     }
@@ -583,6 +596,14 @@ class MessagesComponent {
             work_rejected: '#/production',
             work_accrued: '#/production',
             new_message: '#/messages',
+            // Предупреждения о подписке: суперадмину — к разделу компаний,
+            // сотруднику — на главную (продление делает платформа).
+            subscription_expiring_soon: user.is_superadmin ? '#/companies' : '#/',
+            subscription_expiring: user.is_superadmin ? '#/companies' : '#/',
+            // Запрос на продление приходит только суперадмину.
+            subscription_renewal_request: user.is_superadmin ? '#/companies' : '',
+            // Подтверждение продления — владельцу/админу на страницу «Подписка».
+            subscription_extended: '#/subscription',
         };
         return map[n.type] || '';
     }
@@ -607,14 +628,21 @@ class MessagesComponent {
         const [icon, color] = this.notificationStyle(n.type);
         const route = this.notificationRoute(n);
         const clickable = route ? `cursor:pointer;` : 'cursor:default;';
+        // Суперадмин обрабатывает запрос на продление прямо из уведомления:
+        // продление на 30 дней закрывает запрос и уведомляет владельца.
+        const user = window.currentUser || {};
+        const showHandle = user.is_superadmin && n.type === 'subscription_renewal_request' && n.company;
         return `
             <div class="list-row" ${route ? `data-notif-id="${n.id}" role="button" tabindex="0"` : ''}
                  style="${clickable}${n.is_read ? '' : 'background:var(--primary-soft);'}">
                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
                     <div class="stat-icon ${color}" style="width:36px;height:36px;font-size:16px;border-radius:10px;">${icon}</div>
-                    <div style="min-width:0;">
+                    <div style="min-width:0;flex:1;">
                         <div style="font-weight:600;font-size:14px;" data-i18n="notifications.${n.type}"></div>
                         <div class="text-sm text-muted" style="overflow:hidden;text-overflow:ellipsis;">${window.ui.escape(n.message)}</div>
+                        ${showHandle ? `
+                            <button class="btn btn-primary btn-sm" data-handle-notif="${n.id}" style="margin-top:8px;"
+                                    data-i18n="companies.extend_30"></button>` : ''}
                     </div>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -622,6 +650,28 @@ class MessagesComponent {
                     ${n.is_read ? '' : '<span style="width:8px;height:8px;border-radius:50%;background:var(--primary);display:inline-block;"></span>'}
                 </div>
             </div>`;
+    }
+
+    /**
+     * Суперадмин продлевает подписку на 30 дней прямо из уведомления о запросе.
+     * Продление через существующий action: backend сам закрывает запрос
+     * (дедупликация сбрасывается) и уведомляет владельца о продлении.
+     */
+    async handleRenewalRequest(id) {
+        const n = (this.notifications || []).find((item) => String(item.id) === String(id));
+        if (!n || !n.company) return;
+        if (!(await window.confirmation.confirm(
+            window.ui.t('companies.extend_30_confirm'), window.ui.t('companies.extend_30')))) return;
+        try {
+            await window.api.request(`/companies/${n.company}/subscription_extend/`, {
+                method: 'POST', body: JSON.stringify({ days: 30 }),
+            });
+            window.toast.success(window.ui.t('common.success'));
+            if (window.refreshNotificationBadge) window.refreshNotificationBadge();
+            this.loadNotifications();
+        } catch (e) {
+            window.toast.error(window.ui.errorText ? window.ui.errorText(e) : window.ui.t('common.error'));
+        }
     }
 
     async loadNotifications() {
@@ -654,6 +704,13 @@ class MessagesComponent {
                 row.addEventListener('click', open);
                 row.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+                });
+            });
+            // Кнопка обработки запроса не должна триггерить переход по уведомлению.
+            el.querySelectorAll('[data-handle-notif]').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.handleRenewalRequest(btn.dataset.handleNotif);
                 });
             });
             const markAll = el.querySelector('#mark-all-read');

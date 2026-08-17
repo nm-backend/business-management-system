@@ -177,6 +177,13 @@ class Notification(TimestampedModel):
         NEW_MESSAGE: новое сообщение
         WORK_ACCRUED: личная работа начислена
         MATERIAL_SHORTAGE: нехватка материала
+        SUBSCRIPTION_EXPIRING_SOON: подписка истекает через 7 дней
+        SUBSCRIPTION_EXPIRING: подписка истекает через 1 день
+        SUBSCRIPTION_RENEWAL_REQUEST: владелец запросил продление подписки
+        SUBSCRIPTION_GRACE_STARTED: начался льготный период (срок прошёл,
+                                    бизнес ещё работает до конца льготного срока)
+        SUBSCRIPTION_EXPIRED: подписка истекла, доступ ограничен
+        SUBSCRIPTION_PLAN_CHANGED: тариф компании изменён супер-администратором
         """
         NEW_ORDER = 'new_order', 'Янги буюртма'
         NEW_EXPENSE = 'new_expense', 'Янги харажат'
@@ -194,6 +201,13 @@ class Notification(TimestampedModel):
         NEW_MESSAGE = 'new_message', 'Янги хабар'
         WORK_ACCRUED = 'work_accrued', 'Шахсий иш ҳисобланди'
         MATERIAL_SHORTAGE = 'material_shortage', 'Материал етишмовчилиги'
+        SUBSCRIPTION_EXPIRING_SOON = 'subscription_expiring_soon', 'Обуна 7 кундан сўнг тугайди'
+        SUBSCRIPTION_EXPIRING = 'subscription_expiring', 'Обуна 1 кундан сўнг тугайди'
+        SUBSCRIPTION_RENEWAL_REQUEST = 'subscription_renewal_request', 'Обунани узайтириш сўрови'
+        SUBSCRIPTION_EXTENDED = 'subscription_extended', 'Обуна узайтирилди'
+        SUBSCRIPTION_GRACE_STARTED = 'subscription_grace_started', 'Имтиёзли давр бошланди'
+        SUBSCRIPTION_EXPIRED = 'subscription_expired', 'Обуна тугади'
+        SUBSCRIPTION_PLAN_CHANGED = 'subscription_plan_changed', 'Тариф ўзгартирилди'
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='notifications', null=True, verbose_name='Компания')
     user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='notifications', verbose_name='Пользователь')

@@ -14,7 +14,7 @@ from django.db.models import (
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
-from rest_framework import status, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -265,6 +265,21 @@ class EmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         return qs.order_by('full_name', 'username')
 
 
+class SuperadminOrCompanyMember(permissions.BasePermission):
+    """
+    Доступ к колокольчику уведомлений: суперадмин (платформенные
+    уведомления о компаниях) или сотрудник компании с активной подпиской.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superadmin:
+            return True
+        return user.company_id is not None and user.company.is_subscription_active
+
+
 @extend_schema(tags=['Notifications'])
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -273,16 +288,23 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     Только чтение, уведомления создаются автоматически системой.
     """
     queryset = Notification.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
-    permission_classes = [IsCompanyMember]
+    permission_classes = [SuperadminOrCompanyMember]
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Notification.objects.none()
         user = self.request.user
-        queryset = Notification.objects.filter(
-            user=user, company_id=user.company_id,
-        ).select_related('user', 'related_order', 'related_task')
+        # Суперадмин видит платформенные уведомления (подписки компаний:
+        # company указывает на компанию-источник), сотрудник — только
+        # уведомления своей компании (изоляция арендаторов).
+        if user.is_superadmin:
+            queryset = Notification.objects.filter(user=user)
+        else:
+            queryset = Notification.objects.filter(
+                user=user, company_id=user.company_id,
+            )
+        queryset = queryset.select_related('user', 'related_order', 'related_task')
 
         is_read = self.request.query_params.get('is_read')
         if is_read is not None:

@@ -3,7 +3,8 @@
 
 Создание компании в один шаг вместе с её владельцем (Owner), массовая
 блокировка/разблокировка (каскадом на пользователей), просмотр состава
-пользователей компании инлайном.
+пользователей компании инлайном. Новая компания сразу получает триал-подписку
+(30 дней) — как и при создании через API.
 """
 from django import forms
 from django.contrib import admin, messages
@@ -17,8 +18,10 @@ from apps.accounts.access_keys import issue_access_key
 from apps.accounts.models import AccessKey, Skill, User
 from apps.core.admin_utils import badge, choice_badge
 from .models import Company
+from .subscriptions import activate_for_new_company
 
 KEY_STATUS_COLORS = {'active': 'green', 'used': 'gray', 'revoked': 'red', 'expired': 'amber'}
+SUBSCRIPTION_COLORS = {'active': 'green', 'grace': 'orange', 'expired': 'red', 'frozen': 'amber', 'cancelled': 'gray'}
 
 
 class AddEmployeeForm(forms.Form):
@@ -127,11 +130,15 @@ class CompanyAccessKeyInline(admin.TabularInline):
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
     form = CompanyAdminForm
-    list_display = ('name', 'active_badge', 'owner_display', 'users_count', 'employees_summary', 'created_at')
-    list_filter = ('is_active',)
+    list_display = ('name', 'active_badge', 'subscription_badge', 'owner_display', 'users_count', 'employees_summary', 'created_at')
+    list_filter = ('is_active', 'subscription_status')
     search_fields = ('name',)
     date_hierarchy = 'created_at'
-    readonly_fields = ('created_at', 'updated_at', 'stats_panel', 'recent_activity')
+    readonly_fields = (
+        'created_at', 'updated_at', 'stats_panel', 'recent_activity',
+        # Подпиской управляет супер-администратор через API — в админке только просмотр.
+        'subscription_status', 'subscription_start', 'subscription_end', 'last_activity',
+    )
     ordering = ('name',)
     inlines = [CompanyUserInline, CompanyAccessKeyInline]
     actions = ('block_companies', 'unblock_companies')
@@ -207,17 +214,32 @@ class CompanyAdmin(admin.ModelAdmin):
                 (None, {'fields': ('name', 'is_active')}),
                 ('Владелец (Owner)', {
                     'fields': ('owner_username', 'owner_password', 'owner_full_name', 'owner_phone'),
-                    'description': 'Владелец будет создан вместе с компанией.',
+                    'description': 'Владелец будет создан вместе с компанией, а компания '
+                                   'сразу получит триал-подписку (30 дней).',
                 }),
             )
         return (
             (None, {'fields': ('name', 'is_active', 'created_at', 'updated_at')}),
+            ('Подписка (SaaS)', {
+                'fields': ('subscription_status', 'subscription_start', 'subscription_end', 'last_activity'),
+                'description': 'Подпиской управляет платформенный супер-администратор '
+                               'через API «Управление бизнесами». Здесь — только просмотр.',
+            }),
             ('Обзор', {'fields': ('stats_panel', 'recent_activity')}),
         )
 
     @admin.display(description='Статус')
     def active_badge(self, obj):
         return badge('Активна', 'green') if obj.is_active else badge('Заблокирована', 'red')
+
+    @admin.display(description='Подписка')
+    def subscription_badge(self, obj):
+        label = dict(Company.SubscriptionStatus.choices).get(
+            obj.effective_subscription_status, obj.subscription_status,
+        )
+        return choice_badge(
+            obj.effective_subscription_status, label, SUBSCRIPTION_COLORS,
+        )
 
     @admin.display(description='Владелец')
     def owner_display(self, obj):
@@ -270,10 +292,10 @@ class CompanyAdmin(admin.ModelAdmin):
         )
         add_url = reverse('admin:companies_company_add_employee', args=[obj.pk])
         return format_html(
-            '<a href="{}" style="display:inline-block;margin-bottom:14px;padding:9px 18px;'
+            '<a href="{0}" style="display:inline-block;margin-bottom:14px;padding:9px 18px;'
             'background:#1c64d9;color:#fff;border-radius:8px;font-weight:600;'
             'text-decoration:none;">+ Добавить сотрудника</a>'
-            '<table style="border-collapse:collapse;">{}</table>',
+            '<table style="border-collapse:collapse;">{1}</table>',
             add_url, rows_html,
         )
 
@@ -318,7 +340,9 @@ class CompanyAdmin(admin.ModelAdmin):
             )
             owner.set_password(form.cleaned_data['owner_password'])
             owner.save()
-            self.message_user(request, f'Компания и владелец «{owner.username}» созданы.', messages.SUCCESS)
+            # SaaS: триал-подписка при создании (как и в API-пути).
+            activate_for_new_company(obj)
+            self.message_user(request, f'Компания и владелец «{owner.username}» созданы. Триал-подписка активирована.', messages.SUCCESS)
 
     def _set_active(self, request, queryset, active):
         for company in queryset:

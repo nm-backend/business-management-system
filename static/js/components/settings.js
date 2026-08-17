@@ -41,6 +41,10 @@ class SettingsComponent {
                     <a class="list-row" href="#/finance" style="text-decoration:none;color:inherit;">
                         <span>💰 <span data-i18n="finance.title"></span></span><span>›</span>
                     </a>` : ''}
+                ${(user.is_owner || user.is_admin) ? `
+                    <a class="list-row" href="#/subscription" style="text-decoration:none;color:inherit;">
+                        <span>📄 <span data-i18n="subscription.page_title"></span></span><span>›</span>
+                    </a>` : ''}
             </div>
             ` : ''}
 
