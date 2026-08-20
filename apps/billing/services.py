@@ -36,6 +36,27 @@ _AUDIT_ACTION = {
 }
 
 
+def _sync_company_fields(sub):
+    """Sync billing subscription status to Company model fields."""
+    from apps.companies.models import Company
+
+    _STATUS_MAP = {
+        Subscription.Status.ACTIVE: Company.SubscriptionStatus.ACTIVE,
+        Subscription.Status.EXPIRED: Company.SubscriptionStatus.EXPIRED,
+        Subscription.Status.FROZEN: Company.SubscriptionStatus.FROZEN,
+    }
+    company_status = _STATUS_MAP.get(sub.status, Company.SubscriptionStatus.ACTIVE)
+    Company.objects.filter(pk=sub.company_id).update(
+        subscription_status=company_status,
+        subscription_start=sub.started_at,
+        subscription_end=sub.expires_at,
+        is_trial=False if sub.status != Subscription.Status.ACTIVE or sub.last_renewed_at else True,
+    )
+    sub.company.subscription_status = company_status
+    sub.company.subscription_start = sub.started_at
+    sub.company.subscription_end = sub.expires_at
+
+
 def plan_price(plan):
     """Стоимость тарифа из каталога настроек (0 — пока оплата не подключена)."""
     for item in getattr(settings, 'SUBSCRIPTION_PLANS', []):
@@ -162,6 +183,7 @@ def _extend(sub, days, action, *, actor=None, request=None, note=''):
             },
         },
     )
+    _sync_company_fields(sub)
     _notify_owner(
         sub, Notification.NotificationType.SUBSCRIPTION_RENEWED,
         'Подписка продлена',
@@ -255,6 +277,7 @@ def freeze_subscription(sub, *, actor=None, request=None):
             sub, AuditLog.Action.SUBSCRIPTION_FROZEN, actor=actor, request=request,
             changes={'status': {'old': Subscription.Status.EXPIRED, 'new': sub.status}},
         )
+        _sync_company_fields(sub)
         notify_staff(
             sub.company, Notification.NotificationType.SUBSCRIPTION_FROZEN,
             'Подписка истекла',
@@ -288,6 +311,7 @@ def unfreeze_subscription(sub, *, actor=None, request=None, note=''):
             sub, AuditLog.Action.SUBSCRIPTION_UNFROZEN, actor=actor, request=request,
             changes={'status': {'old': old_status, 'new': sub.status}},
         )
+        _sync_company_fields(sub)
         _notify_owner(
             sub, Notification.NotificationType.SUBSCRIPTION_RENEWED,
             'Подписка возобновлена',

@@ -48,10 +48,9 @@ def _resolve_user_by_ticket(ticket):
             # без этой проверки замороженная компания открыла бы чат по
             # «протухающему» тикету (вход и профиль остаются доступными,
             # чат — нет).
-            from apps.billing.models import Subscription
             if user.company_id is not None:
-                sub = Subscription.objects.filter(company_id=user.company_id).first()
-                if sub is None or sub.is_blocked:
+                company = getattr(user, 'company', None)
+                if company is None or not company.is_subscription_active:
                     return AnonymousUser()
             # Одноразовость: помечаем использованным ДО открытия соединения.
             ws_ticket.used = True

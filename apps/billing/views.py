@@ -25,8 +25,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import IsCompanyMember, IsSuperAdmin
+from apps.core.permissions import IsSuperAdmin
 from core.permissions import IsOwner
+from rest_framework.permissions import IsAuthenticated
 
 from .models import Invoice, Subscription
 from .serializers import (
@@ -54,14 +55,7 @@ def _plans_catalog():
 
 
 class SubscriptionView(APIView):
-    """
-    Подписка текущей компании (только владелец).
-
-    GET — статус/срок/история/каталог тарифов.
-    Работает и в замороженном состоянии (whitelist gate): owner должен
-    видеть свою подписку, чтобы продлить.
-    """
-    permission_classes = [IsCompanyMember, IsOwner]
+    permission_classes = [IsAuthenticated, IsOwner]
 
     def get(self, request):
         sub = Subscription.objects.filter(company_id=request.user.company_id).first()
@@ -80,14 +74,7 @@ class SubscriptionView(APIView):
 
 
 class SubscriptionRenewView(APIView):
-    """
-    Продление подписки: POST /billing/subscription/renew/.
-
-    Создаёт счёт через payment adapter. Пока провайдер manual — счёт висит
-    в pending до подтверждения супер-админом; как только оплата подтверждена,
-    подписка продлевается автоматически.
-    """
-    permission_classes = [IsCompanyMember, IsOwner]
+    permission_classes = [IsAuthenticated, IsOwner]
 
     def post(self, request):
         serializer = RenewRequestSerializer(data=request.data)
@@ -106,8 +93,7 @@ class SubscriptionRenewView(APIView):
 
 
 class SubscriptionInvoicesView(APIView):
-    """Счета текущей компании (только владелец)."""
-    permission_classes = [IsCompanyMember, IsOwner]
+    permission_classes = [IsAuthenticated, IsOwner]
 
     def get(self, request):
         invoices = Invoice.objects.filter(

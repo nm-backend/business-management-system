@@ -306,19 +306,19 @@ class LogoutView(APIView):
 
 
 def _subscription_summary(user):
-    """Краткая сводка подписки для /accounts/me/ (фронтенд строит по ней
-    экран «Подписка истекла» для всех ролей компании)."""
     if user.company_id is None:
         return None
-    from apps.billing.models import Subscription
-    sub = Subscription.objects.filter(company_id=user.company_id).first()
-    if sub is None:
+    company = getattr(user, 'company', None)
+    if company is None:
         return {'status': 'frozen', 'is_frozen': True, 'plan': 'free', 'expires_at': None}
+    status = company.effective_subscription_status
+    is_frozen = status in ('expired', 'frozen', 'cancelled')
+    plan_name = company.plan.name if company.plan else 'free'
     return {
-        'status': sub.status,
-        'is_frozen': sub.is_blocked,  # включает «истекла, но ещё не заморожена Celery»
-        'plan': sub.plan,
-        'expires_at': sub.expires_at.isoformat() if sub.expires_at else None,
+        'status': status,
+        'is_frozen': is_frozen,
+        'plan': plan_name,
+        'expires_at': company.subscription_end.isoformat() if company.subscription_end else None,
     }
 
 

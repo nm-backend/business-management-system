@@ -1,13 +1,3 @@
-"""
-Celery-задачи жизненного цикла подписок.
-
-Расписание создаётся data-migration'ом в django_celery_beat (DatabaseScheduler):
-  billing-check-expired     — каждые 60 минут: поиск истекающих и заморозка;
-  billing-notify-expiring   — раз в день: напоминания об окончании.
-
-Обе задачи идемпотентны: повторный запуск не создаёт дубликатов событий,
-уведомлений и не «перезамораживает» уже замороженные компании.
-"""
 import logging
 
 from celery import shared_task
@@ -18,13 +8,6 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def check_expired_subscriptions():
-    """
-    Автоматическое определение истечения + заморозка компании.
-
-    Берёт подписки со статусом ACTIVE и истёкшим сроком, для каждой вызывает
-    freeze_subscription() под SELECT ... FOR UPDATE (внутри повторно проверяет
-    срок — гонка с продлением безопасна). Пропускает уже замороженные.
-    """
     from .models import Subscription
     from .services import freeze_subscription
 
@@ -48,11 +31,6 @@ def check_expired_subscriptions():
 
 @shared_task
 def notify_expiring_subscriptions():
-    """
-    Напоминания об окончании: компании, чей срок подходит к концу.
-
-    Рассылка не чаще раза в день на компанию (см. send_expiry_reminders).
-    """
     from .services import send_expiry_reminders
 
     sent = send_expiry_reminders()
