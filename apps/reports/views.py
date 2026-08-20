@@ -128,20 +128,21 @@ def _period_financials(company_id, date_from, date_to):
         Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
         .aggregate(s=Sum('amount'))['s']
     )
-    # Выплаты работникам — отдельный отток денег, они НЕ попадают в Expense
-    # (это разные журналы: Expense заполняют вручную, WorkerPayment создаётся
-    # при выплате). Касса ниже уже вычитает их отдельной строкой, а чистая
-    # прибыль — не вычитала, и на сумму всех выплат была завышена.
     worker_payments = money(
         WorkerPayment.objects.filter(company_id=company_id,
                                      payment_date__range=(date_from, date_to))
+        .aggregate(s=Sum('amount'))['s']
+    )
+    salaries = money(
+        Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to),
+                               category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE))
         .aggregate(s=Sum('amount'))['s']
     )
     return {
         'revenue': revenue,
         'expenses_total': expenses_total,
         'worker_payments': worker_payments,
-        'net_profit': revenue - cost_of_goods - expenses_total - worker_payments,
+        'net_profit': revenue - cost_of_goods - (expenses_total - salaries) - worker_payments,
     }
 
 
@@ -166,12 +167,6 @@ def owner_analytics_data(company_id, date_from, date_to):
     def expenses_by(*categories):
         return money(expenses_qs.filter(category__in=categories).aggregate(s=Sum('amount'))['s'])
 
-    # ВНИМАНИЕ: Expense с категориями SALARY/ADVANCE И WorkerPayment — разные сущности.
-    # Если владелец проведёт выплату работнику через ОБА канала (и Expense, и
-    # WorkerPayment), сумма вычтется дважды. Это не кодовая ошибка, а UX-аспект:
-    # при создании Expense с категорией SALARY или WorkerPayment система не
-    # проверяет дублирование. Рекомендуется использовать ТОЛЬКО WorkerPayment
-    # для выплат работникам, а Expense.SALARY — для дополнительных проводок.
     salaries = expenses_by(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE)
     taxes = expenses_by(ExpenseCategory.TAXES)
     losses = expenses_by(ExpenseCategory.MATERIAL_LOSS, ExpenseCategory.DEFECT)
@@ -193,10 +188,14 @@ def owner_analytics_data(company_id, date_from, date_to):
     )
     worker_debts = max(worker_earned - worker_paid_total, 0)
 
-    # Касса считается за всё время (текущий остаток) в рамках компании.
+    non_salary_expenses = money(
+        Expense.objects.filter(company_id=company_id)
+        .exclude(category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE))
+        .aggregate(s=Sum('amount'))['s']
+    )
     cash = (
         money(Payment.objects.filter(company_id=company_id).aggregate(s=Sum('amount'))['s'])
-        - money(Expense.objects.filter(company_id=company_id).aggregate(s=Sum('amount'))['s'])
+        - non_salary_expenses
         - worker_paid_total
     )
 
@@ -228,9 +227,7 @@ def owner_analytics_data(company_id, date_from, date_to):
     prev_to = date_from - datetime.timedelta(days=1)
     prev_from = prev_to - datetime.timedelta(days=span - 1)
     prev = _period_financials(company_id, prev_from, prev_to)
-    # Выплаты работникам вычитаются наравне с расходами: это реальные деньги,
-    # ушедшие из кассы за период (см. worker_payments выше и расчёт cash).
-    net_profit = revenue - cost_of_goods - expenses_total - worker_payments
+    net_profit = revenue - cost_of_goods - (expenses_total - salaries) - worker_payments
 
     # Активные сотрудники (админы + работники, не заблокированы, не в архиве)
     active_employees = User.objects.filter(
@@ -380,7 +377,7 @@ class RevenueTimelineView(APIView):
             Expense.objects.filter(
                 company_id=company_id,
                 date__gte=six_months_ago,
-            )
+            ).exclude(category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE))
             .annotate(month=TruncMonth('date'))
             .values('month')
             .annotate(total=Sum('amount'))
@@ -471,9 +468,6 @@ class RevenueTimelineView(APIView):
             cogs = cogs_map.get(m, 0)
             payout = payout_map.get(m, 0)
             revenues.append(rev)
-            # Та же формула, что и у карточки «Чистая прибыль» (owner_analytics_data):
-            # выплаты работникам вычитаются. Иначе график показывал прибыль выше,
-            # чем карточка над ним, — на сумму выплат.
             net_profits.append(rev - cogs - exp - payout)
 
         return Response({
