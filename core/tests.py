@@ -20,7 +20,17 @@ def make_request(user):
 
 def make_user(role='worker', authenticated=True, **extra):
     """Возвращает объект-заглушку пользователя для permission-тестов."""
-    return SimpleNamespace(role=role, is_authenticated=authenticated, **extra)
+    is_superadmin = role == 'superadmin'
+    return SimpleNamespace(
+        role=role,
+        is_authenticated=authenticated,
+        is_owner=role == 'owner',
+        is_admin=role == 'admin',
+        is_worker=role == 'worker',
+        is_manager=role == 'manager',
+        is_superadmin=is_superadmin,
+        **extra,
+    )
 
 
 class DeepMergeTests(SimpleTestCase):
@@ -57,7 +67,6 @@ class FormatCurrencyTests(SimpleTestCase):
         self.assertEqual(format_currency(None), '')
 
     def test_default_uses_space_thousands_separator_and_truncates(self):
-        # decimal_places=0 использует int(), т.е. усечение, а не округление.
         self.assertEqual(format_currency(12345.67), '12 345 som')
 
     def test_large_integer_formatting(self):
@@ -82,7 +91,6 @@ class GetLocaleTests(SimpleTestCase):
     def test_ru_locale_overrides_translations(self):
         uz = get_locale('uz_cyrl')
         ru = get_locale('ru')
-        # Обе локали содержат общие ключи, но переводы различаются.
         self.assertEqual(set(uz.keys()), set(ru.keys()))
         self.assertNotEqual(uz['auth']['login'], ru['auth']['login'])
 

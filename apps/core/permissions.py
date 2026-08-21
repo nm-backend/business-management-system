@@ -96,7 +96,7 @@ class IsOwner(permissions.BasePermission):
     Разрешает доступ только пользователям с ролью 'owner'.
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_owner
+        return bool(request.user and request.user.is_authenticated and request.user.is_owner)
 
 
 class IsAdmin(permissions.BasePermission):
@@ -106,7 +106,7 @@ class IsAdmin(permissions.BasePermission):
     Разрешает доступ только пользователям с ролью 'admin'.
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_admin
+        return bool(request.user and request.user.is_authenticated and request.user.is_admin)
 
 
 class IsWorker(permissions.BasePermission):
@@ -116,7 +116,7 @@ class IsWorker(permissions.BasePermission):
     Разрешает доступ только пользователям с ролью 'worker'.
     """
     def has_permission(self, request, view):
-        return request.user and request.user.is_worker
+        return bool(request.user and request.user.is_authenticated and request.user.is_worker)
 
 
 class IsOwnerOrAdmin(permissions.BasePermission):
@@ -126,7 +126,7 @@ class IsOwnerOrAdmin(permissions.BasePermission):
     Разрешает доступ владельцу или администратору.
     """
     def has_permission(self, request, view):
-        return request.user and (request.user.is_owner or request.user.is_admin)
+        return bool(request.user and request.user.is_authenticated and (request.user.is_owner or request.user.is_admin))
 
 
 class IsOwnerOrAdminOrManager(permissions.BasePermission):
@@ -139,9 +139,9 @@ class IsOwnerOrAdminOrManager(permissions.BasePermission):
     применяется к чтению (list/retrieve) и операционной аналитике.
     """
     def has_permission(self, request, view):
-        return request.user and (
+        return bool(request.user and request.user.is_authenticated and (
             request.user.is_owner or request.user.is_admin or request.user.is_manager
-        )
+        ))
 
 
 class IsOwnerOrAdminOrWorker(permissions.BasePermission):
@@ -153,9 +153,9 @@ class IsOwnerOrAdminOrWorker(permissions.BasePermission):
     создание задач и записей о работе в производстве).
     """
     def has_permission(self, request, view):
-        return request.user and (
+        return bool(request.user and request.user.is_authenticated and (
             request.user.is_owner or request.user.is_admin or request.user.is_worker
-        )
+        ))
 
 
 class IsAuthenticated(permissions.BasePermission):
@@ -169,25 +169,8 @@ class IsAuthenticated(permissions.BasePermission):
 
 
 class FinancialDataPermission(permissions.BasePermission):
-    """
-    Permission - защита финансовых данных.
-
-    Разрешает доступ к финансовым данным только владельцу.
-    Администраторы и работники не должны получать финансовые данные
-    даже через API - сервер должен фильтровать их на уровне сериализаторов.
-
-    Финансовые поля:
-    - Цены (purchase_price, sale_price, cost_price)
-    - Суммы заказов и оплат
-    - Прибыль и расходы
-    - Зарплаты и долги
-    - Касса и финансы
-
-    Используется в связке с сериализаторами, которые исключают
-    финансовые поля для non-owner пользователей.
-    """
     def has_permission(self, request, view):
-        return request.user and request.user.is_owner
+        return bool(request.user and request.user.is_authenticated and request.user.is_owner)
 
 
 class CanCreateWorkers(permissions.BasePermission):
@@ -258,10 +241,5 @@ class IsOwnerOrAssignedWorker(permissions.BasePermission):
 
 
 class IsOwnerOrAssignedAdmin(permissions.BasePermission):
-    """
-    Permission - владелец или администратор.
-
-    Разрешает доступ владельцу или администратору.
-    """
     def has_permission(self, request, view):
-        return request.user and (request.user.is_owner or request.user.is_admin)
+        return bool(request.user and request.user.is_authenticated and (request.user.is_owner or request.user.is_admin))
