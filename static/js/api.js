@@ -159,7 +159,6 @@ class APIClient {
                     window.location.reload();
                     throw { status: 403, data: errorData };
                 }
-                }
                 throw { status: response.status, data: errorData };
             }
 
