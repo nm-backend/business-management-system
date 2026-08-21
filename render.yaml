@@ -1,7 +1,20 @@
-# Render Blueprint — деплой SkladPro одним нажатием (Render → New → Blueprint).
-# Поднимает: web (Django+Channels/Daphne из Dockerfile) + PostgreSQL + Redis.
-# SECRET_KEY генерируется автоматически; ALLOWED_HOSTS = домен сервиса.
+# ── SkladPro.Nod — Render Blueprint ──────────────────────────────────────────
+# Деплой: Render → New → Blueprint → выбрать этот файл.
+#
+# ПЕРЕД ДЕПЛОЕМ создайте Environment Group "skladpro-secrets" в Render Dashboard:
+#   Render → Environment Groups → New Group → "skladpro-secrets"
+#   Добавьте: SECRET_KEY (сгенерируйте длинный случайный ключ)
+#
+# Все сервисы ссылаются на эту группу — SECRET_KEY общий для web, worker и beat.
+# Без этого JWT-токены, подписанные web, невалидны в worker/beat.
+#
+# После деплоя 확인ите:
+#   1. Health check: https://<ваш-домен>/api/v1/core/health/ → 200
+#   2. Admin: https://<ваш-домен>/admin/
+#   3. Создайте суперадмина: https://<ваш-домен>/accounts/setup/
+
 services:
+  # ── Web: Django + Daphne (ASGI для WebSocket) ──
   - type: web
     name: skladpro
     runtime: docker
@@ -10,19 +23,20 @@ services:
     healthCheckPath: /api/v1/core/health/
     autoDeploy: true
     envVars:
+      - fromGroup: skladpro-secrets
       - key: DJANGO_ENV
         value: production
       - key: DEBUG
         value: "False"
-      - key: SECRET_KEY
-        generateValue: true          # Render сгенерирует длинный случайный ключ
       - key: SECURE_SSL_REDIRECT
+        value: "True"
+      - key: MEDIA_SERVE
         value: "True"
       - key: ALLOWED_HOSTS
         fromService:
           type: web
           name: skladpro
-          property: host             # автоматически = <name>.onrender.com
+          property: host
       - key: DB_HOST
         fromDatabase: { name: skladpro-db, property: host }
       - key: DB_PORT
@@ -35,33 +49,51 @@ services:
         fromDatabase: { name: skladpro-db, property: password }
       - key: REDIS_URL
         fromService: { type: redis, name: skladpro-redis, property: connectionString }
+      # Media Storage: раскомментируйте и задайте S3/R2 credentials
+      # для сохранения фото при redeploy. Без этого фото эфемерны.
+      # - key: AWS_STORAGE_BUCKET_NAME
+      #   sync: false
+      # - key: AWS_ACCESS_KEY_ID
+      #   sync: false
+      # - key: AWS_SECRET_ACCESS_KEY
+      #   sync: false
+      # - key: AWS_S3_ENDPOINT_URL
+      #   sync: false
+      # - key: AWS_S3_REGION_NAME
+      #   sync: false
 
-  # Redis (Key Value) для Django Channels / WebSocket.
+  # ── PostgreSQL ──
+  databases:
+    - name: skladpro-db
+      plan: free
+      databaseName: skladpro
+      postgresMajorVersion: "16"
+
+  # ── Redis: Channel Layer + Celery Broker ──
   - type: redis
     name: skladpro-redis
     plan: free
-    ipAllowList: []                  # только внутренняя сеть Render
+    ipAllowList: []
 
-  # ── Celery worker: автобэкап БД, фоновые задачи ──────────────────────────
-  # Без него backups/tasks.py молча не выполняются (периодические бэкапы,
-  # уведомления). SKIP_INIT=1 — миграции/статику делает web при старте.
+  # ── Celery Worker: фоновые задачи (бэкап, подписки, уведомления) ──
   - type: worker
     name: skladpro-worker
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    dockerCommand: celery -A skladpro worker -l info
+    dockerCommand: celery -A skladpro worker -l info --concurrency=2
     envVars:
+      - fromGroup: skladpro-secrets
       - key: DJANGO_ENV
         value: production
+      - key: DEBUG
+        value: "False"
       - key: SKIP_INIT
         value: "1"
       - key: SECURE_SSL_REDIRECT
         value: "False"
-      - key: SECRET_KEY
-        generateValue: true
       - key: ALLOWED_HOSTS
-        value: worker.internal
+        value: "worker.internal"
       - key: DB_HOST
         fromDatabase: { name: skladpro-db, property: host }
       - key: DB_PORT
@@ -75,7 +107,7 @@ services:
       - key: REDIS_URL
         fromService: { type: redis, name: skladpro-redis, property: connectionString }
 
-  # ── Celery beat: расписание периодических задач (автобэкап) ──────────────
+  # ── Celery Beat: планировщик periodic tasks (DatabaseScheduler) ──
   - type: worker
     name: skladpro-beat
     runtime: docker
@@ -83,16 +115,17 @@ services:
     plan: free
     dockerCommand: celery -A skladpro beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     envVars:
+      - fromGroup: skladpro-secrets
       - key: DJANGO_ENV
         value: production
+      - key: DEBUG
+        value: "False"
       - key: SKIP_INIT
         value: "1"
       - key: SECURE_SSL_REDIRECT
         value: "False"
-      - key: SECRET_KEY
-        generateValue: true
       - key: ALLOWED_HOSTS
-        value: beat.internal
+        value: "beat.internal"
       - key: DB_HOST
         fromDatabase: { name: skladpro-db, property: host }
       - key: DB_PORT
@@ -105,44 +138,3 @@ services:
         fromDatabase: { name: skladpro-db, property: password }
       - key: REDIS_URL
         fromService: { type: redis, name: skladpro-redis, property: connectionString }
-
-  # ── ОПЦИОНАЛЬНО: ежедневное уведомление о просроченных долгах ──────────────
-  # Раскомментируйте, чтобы Render по расписанию запускал команду
-  # `notify_overdue_debts` (создаёт уведомления OVERDUE_DEBT владельцу/админам).
-  # ВНИМАНИЕ: Render Cron Jobs могут требовать платный план — на free это может
-  # не примениться. Оставлено закомментированным, чтобы не сорвать деплой web.
-  # - type: cron
-  #   name: skladpro-overdue-debts
-  #   runtime: docker
-  #   dockerfilePath: ./Dockerfile
-  #   schedule: "0 6 * * *"            # ежедневно 06:00 UTC
-  #   dockerCommand: python manage.py notify_overdue_debts
-  #   envVars:
-  #     - key: DJANGO_ENV
-  #       value: production
-  #     - key: DEBUG
-  #       value: "False"
-  #     - key: SKIP_INIT               # cron не мигрирует/не собирает статику
-  #       value: "1"
-  #     - key: SECURE_SSL_REDIRECT
-  #       value: "False"
-  #     - key: SECRET_KEY
-  #       generateValue: true
-  #     - key: ALLOWED_HOSTS
-  #       value: cron.internal         # командой не используется, но нужен settings
-  #     - key: DB_HOST
-  #       fromDatabase: { name: skladpro-db, property: host }
-  #     - key: DB_PORT
-  #       fromDatabase: { name: skladpro-db, property: port }
-  #     - key: DB_NAME
-  #       fromDatabase: { name: skladpro-db, property: database }
-  #     - key: DB_USER
-  #       fromDatabase: { name: skladpro-db, property: user }
-  #     - key: DB_PASSWORD
-  #       fromDatabase: { name: skladpro-db, property: password }
-
-databases:
-  - name: skladpro-db
-    plan: free
-    databaseName: skladpro
-    postgresMajorVersion: "16"

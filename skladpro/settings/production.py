@@ -56,6 +56,14 @@ if '*' in ALLOWED_HOSTS:
     )
 
 CORS_ALLOW_ALL_ORIGINS = False
+# Разрешённые origins для CORS. Задайте через env: https://skladpro.onrender.com
+_CORS_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='')
+if _CORS_ORIGINS:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _CORS_ORIGINS.split(',') if o.strip()]
+
+# CSRF trusted origins: Django 4.0+ требует явного указания HTTPS origins
+# при работе за reverse-proxy. Без этого CSRF-проверка AJAX POST падает.
+CSRF_TRUSTED_ORIGINS = [f'https://{h.strip()}' for h in ALLOWED_HOSTS if h.strip() and h.strip() != 'localhost']
 
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True
@@ -100,3 +108,31 @@ VAPID_SUBJECT = config('VAPID_SUBJECT', default='mailto:admin@skladpro.nod')
 # Включите MEDIA_SERVE=True, если фронтенд-прокси нет (Railway/Render);
 # при наличии nginx/Caddy задайте False и отдавайте /media/ с него.
 MEDIA_SERVE = config('MEDIA_SERVE', default=False, cast=bool)
+
+# ── Media Storage: S3 (Cloudflare R2 / AWS S3 / MinIO) ──
+# Render filesystem эфемерный: файлы теряются при redeploy/restart.
+# Для сохранения фото задайте S3-переменные окружения:
+#   AWS_STORAGE_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+#   AWS_S3_ENDPOINT_URL (для Cloudflare R2: https://<account-id>.r2.cloudflarestorage.com)
+#   AWS_S3_REGION_NAME (для R2: auto)
+# Если переменные не заданы — используется локальный файловый систем (эфемерный).
+_AWS_BUCKET = config('AWS_STORAGE_BUCKET_NAME', default='')
+if _AWS_BUCKET:
+    STORAGES['default'] = {
+        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        'OPTIONS': {
+            'bucket_name': _AWS_BUCKET,
+            'region_name': config('AWS_S3_REGION_NAME', default='us-east-1'),
+            'endpoint_url': config('AWS_S3_ENDPOINT_URL', default=None),
+            'access_key': config('AWS_ACCESS_KEY_ID', default=''),
+            'secret_key': config('AWS_SECRET_ACCESS_KEY', default=''),
+            'default_acl': 'public-read',
+            'querystring_auth': False,  # прямые URL без подписи
+            'location': 'media',
+        },
+    }
+    MEDIA_URL = f'https://{_AWS_BUCKET}.s3.amazonaws.com/media/'
+    _endpoint = config('AWS_S3_ENDPOINT_URL', default='')
+    if _endpoint:
+        # Cloudflare R2 / MinIO: URL отличается от стандартного S3
+        MEDIA_URL = f'{_endpoint}/{_AWS_BUCKET}/media/'
