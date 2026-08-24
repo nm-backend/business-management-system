@@ -31,11 +31,6 @@ def make_user(role='worker', authenticated=True, **extra):
         is_superadmin=is_superadmin,
         **extra,
     )
-<<<<<<< Updated upstream
-=======
-    """Возвращает объект-заглушку пользователя для permission-тестов."""
-    return SimpleNamespace(role=role, is_authenticated=authenticated, **extra)
->>>>>>> Stashed changes
 
 
 class DeepMergeTests(SimpleTestCase):
