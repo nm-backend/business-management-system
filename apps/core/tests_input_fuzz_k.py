@@ -14,7 +14,9 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.companies.models import Company
 
-REPORT = r'C:\Users\User\AppData\Local\Temp\opencode\fuzz_report.txt'
+# Список проблем печатается в AssertionError tearDown — файл-отчёт не нужен.
+# Раньше здесь был жёстко прописан Windows-путь (C:\Users\...): на Linux каждый
+# прогон теста создавал в корне репозитория мусорный каталог 'C:\Users\...'.
 
 PATH_GARBAGE = ['abc', '0', '-1', '999999999999999999999', '1.5', 'null']
 
@@ -184,9 +186,6 @@ class InputFuzzTests(TestCase):
         print(f'[fuzz-worker] done: {count} requests')
 
     def tearDown(self):
-        with open(REPORT, 'a', encoding='utf-8') as f:
-            for line in self.fails:
-                f.write(line + '\n')
         if self.fails:
             msg = '\n'.join(self.fails[:60])
             raise AssertionError(f'Fuzz found {len(self.fails)} problems:\n{msg}')
