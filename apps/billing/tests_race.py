@@ -66,12 +66,23 @@ class SubscriptionRaceTests(TransactionTestCase):
         self.assertEqual(self.sub.status, Subscription.Status.ACTIVE)
         self.assertGreater(self.sub.expires_at, timezone.now() + timedelta(days=29))
         self.assertIsNone(self.sub.frozen_at)
+        # 4 потока renew = 4 оплаченных периода: каждое продление применилось
+        # ровно один раз (+30 дней к сроку) — это и есть отсутствие потерянного
+        # обновления. Раньше здесь ожидалось «ровно одно» событие, что
+        # невозможно при 4 параллельных renew (на SQLite тест пропускается,
+        # поэтому ошибка не была видна).
+        renewed = SubscriptionEvent.objects.filter(
+            subscription=self.sub, action='renewed',
+        )
+        self.assertEqual(renewed.count(), 4)
+        self.assertGreaterEqual(
+            self.sub.expires_at,
+            timezone.now() + timedelta(days=119),
+            '4 × 30 дней должны суммироваться без потери',
+        )
         self.assertEqual(
-            SubscriptionEvent.objects.filter(
-                subscription=self.sub, action='renewed',
-            ).count(),
-            1,
-            'Двойное продление — событие renewed должно быть ровно одно',
+            renewed.values_list('new_expires_at', flat=True).distinct().count(), 4,
+            'Каждое продление дало свою дату окончания',
         )
 
     def test_concurrent_renew_creates_single_pending_invoice(self):

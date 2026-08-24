@@ -34,8 +34,13 @@ def _resolve_user_by_ticket(ticket):
         return AnonymousUser()
     try:
         with transaction.atomic():
+            # user__company — НЕ select_related: User.company nullable (супер-
+            # админы без компании), select_for_update + LEFT OUTER JOIN даёт на
+            # PostgreSQL "FOR UPDATE cannot be applied to the nullable side of an
+            # outer join" — каждое WS-соединение падало с ошибкой, чат не
+            # работал. user — NOT NULL (INNER JOIN), его можно подтягивать.
             ws_ticket = WsTicket.objects.select_for_update().select_related(
-                'user', 'user__company',
+                'user',
             ).get(
                 ticket=ticket, used=False, expires_at__gt=timezone.now(),
             )
