@@ -29,18 +29,23 @@ def _should_enforce(path):
 
 
 def _is_blocked(company):
+    """
+    Заблокирована ли компания — по ЕДИНСТВЕННОМУ источнику состояния.
+
+    Источник истины — поля Company (полный жизненный цикл active/grace/
+    expired/frozen; effective_subscription_status учитывает и «серую зону»:
+    срок прошёл, а задача Celery ещё не отработала). Раньше здесь был запасной
+    путь через billing.Subscription.is_blocked: продление через companies-API
+    обновляло Company, но не billing-запись, и гейт блокировал уже продлённую
+    компанию (403 subscription_expired). billing.Subscription теперь
+    синхронизируется из Company при каждом изменении (apps/companies/
+    subscriptions.py), поэтому читать его в гейте не нужно.
+    """
     if company is None:
         return False, None, None
     status = company.effective_subscription_status
     if status in _BLOCKED_STATUSES:
         return True, status, company.subscription_end
-    try:
-        from .models import Subscription
-        sub = Subscription.objects.filter(company_id=company.pk).first()
-        if sub is not None and sub.is_blocked:
-            return True, sub.status, sub.expires_at
-    except Exception:
-        pass
     return False, None, None
 
 

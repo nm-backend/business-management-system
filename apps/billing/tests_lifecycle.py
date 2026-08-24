@@ -96,9 +96,16 @@ class SubscriptionLifecycleTests(TestCase):
         self.api.credentials(HTTP_AUTHORIZATION=f'Bearer {self._login(user)}')
 
     def _expire(self, days=1):
-        Subscription.objects.filter(pk=self.sub.pk).update(
-            expires_at=timezone.now() - timedelta(days=days),
+        # Истекли обе модели (billing.Subscription и поля Company): компании-поля —
+        # источник состояния гейта, billing-запись — их зеркало. Льготный период
+        # обнуляем, чтобы «срок истёк» означал немедленную блокировку.
+        now = timezone.now() - timedelta(days=days)
+        Company.objects.filter(pk=self.company.pk).update(
+            subscription_end=now, grace_period_days=0,
         )
+        self.company.refresh_from_db()
+        Subscription.objects.filter(pk=self.sub.pk).update(expires_at=now)
+        self.sub.refresh_from_db()
 
     def test_full_cycle_active_expired_frozen_renewed(self):
         # 1. Активная подписка — бизнес работает.
@@ -384,16 +391,28 @@ class SubscriptionReminderTests(TestCase):
 
 
 class SubscriptionBeatScheduleTests(TestCase):
-    """Расписание Celery Beat создаётся миграцией."""
+    """
+    Расписание Celery Beat.
 
-    def test_periodic_tasks_exist(self):
+    Жизненным циклом подписки (истечение → grace → expired, напоминания)
+    управляет ЕДИНСТВЕННЫЙ набор задач companies (subscription-auto-freeze /
+    subscription-expiry-notify): они учитывают льготный период. Дублирующие
+    billing-задачи (billing-check-expired / billing-notify-expiring) удалены
+    миграцией 0004 — раньше они морозили компанию сразу по истечении срока,
+    обходя grace, и поведение зависело от порядка запуска двух воркеров.
+    """
+
+    def test_billing_periodic_tasks_are_not_scheduled(self):
         from django_celery_beat.models import PeriodicTask
         names = set(
             PeriodicTask.objects.filter(name__startswith='billing-')
             .values_list('name', flat=True)
         )
-        self.assertIn('billing-check-expired', names)
-        self.assertIn('billing-notify-expiring', names)
-        task = PeriodicTask.objects.get(name='billing-check-expired')
-        self.assertTrue(task.enabled)
-        self.assertEqual(task.task, 'apps.billing.tasks.check_expired_subscriptions')
+        self.assertNotIn('billing-check-expired', names)
+        self.assertNotIn('billing-notify-expiring', names)
+
+    def test_companies_periodic_tasks_are_scheduled(self):
+        from django_celery_beat.models import PeriodicTask
+        names = set(PeriodicTask.objects.values_list('name', flat=True))
+        self.assertIn('subscription-auto-freeze', names)
+        self.assertIn('subscription-expiry-notify', names)

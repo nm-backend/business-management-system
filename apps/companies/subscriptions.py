@@ -66,6 +66,118 @@ class SubscriptionError(ValueError):
     """Некорректный запрос на изменение подписки (превращается в 400)."""
 
 
+def _billing_plan_key(company):
+    """
+    Тариф billing.Subscription по плану каталога (companies.SubscriptionPlan).
+
+    У billing своя плоская шкала (free/pro), у каталога — четыре плана.
+    Платные уровни каталога (business/enterprise) считаются pro, остальные — free.
+    """
+    code = company.plan.code if company.plan else ''
+    return 'pro' if code in ('business', 'enterprise') else 'free'
+
+
+def _sync_billing_subscription(company, *, action, actor=None, note=''):
+    """
+    Приводит billing.Subscription в согласие с полями Company.
+
+    Подписка описана ДВУМЯ моделями: fields на Company (здесь — источник
+    состояния: полный жизненный цикл active/grace/expired/frozen) и
+    apps.billing.models.Subscription (счета, события, экран владельца).
+    Раньше синхронизация шла только в одну сторону (billing → Company), и
+    любое продление/заморозка через этот сервис оставляло billing.Subscription
+    в старом состоянии: владелец видел «истекла», а subscription gate по
+    устаревшей записи блокировал уже продлённую компанию (403).
+
+    Статусы billing: active/expired/frozen. GRACE выражается как active со
+    сроком до конца льготного периода — ровно тот момент, когда доступ
+    действительно закроется. Вызывается внутри транзакции, где строка Company
+    уже заблокирована (или компания только создана).
+    """
+    from apps.billing.models import Subscription as BillingSubscription
+    from apps.billing.models import SubscriptionEvent
+
+    target_status = {
+        Company.SubscriptionStatus.GRACE: BillingSubscription.Status.ACTIVE,
+        Company.SubscriptionStatus.EXPIRED: BillingSubscription.Status.EXPIRED,
+        Company.SubscriptionStatus.FROZEN: BillingSubscription.Status.FROZEN,
+        Company.SubscriptionStatus.CANCELLED: BillingSubscription.Status.EXPIRED,
+    }.get(company.subscription_status, BillingSubscription.Status.ACTIVE)
+
+    target_expires = (
+        company.grace_end
+        if company.subscription_status == Company.SubscriptionStatus.GRACE
+        else company.subscription_end
+    )
+    now = timezone.now()
+
+    sub, created = BillingSubscription.objects.get_or_create(
+        company_id=company.pk,
+        defaults={
+            'plan': _billing_plan_key(company),
+            'status': target_status,
+            'started_at': company.subscription_start or now,
+            'expires_at': target_expires or now,
+        },
+    )
+    if created:
+        SubscriptionEvent.objects.create(
+            subscription=sub, company_id=company.pk,
+            action=SubscriptionEvent.Action.CREATED,
+            actor=actor,
+            actor_role=getattr(actor, 'role', '') if actor is not None else 'system',
+            to_status=target_status,
+            new_expires_at=sub.expires_at,
+            note='Создана синхронизацией с полями Company',
+        )
+        return
+
+    fields = {}
+    if sub.status != target_status:
+        fields['status'] = target_status
+    if sub.plan != _billing_plan_key(company):
+        fields['plan'] = _billing_plan_key(company)
+    if target_expires is not None and sub.expires_at != target_expires:
+        fields['expires_at'] = target_expires
+    if target_status == BillingSubscription.Status.FROZEN and sub.frozen_at is None:
+        fields['frozen_at'] = now
+    elif target_status != BillingSubscription.Status.FROZEN and sub.frozen_at is not None:
+        fields['frozen_at'] = None
+    if action in ('activated', 'extended', 'end_set', 'unfrozen'):
+        fields['last_renewed_at'] = now
+
+    if not fields:
+        return
+
+    old_status = sub.status
+    old_expires = sub.expires_at
+    for field, value in fields.items():
+        setattr(sub, field, value)
+    sub.save(update_fields=[*fields.keys(), 'updated_at'])
+
+    event_action = {
+        'activated': SubscriptionEvent.Action.ACTIVATED,
+        'extended': SubscriptionEvent.Action.EXTENDED,
+        'end_set': SubscriptionEvent.Action.EXTENDED,
+        'frozen': SubscriptionEvent.Action.FROZEN,
+        'unfrozen': SubscriptionEvent.Action.UNFROZEN,
+        'expired': SubscriptionEvent.Action.EXPIRED,
+        'plan_changed': SubscriptionEvent.Action.PLAN_CHANGED,
+    }.get(action)
+    if event_action:
+        SubscriptionEvent.objects.create(
+            subscription=sub, company_id=company.pk,
+            action=event_action,
+            actor=actor,
+            actor_role=getattr(actor, 'role', '') if actor is not None else 'system',
+            from_status=old_status,
+            to_status=sub.status,
+            old_expires_at=old_expires,
+            new_expires_at=sub.expires_at,
+            note=note or '',
+        )
+
+
 @contextmanager
 def _locked_company(company):
     """
@@ -354,6 +466,10 @@ def activate_for_new_company(company, *, actor=None):
         actor=actor,
         note='Триал при создании компании',
     )
+    _sync_billing_subscription(
+        company, action=SubscriptionChange.Action.ACTIVATED, actor=actor,
+        note='Триал при создании компании',
+    )
 
 
 def activate_subscription(company, *, actor=None, note=''):
@@ -386,6 +502,9 @@ def activate_subscription(company, *, actor=None, note=''):
             old_status=old_status, new_status=locked.subscription_status,
             old_end=old_end, new_end=locked.subscription_end,
             actor=actor, note=note,
+        )
+        _sync_billing_subscription(
+            locked, action=SubscriptionChange.Action.ACTIVATED, actor=actor, note=note,
         )
     _notify_subscription_renewed(company)
     return company
@@ -436,6 +555,9 @@ def extend_subscription(company, *, days, actor=None, note=''):
             days_added=days,
             actor=actor, note=note,
         )
+        _sync_billing_subscription(
+            locked, action=SubscriptionChange.Action.EXTENDED, actor=actor, note=note,
+        )
     _notify_subscription_renewed(company)
     return company
 
@@ -475,6 +597,9 @@ def set_subscription_end(company, *, end, actor=None, note=''):
             old_end=old_end, new_end=locked.subscription_end,
             actor=actor, note=note,
         )
+        _sync_billing_subscription(
+            locked, action=SubscriptionChange.Action.END_SET, actor=actor, note=note,
+        )
     _notify_subscription_renewed(company)
     return company
 
@@ -513,6 +638,9 @@ def change_plan(company, *, plan, actor=None, note=''):
             old_plan=old_plan_name, new_plan=plan.name,
             actor=actor, note=note,
         )
+        _sync_billing_subscription(
+            locked, action=SubscriptionChange.Action.PLAN_CHANGED, actor=actor, note=note,
+        )
     _notify_plan_changed(company, plan)
     return company
 
@@ -544,6 +672,9 @@ def freeze_company(company, *, actor=None, note=''):
             old_status=old_status, new_status=locked.subscription_status,
             old_end=old_end, new_end=locked.subscription_end,
             actor=actor, note=note,
+        )
+        _sync_billing_subscription(
+            locked, action=SubscriptionChange.Action.FROZEN, actor=actor, note=note,
         )
     return company
 
@@ -583,6 +714,9 @@ def unfreeze_company(company, *, actor=None, note=''):
             old_end=old_end, new_end=locked.subscription_end,
             actor=actor, note=note,
         )
+        _sync_billing_subscription(
+            locked, action=SubscriptionChange.Action.UNFROZEN, actor=actor, note=note,
+        )
     _notify_subscription_renewed(company)
     return company
 
@@ -611,6 +745,9 @@ def start_grace(company, *, note='Автоматически: срок подп�
             old_status=old_status, new_status=locked.subscription_status,
             old_end=old_end, new_end=locked.subscription_end,
             note=note,
+        )
+        _sync_billing_subscription(
+            locked, action=SubscriptionChange.Action.GRACE_STARTED, note=note,
         )
     _notify_grace_started(company)
     return company
@@ -644,6 +781,9 @@ def expire_company(company, *, note='Автоматически: срок под
             old_status=old_status, new_status=locked.subscription_status,
             old_end=old_end, new_end=locked.subscription_end,
             note=note,
+        )
+        _sync_billing_subscription(
+            locked, action=SubscriptionChange.Action.EXPIRED, note=note,
         )
     _notify_subscription_expired(company)
     return company

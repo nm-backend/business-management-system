@@ -85,7 +85,7 @@ class SubscriptionUI {
     async renew(modal, data, btn) {
         if (btn.disabled) return;
         btn.disabled = true;
-        const plan = (modal.querySelector('input[name="sub-plan']:checked') || {}).value || data.plan;
+        const plan = (modal.querySelector('input[name="sub-plan"]:checked') || {}).value || data.plan;
         try {
             await window.api.request('/billing/subscription/renew/', {
                 method: 'POST',
@@ -97,10 +97,6 @@ class SubscriptionUI {
         } catch (e) {
             btn.disabled = false;
             window.toast.error(window.ui.errorText(e));
-        }
-    }
-}
-
         }
     }
 }

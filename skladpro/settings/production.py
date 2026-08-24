@@ -30,6 +30,16 @@ _railway_private_domain = config('RAILWAY_PRIVATE_DOMAIN', default='')
 if _railway_private_domain and _railway_private_domain not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_railway_private_domain)
 
+# Render: публичный хост (например, skladpro.onrender.com). render.yaml ссылается
+# на него через fromService envVarKey: RENDER_EXTERNAL_HOSTNAME, а здесь он
+# добавляется страховочно (на случай, если переменная приедет напрямую из
+# окружения). Свойство `host` из blueprint-ссылки — это ВНУТРЕННИЙ hostname
+# приватной сети (skladpro-xxxx.onrender.internal), и если ALLOWED_HOSTS задан
+# только им, каждый запрос браузера получает 400 DisallowedHost.
+_render_external_host = config('RENDER_EXTERNAL_HOSTNAME', default='')
+if _render_external_host and _render_external_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_external_host)
+
 # ── Защита: production не должен стартовать с небезопасными настройками ──
 # Превращаем «тихий риск» (Django лишь предупреждает) в громкий отказ запуска.
 from django.core.exceptions import ImproperlyConfigured  # noqa: E402

@@ -82,6 +82,13 @@ class Client(TimestampedModel, SoftDeleteModel):
             locked.total_paid = paid
             locked.debt = max(orders_total - paid, Decimal('0'))
             locked.save(update_fields=['total_orders_amount', 'total_paid', 'debt', 'updated_at'])
+            # Копируем свежие агрегаты в переданный инстанс: auto_archive() и
+            # ветки, читающие self.debt сразу после пересчёта, иначе видят
+            # СТАРЫЙ долг. Воспроизведено: полная оплата после выдачи не
+            # архивировала клиента — в памяти оставался долг до оплаты.
+            self.total_orders_amount = locked.total_orders_amount
+            self.total_paid = locked.total_paid
+            self.debt = locked.debt
 
     def auto_archive(self):
         """Переводит клиента в архив, когда нет долга и активных заказов (правило ТЗ)."""

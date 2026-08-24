@@ -32,11 +32,16 @@ services:
         value: "True"
       - key: MEDIA_SERVE
         value: "True"
+      # Публичный хост (skladpro.onrender.com). Раньше здесь был property: host —
+      # это ВНУТРЕННИЙ hostname приватной сети (skladpro-xxxx.onrender.internal),
+      # и каждый запрос браузера получал 400 DisallowedHost. RENDER_EXTERNAL_HOSTNAME
+      # — публичный домен, который Render задаёт сам; production.py дополнительно
+      # подхватывает его из окружения (страховка, см. skladpro/settings/production.py).
       - key: ALLOWED_HOSTS
         fromService:
           type: web
           name: skladpro
-          property: host
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
       - key: DB_HOST
         fromDatabase:
           name: skladpro-db
