@@ -54,8 +54,14 @@ class AccessKeyRaceTests(TransactionTestCase):
         self.company = Company.objects.create(name='RaceCo')
         self.owner = User.objects.create_user(username='race_o', password='p',
                                               role=User.Role.OWNER, company=self.company)
-        self.worker = User.objects.create_user(username='race_w', password='p',
-                                               role=User.Role.WORKER, company=self.company)
+        # Ключи выдаются только приглашённым (без рабочего пароля). Созданный
+        # с паролем worker вызывал ValueError в issue_access_key, и оба теста
+        # этого класса падали на PostgreSQL (на SQLite они пропускаются).
+        self.worker = User.objects.create_user(
+            username='race_w', role=User.Role.WORKER, company=self.company,
+        )
+        self.worker.set_unusable_password()
+        self.worker.save()
 
     def test_only_one_active_key_under_concurrent_issue(self):
         """РЕГРЕССИЯ подтверждённой гонки: 16 потоков -> ровно 1 активный ключ."""
