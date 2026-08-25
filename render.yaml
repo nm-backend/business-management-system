@@ -1,20 +1,21 @@
 # ── SkladPro.Nod — Render Blueprint ──────────────────────────────────────────
+#
 # Деплой: Render → New → Blueprint → выбрать этот файл.
 #
 # ПЕРЕД ДЕПЛОЕМ создайте Environment Group "skladpro-secrets" в Render Dashboard:
 #   Render → Environment Groups → New Group → "skladpro-secrets"
 #   Добавьте: SECRET_KEY (сгенерируйте длинный случайный ключ)
 #
-# Все сервисы ссылаются на эту группу — SECRET_KEY общий для web, worker и beat.
-# Без этого JWT-токены, подписанные web, невалидны в worker/beat.
+# Все сервисы используют одну SECRET_KEY:
+#   web + worker + beat
 #
-# После деплоя проверьте:
-#   1. Health check: https://<ваш-домен>/api/v1/core/health/ → 200
+# После деплоя:
+#   1. Health: https://<ваш-домен>/api/v1/core/health/
 #   2. Admin: https://<ваш-домен>/admin/
-#   3. Создайте суперадмина: https://<ваш-домен>/accounts/setup/
+#   3. Setup: https://<ваш-домен>/accounts/setup/
 
 services:
-  # ── Web: Django + Daphne (ASGI для WebSocket) ──
+  # ── Web: Django + Daphne ──
   - name: skladpro
     type: web
     runtime: docker
@@ -22,66 +23,86 @@ services:
     plan: starter
     healthCheckPath: /api/v1/core/health/
     autoDeployTrigger: commit
+
     envVars:
       - fromGroup: skladpro-secrets
+
       - key: DJANGO_ENV
         value: production
+
       - key: DEBUG
         value: "False"
+
       - key: SECURE_SSL_REDIRECT
         value: "True"
+
       - key: MEDIA_SERVE
         value: "True"
+
       - key: ALLOWED_HOSTS
         fromService:
           type: web
           name: skladpro
           property: host
+
+      # PostgreSQL
       - key: DB_HOST
         fromDatabase:
           name: skladpro-db
           property: host
+
       - key: DB_PORT
         fromDatabase:
           name: skladpro-db
           property: port
+
       - key: DB_NAME
         fromDatabase:
           name: skladpro-db
           property: database
+
       - key: DB_USER
         fromDatabase:
           name: skladpro-db
           property: user
+
       - key: DB_PASSWORD
         fromDatabase:
           name: skladpro-db
           property: password
+
+      # Redis / Key Value
       - key: REDIS_URL
         fromService:
           type: keyvalue
           name: skladpro-redis
           property: connectionString
-      # Media Storage: задайте S3/R2 credentials для сохранения фото при redeploy.
-      # Без этого фото эфемерны и теряются при каждом деплое.
-      # - key: AWS_STORAGE_BUCKET_NAME
-      #   sync: false
-      # - key: AWS_ACCESS_KEY_ID
-      #   sync: false
-      # - key: AWS_SECRET_ACCESS_KEY
-      #   sync: false
-      # - key: AWS_S3_ENDPOINT_URL
-      #   sync: false
-      # - key: AWS_S3_REGION_NAME
-      #   sync: false
 
-  # ── Redis: Channel Layer + Celery Broker ──
+      # ── Persistent Media: S3 / Cloudflare R2 ──
+      # Заполните эти переменные в Render Dashboard.
+      # Без persistent storage фотографии могут исчезнуть после redeploy.
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+
+      - key: AWS_S3_REGION_NAME
+        sync: false
+
+  # ── Redis / Key Value: Celery + Channels ──
   - name: skladpro-redis
     type: keyvalue
     plan: free
     ipAllowList: []
 
-  # ── Celery Worker: фоновые задачи (бэкап, подписки, уведомления) ──
+  # ── Celery Worker ──
   - name: skladpro-worker
     type: worker
     runtime: docker
@@ -89,45 +110,59 @@ services:
     plan: starter
     dockerCommand: celery -A skladpro worker -l info --concurrency=2
     autoDeployTrigger: commit
+
     envVars:
       - fromGroup: skladpro-secrets
+
       - key: DJANGO_ENV
         value: production
+
       - key: DEBUG
         value: "False"
+
       - key: SKIP_INIT
         value: "1"
+
       - key: SECURE_SSL_REDIRECT
         value: "False"
+
       - key: ALLOWED_HOSTS
         value: "worker.internal"
+
+      # PostgreSQL
       - key: DB_HOST
         fromDatabase:
           name: skladpro-db
           property: host
+
       - key: DB_PORT
         fromDatabase:
           name: skladpro-db
           property: port
+
       - key: DB_NAME
         fromDatabase:
           name: skladpro-db
           property: database
+
       - key: DB_USER
         fromDatabase:
           name: skladpro-db
           property: user
+
       - key: DB_PASSWORD
         fromDatabase:
           name: skladpro-db
           property: password
+
+      # Redis
       - key: REDIS_URL
         fromService:
           type: keyvalue
           name: skladpro-redis
           property: connectionString
 
-  # ── Celery Beat: планировщик periodic tasks (DatabaseScheduler) ──
+  # ── Celery Beat ──
   - name: skladpro-beat
     type: worker
     runtime: docker
@@ -135,38 +170,52 @@ services:
     plan: starter
     dockerCommand: celery -A skladpro beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     autoDeployTrigger: commit
+
     envVars:
       - fromGroup: skladpro-secrets
+
       - key: DJANGO_ENV
         value: production
+
       - key: DEBUG
         value: "False"
+
       - key: SKIP_INIT
         value: "1"
+
       - key: SECURE_SSL_REDIRECT
         value: "False"
+
       - key: ALLOWED_HOSTS
         value: "beat.internal"
+
+      # PostgreSQL
       - key: DB_HOST
         fromDatabase:
           name: skladpro-db
           property: host
+
       - key: DB_PORT
         fromDatabase:
           name: skladpro-db
           property: port
+
       - key: DB_NAME
         fromDatabase:
           name: skladpro-db
           property: database
+
       - key: DB_USER
         fromDatabase:
           name: skladpro-db
           property: user
+
       - key: DB_PASSWORD
         fromDatabase:
           name: skladpro-db
           property: password
+
+      # Redis
       - key: REDIS_URL
         fromService:
           type: keyvalue
