@@ -34,3 +34,10 @@ backups/
 # Документация не нужна в образе для сборки
 *.md
 docs/
+
+# Stale captured test/CI logs: не используются приложением и только
+# раздувают Docker build context (~20 МБ test_*.txt). Исключаем из образа.
+test_full.txt
+test_run2.txt
+test_output.txt
+check_deploy_output.txt

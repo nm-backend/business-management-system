@@ -387,23 +387,37 @@ python manage.py runserver
 
 # 🚀 Деплой в интернет / Интернетга жойлаштириш
 
-**RU:** Проект готов к Railway/Render. Обязательные шаги владельца:
-**UZ:** Лойиҳа Railway/Render учун тайёр. Эга бажариши шарт бўлган қадамлар:
+**RU:** Проект готов к Render — единственной production-платформе (Railway больше
+не используется; `railway.toml` удалён). Вся инфраструктура — в `render.yaml`:
+Render → New → Blueprint → выбрать `render.yaml`.
+**UZ:** Такимиратув саҚлиқ — Render (`railway.toml` ўчирилган). Инфраструктура
+`render.yaml`да: Render → New → Blueprint → `render.yaml`.
 
-1. **RU:** Создать сервисы **PostgreSQL** и **Redis** на платформе. **UZ:** Платформада **PostgreSQL** ва **Redis** сервисларини яратинг.
-2. **RU:** Задать переменные: `SECRET_KEY` (настоящий!), `DEBUG=False`, `DJANGO_ENV=production`, `ALLOWED_HOSTS=<домен>`, `REDIS_URL`, `DB_*`.
-   **UZ:** Ўзгарувчиларни киритинг: `SECRET_KEY` (ҳақиқий!), `DEBUG=False`, `DJANGO_ENV=production`, `ALLOWED_HOSTS=<домен>`, `REDIS_URL`, `DB_*`.
-3. **RU:** Команда запуска: / **UZ:** Ишга тушириш буйруғи:
+1. **RU:** Environment Group `skladpro-secrets` → + `SECRET_KEY` (длинный случайный).
+   Ключ яратиш:
+   ```bash
+   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
    ```
-   daphne -b 0.0.0.0 -p $PORT skladpro.asgi:application
-   ```
-   **RU:** ⚠️ Обычный gunicorn НЕ обслужит WebSocket — чат работать не будет.
-   **UZ:** ⚠️ Оддий gunicorn WebSocket ни қўллаб-қувватламайди — чат ишламайди.
-
-**RU:** Сгенерировать `SECRET_KEY`: / **UZ:** `SECRET_KEY` яратиш:
-```bash
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-```
+   **UZ:** `skladpro-secrets` → `SECRET_KEY`.
+2. **RU:** Render → New → Blueprint → `render.yaml`. Render создаст: Web Service
+   (Daphne/ASGI, `$PORT` через Dockerfile), PostgreSQL (`skladpro-db`), Redis
+   (`skladpro-redis`), Celery Worker (`skladpro-worker`) и Celery Beat
+   (`skladpro-beat`). `SKIP_INIT=1` у воркера/бита — миграции, статика и
+   супер-админ применяются входом web через `docker/entrypoint.sh`.
+   **UZ:** Blueprint → `render.yaml`. Web (Daphne), PostgreSQL, Redis, Worker, Beat.
+3. **RU:** Чтобы войти в `/admin/`, один раз задайте в Environment Group
+   `DJANGO_SUPERUSER_USERNAME` + `DJANGO_SUPERUSER_PASSWORD` (читает
+   `ensure_superuser` из entrypoint); либо `/accounts/setup/` после старта.
+   **UZ:** `/admin/` учун `DJANGO_SUPERUSER_USERNAME` ва `DJANGO_SUPERUSER_PASSWORD`.
+4. **RU:** ⚠️ Обычный gunicorn НЕ обслужит WebSocket — чат работать не будет.
+   Запуск через Daphne в Dockerfile (уже настроен, `$PORT` подставляет Render).
+   **UZ:** ⚠️ gunicorn WebSocket ни қўллаб-қувватламайди. Daphne (Dockerfile).
+5. **RU:** Медиа (фото работ/материалов/готовой продукции, аватары) хранится на
+   эфемерном filesystem Render — после redeploy исчезнут. Чтобы сохранять фото,
+   включите S3/R2: задайте credentials в Environment Group (см. закомментированные
+   строки в `render.yaml`): `AWS_STORAGE_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`,
+   `AWS_SECRET_ACCESS_KEY`, `AWS_S3_ENDPOINT_URL`, `AWS_S3_REGION_NAME`.
+   **UZ:** Медиа эфемер; S3/R2 уйимлаштиринг (render.yaml шартлари).
 
 ---
 
