@@ -9,7 +9,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError, MethodNotAllowed
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
@@ -101,17 +101,8 @@ class ExpenseViewSet(CompanyScopedViewSet):
                 request=self.request,
             )
 
-    def perform_destroy(self, instance):
-        from apps.audit.models import AuditLog
-        from apps.audit.services import write_audit_log
-
-        write_audit_log(
-            action=AuditLog.Action.DELETE,
-            actor=self.request.user,
-            target=instance,
-            request=self.request,
-        )
-        instance.delete()
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Financial records cannot be deleted.')
 
 
 class LaborRateReadPermission(BasePermission):
@@ -198,16 +189,8 @@ class LaborRateViewSet(CompanyScopedViewSet):
                 request=self.request,
             )
 
-    def perform_destroy(self, instance):
-        from apps.audit.models import AuditLog
-        from apps.audit.services import write_audit_log
-        write_audit_log(
-            action=AuditLog.Action.DELETE,
-            actor=self.request.user,
-            target=instance,
-            request=self.request,
-        )
-        instance.delete()
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Financial records cannot be deleted.')
 
 
 class WorkerPaymentViewSet(CompanyScopedViewSet):
@@ -409,13 +392,5 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
                 request=self.request,
             )
 
-    def perform_destroy(self, instance):
-        from apps.audit.models import AuditLog
-        from apps.audit.services import write_audit_log
-        write_audit_log(
-            action=AuditLog.Action.DELETE,
-            actor=self.request.user,
-            target=instance,
-            request=self.request,
-        )
-        instance.delete()
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE', detail='Financial records cannot be deleted.')

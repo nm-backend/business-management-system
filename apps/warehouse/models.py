@@ -130,6 +130,20 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
         verbose_name = 'Сырьё (материал)'
         verbose_name_plural = 'Склад сырья'
         ordering = ['name']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(quantity__gte=0),
+                name='rawmaterial_quantity_nonnegative',
+            ),
+            models.CheckConstraint(
+                check=models.Q(reserved_for_orders__gte=0),
+                name='rawmaterial_reserved_nonnegative',
+            ),
+            models.CheckConstraint(
+                check=models.Q(reserved_for_orders__lte=models.F('quantity')),
+                name='rawmaterial_reserved_lte_quantity',
+            ),
+        ]
 
     def __str__(self):
         """
@@ -218,6 +232,20 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         verbose_name = 'Готовая продукция'
         verbose_name_plural = 'Готовая продукция'
         ordering = ['name']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(quantity__gte=0),
+                name='finishedproduct_quantity_nonnegative',
+            ),
+            models.CheckConstraint(
+                check=models.Q(reserved_for_orders__gte=0),
+                name='finishedproduct_reserved_nonnegative',
+            ),
+            models.CheckConstraint(
+                check=models.Q(reserved_for_orders__lte=models.F('quantity')),
+                name='finishedproduct_reserved_lte_quantity',
+            ),
+        ]
 
     def __str__(self):
         """
