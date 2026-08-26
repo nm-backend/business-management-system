@@ -123,6 +123,9 @@ class SubscriptionAdmin(admin.ModelAdmin):
             'expiring': expiring,
             'blocked': blocked,
         }
+        # Ensure context is a proper dict for template rendering to avoid
+        # Django test client ContextList copy issue (Django bug)
+        context = dict(context)
         return render(request, 'admin/billing/subscription_dashboard.html', context)
 
     def quick_extend_view(self, request, pk):

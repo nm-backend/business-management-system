@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from apps.audit.models import AuditLog
 from apps.audit.services import write_audit_log
@@ -141,6 +142,18 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
     # приходовало товар по отменённой сделке.
     if work.task and work.task.order and work.task.order.status == work.task.order.Status.CANCELLED:
         raise AlreadyProcessedError('Заказ отменён - работу подтвердить нельзя')
+
+    # Валидация defect_quantity: не может быть отрицательным,
+    # не может превышать количество, и количество не может быть нулевым при наличии брака.
+    if work.defect_quantity is not None:
+        if work.defect_quantity < 0:
+            raise ValidationError({'defect_quantity': 'Количество брака не может быть отрицательным.'})
+        if work.defect_quantity > work.quantity:
+            raise ValidationError({'defect_quantity': 'Количество брака не может превышать общее количество.'})
+    if work.quantity is not None and work.quantity <= 0:
+        raise ValidationError({'quantity': 'Количество должно быть больше нуля.'})
+    if work.defect_quantity is not None and work.defect_quantity > 0 and (work.quantity is None or work.quantity <= 0):
+        raise ValidationError({'quantity': 'При наличии брака количество должно быть больше нуля.'})
 
     product = work.product
     # Сырьё уходит и на брак: рабочий его уже израсходовал, годным оно не
