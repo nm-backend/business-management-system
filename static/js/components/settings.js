@@ -300,11 +300,7 @@ class SettingsComponent {
             <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">
                 <div class="list-row" style="cursor:default;">
                     <span class="text-sm font-bold">Nurullo Musajanov</span>
-                    <span class="text-sm text-muted">Backend Developer</span>
-                </div>
-                <div class="list-row" style="cursor:default;">
-                    <span class="text-sm font-bold">Claude (Anthropic AI)</span>
-                    <span class="text-sm text-muted" style="text-align:right;">Financial Architecture &amp; System Design</span>
+                    <span class="text-sm text-muted">Full-stack Developer</span>
                 </div>
             </div>
             <div class="section-title" data-i18n="about.contacts"></div>
