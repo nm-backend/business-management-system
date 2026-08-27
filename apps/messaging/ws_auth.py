@@ -34,8 +34,14 @@ def _resolve_user_by_ticket(ticket):
         return AnonymousUser()
     try:
         with transaction.atomic():
+            # select_related('user') — INNER JOIN (WsTicket.user ненулевой).
+            # НЕ тянем user__company в тот же FOR UPDATE: Company FK у
+            # пользователя nullable, и PostgreSQL запрещает FOR UPDATE на
+            # nullable-стороне outer join (NotSupportedError: FOR UPDATE cannot
+            # be applied to the nullable side of an outer join). Company читаем
+            # отдельным запросом ниже.
             ws_ticket = WsTicket.objects.select_for_update().select_related(
-                'user', 'user__company',
+                'user',
             ).get(
                 ticket=ticket, used=False, expires_at__gt=timezone.now(),
             )
@@ -49,7 +55,7 @@ def _resolve_user_by_ticket(ticket):
             # «протухающему» тикету (вход и профиль остаются доступными,
             # чат — нет).
             if user.company_id is not None:
-                company = getattr(user, 'company', None)
+                company = user.company  # отдельный SELECT вне FOR UPDATE
                 if company is None or not company.is_subscription_active:
                     return AnonymousUser()
             # Одноразовость: помечаем использованным ДО открытия соединения.

@@ -30,6 +30,7 @@
 Все три среза (БД, analytics-API/дашборд, экспорт) обязаны совпадать.
 """
 import datetime
+import io
 from decimal import Decimal
 
 from django.db.models import Sum
@@ -193,10 +194,22 @@ class EndToEndReconciliationTests(TestCase):
 
     def test_export_matches_analytics(self):
         d = self.api.get(ANALYTICS, {'period': 'month'}).json()
+        expected = {
+            'revenue': Decimal('70000'),
+            'cost_of_goods': Decimal('5500'),
+            'net_profit': Decimal('52500'),
+            'cash': Decimal('58000'),
+            'client_debts': Decimal('30000'),
+            'worker_debts': Decimal('3000'),
+        }
+        for key, value in expected.items():
+            self.assertEqual(Decimal(str(d[key])), value, key)
+
+        # CSV: тот же owner_analytics_data.
         resp = self.api.get(EXPORT, {'format': 'csv'})
         self.assertEqual(resp.status_code, 200, resp.content[:200])
+        self.assertEqual(resp['Content-Type'], 'text/csv; charset=utf-8')
         body = resp.content.decode('utf-8', 'replace').replace(' ', '')
-        # Экспорт использует тот же owner_analytics_data: ключевые суммы совпадают.
         for label, value in (
             ('Даромад', '70000'),       # revenue
             ('Таннарх', '5500'),        # COGS
@@ -205,11 +218,29 @@ class EndToEndReconciliationTests(TestCase):
             ('Мижозларқарзи', '30000'),  # client debt
             ('Ишчиларқарзи', '3000'),    # worker debt
         ):
-            self.assertIn(f'{label};{value}', body, f'в экспорте нет {label};{value}')
-        # И сверяем с API: те же суммы.
-        self.assertEqual(Decimal(str(d['revenue'])), Decimal('70000'))
-        self.assertEqual(Decimal(str(d['net_profit'])), Decimal('52500'))
-        self.assertEqual(Decimal(str(d['cash'])), Decimal('58000'))
+            self.assertIn(f'{label};{value}', body, f'в CSV нет {label};{value}')
+
+        # XLSX: те же числа в ячейках (парсим openpyxl).
+        resp = self.api.get(EXPORT, {'format': 'xlsx'})
+        self.assertEqual(resp.status_code, 200, resp.content[:200])
+        from openpyxl import load_workbook
+        wb = load_workbook(io.BytesIO(resp.content))
+        sheet = wb['Finance']
+        cells = {}
+        for row in sheet.iter_rows(values_only=True):
+            if row and row[0] is not None:
+                cells[str(row[0])] = row[1]
+        # Ключи совпадают с CSV (по тексту отчёта).
+        self.assertEqual(str(cells.get('Даромад')), '70000')
+        self.assertEqual(str(cells.get('Таннарх')), '5500')
+        self.assertEqual(str(cells.get('Соф фойда')), '52500')
+        self.assertEqual(str(cells.get('Касса')), '58000')
+
+        # PDF: 200 + content-type (числа не парсим — тот же rows-источник).
+        resp = self.api.get(EXPORT, {'format': 'pdf'})
+        self.assertEqual(resp.status_code, 200, resp.content[:200])
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertTrue(resp.content.startswith(b'%PDF'))
 
 
 class PeriodBoundaryReconciliationTests(TestCase):

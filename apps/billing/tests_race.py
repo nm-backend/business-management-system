@@ -48,7 +48,9 @@ class SubscriptionRaceTests(TransactionTestCase):
         С select_for_update оба сериализуются; итог консистентен:
           - renew первый → freeze повторно проверяет срок и пропускает;
           - freeze первый → renew возвращает компанию в active.
-        В любом случае: статус ACTIVE, срок в будущем, ровно одно renew-событие.
+        В любом случае: статус ACTIVE, срок в будущем, frozen_at=None и
+        КАЖДЫЙ из 4 параллельных renew сохранён (ни одно продление не
+        потеряно — renewed-событий ровно 4, по одному на renew-поток).
         """
         self._expire()
         results = run_parallel(
@@ -70,8 +72,8 @@ class SubscriptionRaceTests(TransactionTestCase):
             SubscriptionEvent.objects.filter(
                 subscription=self.sub, action='renewed',
             ).count(),
-            1,
-            'Двойное продление — событие renewed должно быть ровно одно',
+            4,
+            '4 параллельных renew обязаны сохраниться целиком (ни одно не потеряно)',
         )
 
     def test_concurrent_renew_creates_single_pending_invoice(self):

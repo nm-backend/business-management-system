@@ -54,8 +54,15 @@ class AccessKeyRaceTests(TransactionTestCase):
         self.company = Company.objects.create(name='RaceCo')
         self.owner = User.objects.create_user(username='race_o', password='p',
                                               role=User.Role.OWNER, company=self.company)
+        # Ключи выпускаются только ПРИГЛАШЁННЫМ (без рабочего пароля): у
+        # активированного сотрудника issue_access_key отклоняет выдачу
+        # (захват аккаунта). Фикстура устарела после введения этого запрета —
+        # сотрудника создаём приглашённым (unusable password), как в
+        # apps/accounts/tests.py AccessKeyModelTests.
         self.worker = User.objects.create_user(username='race_w', password='p',
                                                role=User.Role.WORKER, company=self.company)
+        self.worker.set_unusable_password()
+        self.worker.save(update_fields=['password'])
 
     def test_only_one_active_key_under_concurrent_issue(self):
         """РЕГРЕССИЯ подтверждённой гонки: 16 потоков -> ровно 1 активный ключ."""

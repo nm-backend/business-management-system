@@ -5,7 +5,9 @@
 ответ API (4xx JSON), а не 500 и не HTML-страницу ошибки Django.
 """
 import json
+import os
 import re
+import tempfile
 
 from django.test import TestCase
 from django.urls import get_resolver, resolve, Resolver404
@@ -14,7 +16,11 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.companies.models import Company
 
-REPORT = r'C:\Users\User\AppData\Local\Temp\opencode\fuzz_report.txt'
+# Отчёт фаззера пишется в системный tempdir, а не в корень репозитория:
+# прежний путь был жёстко зашит под Windows-машину автора
+# ('C:\\Users\\...\\fuzz_report.txt') и на Linux создавал мусорный файл с этим
+# именем прямо в рабочей директории.
+REPORT = os.path.join(tempfile.gettempdir(), 'skladpro_fuzz_report.txt')
 
 PATH_GARBAGE = ['abc', '0', '-1', '999999999999999999999', '1.5', 'null']
 
