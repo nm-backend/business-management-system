@@ -2,6 +2,7 @@
  * Дашборд: у каждой роли своя главная.
  * Owner - финансовая аналитика, Admin - операционные показатели без денег,
  * Worker - задачи на сегодня и заработок.
+ * SuperAdmin - Платформенный дашборд (компании, подписки, статистика).
  */
 class DashboardComponent {
     async render(container) {
@@ -9,7 +10,9 @@ class DashboardComponent {
         window.i18n.applyTranslations();
 
         const user = window.currentUser;
-        if (user.is_owner) await this.renderOwner(container);
+        if (user.is_superadmin) {
+            await this.renderSuperAdmin(container);
+        } else if (user.is_owner) await this.renderOwner(container);
         else if (user.is_admin || user.is_manager) await this.renderAdmin(container);
         else await this.renderWorker(container);
         window.i18n.applyTranslations();
@@ -22,6 +25,62 @@ class DashboardComponent {
             .map((cat) => ({ label: window.ui.t('expense_categories.' + cat), value: Number(byCat[cat]) }))
             .filter((s) => s.value > 0)
             .sort((a, b) => b.value - a.value);
+    }
+
+    async renderSuperAdmin(container) {
+        document.getElementById('page-title').setAttribute('data-i18n', 'superadmin.dashboard_title');
+        window.i18n.applyTranslations();
+
+        let stats = {};
+        try {
+            stats = await window.api.request('/companies/stats/');
+        } catch (e) {
+            console.error('Failed to load platform stats', e);
+        }
+
+        container.innerHTML = `
+            <div class="page-hero">
+                <div>
+                    <div class="eyebrow" data-i18n="superadmin.welcome"></div>
+                    <h2 data-i18n="superadmin.dashboard_title"></h2>
+                </div>
+            </div>
+
+            <div class="stat-grid">
+                ${window.ui.statCard({ icon: window.icon('building', 18), color: 'blue', titleKey: 'superadmin.stat_total', value: stats.total || 0 })}
+                ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'green', titleKey: 'superadmin.stat_active', value: stats.active || 0 })}
+                ${window.ui.statCard({ icon: window.icon('star', 18), color: 'teal', titleKey: 'superadmin.stat_trial', value: stats.trial || 0 })}
+                ${window.ui.statCard({ icon: window.icon('clock', 18), color: 'orange', titleKey: 'superadmin.stat_grace', value: stats.grace || 0 })}
+                ${window.ui.statCard({ icon: window.icon('alert-triangle', 18), color: 'purple', titleKey: 'superadmin.stat_expiring', value: stats.expiring_soon || 0 })}
+                ${window.ui.statCard({ icon: window.icon('pause-circle', 18), color: 'red', titleKey: 'superadmin.stat_expired', value: stats.expired || 0 })}
+                ${window.ui.statCard({ icon: window.icon('lock', 18), color: 'gray', titleKey: 'superadmin.stat_frozen', value: stats.frozen || 0 })}
+                ${window.ui.statCard({ icon: window.icon('x-circle', 18), color: 'dark', titleKey: 'superadmin.stat_cancelled', value: stats.cancelled || 0 })}
+            </div>
+
+            ${(stats.expiring_soon > 0 || stats.grace > 0 || stats.frozen > 0) ? `
+            <div class="alert-box alert-box-warning" style="margin-bottom:16px;">
+                <span>${window.icon('alert-triangle', 16)} <strong data-i18n="superadmin.attention_needed"></strong></span>
+                <span class="badge badge-progress">${stats.expiring_soon || 0} ${window.ui.t('superadmin.expiring_soon')}</span>
+                ${stats.grace > 0 ? `<span class="badge badge-progress" style="margin-left:4px;">${stats.grace} ${window.ui.t('superadmin.in_grace')}</span>` : ''}
+                ${stats.frozen > 0 ? `<span class="badge badge-progress" style="margin-left:4px;">${stats.frozen} ${window.ui.t('superadmin.frozen')}</span>` : ''}
+            </div>` : ''}
+
+            <div class="card-grid">
+                <div class="card card-minimal">
+                    <div class="card-title" data-i18n="superadmin.recent_activity"></div>
+                    ${window.ui.statCard({ icon: window.icon('plus-circle', 18), color: 'blue', titleKey: 'superadmin.stat_recent_subs', value: stats.recent_subscriptions || 0 })}
+                    ${window.ui.statCard({ icon: window.icon('repeat', 18), color: 'green', titleKey: 'superadmin.stat_recent_renewals', value: stats.recent_renewals || 0 })}
+                </div>
+                <div class="card card-minimal">
+                    <div class="card-title" data-i18n="superadmin.quick_actions"></div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <a class="btn btn-primary btn-block" href="#/companies" data-i18n="superadmin.manage_companies"></a>
+                        <a class="btn btn-secondary btn-block" href="#/messages?tab=notifications" data-i18n="superadmin.view_notifications"></a>
+                        <a class="btn btn-secondary btn-block" href="#/settings" data-i18n="settings.title"></a>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     async renderOwner(container) {

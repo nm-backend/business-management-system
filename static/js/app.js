@@ -65,25 +65,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('authenticated');
     setupSidebar(user);
 
-    // Платформенный супер-администратор управляет только компаниями.
+    // Платформенный супер-администратор управляет платформой (компании, подписки, аудит).
+    // Бизнес-данные (заказы, склад, производство, клиенты, финансы) ему недоступны.
     if (user.is_superadmin) {
         document.getElementById('notifications-btn').addEventListener('click', () => {
             window.location.hash = '#/messages?tab=notifications';
         });
-        // Скрываем пункты нижней навигации, недоступные для superadmin
-        // (сайдбар фильтруется в setupSidebar через data-role).
-        ['nav-orders', 'nav-warehouse', 'nav-clients', 'nav-production'].forEach(function(id) {
+        // Скрываем пункты навигации, недоступные для superadmin
+        // (сайдбар фильтруется в setupSidebar через data-role, bottom-nav здесь).
+        ['nav-orders', 'nav-warehouse', 'nav-clients', 'nav-production', 'nav-finance'].forEach(function(id) {
             let el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
-        window.router.addRoute('/', window.CompaniesComponent);
+        // SuperAdmin routes: только платформенные
+        window.router.addRoute('/', window.PlatformDashboardComponent);
         window.router.addRoute('/companies', window.CompaniesComponent);
         window.router.addRoute('/messages', window.MessagesComponent);
         window.router.addRoute('/settings', window.SettingsComponent);
+        // Блокируем прямой доступ к бизнес-маршрутам
+        ['/orders', '/warehouse', '/finished-products', '/production', '/clients', '/finance', '/subscription', '/audit', '/backup'].forEach(function(path) {
+            window.router.addRoute(path, function(container) {
+                container.innerHTML = '<div class="card route-error"><p class="eyebrow">403</p><h1 data-i18n="common.forbidden">Доступ запрещён</h1><p data-i18n="superadmin.no_business_access"></p><a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard">Платформа</a></div>';
+                window.i18n.applyTranslations();
+            });
+        });
         window.router.handleRoute();
 
-        // Суперадмину тоже доступны push и колокольчик: подписки компаний
-        // — его прямая зона ответственности.
         if (localStorage.getItem('theme') === 'dark') {
             document.body.classList.add('theme-dark');
         }

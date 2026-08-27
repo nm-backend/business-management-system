@@ -64,6 +64,10 @@ class CompaniesComponent {
                     <span>Русский</span>
                     <span class="text-success font-bold" style="${window.i18n.currentLang === 'ru' ? '' : 'visibility:hidden;'}">✓</span>
                 </div>
+                <div class="list-row lang-option" data-lang="ky">
+                    <span>Кыргызча</span>
+                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'ky' ? '' : 'visibility:hidden;'}">✓</span>
+                </div>
             </div>
             <div class="list-group" style="margin-top:16px;">
                 <div class="list-row" id="logout-row">
