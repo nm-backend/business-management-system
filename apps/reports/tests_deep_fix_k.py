@@ -59,8 +59,8 @@ class ShortageExportTests(TestCase):
         material = RawMaterial.objects.create(
             company=self.company, name='Мрамор', quantity=Decimal('10'),
             min_stock=Decimal('10'), unit='dona')
-        material.reserved_for_orders = Decimal('9')
-        material.save(update_fields=['reserved_for_orders'])
+        material.required_for_orders = Decimal('9')
+        material.save(update_fields=['required_for_orders'])
         resp = self.api.get(SHORTAGE)
         self.assertEqual(resp.status_code, 200, resp.content[:200])
         rows = list(csv.reader(io.StringIO(resp.content.decode('utf-8')), delimiter=';'))
@@ -73,8 +73,8 @@ class ShortageExportTests(TestCase):
         material = RawMaterial.objects.create(
             company=self.company, name='Гранит', quantity=Decimal('12'),
             min_stock=Decimal('10'), unit='dona')
-        material.reserved_for_orders = Decimal('2')
-        material.save(update_fields=['reserved_for_orders'])
+        material.required_for_orders = Decimal('2')
+        material.save(update_fields=['required_for_orders'])
         resp = self.api.get(SHORTAGE)
         rows = list(csv.reader(io.StringIO(resp.content.decode('utf-8')), delimiter=';'))
         data_rows = [r for r in rows if r and r[0] == 'Гранит']

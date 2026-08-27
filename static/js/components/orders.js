@@ -305,7 +305,7 @@ class OrdersComponent {
         const products = productsResp.results || productsResp;
 
         const productById = new Map(products.map((p) => [String(p.id), p]));
-        // В режиме редактирования в reserved_for_orders учтён и резерв
+        // В режиме редактирования в required_for_orders учтён и резерв
         // ЭТОГО заказа — при выдаче он снимается, поэтому при сверке
         // с формой его нужно вернуть обратно в доступное количество.
         const ownReserved = (o && o.product) ? (Number(o.quantity) || 0) : 0;

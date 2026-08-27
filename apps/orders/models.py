@@ -139,13 +139,15 @@ class Order(TimestampedModel, SoftDeleteModel):
             self.payment_status = self.PaymentStatus.UNPAID
         self.save(update_fields=['payment_status', 'updated_at'])
 
-    def reserve_product(self):
+    def apply_product_requirement(self):
         """
-        Резервирует товар под заказ: reserved_for_orders += quantity.
+        Учитывает потребность заказа в товаре: required_for_orders += quantity.
 
-        Атомарно (select_for_update), чтобы два параллельных заказа на один
-        товар не потеряли резерв друг друга (как в apply_payment_amount).
-        Заказ без товара (custom_product_name) ничего не резервирует.
+        Это потребность (demand), а не физический резерв: она может превышать
+        остаток, нехватка помечается has_product_shortage. Атомарно
+        (select_for_update), чтобы два параллельных заказа на один товар не
+        потеряли потребность друг друга (как в apply_payment_amount).
+        Заказ без товара (custom_product_name) потребности не создаёт.
         """
         if not self.product_id or not self.quantity:
             return
@@ -153,17 +155,17 @@ class Order(TimestampedModel, SoftDeleteModel):
 
         with transaction.atomic():
             product = FinishedProduct.objects.select_for_update().get(pk=self.product_id)
-            product.reserved_for_orders = (product.reserved_for_orders or Decimal('0')) + self.quantity
-            product.save(update_fields=['reserved_for_orders', 'updated_at'])
+            product.required_for_orders = (product.required_for_orders or Decimal('0')) + self.quantity
+            product.save(update_fields=['required_for_orders', 'updated_at'])
 
-    def release_product(self, product_id=None, quantity=None):
+    def release_product_requirement(self, product_id=None, quantity=None):
         """
-        Снимает резерв товара: reserved_for_orders -= quantity.
+        Снимает потребность заказа в товаре: required_for_orders -= quantity.
 
         product_id/quantity принимаются явно для пересчёта при смене товара или
-        количества заказа (в perform_update старый резерв снимается по старым
-        значениям). Без аргументов используются собственные product/quantity.
-        Резерв не уходит в минус (заказы, созданные до фичи, резерва не имели).
+        количества заказа (в perform_update старая потребность снимается по
+        старым значениям). Без аргументов используются собственные
+        product/quantity. Потребность не уходит в минус.
         """
         pid = product_id if product_id is not None else self.product_id
         qty = quantity if quantity is not None else self.quantity
@@ -173,8 +175,8 @@ class Order(TimestampedModel, SoftDeleteModel):
 
         with transaction.atomic():
             product = FinishedProduct.objects.select_for_update().get(pk=pid)
-            product.reserved_for_orders = max((product.reserved_for_orders or Decimal('0')) - qty, Decimal('0'))
-            product.save(update_fields=['reserved_for_orders', 'updated_at'])
+            product.required_for_orders = max((product.required_for_orders or Decimal('0')) - qty, Decimal('0'))
+            product.save(update_fields=['required_for_orders', 'updated_at'])
 
     def _recipe_requirements(self, product_id=None, quantity=None):
         """[(material, required_qty), ...] по активному рецепту товара."""
@@ -191,14 +193,15 @@ class Order(TimestampedModel, SoftDeleteModel):
             return []
         return get_recipe_requirements(product, qty)
 
-    def reserve_raw_materials(self):
+    def apply_raw_material_requirements(self):
         """
-        Резервирует сырьё под заказ: по активному рецепту товара
-        reserved_for_orders += required * quantity.
+        Учитывает потребность заказа в сырье: по активному рецепту товара
+        required_for_orders += required * quantity.
 
-        Атомарно (select_for_update). Заказ без товара или без активного
-        рецепта ничего не резервирует (макет «Хомашё омбори»: у материала
-        виден резерв и номер заказа).
+        Это потребность (demand), а не физический резерв — может превышать
+        остаток, нехватка помечается has_material_shortage. Атомарно
+        (select_for_update). Заказ без товара или без активного рецепта
+        потребности не создаёт.
         """
         if not self.product_id or not self.quantity:
             return
@@ -211,22 +214,23 @@ class Order(TimestampedModel, SoftDeleteModel):
             # строки в разной последовательности и упирались в дедлок.
             for material, required in sorted(self._recipe_requirements(), key=lambda item: item[0].pk):
                 locked = RawMaterial.objects.select_for_update().get(pk=material.pk)
-                locked.reserved_for_orders = (
-                    (locked.reserved_for_orders or Decimal('0')) + required
+                locked.required_for_orders = (
+                    (locked.required_for_orders or Decimal('0')) + required
                 )
-                locked.save(update_fields=['reserved_for_orders', 'updated_at'])
+                locked.save(update_fields=['required_for_orders', 'updated_at'])
 
-    def release_raw_materials(self, product_id=None, quantity=None):
+    def release_raw_material_requirements(self, product_id=None, quantity=None):
         """
-        Снимает резерв сырья по рецепту товара: reserved_for_orders -= required.
+        Снимает потребность заказа в сырье по рецепту: required_for_orders -= required.
 
         product_id/quantity — явно, для пересчёта при смене товара/количества.
-        Резерв не уходит в минус (заказы до фичи резерва не имели).
+        Потребность не уходит в минус.
 
         Подтверждение производства (confirm_work) уже списало сырьё И сняло его
-        резерв. Повторное снятие здесь (выдача, отмена) снимало бы и чужой
-        резерв: у заказа B с параллельным заказом A резерв «крался» вдвое.
-        Вычитаем уже израсходованное подтверждёнными работами по этому заказу.
+        потребность. Повторное снятие здесь (выдача, отмена) снимало бы и
+        чужую потребность: у заказа B с параллельным заказом A потребность
+        «кралась» вдвое. Вычитаем уже израсходованное подтверждёнными работами
+        по этому заказу.
         """
         if not self.product_id and not product_id:
             return
@@ -249,17 +253,37 @@ class Order(TimestampedModel, SoftDeleteModel):
                 consumed_by_material[row['material_id']] = row['total'] or Decimal('0')
 
         with transaction.atomic():
-            # Тот же фиксированный порядок блокировок, что и в reserve_raw_materials.
+            # Тот же фиксированный порядок блокировок, что и в apply_raw_material_requirements.
             for material, required in sorted(self._recipe_requirements(product_id, quantity), key=lambda item: item[0].pk):
                 locked = RawMaterial.objects.select_for_update().get(pk=material.pk)
                 already = consumed_by_material.get(material.pk, Decimal('0'))
                 remaining = required - already
                 if remaining <= 0:
                     continue
-                locked.reserved_for_orders = max(
-                    (locked.reserved_for_orders or Decimal('0')) - remaining, Decimal('0')
+                locked.required_for_orders = max(
+                    (locked.required_for_orders or Decimal('0')) - remaining, Decimal('0')
                 )
-                locked.save(update_fields=['reserved_for_orders', 'updated_at'])
+                locked.save(update_fields=['required_for_orders', 'updated_at'])
+
+    def refresh_product_cache(self):
+        """
+        Перечитывает связанный товар в FK-кэш после мутаций склада.
+
+        Order.objects.create(product=...) кэширует переданный инстанс (снапшот из
+        валидации, где required_for_orders ещё не изменён), а perform_create/
+        update/deliver/cancel затем меняют quantity/required_for_orders в БД.
+        Сериализатор ответа читает obj.product — без перечитывания он видит
+        устаревшие значения, и has_product_shortage/product_shortage/available в
+        ответе расходятся с базой (нехватка не помечалась в create-ответе).
+        """
+        if self.product_id is None:
+            return
+        from apps.warehouse.models import FinishedProduct
+
+        try:
+            self.product = FinishedProduct.objects.get(pk=self.product_id)
+        except FinishedProduct.DoesNotExist:
+            pass
 
     def apply_payment_amount(self, amount):
         """

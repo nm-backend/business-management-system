@@ -54,8 +54,8 @@ class OutgoingSerializer(serializers.Serializer):
 
     quantity строго больше нуля. outgoing_date — дата списания (не в будущем).
     document_number — номер документа расхода. Списывается только доступное
-    количество (quantity - reserved_for_orders): зарезервированное под заказы
-    сырьё трогать нельзя, иначе под заказ не хватит материала.
+    количество (quantity - required_for_orders): требуемое под заказы сырьё
+    трогать нельзя, иначе под заказ не хватит материала.
     """
     quantity = serializers.DecimalField(max_digits=15, decimal_places=3, min_value=Decimal('0.001'))
     outgoing_date = serializers.DateField(required=False, validators=[validate_not_future])
@@ -75,10 +75,10 @@ class RawMaterialSerializer(StockQuantityGuardMixin, serializers.ModelSerializer
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
     storage_zone_display = serializers.CharField(source='get_storage_zone_display', read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
-    # Резерв сырья мутируется только бизнес-флоу (заказы, подтверждение работ),
-    # а не обычным PATCH-ем: иначе сотрудник мог бы выставить произвольный резерв
-    # и заблокировать расход. available_quantity — производное, только чтение.
-    reserved_for_orders = serializers.DecimalField(
+    # Потребность сырья мутируется только бизнес-флоу (заказы, подтверждение
+    # работ), а не обычным PATCH-ем: иначе сотрудник мог бы выставить произвольную
+    # потребность и заблокировать расход. available_quantity — производное, только чтение.
+    required_for_orders = serializers.DecimalField(
         max_digits=15, decimal_places=3, read_only=True)
     available_quantity = serializers.DecimalField(
         max_digits=15, decimal_places=3, read_only=True)
@@ -89,7 +89,7 @@ class RawMaterialSerializer(StockQuantityGuardMixin, serializers.ModelSerializer
             'id', 'name', 'stone_type', 'color', 'size', 'thickness',
             'unit', 'unit_display', 'quantity', 'barcode', 'storage_zone',
             'storage_zone_display', 'storage_location',
-            'reserved_for_orders', 'available_quantity',
+            'required_for_orders', 'available_quantity',
             'photo', 'min_stock', 'supplier', 'arrival_date',
             'comment', 'is_archived', 'is_low_stock',
             'created_at', 'updated_at'
@@ -103,8 +103,8 @@ class FinishedProductSerializer(StockQuantityGuardMixin, serializers.ModelSerial
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
     available_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
-    # Резерв товара мутируется только заказами (reserve/release), не PATCH-ем.
-    reserved_for_orders = serializers.DecimalField(
+    # Потребность товара мутируется только заказами (apply/release), не PATCH-ем.
+    required_for_orders = serializers.DecimalField(
         max_digits=15, decimal_places=3, read_only=True)
 
     class Meta:
@@ -112,7 +112,7 @@ class FinishedProductSerializer(StockQuantityGuardMixin, serializers.ModelSerial
         fields = [
             'id', 'name', 'category', 'unit', 'unit_display',
             'quantity', 'photo', 'description', 'min_stock',
-            'reserved_for_orders', 'available_quantity',
+            'required_for_orders', 'available_quantity',
             'is_archived', 'is_low_stock',
             'created_at', 'updated_at'
         ]

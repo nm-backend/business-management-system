@@ -110,13 +110,17 @@ class SubscriptionCrossModelTests(TestCase):
         self.api.credentials(HTTP_AUTHORIZATION=f'Bearer {self._login(user)}')
 
     def _expire_and_freeze(self):
-        Subscription.objects.filter(pk=self.sub.pk).update(
-            expires_at=timezone.now() - timedelta(days=1),
-        )
+        # Срок истёк и льготный период (grace, 7 дней) вышел — компания
+        # автоматически переходит в EXPIRED (бизнес заблокирован). FROZEN —
+        # отдельная РУЧНАЯ заморозка супер-админом.
+        end = timezone.now() - timedelta(days=8)
+        # Истекаем и компанию (источник истины), и её billing-проекцию.
+        Company.objects.filter(pk=self.company.pk).update(subscription_end=end)
+        Subscription.objects.filter(pk=self.sub.pk).update(expires_at=end)
         result = check_expired_subscriptions()
         self.assertEqual(result['frozen'], 1)
         self.sub.refresh_from_db()
-        self.assertEqual(self.sub.status, Subscription.Status.FROZEN)
+        self.assertEqual(self.sub.status, Subscription.Status.EXPIRED)
 
     def test_gate_blocks_all_business_models_for_all_roles(self):
         """Заморозка: НИ ОДИН бизнес-эндпоинт не доступен ни одной роли."""

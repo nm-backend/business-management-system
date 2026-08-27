@@ -94,7 +94,7 @@ class FinishedProductsComponent {
                             <div style="font-size:14px;font-weight:600;">${window.ui.escape(p.name)}</div>
                             <div class="text-sm text-muted">
                                 ${window.ui.escape(p.category || '-')} ·
-                                <span data-i18n="warehouse.reserved"></span>: ${window.ui.qty(p.reserved_for_orders)}
+                                <span data-i18n="warehouse.required_for_orders"></span>: ${window.ui.qty(p.required_for_orders)}
                             </div>
                         </div>
                     </div>
@@ -143,7 +143,7 @@ class FinishedProductsComponent {
             </div>
             <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
                 ${row('warehouse.quantity', `${window.ui.qty(p.quantity)} ${window.ui.t('units.' + p.unit)}`, p.is_low_stock)}
-                ${row('warehouse.reserved', window.ui.qty(p.reserved_for_orders))}
+                ${row('warehouse.required_for_orders', window.ui.qty(p.required_for_orders))}
                 ${row('warehouse.min_stock', window.ui.qty(p.min_stock))}
                 ${user.is_owner ? row('warehouse.cost_price', window.ui.money(p.cost_price)) : ''}
                 ${user.is_owner ? row('warehouse.sale_price', window.ui.money(p.sale_price)) : ''}
@@ -438,9 +438,9 @@ class FinishedProductsComponent {
                         <input name="min_stock" type="number" step="0.001" min="0" class="form-control" value="${p?.min_stock ?? 0}"></div>
                 </div>
                 <div class="form-group">
-                    <label data-i18n="warehouse.reserved"></label>
-                    <input type="text" class="form-control" value="${window.ui.qty(p?.reserved_for_orders ?? 0)}" disabled>
-                    <small class="text-muted" data-i18n="warehouse.reserved_hint"></small>
+                    <label data-i18n="warehouse.required_for_orders"></label>
+                    <input type="text" class="form-control" value="${window.ui.qty(p?.required_for_orders ?? 0)}" disabled>
+                    <small class="text-muted" data-i18n="warehouse.required_for_orders_hint"></small>
                 </div>
                 ${isOwner ? `
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">

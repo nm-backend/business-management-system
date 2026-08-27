@@ -33,6 +33,13 @@ from .tasks import check_expired_subscriptions, notify_expiring_subscriptions
 
 def make_company(name):
     company = Company.objects.create(name=name)
+    # Зеркалим production-поток: у компании есть срок подписки (источник истины
+    # для гейта и жизненного цикла), billing.Subscription — проекция.
+    now = timezone.now()
+    company.subscription_start = now
+    company.subscription_end = now + timedelta(days=30)
+    company.subscription_status = Company.SubscriptionStatus.ACTIVE
+    company.save(update_fields=['subscription_start', 'subscription_end', 'subscription_status'])
     owner = User.objects.create_user(
         username=f'{name}_owner', password='pw', role=User.Role.OWNER, company=company,
     )
@@ -96,54 +103,58 @@ class SubscriptionLifecycleTests(TestCase):
         self.api.credentials(HTTP_AUTHORIZATION=f'Bearer {self._login(user)}')
 
     def _expire(self, days=1):
-        Subscription.objects.filter(pk=self.sub.pk).update(
-            expires_at=timezone.now() - timedelta(days=days),
-        )
+        # Срок истекает и у компании (источник истины), и у её проекции billing.
+        end = timezone.now() - timedelta(days=days)
+        Company.objects.filter(pk=self.company.pk).update(subscription_end=end)
+        Subscription.objects.filter(pk=self.sub.pk).update(expires_at=end)
 
-    def test_full_cycle_active_expired_frozen_renewed(self):
+    def test_full_cycle_active_grace_expired_renewed(self):
         # 1. Активная подписка — бизнес работает.
         self._auth(self.owner)
         self.assertEqual(self.api.get('/api/v1/warehouse/raw-materials/').status_code, 200)
 
-        # 2. Срок истёк, Celery ещё не прогнал — гейт уже закрыт (fail-closed).
-        self._expire()
+        # 2. Срок истёк, но идёт льготный период (grace) — бизнес ПРОДОЛЖАЕТ
+        #    работать (гейт учитывает grace и не блокирует).
+        self._expire(1)
         resp = self.api.get('/api/v1/warehouse/raw-materials/')
-        self.assertEqual(resp.status_code, 403)
-        # Ответ приходит из middleware (JsonResponse), поэтому читаем через json().
-        self.assertEqual(resp.json()['code'], 'subscription_expired')
+        self.assertEqual(resp.status_code, 200, resp.data)
 
-        # 3. Celery: expired → frozen, события и аудит.
+        # 3. Celery: active -> grace, льготный период начался.
         result = check_expired_subscriptions()
         self.assertEqual(result['frozen'], 1)
+        self.company.refresh_from_db()
+        self.assertEqual(self.company.subscription_status, Company.SubscriptionStatus.GRACE)
         self.sub.refresh_from_db()
-        self.assertEqual(self.sub.status, Subscription.Status.FROZEN)
-        self.assertTrue(self.sub.is_blocked)
-        self.assertIsNotNone(self.sub.frozen_at)
-        actions = list(
-            SubscriptionEvent.objects.filter(subscription=self.sub)
-            .values_list('action', flat=True)
-        )
-        self.assertIn(SubscriptionEvent.Action.EXPIRED, actions)
-        self.assertIn(SubscriptionEvent.Action.FROZEN, actions)
-        self.assertTrue(AuditLog.objects.filter(
-            action=AuditLog.Action.SUBSCRIPTION_FROZEN, object_id=str(self.sub.pk),
-        ).exists())
-        self.assertTrue(Notification.objects.filter(
-            type=Notification.NotificationType.SUBSCRIPTION_FROZEN,
-        ).exists())
+        # billing-проекция в grace отражается как active (grace-статуса в
+        # billing-модели нет), но expires_at остаётся в прошлом.
+        self.assertEqual(self.sub.status, Subscription.Status.ACTIVE)
+        self.assertGreater(self.company.grace_end, timezone.now())
 
-        # 4. Вход работает; /me/ сообщает о заморозке.
+        # 4. Льготный период вышел -> expired, гейт закрыт (fail-closed).
+        self._expire(8)
+        result = check_expired_subscriptions()
+        self.assertEqual(result['frozen'], 1)
+        self.company.refresh_from_db()
+        self.assertEqual(self.company.subscription_status, Company.SubscriptionStatus.EXPIRED)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, Subscription.Status.EXPIRED)
+        self.assertTrue(self.sub.is_blocked)
+        resp = self.api.get('/api/v1/warehouse/raw-materials/')
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()['code'], 'subscription_expired')
+
+        # 5. Вход работает; /me/ сообщает о заморозке/истечении.
         self.assertEqual(self.api.get('/api/v1/accounts/me/').status_code, 200)
         me = self.api.get('/api/v1/accounts/me/').data
         self.assertTrue(me['subscription']['is_frozen'])
 
-        # 5. Статус подписки и продление доступны (whitelist gate).
+        # 6. Статус подписки и продление доступны (whitelist gate).
         resp = self.api.get('/api/v1/billing/subscription/')
         self.assertEqual(resp.status_code, 200, resp.data)
-        self.assertEqual(resp.data['status'], 'frozen')
+        self.assertEqual(resp.data['status'], 'expired')
         self.assertEqual(resp.data['is_blocked'], True)
 
-        # 6. Супер-админ продлевает — компания автоматически возвращается в active.
+        # 7. Супер-админ продлевает — компания автоматически возвращается в active.
         self.api.force_authenticate(user=self.superadmin)
         resp = self.api.post(
             f'/api/v1/billing/subscriptions/{self.sub.pk}/extend/',
@@ -156,7 +167,7 @@ class SubscriptionLifecycleTests(TestCase):
         self.assertIsNone(self.sub.frozen_at)
         self.assertGreater(self.sub.expires_at, timezone.now() + timedelta(days=29))
 
-        # 7. Бизнес снова работает.
+        # 8. Бизнес снова работает.
         self._auth(self.owner)
         self.assertEqual(self.api.get('/api/v1/warehouse/raw-materials/').status_code, 200)
 
@@ -170,19 +181,15 @@ class SubscriptionLifecycleTests(TestCase):
         self.assertTrue(self.owner.is_active)
 
     def test_celery_freeze_is_idempotent(self):
-        self._expire()
+        self._expire(8)
         check_expired_subscriptions()
         result = check_expired_subscriptions()
         self.assertEqual(result['frozen'], 0)
-        self.assertEqual(
-            SubscriptionEvent.objects.filter(subscription=self.sub, action='frozen').count(),
-            1,
-        )
         self.sub.refresh_from_db()
-        self.assertEqual(self.sub.status, Subscription.Status.FROZEN)
+        self.assertEqual(self.sub.status, Subscription.Status.EXPIRED)
 
     def test_worker_sees_frozen_me_but_not_billing_management(self):
-        self._expire()
+        self._expire(8)
         check_expired_subscriptions()
         self._auth(self.worker)
         me = self.api.get('/api/v1/accounts/me/').data
@@ -384,16 +391,28 @@ class SubscriptionReminderTests(TestCase):
 
 
 class SubscriptionBeatScheduleTests(TestCase):
-    """Расписание Celery Beat создаётся миграцией."""
+    """
+    Расписание жизненного цикла ведётся ЕДИНСТВЕННЫМ контуром companies
+    (grace-aware). Billing-задачи сняты с расписания (migrations/0004), чтобы
+    не было второй системы, переводящей компанию в противоречащее состояние.
+    """
 
-    def test_periodic_tasks_exist(self):
+    def test_billing_tasks_not_scheduled(self):
         from django_celery_beat.models import PeriodicTask
         names = set(
             PeriodicTask.objects.filter(name__startswith='billing-')
             .values_list('name', flat=True)
         )
-        self.assertIn('billing-check-expired', names)
-        self.assertIn('billing-notify-expiring', names)
-        task = PeriodicTask.objects.get(name='billing-check-expired')
-        self.assertTrue(task.enabled)
-        self.assertEqual(task.task, 'apps.billing.tasks.check_expired_subscriptions')
+        self.assertEqual(names, set(), 'billing-задачи не должны быть в расписании')
+
+    def test_companies_lifecycle_tasks_scheduled(self):
+        from django_celery_beat.models import PeriodicTask
+        names = set(
+            PeriodicTask.objects.filter(name__startswith='subscription-')
+            .values_list('name', flat=True)
+        )
+        self.assertIn('subscription-auto-freeze', names)
+        self.assertIn('subscription-expiry-notify', names)
+        for name in ('subscription-auto-freeze', 'subscription-expiry-notify'):
+            task = PeriodicTask.objects.get(name=name)
+            self.assertTrue(task.enabled)

@@ -178,11 +178,11 @@ class Task(TimestampedModel):
             ready = True
             if order.product_id:
                 product = FinishedProduct.objects.select_for_update().get(pk=order.product_id)
-                # Доступно = остаток минус резервы ДРУГИХ заказов: свой резерв
-                # снимаем из формулы (выдача делает то же до списания, иначе
-                # собственный резерв занизил бы доступное).
+                # Доступно = остаток минус потребность ДРУГИХ заказов: свою
+                # потребность снимаем из формулы (выдача делает то же до
+                # списания, иначе собственная потребность занизила бы доступное).
                 available = product.quantity - (
-                    (product.reserved_for_orders or Decimal('0')) - order.quantity
+                    (product.required_for_orders or Decimal('0')) - order.quantity
                 )
                 ready = available >= order.quantity
             if ready:
@@ -197,11 +197,23 @@ class WorkRecord(TimestampedModel):
     Хранит информацию о работе, выполненной работником,
     для подтверждения и начисления оплаты.
 
+    СЕМАНТИКА КОЛИЧЕСТВА И БРАКА (однозначно):
+        quantity        — ГОДНОЕ количество (good), поступит на склад;
+        defect_quantity — БРАК (defective), на склад НЕ поступает, но сырьё
+                          на него уже израсходовано;
+        total_processed = quantity + defect_quantity  (всего обработано).
+
+    Подтверждение (confirm_work):
+        - сырьё списывается на total_processed (годное + брак);
+        - на склад готовой продукции приходуется только quantity (годное);
+        - оплата труда начисляется только на quantity (годное).
+
     Поля:
         task: ForeignKey - связанная задача
         worker: ForeignKey - работник
         product: ForeignKey - готовый продукт
-        quantity: DecimalField - количество выполненной работы
+        quantity: DecimalField - ГОДНОЕ количество (на склад)
+        defect_quantity: DecimalField - брак (сырьё израсходовано, товара нет)
         unit: CharField - единица измерения
         photo: ImageField - фото результата
         comment: TextField - комментарий работника
@@ -241,11 +253,12 @@ class WorkRecord(TimestampedModel):
     # за чужую операцию.
     operation = models.CharField(max_length=20, choices=LaborRate.OperationType.choices,
                                  null=True, blank=True, verbose_name='Операция')
-    quantity = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Количество')
-    # Брак по макету «Ишни якунлаш»: рабочий указывает его отдельно от годного.
-    # Сырьё расходуется и на брак тоже, а на склад готовой продукции попадает
+    # ГОДНОЕ количество (good): приходуется на склад и оплачивается.
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Годное количество')
+    # БРАК (defective): рабочий указывает его отдельно от годного. Сырьё
+    # расходуется и на брак тоже, а на склад готовой продукции попадает
     # только годное — без этого поля материал, ушедший в брак, не списывался
-    # и остаток сырья был завышен.
+    # и остаток сырья был завышен. total_processed = quantity + defect_quantity.
     defect_quantity = models.DecimalField(
         max_digits=15, decimal_places=3, default=0,
         validators=[MinValueValidator(Decimal('0'))], verbose_name='Брак')

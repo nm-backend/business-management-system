@@ -37,7 +37,7 @@ from .serializers import (
 )
 from .services import (
     activate_subscription, confirm_invoice_paid, create_invoice, extend_subscription,
-    freeze_subscription, unfreeze_subscription,
+    unfreeze_subscription,
 )
 
 
@@ -166,12 +166,26 @@ class SubscriptionAdminViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(request=NoteRequestSerializer)
     @action(detail=True, methods=['post'])
     def freeze(self, request, pk=None):
-        """Ручная заморозка компании."""
+        """
+        Ручная заморозка компании (любой статус -> FROZEN).
+
+        Идёт через компании-контур (companies.subscriptions.freeze_company),
+        который сериализует параллельные заморозки блокировкой строки Company и
+        зеркалит статус в billing.Subscription. Прежний вызов
+        billing.services.freeze_subscription был «заморозкой по истечению»
+        (срабатывал только на active+просроченной подписке и возвращал bool) —
+        кнопка «Заморозить» в API не работала для уже истёкших компаний и
+        роняла сериализатор на bool.
+        """
         serializer = NoteRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        sub = freeze_subscription(
-            self._get_subscription(request), actor=request.user, request=request,
+        sub = self._get_subscription(request)
+        from apps.companies import subscriptions as company_subs
+        company_subs.freeze_company(
+            sub.company, actor=request.user,
+            note=serializer.validated_data.get('note', ''),
         )
+        sub.refresh_from_db()
         return Response(SubscriptionSerializer(sub).data)
 
     @extend_schema(request=NoteRequestSerializer)

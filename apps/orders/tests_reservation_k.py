@@ -1,13 +1,13 @@
 """
-Резервирование склада под заказы (reserved_for_orders).
+Резервирование склада под заказы (required_for_orders).
 
 Заказ на товар из каталога резервирует количество на складе готовой продукции:
-- создание заказа -> reserved_for_orders += quantity
-- отмена / удаление / выдача -> reserved_for_orders -= quantity (резерв возвращается)
+- создание заказа -> required_for_orders += quantity
+- отмена / удаление / выдача -> required_for_orders -= quantity (резерв возвращается)
 - смена товара или количества -> резерв пересчитывается
 
 Раньше поле never заполнялось (всегда 0), несмотря на available_quantity =
-quantity - reserved_for_orders. Эти тесты фиксируют полный жизненный цикл резерва.
+quantity - required_for_orders. Эти тесты фиксируют полный жизненный цикл резерва.
 """
 import datetime
 from decimal import Decimal
@@ -55,7 +55,7 @@ class OrderReservationAPITests(TestCase):
         """Создание заказа резервирует количество товара."""
         order_id = self._create_order(self.product, '3')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('3'))
+        self.assertEqual(self.product.required_for_orders, Decimal('3'))
         self.assertEqual(self.product.available_quantity, Decimal('7'))
 
         order = Order.objects.get(pk=order_id)
@@ -71,78 +71,78 @@ class OrderReservationAPITests(TestCase):
         }, format='json')
         self.assertIn(resp.status_code, (200, 201), resp.content[:300])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
 
     def test_multiple_orders_reserve_sum(self):
         """Два заказа на один товар резервируют суммарное количество."""
         self._create_order(self.product, '2')
         self._create_order(self.product, '4')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('6'))
+        self.assertEqual(self.product.required_for_orders, Decimal('6'))
         self.assertEqual(self.product.available_quantity, Decimal('4'))
 
     def test_cancel_releases_reservation(self):
         """Отмена заказа возвращает резерв на склад."""
         self._create_order(self.product, '5')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('5'))
+        self.assertEqual(self.product.required_for_orders, Decimal('5'))
 
         order_id = self.product.orders.first().id
         resp = self.api().post(f'/api/v1/orders/orders/{order_id}/cancel/')
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
         self.assertEqual(self.product.available_quantity, Decimal('10'))
 
     def test_deliver_releases_reservation(self):
         """Выдача заказа снимает резерв (товар ушёл клиенту)."""
         self._create_order(self.product, '4')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('4'))
+        self.assertEqual(self.product.required_for_orders, Decimal('4'))
 
         order_id = self.product.orders.first().id
         resp = self.api().post(f'/api/v1/orders/orders/{order_id}/deliver/')
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
 
     def test_destroy_releases_reservation(self):
         """Удаление заказа (архивация с отменой) возвращает резерв."""
         self._create_order(self.product, '3')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('3'))
+        self.assertEqual(self.product.required_for_orders, Decimal('3'))
 
         order_id = self.product.orders.first().id
         resp = self.api().delete(f'/api/v1/orders/orders/{order_id}/')
         self.assertIn(resp.status_code, (200, 204), resp.content[:300])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
 
     def test_update_quantity_resyncs_reservation(self):
         """Смена количества заказа пересчитывает резерв."""
         order_id = self._create_order(self.product, '2')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('2'))
+        self.assertEqual(self.product.required_for_orders, Decimal('2'))
 
         resp = self.api().patch(f'/api/v1/orders/orders/{order_id}/',
                                 {'quantity': '7'}, format='json')
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('7'))
+        self.assertEqual(self.product.required_for_orders, Decimal('7'))
 
     def test_update_product_moves_reservation(self):
         """Смена товара переносит резерв с одного товара на другой."""
         order_id = self._create_order(self.product, '2')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('2'))
+        self.assertEqual(self.product.required_for_orders, Decimal('2'))
 
         resp = self.api().patch(f'/api/v1/orders/orders/{order_id}/',
                                 {'product': self.other.id}, format='json')
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.product.refresh_from_db()
         self.other.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
-        self.assertEqual(self.other.reserved_for_orders, Decimal('2'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
+        self.assertEqual(self.other.required_for_orders, Decimal('2'))
 
     def test_update_delivered_order_does_not_reserve_again(self):
         """
@@ -151,13 +151,13 @@ class OrderReservationAPITests(TestCase):
         order_id = self._create_order(self.product, '2')
         self.api().post(f'/api/v1/orders/orders/{order_id}/deliver/')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
 
         resp = self.api().patch(f'/api/v1/orders/orders/{order_id}/',
                                 {'quantity': '5'}, format='json')
         self.assertEqual(resp.status_code, 400, resp.content[:300])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'),
+        self.assertEqual(self.product.required_for_orders, Decimal('0'),
                          'выданный заказ не должен резервировать при правке')
 
     def test_update_cancelled_order_does_not_reserve_again(self):
@@ -165,26 +165,26 @@ class OrderReservationAPITests(TestCase):
         order_id = self._create_order(self.product, '2')
         self.api().post(f'/api/v1/orders/orders/{order_id}/cancel/')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
 
         resp = self.api().patch(f'/api/v1/orders/orders/{order_id}/',
                                 {'quantity': '5'}, format='json')
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
 
     def test_non_terminal_transition_keeps_reservation(self):
         """Переходы Kanban (например, в ready) резерв не трогают."""
         order_id = self._create_order(self.product, '3')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('3'))
+        self.assertEqual(self.product.required_for_orders, Decimal('3'))
 
         # new -> ready напрямую запрещён конечным автоматом; берём разрешённый путь
         resp = self.api().patch(f'/api/v1/orders/orders/{order_id}/transition/',
                                 {'status': Order.Status.AWAITING_MATERIAL}, format='json')
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('3'),
+        self.assertEqual(self.product.required_for_orders, Decimal('3'),
                          'не-терминальный переход не должен менять резерв')
 
     def test_worker_cannot_create_order(self):
@@ -199,7 +199,7 @@ class OrderReservationAPITests(TestCase):
 
 
 class OrderReservationModelTests(TestCase):
-    """Unit-тесты методов модели reserve_product/release_product."""
+    """Unit-тесты методов модели apply_product_requirement/release_product_requirement."""
 
     def setUp(self):
         self.company = Company.objects.create(name='ModelCo', is_active=True)
@@ -213,13 +213,13 @@ class OrderReservationModelTests(TestCase):
 
     def test_release_never_goes_below_zero(self):
         """Резерв не уходит в минус даже без предварительного резервирования."""
-        self.order.release_product()
+        self.order.release_product_requirement()
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
 
     def test_release_with_explicit_args(self):
-        """release_product(product_id, quantity) снимает резерв по явным значениям."""
-        self.order.reserve_product()
-        self.order.release_product(product_id=self.product.id, quantity=Decimal('2'))
+        """release_product_requirement(product_id, quantity) снимает резерв по явным значениям."""
+        self.order.apply_product_requirement()
+        self.order.release_product_requirement(product_id=self.product.id, quantity=Decimal('2'))
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('1'))
+        self.assertEqual(self.product.required_for_orders, Decimal('1'))

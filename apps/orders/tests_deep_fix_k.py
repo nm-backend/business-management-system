@@ -67,7 +67,7 @@ class OrderDeepFixTests(TestCase):
         self.assertEqual(resp.status_code, 500, resp.content[:200])
         self.assertEqual(Order.objects.count(), 0, 'заказ откатывается целиком')
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'),
+        self.assertEqual(self.product.required_for_orders, Decimal('0'),
                          'резерв не остаётся после отката')
 
     def test_update_client_recalculates_old_client(self):
@@ -103,15 +103,15 @@ class OrderDeepFixTests(TestCase):
             company=self.company, name='Стол', quantity=Decimal('20'), unit='dona')
         order_id = self._create_order(self.client_a)
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('2'))
+        self.assertEqual(self.product.required_for_orders, Decimal('2'))
 
         resp = self.api().patch(f'/api/v1/orders/orders/{order_id}/',
                                 {'product': other.id}, format='json')
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.product.refresh_from_db()
         other.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0'))
-        self.assertEqual(other.reserved_for_orders, Decimal('2'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
+        self.assertEqual(other.required_for_orders, Decimal('2'))
 
     def test_transition_parallel_status_flow(self):
         """Обычный рабочий переход Kanban продолжает работать."""

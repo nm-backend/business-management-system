@@ -8,6 +8,7 @@ updated_at, но НЕ должна выкидывать заказ из отчё
 import datetime
 from decimal import Decimal
 
+from django.db import models as django_models
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -81,6 +82,53 @@ class CogsPeriodAttributionTests(TestCase):
         self.product.save(update_fields=['cost_price'])
         # COGS за июнь всё ещё по снимку на момент выдачи.
         self.assertEqual(self._june_cogs(), Decimal('1000'))
+
+    def test_historical_cogs_survives_weighted_average_change(self):
+        """
+        Исторический COGS не пересчитывается после смены WAC.
+
+        Старый заказ выдан при себестоимости 50 за шт. Затем приход меняет
+        средневзвешенную себестоимость товара (WAC) до 80 за шт. COGS уже
+        выданного заказа обязан остаться 50 × quantity, а не пересчитаться
+        в 80 — иначе поздний приход задним числом меняет прибыль прошлых
+        периодов.
+        """
+        product = FinishedProduct.objects.create(
+            company=self.company, name='WAC', quantity=Decimal('0'), cost_price=Decimal('50'))
+        # Приход 10 шт по 50 → WAC = 50.
+        from apps.warehouse.services import record_incoming
+        record_incoming(target=product, quantity=Decimal('10'), price_per_unit=Decimal('50'))
+        order = Order.objects.create(
+            company=self.company, client=self.cli, product=product,
+            quantity=Decimal('4'), unit='dona', total_amount=Decimal('400'),
+            status=Order.Status.DELIVERED)
+        Order.objects.filter(pk=order.pk).update(delivered_at=JUNE, updated_at=JUNE)
+        self.assertEqual(order.cost_price, Decimal('50'))
+        self.assertEqual(self._june_cogs_for(product), Decimal('200'))  # 4 × 50
+
+        # Поздний приход дороже → WAC растёт до 80.
+        record_incoming(target=product, quantity=Decimal('10'), price_per_unit=Decimal('110'))
+        product.refresh_from_db()
+        self.assertEqual(product.cost_price, Decimal('80'))  # (10*50 + 10*110)/20 = 80
+
+        # Исторический COGS не изменился: 4 × 50 = 200, а не 4 × 80 = 320.
+        self.assertEqual(self._june_cogs_for(product), Decimal('200'))
+
+    def _june_cogs_for(self, product):
+        from django.db.models import Sum
+        from apps.orders.models import Order as OrderModel
+        return (
+            OrderModel.objects.filter(
+                company=self.company, product=product,
+                status=OrderModel.Status.DELIVERED,
+                delivered_at__date__range=('2026-06-01', '2026-06-30'),
+            ).aggregate(
+                s=Sum(django_models.ExpressionWrapper(
+                    django_models.F('quantity') * django_models.F('cost_price'),
+                    output_field=django_models.DecimalField(max_digits=15, decimal_places=2),
+                ))
+            )['s'] or Decimal('0')
+        )
 
     def test_custom_product_contributes_zero_cogs(self):
         """Ручная позиция без товара не завышает прибыль: COGS по ней 0."""

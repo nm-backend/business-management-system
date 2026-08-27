@@ -101,11 +101,11 @@ class ParallelReservationTests(_Base):
         order_a = self._order(self.product, 5, 500000)
         order_b = self._order(self.product, 10, 1000000)
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('15.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('15.000'))
 
         self._produce_and_confirm(order_a, self.product, 5)
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('10.000'),
+        self.assertEqual(self.material.required_for_orders, Decimal('10.000'),
                          'confirm снимает резерв только своей части')
 
         resp = self.api.post(f'{ORDERS}{order_a}/deliver/', {}, format='json')
@@ -113,7 +113,7 @@ class ParallelReservationTests(_Base):
 
         # Резерв заказа B не тронут: confirm снял 5, выдача НЕ снимает повторно.
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('10.000'),
+        self.assertEqual(self.material.required_for_orders, Decimal('10.000'),
                          'резерв B не должен сниматься дважды')
         self.product.refresh_from_db()
         self.assertEqual(self.product.quantity, Decimal('0.000'), 'выдано 5 из произведённых 5')

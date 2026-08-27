@@ -188,15 +188,15 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
     if labor_cost is None:
         labor_cost = calculate_labor_cost(work)
 
-    # 3. Списание сырья. Заодно снимаем резерв под заказ: сырьё физически
-    # израсходовано, обещание заказу исполнено — reserved_for_orders падает.
+    # 3. Списание сырья. Заодно снимаем потребность под заказ: сырьё физически
+    # израсходовано, обещание заказу исполнено — required_for_orders падает.
     for material, required in locked_materials:
         material.quantity -= required
         if work.task and work.task.order_id:
-            material.reserved_for_orders = max(
-                (material.reserved_for_orders or Decimal('0')) - required, Decimal('0')
+            material.required_for_orders = max(
+                (material.required_for_orders or Decimal('0')) - required, Decimal('0')
             )
-            material.save(update_fields=['quantity', 'reserved_for_orders', 'updated_at'])
+            material.save(update_fields=['quantity', 'required_for_orders', 'updated_at'])
         else:
             material.save(update_fields=['quantity', 'updated_at'])
         StockMovement.objects.create(

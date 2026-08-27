@@ -25,7 +25,7 @@ from apps.core.admin_utils import badge, choice_badge
 from .models import Invoice, Subscription, SubscriptionEvent
 from .services import (
     activate_subscription, confirm_invoice_paid, extend_subscription,
-    freeze_subscription, quick_renew_subscription, unfreeze_subscription,
+    quick_renew_subscription, unfreeze_subscription,
 )
 
 STATUS_COLORS = {
@@ -198,10 +198,16 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
     @admin.action(description='Заморозить')
     def freeze_selected(self, request, queryset):
+        # Ручная заморозка через компании-контур (любой статус -> FROZEN),
+        # тот же код, что и в API (см. SubscriptionAdminViewSet.freeze).
+        from apps.companies import subscriptions as company_subs
         count = 0
         for sub in queryset:
-            if freeze_subscription(sub, actor=request.user, request=request):
+            try:
+                company_subs.freeze_company(sub.company, actor=request.user)
                 count += 1
+            except Exception as exc:
+                self.message_user(request, f'{sub}: {exc}', level=messages.ERROR)
         self.message_user(request, f'Заморожено компаний: {count}.')
 
     @admin.action(description='Разморозить')

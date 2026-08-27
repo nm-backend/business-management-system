@@ -7,7 +7,7 @@
 - outgoing — операции «расход/потеря/корректировка» не было вовсе;
 - summary — агрегатов склада не было;
 - Recipe/RecipeItemViewSet — endpoints существовали, но UI рецептов не было;
-- reserved_for_orders у сырья — резерв считался только для готовой продукции.
+- required_for_orders у сырья — резерв считался только для готовой продукции.
 """
 import datetime
 from decimal import Decimal
@@ -108,7 +108,7 @@ class OutgoingTests(_Base):
         self.assertEqual(m.document_number, '№О-7')
 
     def test_outgoing_limited_to_available_quantity(self):
-        self.material.reserved_for_orders = Decimal('10')
+        self.material.required_for_orders = Decimal('10')
         self.material.save()
         r = self.api().post(f'{MATERIALS}{self.material.id}/outgoing/', {
             'quantity': '95',  # available = 90
@@ -118,7 +118,7 @@ class OutgoingTests(_Base):
         self.assertEqual(self.material.quantity, Decimal('100.000'))
 
     def test_outgoing_reserved_material_blocked(self):
-        self.material.reserved_for_orders = Decimal('100')
+        self.material.required_for_orders = Decimal('100')
         self.material.save()
         r = self.api().post(f'{MATERIALS}{self.material.id}/outgoing/', {
             'quantity': '1',
@@ -284,17 +284,17 @@ class RawMaterialReservationTests(_Base):
         # Рецепт: 2 м2 на 1 товар -> 3 товара резервируют 6 м2.
         self._create_order()
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('6.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('6.000'))
 
     def test_order_cancel_releases_raw_materials(self):
         order_id = self._create_order()
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('6.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('6.000'))
 
         r = self.api().post(f'/api/v1/orders/orders/{order_id}/cancel/')
         self.assertEqual(r.status_code, 200, r.content[:300])
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('0.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('0.000'))
 
     def test_order_deliver_releases_raw_materials(self):
         # Выдача теперь списывает готовую продукцию, поэтому нужен запас.
@@ -305,7 +305,7 @@ class RawMaterialReservationTests(_Base):
         r = self.api().post(f'/api/v1/orders/orders/{order_id}/deliver/')
         self.assertEqual(r.status_code, 200, r.content[:300])
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('0.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('0.000'))
 
     def test_order_quantity_update_resyncs_raw_reservation(self):
         order_id = self._create_order()  # 3 шт -> резерв 6 м2
@@ -315,7 +315,7 @@ class RawMaterialReservationTests(_Base):
         self.material.refresh_from_db()
         # (5 - 3) * 2 = 4 м2 дополнительно; но пересчёт через release+reserve
         # должен дать ровно 5 * 2 = 10 м2.
-        self.assertEqual(self.material.reserved_for_orders, Decimal('10.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('10.000'))
 
     def test_order_without_recipe_reserves_nothing(self):
         other = FinishedProduct.objects.create(company=self.company,
@@ -326,14 +326,14 @@ class RawMaterialReservationTests(_Base):
         }, format='json')
         self.assertEqual(r.status_code, 201, r.content[:300])
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('0.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('0.000'))
 
     def test_confirm_work_consumes_and_releases_reservation(self):
         from apps.production.models import Task, TaskStatus, WorkRecord
         order_id = self._create_order()
         order = Order.objects.get(pk=order_id)
         self.material.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, Decimal('6.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('6.000'))
 
         task = Task.objects.create(
             company=self.company, order=order, worker=self.worker,
@@ -349,4 +349,4 @@ class RawMaterialReservationTests(_Base):
         self.material.refresh_from_db()
         # 100 - 6 = 94; резерв полностью израсходован.
         self.assertEqual(self.material.quantity, Decimal('94.000'))
-        self.assertEqual(self.material.reserved_for_orders, Decimal('0.000'))
+        self.assertEqual(self.material.required_for_orders, Decimal('0.000'))

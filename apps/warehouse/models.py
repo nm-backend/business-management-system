@@ -99,12 +99,15 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     storage_zone = models.CharField(max_length=10, choices=StorageZoneChoices.choices,
                                     blank=True, default='', verbose_name='Зона хранения')
     storage_location = models.CharField(max_length=255, blank=True, verbose_name='Место хранения')
-    # Резерв сырья под заказы: заполняется при создании заказа на товар с
-    # рецептом (Order.reserve_raw_materials), снимается при отмене/выдаче заказа
-    # и при подтверждении работы (сырьё физически израсходовано).
-    reserved_for_orders = models.DecimalField(
+    # ПОТРЕБНОСТЬ заказов (demand), а не физический резерв: сколько сырья
+    # требуется активным заказам по рецептам. Может превышать quantity
+    # (overbooking) — тогда shortage_quantity > 0, а доступность проверяется
+    # по физическому остатку в момент выдачи/подтверждения. Заполняется при
+    # создании заказа (Order.apply_raw_material_requirements), снимается при
+    # отмене/выдаче и при подтверждении работы (сырьё физически израсходовано).
+    required_for_orders = models.DecimalField(
         max_digits=15, decimal_places=3, default=0,
-        validators=[MinValueValidator(Decimal('0'))], verbose_name='Зарезервировано под заказы',
+        validators=[MinValueValidator(Decimal('0'))], verbose_name='Требуется под заказы',
     )
     photo = models.ImageField(upload_to='materials/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
     min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0,
@@ -136,16 +139,17 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
                 name='rawmaterial_quantity_nonnegative',
             ),
             models.CheckConstraint(
-                check=models.Q(reserved_for_orders__gte=0),
-                name='rawmaterial_reserved_nonnegative',
+                check=models.Q(required_for_orders__gte=0),
+                name='rawmaterial_required_nonnegative',
             ),
-            # НАМЕРЕННО нет ограничения reserved_for_orders <= quantity:
-            # резерв может превышать физический остаток (overbooking) — заказ на
-            # большее количество, чем есть на складе, создаётся и помечается
-            # has_material_shortage/has_product_shortage, а нехватка проверяется
-            # при выдаче/подтверждении (record_outgoing/confirm_work). Ограничение
-            # «reserved <= quantity» ломало это (IntegrityError вместо чистого
-            # отказа) и несовместимо с record_outgoing(ignore_reserved=True).
+            # НАМЕРЕННО нет ограничения required_for_orders <= quantity:
+            # потребность заказов может превышать физический остаток (overbooking).
+            # Заказ на большее количество, чем есть на складе, создаётся и
+            # помечается has_material_shortage, а нехватка проверяется по
+            # физическому остатку при выдаче/подтверждении (record_outgoing/
+            # confirm_work). Ограничение «required <= quantity» ломало бы это
+            # (IntegrityError вместо понятного отказа) и несовместимо с
+            # record_outgoing(ignore_required=True).
         ]
 
     def __str__(self):
@@ -159,20 +163,33 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     @property
     def available_quantity(self):
         """
-        Доступное количество сырья с учётом резервов под заказы.
+        Доступное количество с учётом потребности заказов.
+
+        quantity - required_for_orders. Может быть ОТРИЦАТЕЛЬНЫМ: это
+        означает нехватку (потребность заказов превышает физический остаток),
+        а не ошибку — величина нехватки видна в shortage_quantity.
 
         Возвращает:
-            Decimal - quantity - reserved_for_orders
+            Decimal - quantity - required_for_orders
         """
-        return self.quantity - self.reserved_for_orders
+        return self.quantity - self.required_for_orders
+
+    @property
+    def shortage_quantity(self):
+        """
+        Нехватка для покрытия потребности заказов (>= 0).
+
+        max(required_for_orders - quantity, 0). Ноль — остатка хватает.
+        """
+        return max(self.required_for_orders - self.quantity, Decimal('0'))
 
     @property
     def is_low_stock(self):
         """
         Проверяет, находится ли материал на низком остатке.
 
-        Учитывает резервы: материал, зарезервированный под заказы, доступен
-        для новых заказов лишь в объёме available_quantity.
+        Учитывает потребность заказов: доступно для новых заказов лишь
+        available_quantity. При нехватке (available < 0) — безусловно низкий.
 
         Возвращает:
             bool - True если available_quantity <= min_stock
@@ -193,17 +210,21 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         photo: ImageField - фото продукции
         description: TextField - описание
         min_stock: DecimalField - минимальный остаток для предупреждений
-        reserved_for_orders: DecimalField - количество, зарезервированное под заказы
+        required_for_orders: DecimalField - потребность заказов (demand)
         cost_price: DecimalField - себестоимость (ФИНАНСОВОЕ ПОЛЕ - только owner)
         sale_price: DecimalField - цена продажи (ФИНАНСОВОЕ ПОЛЕ - только owner)
 
     Свойства:
-        available_quantity: DecimalField - доступное количество (quantity - reserved)
+        available_quantity: DecimalField - доступное количество (quantity - required)
+        shortage_quantity: DecimalField - нехватка (required - quantity, >= 0)
         is_low_stock: bool - True если available_quantity <= min_stock
 
-    Резервирование: поле заполняется при создании заказа на товар
-    (apps/orders — Order.reserve_product), снимается при отмене, удалении
-    и выдаче заказа (Order.release_product).
+    Потребность заказов: поле заполняется при создании заказа на товар
+    (apps/orders — Order.apply_product_requirement), снимается при отмене,
+    удалении и выдаче заказа (Order.release_product_requirement). Это НЕ
+    физический резерв: потребность может превышать остаток (overbooking),
+    нехватка помечается has_product_shortage и проверяется по физическому
+    остатку в момент выдачи.
     """
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='finished_products', null=True, verbose_name='Компания')
     name = models.CharField(max_length=255, verbose_name='Название')
@@ -215,8 +236,8 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
     description = models.TextField(blank=True, verbose_name='Описание')
     min_stock = models.DecimalField(max_digits=15, decimal_places=3, default=0,
                                     validators=[MinValueValidator(Decimal('0'))], verbose_name='Минимальный остаток')
-    reserved_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0,
-                                        validators=[MinValueValidator(Decimal('0'))], verbose_name='Зарезервировано под заказы')
+    required_for_orders = models.DecimalField(max_digits=15, decimal_places=3, default=0,
+                                        validators=[MinValueValidator(Decimal('0'))], verbose_name='Требуется под заказы')
     arrival_date = models.DateField(null=True, blank=True, verbose_name='Дата поступления')
     cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0,
                                         validators=[MinValueValidator(Decimal('0'))], verbose_name='Себестоимость')  # ФИНАНСОВОЕ ПОЛЕ
@@ -241,10 +262,10 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
                 name='finishedproduct_quantity_nonnegative',
             ),
             models.CheckConstraint(
-                check=models.Q(reserved_for_orders__gte=0),
-                name='finishedproduct_reserved_nonnegative',
+                check=models.Q(required_for_orders__gte=0),
+                name='finishedproduct_required_nonnegative',
             ),
-            # НАМЕРЕННО нет ограничения reserved_for_orders <= quantity: см.
+            # НАМЕРЕННО нет ограничения required_for_orders <= quantity: см.
             # RawMaterial — резерв может превышать физический остаток
             # (overbooking), нехватка проверяется при выдаче/подтверждении.
         ]
@@ -262,19 +283,26 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
         """
         Вычисляет доступное количество для продажи.
 
-        Учитывает резервирование под заказы.
+        Учитывает потребность заказов (может быть отрицательным — нехватка).
 
         Возвращает:
-            DecimalField - quantity - reserved_for_orders
+            DecimalField - quantity - required_for_orders
         """
-        return self.quantity - self.reserved_for_orders
+        return self.quantity - self.required_for_orders
+
+    @property
+    def shortage_quantity(self):
+        """
+        Нехватка для покрытия потребности заказов (>= 0).
+        """
+        return max(self.required_for_orders - self.quantity, Decimal('0'))
 
     @property
     def is_low_stock(self):
         """
         Проверяет, находится ли продукция на низком остатке.
 
-        Учитывает доступное количество (с учетом резервов).
+        Учитывает потребность заказов: при нехватке (available < 0) — низкий.
 
         Возвращает:
             bool - True если available_quantity <= min_stock

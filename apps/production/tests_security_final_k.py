@@ -99,7 +99,7 @@ class DeliverRestoresRawMaterialReserveTests(TestCase):
             company=self.company, name='Гранит', quantity=Decimal('10'), unit='m2')
         self.product = FinishedProduct.objects.create(
             company=self.company, name='Столешница', quantity=Decimal('5'), unit='dona',
-            reserved_for_orders=Decimal('0'))
+            required_for_orders=Decimal('0'))
         recipe = Recipe.objects.create(company=self.company, product=self.product, is_active=True)
         RecipeItem.objects.create(recipe=recipe, material=self.material,
                                   quantity_required=Decimal('2'), unit='m2')
@@ -113,16 +113,16 @@ class DeliverRestoresRawMaterialReserveTests(TestCase):
             company=self.company, client=self.client_obj, product=self.product,
             quantity=Decimal('2'), status=Order.Status.READY,
         )
-        order.reserve_product()
-        order.reserve_raw_materials()
+        order.apply_product_requirement()
+        order.apply_raw_material_requirements()
         return order
 
     def test_reserve_restored_when_deliver_fails(self):
         order = self._order()
         self.material.refresh_from_db()
         self.product.refresh_from_db()
-        material_reserved = self.material.reserved_for_orders
-        product_reserved = self.product.reserved_for_orders
+        material_reserved = self.material.required_for_orders
+        product_reserved = self.product.required_for_orders
         self.assertGreater(material_reserved, 0)
 
         # Товар целиком недоступен: списываем остаток в ноль.
@@ -134,8 +134,8 @@ class DeliverRestoresRawMaterialReserveTests(TestCase):
 
         self.material.refresh_from_db()
         self.product.refresh_from_db()
-        self.assertEqual(self.material.reserved_for_orders, material_reserved)
-        self.assertEqual(self.product.reserved_for_orders, product_reserved)
+        self.assertEqual(self.material.required_for_orders, material_reserved)
+        self.assertEqual(self.product.required_for_orders, product_reserved)
         order.refresh_from_db()
         self.assertNotEqual(order.status, Order.Status.DELIVERED)
 
