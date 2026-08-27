@@ -411,3 +411,63 @@ class RenewalProcessingTests(SubscriptionPageTestCase):
         self.assertEqual(
             self.api_owner.get('/api/v1/warehouse/raw-materials/').status_code, 200,
         )
+
+
+class BillingSubscriptionSyncTests(SubscriptionPageTestCase):
+    """
+    Единый источник истины: Company.subscription_* зеркалится в billing.Subscription.
+
+    Раньше синхронизация была односторонней (billing -> company), поэтому
+    продление/заморозка через компании-API (superadmin UI) не сдвигали
+    billing-часы: billing-задача check_expired_subscriptions замораживала уже
+    продлённую компанию по устаревшему expires_at, а гейт (fallback по
+    Subscription.is_blocked) блокировал её бизнес-доступ.
+    """
+
+    def test_extend_via_companies_api_syncs_billing_subscription(self):
+        from apps.billing.models import Subscription
+
+        end_before = self.company.subscription_end
+        with patch('apps.accounts.push_service.send_push_to_user'):
+            resp = self.api_sa.post(
+                f'/api/v1/companies/{self.company.id}/subscription_extend/',
+                {'days': 30}, format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.company.refresh_from_db()
+        sub = Subscription.objects.get(company=self.company)
+        self.assertGreater(sub.expires_at, end_before)
+        self.assertEqual(sub.expires_at, self.company.subscription_end)
+        self.assertEqual(sub.status, 'active')
+
+    def test_freeze_via_companies_api_syncs_billing_subscription(self):
+        from apps.billing.models import Subscription
+
+        resp = self.api_sa.post(
+            f'/api/v1/companies/{self.company.id}/subscription_freeze/',
+            {}, format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        sub = Subscription.objects.get(company=self.company)
+        self.assertEqual(sub.status, 'frozen')
+        self.assertIsNotNone(sub.frozen_at)
+
+    def test_activate_via_companies_api_syncs_billing_subscription(self):
+        from apps.billing.models import Subscription
+
+        # Замороженная компания с истёкшим сроком: активация выдаёт свежие 30 дней.
+        self.company.subscription_status = Company.SubscriptionStatus.FROZEN
+        self.company.subscription_end = timezone.now() - timedelta(days=5)
+        self.company.save(update_fields=['subscription_status', 'subscription_end'])
+        with patch('apps.accounts.push_service.send_push_to_user'):
+            resp = self.api_sa.post(
+                f'/api/v1/companies/{self.company.id}/subscription_activate/',
+                {}, format='json',
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.company.refresh_from_db()
+        sub = Subscription.objects.get(company=self.company)
+        self.assertEqual(sub.status, 'active')
+        self.assertEqual(sub.expires_at, self.company.subscription_end)
+        self.assertGreater(sub.expires_at, timezone.now())
+        self.assertIsNone(sub.frozen_at)

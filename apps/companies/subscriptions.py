@@ -66,13 +66,58 @@ class SubscriptionError(ValueError):
     """Некорректный запрос на изменение подписки (превращается в 400)."""
 
 
+_COMPANY_TO_BILLING_STATUS = {
+    Company.SubscriptionStatus.ACTIVE: 'active',
+    # Льготный период в billing-модели отсутствует: бизнес ещё работает,
+    # поэтому зеркалим как active (срок при этом уже в прошлом — billing
+    # считает is_blocked по expires_at, но гейт смотрит на Company.effective_*).
+    Company.SubscriptionStatus.GRACE: 'active',
+    Company.SubscriptionStatus.EXPIRED: 'expired',
+    Company.SubscriptionStatus.FROZEN: 'frozen',
+    Company.SubscriptionStatus.CANCELLED: 'frozen',
+}
+
+
+def _sync_billing_subscription(company):
+    """
+    Зеркалит Company.subscription_* в billing.Subscription (единые часы).
+
+    Company.subscription_status/start/end — источник истины для срока и статуса
+    подписки: их читают SubscriptionGateMiddleware, permissions, сериализаторы
+    /me/ и SPA. billing.Subscription — зеркало (счета, история владельца,
+    /billing/subscription/). Раньше синхронизация была односторонней
+    (billing -> company, в billing.services._sync_company_fields), поэтому
+    продление через компании-API (/companies/{id}/subscription_extend/) не
+    сдвигало billing.expires_at: устаревший срок по-прежнему блокировал
+    компанию в гейте (fallback по Subscription.is_blocked) и замораживал её
+    в billing-задаче check_expired_subscriptions.
+    """
+    from apps.billing.models import Subscription
+
+    if not Subscription.objects.filter(company_id=company.pk).exists():
+        return
+    updates = {
+        'status': _COMPANY_TO_BILLING_STATUS.get(company.subscription_status, 'active'),
+    }
+    if company.subscription_start is not None:
+        updates['started_at'] = company.subscription_start
+    if company.subscription_end is not None:
+        updates['expires_at'] = company.subscription_end
+    if company.subscription_status == Company.SubscriptionStatus.FROZEN:
+        updates['frozen_at'] = timezone.now()
+    else:
+        updates['frozen_at'] = None
+    Subscription.objects.filter(company_id=company.pk).update(**updates)
+
+
 @contextmanager
 def _locked_company(company):
     """
     Открывает транзакцию и берёт строку компании в SELECT ... FOR UPDATE.
 
     Возвращает свежий инстанс (locked) с актуальным состоянием; при выходе
-    из контекста состояние locked копируется обратно в переданный company.
+    из контекста состояние locked копируется обратно в переданный company
+    и зеркалится в billing.Subscription (единый источник истины — Company).
     """
     with transaction.atomic():
         locked = Company.objects.select_for_update().get(pk=company.pk)
@@ -81,6 +126,7 @@ def _locked_company(company):
         finally:
             for field in _SYNC_FIELDS:
                 setattr(company, field, getattr(locked, field))
+            _sync_billing_subscription(locked)
 
 
 def _iso(dt):

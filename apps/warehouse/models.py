@@ -139,10 +139,13 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
                 check=models.Q(reserved_for_orders__gte=0),
                 name='rawmaterial_reserved_nonnegative',
             ),
-            models.CheckConstraint(
-                check=models.Q(reserved_for_orders__lte=models.F('quantity')),
-                name='rawmaterial_reserved_lte_quantity',
-            ),
+            # НАМЕРЕННО нет ограничения reserved_for_orders <= quantity:
+            # резерв может превышать физический остаток (overbooking) — заказ на
+            # большее количество, чем есть на складе, создаётся и помечается
+            # has_material_shortage/has_product_shortage, а нехватка проверяется
+            # при выдаче/подтверждении (record_outgoing/confirm_work). Ограничение
+            # «reserved <= quantity» ломало это (IntegrityError вместо чистого
+            # отказа) и несовместимо с record_outgoing(ignore_reserved=True).
         ]
 
     def __str__(self):
@@ -241,10 +244,9 @@ class FinishedProduct(TimestampedModel, SoftDeleteModel):
                 check=models.Q(reserved_for_orders__gte=0),
                 name='finishedproduct_reserved_nonnegative',
             ),
-            models.CheckConstraint(
-                check=models.Q(reserved_for_orders__lte=models.F('quantity')),
-                name='finishedproduct_reserved_lte_quantity',
-            ),
+            # НАМЕРЕННО нет ограничения reserved_for_orders <= quantity: см.
+            # RawMaterial — резерв может превышать физический остаток
+            # (overbooking), нехватка проверяется при выдаче/подтверждении.
         ]
 
     def __str__(self):

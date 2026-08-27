@@ -744,6 +744,7 @@
         "disabled": "Ўчирилган",
         "currency": "сўм",
         "page_not_found": "Саҳифа топилмади",
+        "forbidden": "Кириш тақиқланган",
         "page_load_error": "Саҳифани юклаб бўлмади",
         "select": "— Танланг —",
         "archive": "Архивга",

@@ -143,17 +143,20 @@ def confirm_work(work, confirmed_by, labor_cost=None, request=None):
     if work.task and work.task.order and work.task.order.status == work.task.order.Status.CANCELLED:
         raise AlreadyProcessedError('Заказ отменён - работу подтвердить нельзя')
 
-    # Валидация defect_quantity: не может быть отрицательным,
-    # не может превышать количество, и количество не может быть нулевым при наличии брака.
-    if work.defect_quantity is not None:
-        if work.defect_quantity < 0:
-            raise ValidationError({'defect_quantity': 'Количество брака не может быть отрицательным.'})
-        if work.defect_quantity > work.quantity:
-            raise ValidationError({'defect_quantity': 'Количество брака не может превышать общее количество.'})
-    if work.quantity is not None and work.quantity <= 0:
+    # Валидация quantity/defect_quantity.
+    # quantity — ГОДНОЕ количество, defect_quantity — брак (отдельное поле).
+    # Брак может превышать годное (вплоть до «всё в брак»: 0 годных + N брака) —
+    # такой случай обязан подтверждаться, иначе сырьё, физически ушедшее в брак,
+    # оставалось бы на складе и остаток был бы завышен. Прежняя проверка
+    # «defect > quantity → reject» и «quantity <= 0 → reject» блокировала его.
+    good = work.quantity if work.quantity is not None else Decimal('0')
+    defect = work.defect_quantity if work.defect_quantity is not None else Decimal('0')
+    if defect < 0:
+        raise ValidationError({'defect_quantity': 'Количество брака не может быть отрицательным.'})
+    if good < 0:
+        raise ValidationError({'quantity': 'Количество не может быть отрицательным.'})
+    if good + defect <= 0:
         raise ValidationError({'quantity': 'Количество должно быть больше нуля.'})
-    if work.defect_quantity is not None and work.defect_quantity > 0 and (work.quantity is None or work.quantity <= 0):
-        raise ValidationError({'quantity': 'При наличии брака количество должно быть больше нуля.'})
 
     product = work.product
     # Сырьё уходит и на брак: рабочий его уже израсходовал, годным оно не

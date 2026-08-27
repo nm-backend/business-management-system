@@ -20,19 +20,11 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(condition=models.Q(('reserved_for_orders__gte', 0)), name='finishedproduct_reserved_nonnegative'),
         ),
         migrations.AddConstraint(
-            model_name='finishedproduct',
-            constraint=models.CheckConstraint(condition=models.Q(('reserved_for_orders__lte', models.F('quantity'))), name='finishedproduct_reserved_lte_quantity'),
-        ),
-        migrations.AddConstraint(
             model_name='rawmaterial',
             constraint=models.CheckConstraint(condition=models.Q(('quantity__gte', 0)), name='rawmaterial_quantity_nonnegative'),
         ),
         migrations.AddConstraint(
             model_name='rawmaterial',
             constraint=models.CheckConstraint(condition=models.Q(('reserved_for_orders__gte', 0)), name='rawmaterial_reserved_nonnegative'),
-        ),
-        migrations.AddConstraint(
-            model_name='rawmaterial',
-            constraint=models.CheckConstraint(condition=models.Q(('reserved_for_orders__lte', models.F('quantity'))), name='rawmaterial_reserved_lte_quantity'),
         ),
     ]
