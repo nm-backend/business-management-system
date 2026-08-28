@@ -455,7 +455,7 @@ function setupSidebar(user) {
         } else if (role === 'staff-worker') {
             show = user.is_worker || user.is_manager;
         }
-        link.hidden = !show;
+        link.style.display = show ? '' : 'none';
         link.setAttribute('aria-hidden', show ? 'false' : 'true');
     });
 }
@@ -471,7 +471,7 @@ function setupBottomNav(user) {
         } else if (navKey === 'clients') {
             show = !user.is_worker;
         }
-        link.hidden = !show;
+        link.style.display = show ? '' : 'none';
         link.setAttribute('aria-hidden', show ? 'false' : 'true');
     });
 }
