@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (el) el.style.display = 'none';
         });
         // SuperAdmin routes: только платформенные
-        window.router.addRoute('/', window.PlatformDashboardComponent);
+        window.router.addRoute('/', window.DashboardComponent);
         window.router.addRoute('/companies', window.CompaniesComponent);
         window.router.addRoute('/messages', window.MessagesComponent);
         window.router.addRoute('/settings', window.SettingsComponent);
