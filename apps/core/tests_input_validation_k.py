@@ -72,22 +72,23 @@ class WarehouseValidationTests(_Base):
                       {'name': 'Т', 'quantity': '1', 'unit': 'dona', 'cost_price': '-50'})
         self.assertEqual(r.status_code, 400)
 
-    def test_reserved_for_orders_cannot_be_set_via_api(self):
+    def test_required_for_orders_cannot_be_set_via_api(self):
         """
-        Резерв — только чтение: его мутируют заказы (reserve/release),
-        а не клиент. Раньше PATCH/POST-ом можно было выставить произвольный
-        резерв (до остатка) и заблокировать расход/исказить нехватку.
+        Потребность под заказы — только чтение: её мутируют заказы
+        (apply/release requirement), а не клиент. Раньше PATCH/POST-ом можно
+        было выставить произвольную потребность и заблокировать расход /
+        исказить нехватку.
         """
         r = self.post('/api/v1/warehouse/finished-products/',
-                      {'name': 'Т', 'quantity': '1', 'unit': 'dona', 'reserved_for_orders': '100'})
+                      {'name': 'Т', 'quantity': '1', 'unit': 'dona', 'required_for_orders': '100'})
         self.assertEqual(r.status_code, 201, r.content[:300])
-        self.assertEqual(Decimal(str(r.json()['reserved_for_orders'])), Decimal('0'))
+        self.assertEqual(Decimal(str(r.json()['required_for_orders'])), Decimal('0'))
 
     def test_reserved_equal_quantity_accepted_but_ignored(self):
         r = self.post('/api/v1/warehouse/finished-products/',
-                      {'name': 'Т2', 'quantity': '5', 'unit': 'dona', 'reserved_for_orders': '5'})
+                      {'name': 'Т2', 'quantity': '5', 'unit': 'dona', 'required_for_orders': '5'})
         self.assertEqual(r.status_code, 201)
-        self.assertEqual(Decimal(str(r.json()['reserved_for_orders'])), Decimal('0'))
+        self.assertEqual(Decimal(str(r.json()['required_for_orders'])), Decimal('0'))
 
 
 class OrderValidationTests(_Base):

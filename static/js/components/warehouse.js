@@ -357,7 +357,7 @@ class WarehouseComponent {
             </div>
             <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
                 ${this.detailRow('warehouse.quantity', `${window.ui.qty(m.quantity)} ${window.ui.t('units.' + m.unit)}`, m.is_low_stock)}
-                ${this.detailRow('warehouse.reserved', window.ui.qty(m.reserved_for_orders))}
+                ${this.detailRow('warehouse.required_for_orders', window.ui.qty(m.required_for_orders))}
                 ${this.detailRow('warehouse.available', window.ui.qty(m.available_quantity))}
                 ${this.detailRow('warehouse.min_stock', window.ui.qty(m.min_stock))}
                 ${this.detailRow('warehouse.barcode', m.barcode)}

@@ -29,18 +29,26 @@ def _should_enforce(path):
 
 
 def _is_blocked(company):
+    """
+    Единственный источник истины — Company.effective_subscription_status.
+
+    Он уже учитывает льготный период (GRACE): active со сроком в прошлом
+    отдаёт grace (пока grace не вышел) или expired (когда вышел) — то есть
+    «серая зона» между истечением срока и прогоном Celery обрабатывается
+    корректно и без отдельного billing-запроса.
+
+    Прежний fallback по billing.Subscription.is_blocked блокировал компанию в
+    ЛЬГОТНОМ ПЕРИОДЕ: у billing-модели нет понятия grace, и is_blocked =
+    `status != active or now >= expires_at` давал True на любой просроченной
+    подписке, даже когда grace ещё идёт. Воспроизведено: компания в GRACE
+    получала 403 subscription_expired от middleware, хотя бизнес обязан
+    продолжать работать до конца льготного периода.
+    """
     if company is None:
         return False, None, None
     status = company.effective_subscription_status
     if status in _BLOCKED_STATUSES:
         return True, status, company.subscription_end
-    try:
-        from .models import Subscription
-        sub = Subscription.objects.filter(company_id=company.pk).first()
-        if sub is not None and sub.is_blocked:
-            return True, sub.status, sub.expires_at
-    except Exception:
-        pass
     return False, None, None
 
 

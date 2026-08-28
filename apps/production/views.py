@@ -381,17 +381,26 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             try:
                 labor_cost = Decimal(str(request.data['labor_cost']))
             except (InvalidOperation, TypeError):
-                return Response({'labor_cost': 'Must be a valid number'},
+                return Response({'labor_cost': 'Укажите корректную сумму оплаты труда.'},
                                 status=status.HTTP_400_BAD_REQUEST)
             if labor_cost < 0:
-                return Response({'labor_cost': 'Must not be negative'},
+                return Response({'labor_cost': 'Сумма оплаты труда не может быть отрицательной.'},
                                 status=status.HTTP_400_BAD_REQUEST)
 
         try:
             work = services.confirm_work(work, request.user, labor_cost=labor_cost, request=request)
         except services.MaterialShortageError as error:
+            # Понятный текст + развёрнутый список нехваток для UI.
+            first = error.shortages[0] if error.shortages else None
+            if first:
+                detail = (
+                    f'Недостаточно сырья: «{first["material_name"]}» — требуется '
+                    f'{first["required"]}, доступно {first["available"]}.'
+                )
+            else:
+                detail = 'Недостаточно сырья для подтверждения работы.'
             return Response(
-                {'detail': 'Материал етарли эмас', 'shortages': error.shortages},
+                {'detail': detail, 'shortages': error.shortages},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except services.MissingLaborRateError as error:

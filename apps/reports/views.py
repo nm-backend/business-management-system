@@ -180,15 +180,19 @@ def owner_analytics_data(company_id, date_from, date_to):
     client_debts = money(Client.objects.filter(
         company_id=company_id, is_archived=False,
     ).aggregate(s=Sum('debt'))['s'])
+    # «Долги работникам» — накопительный показатель (как client_debts):
+    # суммарно начислено минус суммарно выплачено по ВСЕМ подтверждённым
+    # работам компании, независимо от периода отчёта. Раньше earned/paid
+    # фильтровались по confirmed_at/payment_date внутри периода — дашборд
+    # расходился с расчётами (settlements), где остаток считается накопительно
+    # (воспроизведено: dashboard=0, settlements=45000).
     worker_earned = money(WorkRecord.objects.filter(
         company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED,
-        confirmed_at__date__range=(date_from, date_to),
     ).aggregate(s=Sum('labor_cost'))['s'])
-    worker_paid = money(
-        WorkerPayment.objects.filter(company_id=company_id, payment_date__range=(date_from, date_to))
-        .aggregate(s=Sum('amount'))['s']
+    worker_paid_total = money(
+        WorkerPayment.objects.filter(company_id=company_id).aggregate(s=Sum('amount'))['s']
     )
-    worker_debts = max(worker_earned - worker_paid, 0)
+    worker_debts = max(worker_earned - worker_paid_total, 0)
 
     non_salary_expenses = money(
         Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
@@ -199,7 +203,7 @@ def owner_analytics_data(company_id, date_from, date_to):
         money(Payment.objects.filter(company_id=company_id, payment_date__date__range=(date_from, date_to))
               .aggregate(s=Sum('amount'))['s'])
         - non_salary_expenses
-        - worker_paid
+        - worker_payments
     )
 
     # Группировка по id, а не по имени: два товара с одинаковым именем иначе
@@ -795,13 +799,13 @@ class ExportReportAPIView(APIView):
         if report_type == 'material_shortage':
             company_id = request.user.company_id
             rows = [['Номи', 'Тури', 'Миқдор', 'Бирлик', 'Мин. қолдиқ', 'Камомад']]
-            # Считаем по ДОСТУПНОМУ остатку (минус резерв под заказы), как
+            # Считаем по ДОСТУПНОМУ остатку (минус потребность под заказы), как
             # карточка склада (is_low_stock): иначе материал «в норме» по
-            # физическому остатку, но целиком зарезервированный, не попадает
+            # физическому остатку, но целиком требуемый под заказы, не попадает
             # в отчёт о нехватке.
             for m in RawMaterial.objects.filter(
                 company_id=company_id, is_archived=False,
-            ).annotate(available=F('quantity') - F('reserved_for_orders')).filter(available__lt=F('min_stock')).order_by('name'):
+            ).annotate(available=F('quantity') - F('required_for_orders')).filter(available__lt=F('min_stock')).order_by('name'):
                 rows.append([
                     m.name, m.stone_type, m.quantity, m.get_unit_display(),
                     m.min_stock, m.min_stock - m.available

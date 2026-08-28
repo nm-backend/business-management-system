@@ -47,14 +47,14 @@ class RawMaterialTests(TestCase):
 
 class FinishedProductTests(TestCase):
     def test_available_quantity_subtracts_reserved(self):
-        p = FinishedProduct(name='Tile', quantity=Decimal('10'), reserved_for_orders=Decimal('3'))
+        p = FinishedProduct(name='Tile', quantity=Decimal('10'), required_for_orders=Decimal('3'))
         self.assertEqual(p.available_quantity, Decimal('7'))
 
     def test_is_low_stock_uses_available_quantity(self):
         p = FinishedProduct(
             name='Tile',
             quantity=Decimal('10'),
-            reserved_for_orders=Decimal('8'),
+            required_for_orders=Decimal('8'),
             min_stock=Decimal('5'),
         )
         # available = 2 <= min_stock 5 -> low stock
@@ -64,7 +64,7 @@ class FinishedProductTests(TestCase):
         p = FinishedProduct(
             name='Tile',
             quantity=Decimal('10'),
-            reserved_for_orders=Decimal('1'),
+            required_for_orders=Decimal('1'),
             min_stock=Decimal('5'),
         )
         self.assertFalse(p.is_low_stock)

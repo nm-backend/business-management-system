@@ -5,7 +5,7 @@
 
 1. Заказ создавался вообще без товара: POST без product и без
    custom_product_name отвечал 201. Такой заказ ничего не резервирует
-   (reserve_product выходит на `if not self.product_id`), не участвует в
+   (apply_product_requirement выходит на `if not self.product_id`), не участвует в
    расчёте нехватки и не может быть корректно выдан.
 
 2. Выдача заказа не списывала готовую продукцию и не писала движение склада.
@@ -91,7 +91,7 @@ class DeliveryWritesOffStockTests(_Base):
     def test_delivery_reduces_stock_and_writes_movement(self):
         order_id = self.create_order().json()['id']
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('3.000'),
+        self.assertEqual(self.product.required_for_orders, Decimal('3.000'),
                          'заказ должен зарезервировать товар')
 
         resp = self.deliver(order_id)
@@ -99,7 +99,7 @@ class DeliveryWritesOffStockTests(_Base):
 
         self.product.refresh_from_db()
         self.assertEqual(self.product.quantity, Decimal('7.000'), 'остаток должен уменьшиться')
-        self.assertEqual(self.product.reserved_for_orders, Decimal('0.000'), 'резерв снят')
+        self.assertEqual(self.product.required_for_orders, Decimal('0.000'), 'резерв снят')
 
         movement = StockMovement.objects.get(product=self.product,
                                              movement_type=StockMovement.MovementType.OUTGOING)
@@ -119,7 +119,7 @@ class DeliveryWritesOffStockTests(_Base):
 
         self.product.refresh_from_db()
         self.assertEqual(self.product.quantity, Decimal('2.000'), 'остаток не должен меняться')
-        self.assertEqual(self.product.reserved_for_orders, Decimal('5.000'),
+        self.assertEqual(self.product.required_for_orders, Decimal('5.000'),
                          'резерв возвращён — заказ всё ещё ждёт товар')
         order = Order.objects.get(pk=order_id)
         self.assertNotEqual(order.status, Order.Status.DELIVERED)

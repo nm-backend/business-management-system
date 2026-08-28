@@ -92,10 +92,10 @@ class OrderViewSet(CompanyScopedViewSet):
     def perform_create(self, serializer):
         company = self.request.user.company
         self._assert_related_own_company(serializer.validated_data)
-        # Всё в одной транзакции: раньше заказ сохранялся, а резерв сырья падал
-        # (например, материал удалили между валидацией и резервированием) — 500
-        # после коммита, заказ оставался без резерва, клиент ретраил и плодил
-        # дубликаты. Теперь сбой откатывает создание целиком.
+        # Всё в одной транзакции: раньше заказ сохранялся, а учёт потребности
+        # сырья падал (например, материал удалили между валидацией и учётом) —
+        # 500 после коммита, заказ оставался без потребности, клиент ретраил и
+        # плодил дубликаты. Теперь сбой откатывает создание целиком.
         with transaction.atomic():
             order = serializer.save(company=company)
             # Сразу синхронизируем payment_status: дефолт модели — 'unpaid',
@@ -103,9 +103,12 @@ class OrderViewSet(CompanyScopedViewSet):
             # который сумм не видит) до первой правки/оплаты «не оплачен»
             # при нулевом долге.
             order.update_payment_status()
-            # Товар и сырьё по его рецепту резервируются под заказ сразу при создании.
-            order.reserve_product()
-            order.reserve_raw_materials()
+            # Потребность в товаре и сырье по рецепту учитывается сразу при создании.
+            order.apply_product_requirement()
+            order.apply_raw_material_requirements()
+            # Перечитываем товар: иначе сериализатор ответа видит устаревший
+            # кэш (required_for_orders ещё 0) и не помечает нехватку.
+            order.refresh_product_cache()
             order.client.recalculate_financials()
             notify_staff(
                 company,
@@ -124,13 +127,13 @@ class OrderViewSet(CompanyScopedViewSet):
 
     def perform_update(self, serializer):
         self._assert_related_own_company(serializer.validated_data)
-        # Строка заказа блокируется на всю правку: release/reserve — check-then-act,
+        # Строка заказа блокируется на всю правку: release/apply — check-then-act,
         # и два параллельных PATCH (смена товара/количества) иначе снимали бы
-        # резерв по одному снапшоту — старый резерв «прилипал» навсегда, а
-        # total_amount в гонке с apply_payment_amount позволял оплату сверх долга.
+        # потребность по одному снапшоту — старая потребность «прилипала» навсегда,
+        # а total_amount в гонке с apply_payment_amount позволял оплату сверх долга.
         with transaction.atomic():
             locked = Order.objects.select_for_update().get(pk=serializer.instance.pk)
-            # Выданный заказ уже списал товар и снял резервы. Правка количества
+            # Выданный заказ уже списал товар и снял потребность. Правка количества
             # раньше проходила: заказ «становился» 5 шт, а склад был списан на 2 —
             # COGS, журнал и отчёты расходились.
             if locked.status == Order.Status.DELIVERED:
@@ -151,18 +154,22 @@ class OrderViewSet(CompanyScopedViewSet):
             old_client_id = locked.client_id
             changes = collect_model_changes(locked, serializer.validated_data)
             order = serializer.save()
-            # Старый резерв снимаем по прежним product/quantity: если товар или
-            # количество изменились, иначе резерв «прилипнет» к старому значению.
+            # Старую потребность снимаем по прежним product/quantity: если товар
+            # или количество изменились, иначе потребность «прилипнет» к старому.
             if order.product_id != old_product_id or order.quantity != old_quantity:
-                order.release_product(product_id=old_product_id, quantity=old_quantity)
-                order.release_raw_materials(product_id=old_product_id, quantity=old_quantity)
-                # Выданный/отменённый заказ резерв не «заводит» заново: deliver/cancel
-                # уже сняли его, и правка количества не должна воскрешать резерв.
+                order.release_product_requirement(product_id=old_product_id, quantity=old_quantity)
+                order.release_raw_material_requirements(product_id=old_product_id, quantity=old_quantity)
+                # Выданный/отменённый заказ потребность не «заводит» заново:
+                # deliver/cancel уже сняли её, и правка количества не должна
+                # воскрешать потребность.
                 if order.status not in (Order.Status.DELIVERED, Order.Status.CANCELLED):
-                    order.reserve_product()
-                    order.reserve_raw_materials()
+                    order.apply_product_requirement()
+                    order.apply_raw_material_requirements()
             if 'total_amount' in changes:
                 order.update_payment_status()
+            # Перечитываем товар после release/apply: сериализатор ответа иначе
+            # покажет устаревшие required_for_orders/available.
+            order.refresh_product_cache()
             order.client.recalculate_financials()
             # Смена клиента заказа переносит сумму долга: без пересчёта старого
             # клиента его total_orders_amount/debt «висели» с ушедшим заказом до
@@ -216,9 +223,9 @@ class OrderViewSet(CompanyScopedViewSet):
                     reason=f'Возврат по отмене заказа #{locked.id}',
                 )
             else:
-                # Невыданный заказ ничего не списывал — возвращаем только резерв.
-                locked.release_product()
-            locked.release_raw_materials()
+                # Невыданный заказ ничего не списывал — снимаем только потребность.
+                locked.release_product_requirement()
+            locked.release_raw_material_requirements()
             locked.status = Order.Status.CANCELLED
             locked.save(update_fields=['status'])
             # Задача — продолжение заказа: после отмены она превращалась в «зомби».
@@ -273,7 +280,7 @@ class OrderViewSet(CompanyScopedViewSet):
         order = self.get_object()
         new_status = request.data.get('status')
         if not new_status:
-            return Response({'error': 'status is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Укажите новый статус заказа.'}, status=status.HTTP_400_BAD_REQUEST)
 
         allowed_transitions = {
             Order.Status.NEW: [Order.Status.AWAITING_MATERIAL, Order.Status.SENT_TO_WORKER],
@@ -287,14 +294,15 @@ class OrderViewSet(CompanyScopedViewSet):
 
         # Строка блокируется, как в deliver/cancel: параллельные transition,
         # deliver и cancel иначе читали один статус и писали поверх друг друга —
-        # отменённый заказ «воскресал» в рабочем статусе (резервы уже сняты,
+        # отменённый заказ «воскресал» в рабочем статусе (потребность уже снята,
         # финансы пересчитаны), а выданный возвращался из DELIVERED в работу.
         with transaction.atomic():
             order = Order.objects.select_for_update().get(pk=order.pk)
             allowed = allowed_transitions.get(order.status, [])
             if new_status not in allowed:
                 return Response(
-                    {'error': f'Cannot transition from {order.status} to {new_status}'},
+                    {'error': f'Недопустимый переход: {order.status} → {new_status}. '
+                              f'Допустимые статусы: {", ".join(allowed) or "—"}'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -326,19 +334,19 @@ class OrderViewSet(CompanyScopedViewSet):
                 return Response({'detail': 'Заказ отменён'},
                                 status=status.HTTP_400_BAD_REQUEST)
             # Повторная выдача блокируется: заказ уже отдан клиенту, второй раз
-            # списать резерв/начислить долг нельзя (раньше выдачу можно было
+            # списать потребность/начислить долг нельзя (раньше выдачу можно было
             # дёргать сколько угодно — дубли в audit и лишний пересчёт финансов).
             if order.status == Order.Status.DELIVERED:
                 return Response({'detail': 'Заказ уже доставлен'},
                                 status=status.HTTP_400_BAD_REQUEST)
-            # Товар и сырьё ушли — резервы снимаем.
-            # Резерв снимаем ДО списания: record_outgoing разрешает списывать
-            # только доступное (остаток минус резерв), и собственный резерв заказа
-            # иначе заблокировал бы его же выдачу.
-            order.release_product()
-            order.release_raw_materials()
+            # Товар и сырьё уходят клиенту — потребность заказов снимаем.
+            # Потребность снимаем ДО списания: record_outgoing разрешает
+            # списывать только доступное (остаток минус потребность), и
+            # собственная потребность заказа иначе заблокировала бы его же выдачу.
+            order.release_product_requirement()
+            order.release_raw_material_requirements()
 
-            # Списание со склада. Раньше выдача только снимала резерв: товар
+            # Списание со склада. Раньше выдача только снимала потребность: товар
             # физически уезжал к клиенту, а остаток продолжал его показывать, и в
             # журнале движений выдачи не было вообще. Отсюда расхождение остатков,
             # журнала и статистики (замечание тестировщика).
@@ -349,26 +357,25 @@ class OrderViewSet(CompanyScopedViewSet):
                         quantity=order.quantity,
                         user=request.user,
                         reason=f'Выдача заказа #{order.id}',
-                        # Собственный резерв уже снят (release_product выше);
-                        # чужие НЕобеспеченные обещания (reserved > остатка)
-                        # иначе блокировали бы выдачу физически имеющегося
-                        # товара (см. record_outgoing).
-                        ignore_reserved=True,
+                        # Собственная потребность уже снята
+                        # (release_product_requirement выше); чужая
+                        # НЕобеспеченная потребность (required > остатка) иначе
+                        # блокировала бы выдачу физически имеющегося товара
+                        # (см. record_outgoing).
+                        ignore_required=True,
                     )
                 except DRFValidationError:
-                    # Считаем доступное ДО возврата резерва: резерв этого же заказа
-                    # иначе занизил бы цифру в сообщении — он отложен как раз под него.
+                    # Считаем доступное ДО возврата потребности: потребность
+                    # этого же заказа иначе занизила бы цифру в сообщении.
                     order.product.refresh_from_db()
-                    available = order.product.quantity - (order.product.reserved_for_orders or 0)
-                    # Не хватило товара — возвращаем резервы (и товара, и сырья по
-                    # рецепту) и не выдаём: иначе остаток ушёл бы в минус, а клиент
-                    # получил бы то, чего нет. Раньше возвращался только резерв
-                    # товара — сырьё оставалось «зарезервированным» навсегда, и
-                    # следующие заказы не могли перебронировать материал.
-                    order.reserve_product()
-                    order.reserve_raw_materials()
+                    available = order.product.quantity - (order.product.required_for_orders or 0)
+                    # Не хватило товара — возвращаем потребность (и товара, и сырья
+                    # по рецепту) и не выдаём: иначе остаток ушёл бы в минус, а
+                    # клиент получил бы то, чего нет.
+                    order.apply_product_requirement()
+                    order.apply_raw_material_requirements()
                     # Сообщение из record_outgoing говорит про «списание» и
-                    # «резерв» — на выдаче это непонятно. Особенно когда клиент
+                    # «потребность» — на выдаче это непонятно. Особенно когда клиент
                     # уже оплатил и пришёл забирать раньше срока: он видит отказ
                     # и не понимает, что делать. Объясняем ситуацию по-человечески.
                     return Response({
@@ -409,6 +416,7 @@ class OrderViewSet(CompanyScopedViewSet):
             changes={'status': {'old': old_status, 'new': 'delivered'}},
             request=request,
         )
+        order.refresh_product_cache()
         return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=['post'])
@@ -431,4 +439,5 @@ class OrderViewSet(CompanyScopedViewSet):
             changes={'status': {'new': 'cancelled'}},
             request=request,
         )
+        order.refresh_product_cache()
         return Response(self.get_serializer(order).data)

@@ -8,7 +8,7 @@
 товар.
 
 После правки сериализатор отдаёт has_product_shortage/product_shortage:
-- при заказе больше, чем available_quantity (quantity - reserved_for_orders);
+- при заказе больше, чем available_quantity (quantity - required_for_orders);
 - собственный резерв заказа при этом не считается «нехваткой» (при выдаче
   он снимается, и доступное количество вырастает ровно на величину заказа);
 - у заказа на ручное название (custom_product_name) поля всегда пустые.
@@ -75,7 +75,7 @@ class ProductShortageFieldTests(TestCase):
         # доступно — выдавать такой заказ можно, нехватки нет.
         o = self.get_order(self.create_order('10')['id'])
         self.product.refresh_from_db()
-        self.assertEqual(self.product.reserved_for_orders, Decimal('10'))
+        self.assertEqual(self.product.required_for_orders, Decimal('10'))
         self.assertFalse(o['has_product_shortage'])
 
     def test_other_order_reservation_reduces_available(self):

@@ -93,10 +93,11 @@ class _ConfirmedWorkGuardMixin:
         return attrs
 
     def validate_quantity(self, value):
-        # Та же защита, что у Create-сериализатора: отрицательное количество
-        # при PATCH до подтверждения испортило бы расчёты confirm_work.
+        # Та же защита, что у Create-сериализатора: quantity — ГОДНОЕ количество.
+        # Нуль/отрицательное при PATCH до подтверждения испортило бы расчёты
+        # confirm_work (входной контракт ТЗ «quantity <= 0 → reject»).
         if value is None or value <= 0:
-            raise serializers.ValidationError('Количество работы должно быть больше нуля.')
+            raise serializers.ValidationError('Годное количество должно быть больше нуля.')
         return value
 
 
@@ -227,10 +228,12 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
         return work
 
     def validate_quantity(self, value):
-        # Отрицательное/нулевое количество портит склад при подтверждении:
-        # требования по рецепту становятся отрицательными, проверка нехватки
-        # сырья не срабатывает, остаток «дорисовывается», а labor_cost уходит
-        # в минус. Отсекаем на входе.
+        # quantity — ГОДНОЕ количество. Нуль/отрицательное портит склад при
+        # подтверждении: требования по рецепту становятся отрицательными,
+        # проверка нехватки сырья не срабатывает, остаток «дорисовывается», а
+        # labor_cost уходит в минус. Отсекаем на входе (ТЗ «quantity <= 0 →
+        # reject»). Работа «всё в брак» (0 годных + N брака) штатным API не
+        # создаётся; confirm_work обрабатывает такие записи оборонительно.
         if value is None or value <= 0:
-            raise serializers.ValidationError('Количество работы должно быть больше нуля.')
+            raise serializers.ValidationError('Годное количество должно быть больше нуля.')
         return value

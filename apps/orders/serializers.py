@@ -26,8 +26,8 @@ class OrderSerializer(serializers.ModelSerializer):
 
         Воспроизведено: POST без product и без custom_product_name отвечал 201.
         Такой заказ не просто «пустая строка в списке» — у него нет рецепта,
-        поэтому он ничего не резервирует (Order.reserve_product выходит на
-        `if not self.product_id`), не попадает в расчёт нехватки материалов и
+        поэтому он не создаёт потребности (Order.apply_product_requirement выходит
+        на `if not self.product_id`), не попадает в расчёт нехватки материалов и
         не может быть корректно выдан.
 
         Оба поля остаются необязательными по отдельности: изделие «по описанию»
@@ -93,12 +93,12 @@ class OrderSerializer(serializers.ModelSerializer):
         Нехватка ГОТОВОГО товара (в отличие от material_shortages — сырья).
 
         Сравниваем с тем, что реально будет доступно при выдаче: сначала
-        снимается собственный резерв заказа (release_product), затем
-        record_outgoing проверяет quantity <= quantity - reserved. Итоговое
-        условие блока выдачи: reserved_for_orders > quantity, т.е. заказы
-        зарезервировали больше, чем лежит на складе. Воспроизведено на
+        снимается собственная потребность заказа (release_product_requirement),
+        затем record_outgoing проверяет quantity <= quantity - required.
+        Итоговое условие блока выдачи: required_for_orders > quantity, т.е.
+        потребность заказов превышает физический остаток. Воспроизведено на
         равном количестве: заказ 10 из 10 помечался «нехваткой», хотя при
-        выдаче резерв снимается и выдать такой заказ можно.
+        выдаче собственная потребность снимается и выдать такой заказ можно.
 
         Раньше о нехватке товара узнавали только при выдаче (record_outgoing
         отдаёт 400) — при создании заказа предупреждения не было вовсе, и
@@ -107,7 +107,7 @@ class OrderSerializer(serializers.ModelSerializer):
         if not obj.product_id or not obj.quantity:
             return None
         p = obj.product
-        available = p.quantity - (p.reserved_for_orders - obj.quantity)
+        available = p.quantity - (p.required_for_orders - obj.quantity)
         if obj.quantity > available:
             return {
                 'product_name': p.name,
