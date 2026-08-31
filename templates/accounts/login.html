@@ -91,7 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearError = () => { errorMsg.style.display = 'none'; };
 
     if (sessionStorage.getItem('session_expired')) {
-        showError(t('auth.session_expired'));
+        // i18n.init() ещё не вызван — берём текст из localStorage-языка или фоллбэк.
+        const expiredMsg = t('auth.session_expired');
+        showError(expiredMsg !== 'auth.session_expired' ? expiredMsg : 'Сессия муддати тугади. Қайта киринг');
         sessionStorage.removeItem('session_expired');
     }
 
