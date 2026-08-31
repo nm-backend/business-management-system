@@ -4,6 +4,10 @@ Serializers for production API.
 Этот модуль содержит сериализаторы для моделей Task и WorkRecord
 с защитой финансовых данных для non-owner пользователей.
 """
+from __future__ import annotations
+
+from typing import Any
+
 from rest_framework import serializers
 
 from apps.core.validators import validate_file_size
@@ -11,7 +15,7 @@ from .models import Task, WorkPhoto, WorkRecord
 
 
 class WorkPhotoSerializer(serializers.ModelSerializer):
-    """Снимок из галереи работы — только чтение, отдаём URL."""
+    """Снимок из галереи работы — только чтение."""
 
     class Meta:
         model = WorkPhoto
@@ -19,12 +23,7 @@ class WorkPhotoSerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор задачи.
-
-    Используется для всех ролей.
-    Финансовых полей нет.
-    """
+    """Сериализатор задачи — для всех ролей, без финансовых полей."""
     order_id = serializers.IntegerField(source='order.id', read_only=True)
     order_product = serializers.SerializerMethodField()
     worker_name = serializers.SerializerMethodField()
@@ -61,11 +60,7 @@ class TaskSerializer(serializers.ModelSerializer):
 
 
 class TaskCreateSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор для создания задачи.
-
-    Используется при назначении задачи работнику.
-    """
+    """Сериализатор для создания задачи."""
     class Meta:
         model = Task
         fields = ['order', 'worker', 'is_self_assigned']
@@ -102,12 +97,7 @@ class _ConfirmedWorkGuardMixin:
 
 
 class WorkRecordSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSerializer):
-    """
-    Сериализатор записи о работе с финансовыми данными.
-
-    Используется только для владельца (owner).
-    Включает стоимость труда.
-    """
+    """Сериализатор записи о работе для владельца — с labor_cost и labor_rate."""
     worker_name = serializers.CharField(source='worker.username', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
@@ -148,32 +138,11 @@ class WorkRecordSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSerializer
 
 
 class WorkRecordLimitedSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSerializer):
-    """
-    Сериализатор записи о работе без финансовых данных.
-
-    Используется для администраторов и работников.
-    Исключает стоимость труда.
-    """
+    """Сериализатор записи о работе для admin — без labor_cost и labor_rate."""
     worker_name = serializers.CharField(source='worker.username', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
     photos = WorkPhotoSerializer(many=True, read_only=True)
-    labor_rate = serializers.SerializerMethodField()
-
-    def get_labor_rate(self, obj):
-        from apps.finance.models import LaborRate
-        if not obj.product:
-            return None
-        rates = list(obj.product.labor_rates.all())
-        if not rates:
-            return None
-        if obj.operation:
-            rate = next((r for r in rates if r.operation == obj.operation), None)
-        elif len(rates) == 1:
-            rate = rates[0]
-        else:
-            rate = None
-        return str(rate.rate_per_unit) if rate else None
 
     class Meta:
         model = WorkRecord
@@ -182,7 +151,7 @@ class WorkRecordLimitedSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSer
             'product', 'product_name', 'operation', 'quantity', 'defect_quantity', 'unit',
             'photo', 'photos', 'comment', 'status',
             'confirmed_by', 'confirmed_by_name', 'confirmed_at',
-            'rejection_reason', 'labor_rate',
+            'rejection_reason',
             'is_confirmed', 'created_at', 'updated_at'
         ]
         # Админ видит работы без денег и не может менять статус прямым PATCH.
@@ -193,11 +162,7 @@ class WorkRecordLimitedSerializer(_ConfirmedWorkGuardMixin, serializers.ModelSer
 
 
 class WorkRecordCreateSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор для создания записи о работе.
-
-    Используется работником при выполнении работы.
-    """
+    """Сериализатор для создания записи о работе работником."""
     # Галерея: рабочий прикладывает несколько снимков (макет «Ишни якунлаш»).
     # Правило мягкое — работу без фото принимаем, админ видит пометку и решает
     # сам: рабочий без камеры или со слабым интернетом не должен застрять.

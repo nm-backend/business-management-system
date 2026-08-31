@@ -4,11 +4,16 @@ Serializers for finance API.
 Этот модуль содержит сериализаторы для финансовых моделей.
 Все финансовые данные доступны только владельцу (owner).
 """
+from __future__ import annotations
+
+from typing import Any
+
 from rest_framework import serializers
 from .models import Expense, LaborRate, WorkerPayment
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
+    """Сериализатор расхода — только для владельца."""
     """
     Сериализатор расхода.
 
@@ -27,11 +32,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
 
 
 class ExpenseCreateSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор для создания расхода.
-
-    Используется при добавлении нового расхода.
-    """
+    """Сериализатор для создания расхода."""
     class Meta:
         model = Expense
         fields = [
@@ -42,11 +43,7 @@ class ExpenseCreateSerializer(serializers.ModelSerializer):
 
 
 class LaborRateSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор ставки оплаты труда.
-
-    Доступен только владельцу (owner).
-    """
+    """Сериализатор ставки оплаты труда — для владельца."""
     product_name = serializers.CharField(source='product.name', read_only=True)
 
     class Meta:
@@ -59,11 +56,7 @@ class LaborRateSerializer(serializers.ModelSerializer):
 
 
 class LaborRateCreateSerializer(serializers.ModelSerializer):
-    """
-    Сериализатор для создания ставки оплаты труда.
-
-    Используется при установке ставок оплаты.
-    """
+    """Сериализатор для создания ставки оплаты труда."""
     class Meta:
         model = LaborRate
         fields = [
@@ -120,11 +113,7 @@ class _SalaryCapMixin:
 
 
 class WorkerPaymentSerializer(_SalaryCapMixin, serializers.ModelSerializer):
-    """
-    Сериализатор выплаты работнику.
-
-    Доступен только владельцу (owner).
-    """
+    """Сериализатор выплаты работнику — только для владельца."""
     worker_name = serializers.CharField(source='worker.username', read_only=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
 
@@ -144,11 +133,7 @@ class WorkerPaymentSerializer(_SalaryCapMixin, serializers.ModelSerializer):
 
 
 class WorkerPaymentCreateSerializer(_SalaryCapMixin, serializers.ModelSerializer):
-    """
-    Сериализатор для создания выплаты работнику.
-
-    Используется при выплате зарплаты/аванса.
-    """
+    """Сериализатор для создания выплаты работнику."""
     class Meta:
         model = WorkerPayment
         fields = [

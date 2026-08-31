@@ -11,7 +11,10 @@ apps/production/services.py: строка блокируется, прибавл
 объявлен в модели, но не создавался ни одной строкой кода, поэтому история
 склада знала только производство.
 """
+from __future__ import annotations
+
 from decimal import Decimal
+from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -20,8 +23,16 @@ from .models import FinishedProduct, RawMaterial, StockMovement
 
 
 @transaction.atomic
-def record_incoming(*, target, quantity, price_per_unit=None, arrival_date=None,
-                    document_number=None, user=None, reason=''):
+def record_incoming(
+    *,
+    target: RawMaterial | FinishedProduct,
+    quantity: Decimal | int | float,
+    price_per_unit: Decimal | int | float | None = None,
+    arrival_date: Any | None = None,
+    document_number: str | None = None,
+    user: Any | None = None,
+    reason: str = '',
+) -> RawMaterial | FinishedProduct:
     """
     Приходует количество на склад и записывает движение.
 
@@ -88,8 +99,17 @@ def record_incoming(*, target, quantity, price_per_unit=None, arrival_date=None,
 
 
 @transaction.atomic
-def record_outgoing(*, target, quantity, movement_type=None, outgoing_date=None,
-                    document_number=None, user=None, reason='', ignore_required=False):
+def record_outgoing(
+    *,
+    target: RawMaterial | FinishedProduct,
+    quantity: Decimal | int | float,
+    movement_type: str | None = None,
+    outgoing_date: Any | None = None,
+    document_number: str | None = None,
+    user: Any | None = None,
+    reason: str = '',
+    ignore_required: bool = False,
+) -> RawMaterial | FinishedProduct:
     """
     Расход/списание сырья со склада с записью движения.
 

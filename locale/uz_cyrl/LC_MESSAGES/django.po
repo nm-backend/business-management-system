@@ -1,0 +1,251 @@
+# Uzbek (Cyrillic) translation for SkladPro.Nod ERP
+# Copyright (C) 2026
+# This file is distributed under the same license as the SkladPro.Nod ERP package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: SkladPro.Nod 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-08-31 12:00+0000\n"
+"PO-Revision-Date: 2026-08-31 12:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: Uzbek (Cyrillic)\n"
+"Language: uz_cyrl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+# ── Order statuses ────────────────────────────────────────────────
+msgid "Янги"
+msgstr "Янги"
+
+msgid "Материал кутилмоқда"
+msgstr "Материал кутилмоқда"
+
+msgid "Ишчига юборилган"
+msgstr "Ишчига юборилган"
+
+msgid "Қабул қилинди"
+msgstr "Қабул қилинди"
+
+msgid "Рад этилди"
+msgstr "Рад этилди"
+
+msgid "Жараёнда"
+msgstr "Жараёнда"
+
+msgid "Тасдиқлаш кутилмоқда"
+msgstr "Тасдиқлаш кутилмоқда"
+
+msgid "Тайёр"
+msgstr "Тайёр"
+
+msgid "Мижозга берилди"
+msgstr "Мижозга берилди"
+
+msgid "Бекор қилинди"
+msgstr "Бекор қилинди"
+
+# ── Payment statuses ──────────────────────────────────────────────
+msgid "Тўлов қилинмаган"
+msgstr "Тўлов қилинмаган"
+
+msgid "Қисман тўланган"
+msgstr "Қисман тўланган"
+
+msgid "Тўланган"
+msgstr "Тўланган"
+
+# ── Task statuses ─────────────────────────────────────────────────
+msgid "Кутилмоқда"
+msgstr "Кутилмоқда"
+
+msgid "Бажарилди"
+msgstr "Бажарилди"
+
+msgid "Тасдиқланди"
+msgstr "Тасдиқланди"
+
+# ── Refusal reasons ───────────────────────────────────────────────
+msgid "Материал етарли эмас"
+msgstr "Материал етарли эмас"
+
+msgid "Вақтим йўқ"
+msgstr "Вақтим йўқ"
+
+msgid "Ўлчам нотўғри"
+msgstr "Ўлчам нотўғри"
+
+msgid "Ёрдамчи керак"
+msgstr "Ёрдамчи керак"
+
+msgid "Ускуна банд"
+msgstr "Ускуна банд"
+
+msgid "Бошқа сабаб"
+msgstr "Бошқа сабаб"
+
+# ── Work statuses ─────────────────────────────────────────────────
+# (same as task statuses for awaiting_confirmation/confirmed/rejected)
+
+# ── Notification types ────────────────────────────────────────────
+msgid "Янги буюртма"
+msgstr "Янги буюртма"
+
+msgid "Янги харажат"
+msgstr "Янги харажат"
+
+msgid "Мижоз тўлов қилмади"
+msgstr "Мижоз тўлов қилмади"
+
+msgid "Қарз муддати ўтди"
+msgstr "Қарз муддати ўтди"
+
+msgid "Ишчи рад этди"
+msgstr "Ишчи рад этди"
+
+msgid "Иш тасдиқлашни кутмоқда"
+msgstr "Иш тасдиқлашни кутмоқда"
+
+msgid "Касса ўзгариши"
+msgstr "Касса ўзгариши"
+
+msgid "Ҳисобот тайёр"
+msgstr "Ҳисобот тайёр"
+
+msgid "Янги вазифа"
+msgstr "Янги вазифа"
+
+msgid "Вазифа ўзгартирилди"
+msgstr "Вазифа ўзгартирилди"
+
+msgid "Вазифа бекор қилинди"
+msgstr "Вазифа бекор қилинди"
+
+msgid "Иш тасдиқланди"
+msgstr "Иш тасдиқланди"
+
+msgid "Иш рад этди"
+msgstr "Иш рад этди"
+
+msgid "Янги хабар"
+msgstr "Янги хабар"
+
+msgid "Шахсий иш ҳисобланди"
+msgstr "Шахсий иш ҳисобланди"
+
+msgid "Материал етишмовчилиги"
+msgstr "Материал етишмовчилиги"
+
+msgid "Обуна 7 кундан сўнг тугайди"
+msgstr "Обуна 7 кундан сўнг тугайди"
+
+msgid "Обуна 1 кундан сўнг тугайди"
+msgstr "Обуна 1 кундан сўнг тугайди"
+
+msgid "Обуна муддати тугади"
+msgstr "Обуна муддати тугади"
+
+msgid "Обуна узайтирилди"
+msgstr "Обуна узайтирилди"
+
+msgid "Обунани узайтириш сўрови"
+msgstr "Обунани узайтириш сўрови"
+
+msgid "Имтиёзли давр бошланди"
+msgstr "Имтиёзли давр бошланди"
+
+msgid "Обуна тугади"
+msgstr "Обуна тугади"
+
+msgid "Тариф ўзгартирилди"
+msgstr "Тариф ўзгартирилди"
+
+# ── Payment methods ───────────────────────────────────────────────
+msgid "Нақд"
+msgstr "Нақд"
+
+msgid "Карта"
+msgstr "Карта"
+
+msgid "Ўтказма"
+msgstr "Ўтказма"
+
+msgid "Бошқа"
+msgstr "Бошқа"
+
+# ── Expense categories ────────────────────────────────────────────
+msgid "Ижара"
+msgstr "Ижара"
+
+msgid "Электр энергия"
+msgstr "Электр энергия"
+
+msgid "Сув"
+msgstr "Сув"
+
+msgid "Транспорт"
+msgstr "Транспорт"
+
+msgid "Етказиб бериш"
+msgstr "Етказиб бериш"
+
+msgid "Солиқлар"
+msgstr "Солиқлар"
+
+msgid "Ишчилар иш ҳақи"
+msgstr "Ишчилар иш ҳақи"
+
+msgid "Ишчиларга аванс"
+msgstr "Ишчиларга аванс"
+
+msgid "Ускуна таъмири"
+msgstr "Ускуна таъмири"
+
+msgid "Асбоб сотиб олиш"
+msgstr "Асбоб сотиб олиш"
+
+msgid "Сарфлаш материаллари"
+msgstr "Сарфлаш материаллари"
+
+msgid "Материал йўқотиш"
+msgstr "Материал йўқотиш"
+
+msgid "Брак"
+msgstr "Брак"
+
+msgid "Кутилмаган харажатлар"
+msgstr "Кутилмаган харажатлар"
+
+msgid "Эгасининг шахсий чиқими"
+msgstr "Эгасининг шахсий чиқими"
+
+msgid "Ишчилар қарзлари"
+msgstr "Ишчилар қарзлари"
+
+msgid "Мижозларга қайтариш"
+msgstr "Мижозларга қайтариш"
+
+# ── Labor rate operations ─────────────────────────────────────────
+msgid "Кесиш"
+msgstr "Кесиш"
+
+msgid "Сийлаш"
+msgstr "Сийлаш"
+
+msgid "Монтаж"
+msgstr "Монтаж"
+
+msgid "Қутлаш"
+msgstr "Қутлаш"
+
+# ── Worker payment types ──────────────────────────────────────────
+msgid "Иш ҳақи"
+msgstr "Иш ҳақи"
+
+msgid "Аванс"
+msgstr "Аванс"
+
+msgid "Мукофот"
+msgstr "Мукофот"

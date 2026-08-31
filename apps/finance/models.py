@@ -10,67 +10,38 @@ from decimal import Decimal
 
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from apps.core.models import TimestampedModel
 from apps.core.validators import validate_not_future, validate_file_size
 from apps.warehouse.models import UnitChoices
 
 
 class ExpenseCategory(models.TextChoices):
-    """
-    Категории расходов.
-
-    RENT: аренда
-    ELECTRICITY: электричество
-    WATER: вода
-    TRANSPORT: транспорт
-    DELIVERY: доставка
-    TAXES: налоги
-    SALARY: зарплата работников
-    ADVANCE: аванс работникам
-    EQUIPMENT_REPAIR: ремонт оборудования
-    TOOLS: покупка инструментов
-    CONSUMABLES: расходные материалы
-    MATERIAL_LOSS: потеря материала
-    DEFECT: брак
-    UNFORESEEN: непредвиденные расходы
-    OWNER_WITHDRAWAL: личный вывод средств владельцем
-    WORKER_DEBT: долги работников
-    CLIENT_REFUND: возвраты клиентам
-    OTHER: другое
-    """
-    RENT = 'rent', 'Ижара'
-    ELECTRICITY = 'electricity', 'Электр энергия'
-    WATER = 'water', 'Сув'
-    TRANSPORT = 'transport', 'Транспорт'
-    DELIVERY = 'delivery', 'Етказиб бериш'
-    TAXES = 'taxes', 'Солиқлар'
-    SALARY = 'salary', 'Ишчилар иш ҳақи'
-    ADVANCE = 'advance', 'Ишчиларга аванс'
-    EQUIPMENT_REPAIR = 'equipment_repair', 'Ускуна таъмири'
-    TOOLS = 'tools', 'Асбоб сотиб олиш'
-    CONSUMABLES = 'consumables', 'Сарфлаш материаллари'
-    MATERIAL_LOSS = 'material_loss', 'Материал йўқотиш'
-    DEFECT = 'defect', 'Брак'
-    UNFORESEEN = 'unforeseen', 'Кутилмаган харажатлар'
-    OWNER_WITHDRAWAL = 'owner_withdrawal', 'Эгасининг шахсий чиқими'
-    WORKER_DEBT = 'worker_debt', 'Ишчилар қарзлари'
-    CLIENT_REFUND = 'client_refund', 'Мижозларга қайтариш'
-    OTHER = 'other', 'Бошқа'
+    RENT = 'rent', _('Ижара')
+    ELECTRICITY = 'electricity', _('Электр энергия')
+    WATER = 'water', _('Сув')
+    TRANSPORT = 'transport', _('Транспорт')
+    DELIVERY = 'delivery', _('Етказиб бериш')
+    TAXES = 'taxes', _('Солиқлар')
+    SALARY = 'salary', _('Ишчилар иш ҳақи')
+    ADVANCE = 'advance', _('Ишчиларга аванс')
+    EQUIPMENT_REPAIR = 'equipment_repair', _('Ускуна таъмири')
+    TOOLS = 'tools', _('Асбоб сотиб олиш')
+    CONSUMABLES = 'consumables', _('Сарфлаш материаллари')
+    MATERIAL_LOSS = 'material_loss', _('Материал йўқотиш')
+    DEFECT = 'defect', _('Брак')
+    UNFORESEEN = 'unforeseen', _('Кутилмаган харажатлар')
+    OWNER_WITHDRAWAL = 'owner_withdrawal', _('Эгасининг шахсий чиқими')
+    WORKER_DEBT = 'worker_debt', _('Ишчилар қарзлари')
+    CLIENT_REFUND = 'client_refund', _('Мижозларга қайтариш')
+    OTHER = 'other', _('Бошқа')
 
 
 class PaymentMethod(models.TextChoices):
-    """
-    Способы оплаты.
-
-    CASH: наличные
-    CARD: карта
-    TRANSFER: перевод
-    OTHER: другое
-    """
-    CASH = 'cash', 'Нақд'
-    CARD = 'card', 'Карта'
-    TRANSFER = 'transfer', 'Ўтказма'
-    OTHER = 'other', 'Бошқа'
+    CASH = 'cash', _('Нақд')
+    CARD = 'card', _('Карта')
+    TRANSFER = 'transfer', _('Ўтказма')
+    OTHER = 'other', _('Бошқа')
 
 
 class Expense(TimestampedModel):
@@ -150,20 +121,11 @@ class LaborRate(TimestampedModel):
         - Разные ставки для разных операций
     """
     class OperationType(models.TextChoices):
-        """
-        Типы операций.
-
-        CUTTING: резка
-        POLISHING: полировка
-        MOUNTING: монтаж
-        PACKING: упаковка
-        OTHER: другое
-        """
-        CUTTING = 'cutting', 'Кесиш'
-        POLISHING = 'polishing', 'Сийлаш'
-        MOUNTING = 'mounting', 'Монтаж'
-        PACKING = 'packing', 'Қутлаш'
-        OTHER = 'other', 'Бошқа'
+        CUTTING = 'cutting', _('Кесиш')
+        POLISHING = 'polishing', _('Сийлаш')
+        MOUNTING = 'mounting', _('Монтаж')
+        PACKING = 'packing', _('Қутлаш')
+        OTHER = 'other', _('Бошқа')
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='labor_rates', null=True, verbose_name='Компания')
     product = models.ForeignKey('warehouse.FinishedProduct', on_delete=models.CASCADE, related_name='labor_rates', verbose_name='Товар')
@@ -216,18 +178,10 @@ class WorkerPayment(TimestampedModel):
         - Разные типы выплат
     """
     class PaymentType(models.TextChoices):
-        """
-        Типы выплат.
-
-        SALARY: зарплата
-        ADVANCE: аванс
-        BONUS: премия
-        OTHER: другое
-        """
-        SALARY = 'salary', 'Иш ҳақи'
-        ADVANCE = 'advance', 'Аванс'
-        BONUS = 'bonus', 'Мукофот'
-        OTHER = 'other', 'Бошқа'
+        SALARY = 'salary', _('Иш ҳақи')
+        ADVANCE = 'advance', _('Аванс')
+        BONUS = 'bonus', _('Мукофот')
+        OTHER = 'other', _('Бошқа')
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='worker_payments', null=True, verbose_name='Компания')
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='payments', verbose_name='Работник')

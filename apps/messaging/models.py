@@ -10,6 +10,7 @@ company. Все выборки фильтруются и по company, и по �
 беседы или сообщения компании B даже через прямой API-запрос.
 """
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import TimestampedModel
 
@@ -185,31 +186,31 @@ class Notification(TimestampedModel):
         SUBSCRIPTION_EXPIRED: подписка истекла, доступ ограничен
         SUBSCRIPTION_PLAN_CHANGED: тариф компании изменён супер-администратором
         """
-        NEW_ORDER = 'new_order', 'Янги буюртма'
-        NEW_EXPENSE = 'new_expense', 'Янги харажат'
-        UNPAID_CLIENT = 'unpaid_client', 'Мижоз тўлов қилмади'
-        OVERDUE_DEBT = 'overdue_debt', 'Қарз муддати ўтди'
-        WORKER_REFUSED = 'worker_refused', 'Ишчи рад этди'
-        WORK_AWAITING = 'work_awaiting', 'Иш тасдиқлашни кутмоқда'
-        CASH_CHANGE = 'cash_change', 'Касса ўзгариши'
-        REPORT_READY = 'report_ready', 'Ҳисобот тайёр'
-        TASK_ASSIGNED = 'task_assigned', 'Янги вазифа'
-        TASK_CHANGED = 'task_changed', 'Вазифа ўзгартирилди'
-        TASK_CANCELLED = 'task_cancelled', 'Вазифа бекор қилинди'
-        WORK_CONFIRMED = 'work_confirmed', 'Иш тасдиқланди'
-        WORK_REJECTED = 'work_rejected', 'Иш рад этди'
-        NEW_MESSAGE = 'new_message', 'Янги хабар'
-        WORK_ACCRUED = 'work_accrued', 'Шахсий иш ҳисобланди'
-        MATERIAL_SHORTAGE = 'material_shortage', 'Материал етишмовчилиги'
-        SUBSCRIPTION_EXPIRING_SOON = 'subscription_expiring_soon', 'Обуна 7 кундан сўнг тугайди'
-        SUBSCRIPTION_EXPIRING = 'subscription_expiring', 'Обуна 1 кундан сўнг тугайди'
-        SUBSCRIPTION_FROZEN = 'subscription_frozen', 'Подписка истекла'
-        SUBSCRIPTION_RENEWED = 'subscription_renewed', 'Подписка продлена'
-        SUBSCRIPTION_RENEWAL_REQUEST = 'subscription_renewal_request', 'Обунани узайтириш сўрови'
-        SUBSCRIPTION_EXTENDED = 'subscription_extended', 'Обуна узайтирилди'
-        SUBSCRIPTION_GRACE_STARTED = 'subscription_grace_started', 'Имтиёзли давр бошланди'
-        SUBSCRIPTION_EXPIRED = 'subscription_expired', 'Обуна тугади'
-        SUBSCRIPTION_PLAN_CHANGED = 'subscription_plan_changed', 'Тариф ўзгартирилди'
+        NEW_ORDER = 'new_order', _('Янги буюртма')
+        NEW_EXPENSE = 'new_expense', _('Янги харажат')
+        UNPAID_CLIENT = 'unpaid_client', _('Мижоз тўлов қилмади')
+        OVERDUE_DEBT = 'overdue_debt', _('Қарз муддати ўтди')
+        WORKER_REFUSED = 'worker_refused', _('Ишчи рад этди')
+        WORK_AWAITING = 'work_awaiting', _('Иш тасдиқлашни кутмоқда')
+        CASH_CHANGE = 'cash_change', _('Касса ўзгариши')
+        REPORT_READY = 'report_ready', _('Ҳисобот тайёр')
+        TASK_ASSIGNED = 'task_assigned', _('Янги вазифа')
+        TASK_CHANGED = 'task_changed', _('Вазифа ўзгартирилди')
+        TASK_CANCELLED = 'task_cancelled', _('Вазифа бекор қилинди')
+        WORK_CONFIRMED = 'work_confirmed', _('Иш тасдиқланди')
+        WORK_REJECTED = 'work_rejected', _('Иш рад этди')
+        NEW_MESSAGE = 'new_message', _('Янги хабар')
+        WORK_ACCRUED = 'work_accrued', _('Шахсий иш ҳисобланди')
+        MATERIAL_SHORTAGE = 'material_shortage', _('Материал етишмовчилиги')
+        SUBSCRIPTION_EXPIRING_SOON = 'subscription_expiring_soon', _('Обуна 7 кундан сўнг тугайди')
+        SUBSCRIPTION_EXPIRING = 'subscription_expiring', _('Обуна 1 кундан сўнг тугайди')
+        SUBSCRIPTION_FROZEN = 'subscription_frozen', _('Обуна муддати тугади')
+        SUBSCRIPTION_RENEWED = 'subscription_renewed', _('Обуна узайтирилди')
+        SUBSCRIPTION_RENEWAL_REQUEST = 'subscription_renewal_request', _('Обунани узайтириш сўрови')
+        SUBSCRIPTION_EXTENDED = 'subscription_extended', _('Обуна узайтирилди')
+        SUBSCRIPTION_GRACE_STARTED = 'subscription_grace_started', _('Имтиёзли давр бошланди')
+        SUBSCRIPTION_EXPIRED = 'subscription_expired', _('Обуна тугади')
+        SUBSCRIPTION_PLAN_CHANGED = 'subscription_plan_changed', _('Тариф ўзгартирилди')
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='notifications', null=True, verbose_name='Компания')
     user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='notifications', verbose_name='Пользователь')

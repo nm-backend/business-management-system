@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from decimal import Decimal
+from typing import Any
 
 from rest_framework import serializers
 
@@ -9,23 +12,11 @@ from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeI
 class StockQuantityGuardMixin:
     """
     Остаток нельзя менять прямой правкой карточки — только операциями склада.
-
-    Воспроизведено: PATCH quantity менял остаток с 10 на 99999, а журнал
-    движений оставался пустым. То есть журнал переставал быть источником
-    правды: инвентаризацию не свести, себестоимость не проверить, а
-    злоупотребление внутри компании не отследить — при этом ни одна запись не
-    указывала, кто и когда изменил цифру.
-
-    При СОЗДАНИИ позиции количество задать можно: это стартовый остаток. Все
-    последующие изменения идут через приход, расход и корректировку
-    (`/incoming/`, `/outgoing/`) — каждая пишет StockMovement с автором и
-    причиной.
     """
 
-    #: поля, которые после создания меняются только складскими операциями
-    quantity_guarded_fields = ('quantity',)
+    quantity_guarded_fields: tuple[str, ...] = ('quantity',)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         if self.instance is not None:
             for name in self.quantity_guarded_fields:
@@ -72,6 +63,7 @@ class OutgoingSerializer(serializers.Serializer):
     )
 
 class RawMaterialSerializer(StockQuantityGuardMixin, serializers.ModelSerializer):
+    """Сериализатор сырья — admin/worker видит количество без цен."""
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
     storage_zone_display = serializers.CharField(source='get_storage_zone_display', read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
@@ -96,10 +88,12 @@ class RawMaterialSerializer(StockQuantityGuardMixin, serializers.ModelSerializer
         ]
 
 class RawMaterialOwnerSerializer(RawMaterialSerializer):
+    """Сериализатор сырья для владельца — с purchase_price и avg_cost_price."""
     class Meta(RawMaterialSerializer.Meta):
         fields = RawMaterialSerializer.Meta.fields + ['purchase_price', 'avg_cost_price']
 
 class FinishedProductSerializer(StockQuantityGuardMixin, serializers.ModelSerializer):
+    """Сериализатор готовой продукции — admin видит количество без цен."""
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
     available_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
@@ -118,15 +112,7 @@ class FinishedProductSerializer(StockQuantityGuardMixin, serializers.ModelSerial
         ]
 
 class FinishedProductOwnerSerializer(FinishedProductSerializer):
-    """
-    Владелец видит и задаёт ставку оплаты труда прямо здесь.
-
-    Ставка живёт в отдельной модели LaborRate (товар + операция) и правилась
-    только в разделе «Финансы → Ставки». Человек, ведущий производство, туда
-    не заходит, поэтому связи «сколько получит работник» с товаром не видел —
-    отсюда замечание «непонятно, где задаётся стоимость работы». Раздел
-    «Ставки» остаётся как общий обзор по всем товарам.
-    """
+    """Сериализатор готовой продукции для владельца — с cost_price, sale_price, labor_rate."""
     labor_rate = serializers.DecimalField(max_digits=15, decimal_places=2,
                                           min_value=Decimal('0'), required=False,
                                           allow_null=True)
@@ -187,6 +173,7 @@ class FinishedProductOwnerSerializer(FinishedProductSerializer):
         return product
 
 class StockMovementSerializer(serializers.ModelSerializer):
+    """Сериализатор движения склада — полная информация для владельца."""
     movement_type_display = serializers.CharField(source='get_movement_type_display', read_only=True)
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
     # Без названий история отдавала только id материала/товара — показывать
@@ -205,12 +192,14 @@ class StockMovementSerializer(serializers.ModelSerializer):
 
 
 class StockMovementLimitedSerializer(StockMovementSerializer):
+    """Сериализатор движения склада без price_per_unit — для admin/worker."""
     class Meta:
         model = StockMovement
         exclude = ['price_per_unit']
 
 
 class RecipeItemSerializer(serializers.ModelSerializer):
+    """Сериализатор компонента рецепта."""
     material_name = serializers.CharField(source='material.name', read_only=True)
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
 
@@ -219,6 +208,7 @@ class RecipeItemSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class RecipeSerializer(serializers.ModelSerializer):
+    """Сериализатор рецепта с вложенными компонентами."""
     items = RecipeItemSerializer(many=True, read_only=True)
 
     class Meta:

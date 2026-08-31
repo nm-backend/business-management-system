@@ -1,86 +1,60 @@
 """
-Reports views - аналитика и экспорт отчётов.
+Reports views - HTTP layer only (DRF validation + service calls).
 
-- /analytics/owner/  - финансовая аналитика (только владелец).
-- /analytics/admin/  - операционная аналитика без денег (владелец и админ).
-- /export/...        - экспорт в Excel/PDF по ролям.
-
-Формулы ТЗ:
-    Выручка        = сумма оплат клиентов за период.
-    Валовая прибыль = выручка - себестоимость проданного товара.
-    Чистая прибыль  = выручка - себестоимость - расходы (включая зарплаты,
-                      налоги, потери - это категории расходов).
-    Касса           = все оплаты - все расходы - выплаты работникам.
+All business logic and financial calculations live in services.py
+(Thin Controller pattern).
 """
 import datetime
-
-from apps.core.validators import parse_date_param, parse_int_param
 import io
 
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Max, Sum
+from apps.core.validators import parse_date_param, parse_int_param
+from django.db.models import Count, F, Sum
 from django.http import HttpResponse
-from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db.models.functions import TruncMonth
-
-from apps.accounts.models import User
-from apps.clients.models import Client, Payment
+from apps.clients.models import Payment
 from apps.core.permissions import IsCompanyMember
-from apps.finance.models import Expense, ExpenseCategory, WorkerPayment
+from apps.finance.models import ExpenseCategory
 from apps.orders.models import Order
 from apps.production.models import WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
 from core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAdminOrManager
 
-MONEY = DecimalField(max_digits=15, decimal_places=2)
+# Service layer — all calculations
+from .services import (
+    get_owner_analytics_data,
+    get_admin_operational_analytics,
+    get_revenue_timeline_data,
+    get_quarterly_report_data,
+    _quarter_bounds,
+)
 
 
-def _quarter_bounds(year, quarter):
-    """Границы КАЛЕНДАРНОГО квартала: Q1=янв–мар, Q2=апр–июн, Q3=июл–сен, Q4=окт–дек."""
-    start_month = 3 * (quarter - 1) + 1
-    start = datetime.date(year, start_month, 1)
-    if start_month + 2 >= 12:
-        end = datetime.date(year, 12, 31)
-    else:
-        end = datetime.date(year, start_month + 3, 1) - datetime.timedelta(days=1)
-    return start, end
-
-
-def parse_period(request):
+def _parse_period(request):
     """
-    Читает период отчёта. Приоритет:
-      1) ?quarter=1..4 [&year=YYYY] — КАЛЕНДАРНЫЙ квартал Q1–Q4;
-      2) ?date_from / ?date_to — явные границы (переопределяют пресет);
-      3) ?period= (today|yesterday|week|month|quarter|year), по умолчанию month.
-    Пресет 'quarter' = ТЕКУЩИЙ календарный квартал (его начало → сегодня),
-    раньше это было «последние 91 день» (скользящее окно, не совпадало с ТЗ).
+    Parse report period from query params.
+    Priority: quarter → date_from/date_to → period preset.
     """
+    from django.utils import timezone
     today = timezone.localdate()
 
-    # (1) Явный календарный квартал имеет приоритет над всем остальным.
     if request.query_params.get('quarter'):
         quarter = parse_int_param(request.query_params['quarter'], 'quarter')
         if quarter < 1 or quarter > 4:
-            raise ValidationError({'quarter': 'Квартал должен быть в диапазоне 1..4.'})
+            raise ValidationError({'quarter': 'Quarter must be 1..4'})
         year = today.year
         if request.query_params.get('year'):
             year = parse_int_param(request.query_params['year'], 'year')
         return _quarter_bounds(year, quarter)
 
+    from django.utils import timezone
     current_quarter = (today.month - 1) // 3 + 1
     quarter_start, _ = _quarter_bounds(today.year, current_quarter)
     presets = {
         'today': (today, today),
         'yesterday': (today - datetime.timedelta(days=1), today - datetime.timedelta(days=1)),
-        # Календарная неделя (понедельник → сегодня), а не скользящие 7 дней:
-        # скользящее окно почти всегда пересекало границу месяца, и «неделя»
-        # стабильно показывала БОЛЬШЕ, чем «месяц» в начале месяца — тестеры
-        # справедливо видели в этом поломанную математику. Теперь неделя и
-        # месяц — сопоставимые календарные окна (неделя ⊆ месяц, когда она
-        # началась в этом месяце).
         'week': (today - datetime.timedelta(days=today.weekday()), today),
         'month': (today.replace(day=1), today),
         'quarter': (quarter_start, today),
@@ -94,407 +68,35 @@ def parse_period(request):
         date_to = parse_date_param(request.query_params['date_to'], 'date_to')
     if date_from > date_to:
         raise ValidationError({
-            'date_from': 'Дата начала позже даты конца периода.',
-            'date_to': 'Дата конца раньше даты начала периода.',
+            'date_from': 'Start date is after end date.',
+            'date_to': 'End date is before start date.',
         })
     return date_from, date_to
 
 
-def money(value):
-    return value or 0
-
-
-def pct_change(current, previous):
-    """Процент изменения current относительно previous. None, если базы нет."""
-    current = float(current or 0)
-    previous = float(previous or 0)
-    if previous == 0:
-        return None
-    return round((current - previous) / previous * 100, 1)
-
-
-def _period_financials(company_id, date_from, date_to):
-    """Ключевые финансовые итоги за период (для сравнения периодов)."""
-    revenue = money(
-        Payment.objects.filter(company_id=company_id, payment_date__date__range=(date_from, date_to))
-        .aggregate(s=Sum('amount'))['s']
-    )
-    cost_of_goods = money(
-        Order.objects.filter(company_id=company_id, status=Order.Status.DELIVERED,
-                             delivered_at__date__range=(date_from, date_to))
-        .aggregate(s=Sum(ExpressionWrapper(F('quantity') * F('cost_price'), output_field=MONEY)))['s']
-    )
-    expenses_total = money(
-        Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
-        .aggregate(s=Sum('amount'))['s']
-    )
-    worker_payments = money(
-        WorkerPayment.objects.filter(company_id=company_id,
-                                     payment_date__range=(date_from, date_to))
-        .aggregate(s=Sum('amount'))['s']
-    )
-    salaries = money(
-        Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to),
-                               category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE))
-        .aggregate(s=Sum('amount'))['s']
-    )
-    return {
-        'revenue': revenue,
-        'expenses_total': expenses_total,
-        'worker_payments': worker_payments,
-        'net_profit': revenue - cost_of_goods - (expenses_total - salaries) - worker_payments,
-    }
-
-
-def owner_analytics_data(company_id, date_from, date_to):
-    """Собирает все финансовые показатели владельца за период (в рамках компании)."""
-    # Все выборки строго ограничены компанией владельца.
-    payments = Payment.objects.filter(company_id=company_id, payment_date__date__range=(date_from, date_to))
-    revenue = money(payments.aggregate(s=Sum('amount'))['s'])
-
-    delivered = Order.objects.filter(
-        company_id=company_id,
-        status=Order.Status.DELIVERED,
-        delivered_at__date__range=(date_from, date_to),
-    ).select_related('product')
-    cost_of_goods = money(delivered.aggregate(
-        s=Sum(ExpressionWrapper(F('quantity') * F('cost_price'), output_field=MONEY)),
-    )['s'])
-
-    expenses_qs = Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
-    expenses_total = money(expenses_qs.aggregate(s=Sum('amount'))['s'])
-
-    def expenses_by(*categories):
-        return money(expenses_qs.filter(category__in=categories).aggregate(s=Sum('amount'))['s'])
-
-    salaries = expenses_by(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE)
-    taxes = expenses_by(ExpenseCategory.TAXES)
-    losses = expenses_by(ExpenseCategory.MATERIAL_LOSS, ExpenseCategory.DEFECT)
-    owner_withdrawal = expenses_by(ExpenseCategory.OWNER_WITHDRAWAL)
-
-    worker_payments = money(
-        WorkerPayment.objects.filter(company_id=company_id, payment_date__range=(date_from, date_to))
-        .aggregate(s=Sum('amount'))['s']
-    )
-
-    client_debts = money(Client.objects.filter(
-        company_id=company_id, is_archived=False,
-    ).aggregate(s=Sum('debt'))['s'])
-    # «Долги работникам» — накопительный показатель (как client_debts):
-    # суммарно начислено минус суммарно выплачено по ВСЕМ подтверждённым
-    # работам компании, независимо от периода отчёта. Раньше earned/paid
-    # фильтровались по confirmed_at/payment_date внутри периода — дашборд
-    # расходился с расчётами (settlements), где остаток считается накопительно
-    # (воспроизведено: dashboard=0, settlements=45000).
-    worker_earned = money(WorkRecord.objects.filter(
-        company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED,
-    ).aggregate(s=Sum('labor_cost'))['s'])
-    worker_paid_total = money(
-        WorkerPayment.objects.filter(company_id=company_id).aggregate(s=Sum('amount'))['s']
-    )
-    worker_debts = max(worker_earned - worker_paid_total, 0)
-
-    non_salary_expenses = money(
-        Expense.objects.filter(company_id=company_id, date__range=(date_from, date_to))
-        .exclude(category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE))
-        .aggregate(s=Sum('amount'))['s']
-    )
-    cash = (
-        money(Payment.objects.filter(company_id=company_id, payment_date__date__range=(date_from, date_to))
-              .aggregate(s=Sum('amount'))['s'])
-        - non_salary_expenses
-        - worker_payments
-    )
-
-    # Группировка по id, а не по имени: два товара с одинаковым именем иначе
-    # сливались в одну строку с суммированием, а переименованный товар/работник
-    # раздваивался на две строки.
-    top_products = list(
-        Order.objects.filter(company_id=company_id, status=Order.Status.DELIVERED, product__isnull=False,
-                             delivered_at__date__range=(date_from, date_to))
-        .values('product_id')
-        .annotate(name=Max('product__name'), total_quantity=Sum('quantity'), orders=Count('id'))
-        .order_by('-total_quantity')[:5]
-    )
-    top_worker = (
-        WorkRecord.objects.filter(company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED,
-                                  confirmed_at__date__range=(date_from, date_to))
-        .values('worker_id')
-        .annotate(name=Max('worker__full_name'), username=Max('worker__username'),
-                  total_quantity=Sum('quantity'), works=Count('id'))
-        .order_by('-total_quantity')
-        .first()
-    )
-
-    orders_qs = Order.objects.filter(company_id=company_id, created_at__date__range=(date_from, date_to))
-    raw_qs = RawMaterial.objects.filter(company_id=company_id, is_archived=False)
-
-    # Сравнение с предыдущим равным по длине периодом (для стрелок % на дашборде).
-    span = (date_to - date_from).days + 1
-    prev_to = date_from - datetime.timedelta(days=1)
-    prev_from = prev_to - datetime.timedelta(days=span - 1)
-    prev = _period_financials(company_id, prev_from, prev_to)
-    net_profit = revenue - cost_of_goods - (expenses_total - salaries) - worker_payments
-
-    # Активные сотрудники (админы + работники, не заблокированы, не в архиве)
-    active_employees = User.objects.filter(
-        company_id=company_id,
-        role__in=(User.Role.ADMIN, User.Role.WORKER),
-        is_active=True,
-        status=User.Status.ACTIVE,
-    ).count()
-
-    # Процент просроченных заказов
-    total_active_orders = orders_qs.exclude(
-        status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED)
-    ).count()
-    overdue_orders = orders_qs.filter(
-        deadline__lt=timezone.now(),
-    ).exclude(
-        status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED)
-    ).count()
-    overdue_percentage = round(
-        (overdue_orders / total_active_orders) * 100, 1
-    ) if total_active_orders > 0 else 0
-
-    # Товары с низким остатком (сырьё + готовая продукция)
-    low_stock_materials_count = sum(1 for m in raw_qs if m.is_low_stock)
-    low_stock_products_count = sum(
-        1 for p in FinishedProduct.objects.filter(
-            company_id=company_id, is_archived=False
-        ) if p.is_low_stock
-    )
-
-    return {
-        'date_from': date_from,
-        'date_to': date_to,
-        'revenue': revenue,
-        'cost_of_goods': cost_of_goods,
-        'gross_profit': revenue - cost_of_goods,
-        'expenses_total': expenses_total,
-        'deltas': {
-            'revenue': pct_change(revenue, prev['revenue']),
-            'net_profit': pct_change(net_profit, prev['net_profit']),
-            'expenses_total': pct_change(expenses_total, prev['expenses_total']),
-        },
-        'expenses_by_category': {
-            row['category']: row['s']
-            for row in expenses_qs.values('category').annotate(s=Sum('amount'))
-        },
-        'salaries': salaries,
-        'taxes': taxes,
-        'losses': losses,
-        'owner_withdrawal': owner_withdrawal,
-        'worker_payments': worker_payments,
-        'net_profit': net_profit,
-        'cash': cash,
-        'client_debts': client_debts,
-        'worker_debts': worker_debts,
-        'orders_count': orders_qs.count(),
-        'orders_delivered': orders_qs.filter(status=Order.Status.DELIVERED).count(),
-        'top_products': top_products,
-        'most_active_worker': top_worker,
-        'active_employees_count': active_employees,
-        'overdue_percentage': overdue_percentage,
-        'low_stock_count': low_stock_materials_count + low_stock_products_count,
-        'stock': {
-            'raw_materials': raw_qs.count(),
-            'low_stock_materials': low_stock_materials_count,
-            'finished_products': FinishedProduct.objects.filter(
-                company_id=company_id, is_archived=False).count(),
-        },
-    }
-
-
-def admin_analytics_data(company_id):
-    """Операционные показатели без денег (для администратора), в рамках компании."""
-    now = timezone.now()
-    orders = Order.objects.filter(company_id=company_id, is_archived=False)
-    active_statuses = (
-        Order.Status.SENT_TO_WORKER, Order.Status.ACCEPTED, Order.Status.IN_PROGRESS,
-        Order.Status.AWAITING_CONFIRMATION,
-    )
-    low_stock = [
-        {
-            'id': m.id, 'name': m.name, 'quantity': m.quantity,
-            'min_stock': m.min_stock, 'unit': m.unit,
-        }
-        for m in RawMaterial.objects.filter(company_id=company_id, is_archived=False)
-        if m.is_low_stock
-    ]
-    worker_performance = list(
-        WorkRecord.objects.filter(company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED)
-        .values(worker_username=F('worker__username'), worker_full_name=F('worker__full_name'))
-        .annotate(total_quantity=Sum('quantity'), works=Count('id'))
-        .order_by('-total_quantity')
-    )
-    unpaid_clients = list(
-        Client.objects.filter(company_id=company_id, is_archived=False, debt__gt=0).values('id', 'name')
-    )
-    return {
-        'orders_new': orders.filter(status=Order.Status.NEW).count(),
-        'orders_in_progress': orders.filter(status__in=active_statuses).count(),
-        'orders_ready': orders.filter(status=Order.Status.READY).count(),
-        'orders_overdue': orders.filter(
-            deadline__lt=now,
-        ).exclude(status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED)).count(),
-        'awaiting_confirmation': WorkRecord.objects.filter(
-            company_id=company_id, status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION,
-        ).count(),
-        'low_stock_materials': low_stock,
-        'worker_performance': worker_performance,
-        'unpaid_clients': unpaid_clients,
-    }
-
-
 class OwnerAnalyticsView(APIView):
-    """GET /api/v1/reports/analytics/owner/?period=month - только владелец."""
+    """GET /api/v1/reports/analytics/owner/?period=month — owner only."""
     permission_classes = [IsCompanyMember, IsOwner]
 
     def get(self, request):
-        date_from, date_to = parse_period(request)
-        return Response(owner_analytics_data(request.user.company_id, date_from, date_to))
+        date_from, date_to = _parse_period(request)
+        return Response(get_owner_analytics_data(request.user.company_id, date_from, date_to))
 
 
 class RevenueTimelineView(APIView):
-    """
-    GET /api/v1/reports/analytics/revenue-timeline/
-    Возвращает помесячную выручку и чистую прибыль за последние 6 месяцев.
-    Только для владельца.
-    """
+    """GET /api/v1/reports/analytics/revenue-timeline/ — 6-month chart, owner only."""
     permission_classes = [IsCompanyMember, IsOwner]
 
     def get(self, request):
-        company_id = request.user.company_id
-        today = timezone.localdate()
-        six_months_ago = today - datetime.timedelta(days=180)
-
-        payments = (
-            Payment.objects.filter(
-                company_id=company_id,
-                payment_date__date__gte=six_months_ago,
-            )
-            .annotate(month=TruncMonth('payment_date'))
-            .values('month')
-            .annotate(total=Sum('amount'))
-            .order_by('month')
-        )
-
-        expenses = (
-            Expense.objects.filter(
-                company_id=company_id,
-                date__gte=six_months_ago,
-            ).exclude(category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE))
-            .annotate(month=TruncMonth('date'))
-            .values('month')
-            .annotate(total=Sum('amount'))
-            .order_by('month')
-        )
-
-        delivered = (
-            Order.objects.filter(
-                company_id=company_id,
-                status=Order.Status.DELIVERED,
-                delivered_at__date__gte=six_months_ago,
-            )
-            .annotate(month=TruncMonth('delivered_at'))
-            .values('month')
-            .annotate(
-                cogs=Sum(ExpressionWrapper(
-                    F('quantity') * F('cost_price'), output_field=MONEY
-                ))
-            )
-            .order_by('month')
-        )
-
-        payouts = (
-            WorkerPayment.objects.filter(
-                company_id=company_id,
-                payment_date__gte=six_months_ago,
-            )
-            .annotate(month=TruncMonth('payment_date'))
-            .values('month')
-            .annotate(total=Sum('amount'))
-            .order_by('month')
-        )
-
-        def month_key(value):
-            """
-            Первое число месяца как date.
-
-            TruncMonth над DateTimeField (оплаты) отдаёт datetime, над DateField
-            (расходы, выплаты) — date. Без приведения к одному типу один и тот же
-            месяц становился ДВУМЯ разными ключами, а sorted() по смеси date и
-            datetime падал с TypeError — график на дашборде отдавал 500, как
-            только в компании появлялись и оплата, и расход.
-            """
-            return value.date() if isinstance(value, datetime.datetime) else value
-
-        # Собираем все месяцы
-        months_set = set()
-        rev_map = {}
-        for p in payments:
-            m = month_key(p['month'])
-            months_set.add(m)
-            rev_map[m] = money(p['total'])
-
-        exp_map = {}
-        for e in expenses:
-            m = month_key(e['month'])
-            months_set.add(m)
-            exp_map[m] = money(e['total'])
-
-        cogs_map = {}
-        for d in delivered:
-            m = month_key(d['month'])
-            months_set.add(m)
-            cogs_map[m] = money(d['cogs'])
-
-        payout_map = {}
-        for w in payouts:
-            m = month_key(w['month'])
-            months_set.add(m)
-            payout_map[m] = money(w['total'])
-
-        months = sorted(months_set, reverse=True)[:6]
-        months.reverse()
-
-        month_names = {
-            1: 'Янв', 2: 'Фев', 3: 'Мар', 4: 'Апр', 5: 'Май', 6: 'Июн',
-            7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек',
-        }
-
-        labels = []
-        revenues = []
-        net_profits = []
-        for m in months:
-            label = f"{month_names.get(m.month, m.month)}'{str(m.year)[2:]}"
-            labels.append(label)
-            rev = rev_map.get(m, 0)
-            exp = exp_map.get(m, 0)
-            cogs = cogs_map.get(m, 0)
-            payout = payout_map.get(m, 0)
-            revenues.append(rev)
-            net_profits.append(rev - cogs - exp - payout)
-
-        return Response({
-            'labels': labels,
-            'revenues': revenues,
-            'net_profits': net_profits,
-        })
+        return Response(get_revenue_timeline_data(request.user.company_id))
 
 
 class AdminAnalyticsView(APIView):
-    """
-    GET /api/v1/reports/analytics/admin/ - операционная аналитика без денег.
-
-    Доступ: владелец, администратор и менеджер (manager видит только
-    операционные показатели, без финансовых сумм).
-    """
+    """GET /api/v1/reports/analytics/admin/ — operational, no financial sums."""
     permission_classes = [IsCompanyMember, IsOwnerOrAdminOrManager]
 
     def get(self, request):
-        return Response(admin_analytics_data(request.user.company_id))
+        return Response(get_admin_operational_analytics(request.user.company_id))
 
 
 def _sanitize_xlsx_cell(value):
@@ -652,8 +254,8 @@ class OwnerFinanceExportView(APIView):
     permission_classes = [IsCompanyMember, IsOwner]
 
     def get(self, request):
-        date_from, date_to = parse_period(request)
-        data = owner_analytics_data(request.user.company_id, date_from, date_to)
+        date_from, date_to = _parse_period(request)
+        data = get_owner_analytics_data(request.user.company_id, date_from, date_to)
         rows = [
             ['Кўрсаткич', 'Қиймат'],
             ['Давр', f"{date_from} - {date_to}"],
@@ -742,7 +344,7 @@ class AdminOrdersExportView(APIView):
                 o.deadline.date() if o.deadline else '',
             ]
             if is_owner:
-                row.append(money(o.total_amount - money(paid_by_order.get(o.id))))
+                row.append(o.total_amount - (paid_by_order.get(o.id) or 0))
             rows.append(row)
         if request.query_params.get('format') == 'pdf':
             return pdf_response('SkladPro.Nod - Буюртмалар', rows, 'orders-report.pdf')

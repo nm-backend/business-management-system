@@ -59,6 +59,7 @@ pluggy==1.6.0
 prompt_toolkit==3.0.52
 propcache==0.5.2
 psycopg2-binary==2.9.10
+sentry-sdk==2.35.0
 py-vapid==1.9.4
 pycparser==3.0
 pyflakes==3.4.0
@@ -95,3 +96,4 @@ wcwidth==0.8.2
 whitenoise==6.8.2
 yarl==1.24.5
 zope.interface==8.5
+

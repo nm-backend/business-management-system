@@ -4,6 +4,10 @@ Serializers for orders API.
 Суммы заказа (total_amount, paid_amount) видит только владелец:
 OrderSerializer - для admin/worker, OrderOwnerSerializer - для owner.
 """
+from __future__ import annotations
+
+from typing import Any
+
 from rest_framework import serializers
 
 from apps.production.services import check_material_shortages
@@ -11,6 +15,7 @@ from .models import Order
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    """Сериализатор заказа — admin/worker видит статусы без сумм."""
     has_material_shortage = serializers.SerializerMethodField()
     material_shortages = serializers.SerializerMethodField()
     has_product_shortage = serializers.SerializerMethodField()
@@ -122,6 +127,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class OrderOwnerSerializer(OrderSerializer):
+    """Сериализатор заказа для владельца — с total_amount и paid_amount."""
     class Meta(OrderSerializer.Meta):
         fields = OrderSerializer.Meta.fields + ['total_amount', 'paid_amount']
         # paid_amount — вычисляемое поле (Order.apply_payment_amount из платежей),

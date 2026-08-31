@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  backend-tests:
     runs-on: ubuntu-latest
 
     services:
@@ -21,6 +21,16 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -39,12 +49,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests (PostgreSQL)
+      - name: Run all tests (PostgreSQL + Redis)
         run: |
-          python manage.py test --settings=skladpro.ci_settings
+          python manage.py test --settings=skladpro.ci_settings --verbosity=2
         env:
           SECRET_KEY: ci-secret-key
           LOG_LEVEL: ERROR
+          REDIS_URL: redis://localhost:6379/0
 
       - name: Run Django system checks (--deploy)
         run: |
@@ -57,3 +68,20 @@ jobs:
           DB_PASSWORD: postgres
           DB_HOST: localhost
           DB_PORT: "5432"
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend unit tests
+        run: npx vitest run

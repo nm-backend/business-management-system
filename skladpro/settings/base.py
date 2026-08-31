@@ -390,5 +390,12 @@ LOGGING = {
             'level': 'WARNING',
             'propagate': False,
         },
+        # SQL-запросы: в dev видим ВСЁ (для поиска N+1 и медленных запросов),
+        # в production только WARNING (медленные >100ms).
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': config('SQL_LOG_LEVEL', default='WARNING'),
+            'propagate': False,
+        },
     },
 }

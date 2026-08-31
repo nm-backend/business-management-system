@@ -1,0 +1,14 @@
+# SkladPro.Nod ERP - Private SaaS Application
+# All business data is behind authentication. No public pages to crawl.
+
+User-agent: *
+Disallow: /api/
+Disallow: /admin/
+Disallow: /accounts/
+Disallow: /ws/
+
+# Allow static assets for caching
+Allow: /static/
+Allow: /sw.js
+
+Sitemap: none

@@ -10,6 +10,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.db import transaction
 from django.db.models import Sum
+from django.utils.translation import gettext_lazy as _
 
 from apps.core.validators import validate_not_future, validate_phone
 from apps.core.models import TimestampedModel, SoftDeleteModel
@@ -93,10 +94,10 @@ class Client(TimestampedModel, SoftDeleteModel):
 
 class Payment(TimestampedModel):
     class PaymentMethod(models.TextChoices):
-        CASH = 'cash', 'Наличные'
-        CARD = 'card', 'Карта'
-        TRANSFER = 'transfer', 'Перевод'
-        OTHER = 'other', 'Другое'
+        CASH = 'cash', _('Нақд')
+        CARD = 'card', _('Карта')
+        TRANSFER = 'transfer', _('Ўтказма')
+        OTHER = 'other', _('Бошқа')
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='payments', null=True, verbose_name='Компания')
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='payments', verbose_name='Клиент')

@@ -1,5 +1,9 @@
 from .base import *
 from decouple import config
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.celery import CeleryIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
 
 DEBUG = False
 
@@ -136,3 +140,27 @@ if _AWS_BUCKET:
     if _endpoint:
         # Cloudflare R2 / MinIO: URL отличается от стандартного S3
         MEDIA_URL = f'{_endpoint}/{_AWS_BUCKET}/media/'
+
+# ── Sentry Error Tracking ──
+# Задайте SENTRY_DSN в переменных окружения для включения мониторинга.
+# Без DSN Sentry не инициализируется — приложение работает как обычно.
+_SENTRY_DSN = config('SENTRY_DSN', default='')
+if _SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+            RedisIntegration(),
+        ],
+        # Производительность: 10% транзакций в normal mode, 100% приIssues.
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
+        # Отправка PII (IP, user info) — включаем для отладки инцидентов.
+        send_default_pii=True,
+        # Окружение и версия деплоя.
+        environment=config('SENTRY_ENVIRONMENT', default='production'),
+        release=config('SENTRY_RELEASE', default='skladpro@latest'),
+        # Не логировать эти URL в Sentry (health check, static).
+        before_send=lambda event, hint: event if '/core/health/' not in (event.get('request', {}).get('url', '') or '') else None,
+    )

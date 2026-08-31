@@ -13,17 +13,24 @@ Production services - подтверждение и отклонение вып�
 
 Всё выполняется в одной транзакции: при нехватке сырья ничего не меняется.
 """
+from __future__ import annotations
+
 from decimal import Decimal
+from typing import Any
 
 from django.db import transaction
+from django.db.models import Model
+from django.http import HttpRequest
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.audit.models import AuditLog
 from apps.audit.services import write_audit_log
+from apps.accounts.models import User
+from apps.clients.models import Client
 from apps.messaging.models import Notification
 from apps.messaging.services import notify
-from apps.warehouse.models import StockMovement
+from apps.warehouse.models import RawMaterial, StockMovement
 
 from .models import TaskStatus, WorkRecord
 
@@ -31,31 +38,33 @@ from .models import TaskStatus, WorkRecord
 class MaterialShortageError(Exception):
     """Сырья на складе меньше, чем требует рецепт."""
 
-    def __init__(self, shortages):
+    def __init__(self, shortages: list[dict[str, Any]]) -> None:
         self.shortages = shortages  # [{material, required, available}, ...]
         super().__init__('Недостаточно сырья для подтверждения работы')
 
 
-def get_recipe_requirements(product, quantity):
+def get_recipe_requirements(
+    product: Model | None,
+    quantity: Decimal | int | float,
+) -> list[tuple[RawMaterial, Decimal]]:
     """Возвращает [(material, required_qty), ...] по активному рецепту товара."""
     if not product:
         return []
-    # Итерируем .all() (использует prefetch-кэш product.recipes, если он есть,
-    # см. OrderViewSet.prefetch_related), а активный рецепт отбираем в Python.
-    # Раньше .filter(is_active=True) шёл в обход prefetch -> 3 запроса на КАЖДЫЙ
-    # заказ (recipe + recipeitem + rawmaterial) = N+1.
     recipe = next((r for r in product.recipes.all() if r.is_active), None)
     if not recipe:
         return []
     return [
-        (item.material, item.quantity_required * Decimal(quantity))
+        (item.material, item.quantity_required * Decimal(str(quantity)))
         for item in recipe.items.all()
     ]
 
 
-def check_material_shortages(product, quantity):
+def check_material_shortages(
+    product: Model | None,
+    quantity: Decimal | int | float,
+) -> list[dict[str, Any]]:
     """Возвращает список нехваток сырья для производства quantity товара."""
-    shortages = []
+    shortages: list[dict[str, Any]] = []
     for material, required in get_recipe_requirements(product, quantity):
         if material.quantity < required:
             shortages.append({
@@ -79,25 +88,16 @@ class MissingLaborRateError(Exception):
     теперь останавливается с понятным текстом.
     """
 
-    def __init__(self, product_name=''):
+    def __init__(self, product_name: str = '') -> None:
         self.product_name = product_name
         super().__init__(product_name)
 
 
-def calculate_labor_cost(work):
+def calculate_labor_cost(work: WorkRecord) -> Decimal:
     """
     Начислено = количество работы x ставка за единицу.
 
-    Ставка выбирается по операции, которую указал работник (work.operation):
-    у товара может быть несколько ставок — по одной на операцию. Раньше бралась
-    ставка «по алфавиту» (order_by('operation')), и работник получал деньги
-    за чужую операцию. Если операция не указана, ставка берётся только когда
-    она одна; при нескольких ставках без операции угадывать нельзя — работа
-    отклоняется, админ видит товар и понимает, что нужно указать операцию.
-
-    Ноль возвращается только когда ставка действительно нулевая: отсутствие
-    ставки — это не «бесплатно», а незаполненный справочник, и такую работу
-    подтверждать нельзя (см. MissingLaborRateError).
+    Ставка выбирается по операции, которую указал работник (work.operation).
     """
     from apps.finance.models import LaborRate
     if not work.product:
@@ -119,13 +119,18 @@ def calculate_labor_cost(work):
 class AlreadyProcessedError(Exception):
     """Работа уже подтверждена или отклонена другим запросом."""
 
-    def __init__(self, message=None):
+    def __init__(self, message: str | None = None) -> None:
         self.message = message
         super().__init__(message or 'Работа уже обработана')
 
 
 @transaction.atomic
-def confirm_work(work, confirmed_by, labor_cost=None, request=None):
+def confirm_work(
+    work: WorkRecord,
+    confirmed_by: User,
+    labor_cost: Decimal | None = None,
+    request: HttpRequest | None = None,
+) -> WorkRecord:
     """
     Подтверждает работу: списывает сырьё, приходует товар, начисляет оплату.
 

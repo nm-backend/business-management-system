@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 from apps.core.models import TimestampedModel
 from apps.core.validators import validate_file_size
 from apps.finance.models import LaborRate
@@ -27,14 +28,14 @@ class TaskStatus(models.TextChoices):
     REJECTED: отклонена администратором/владельцем
     CANCELLED: отменена
     """
-    PENDING = 'pending', 'Кутилмоқда'
-    ACCEPTED = 'accepted', 'Қабул қилинди'
-    REFUSED = 'refused', 'Рад этилди'
-    IN_PROGRESS = 'in_progress', 'Жараёнда'
-    COMPLETED = 'completed', 'Бажарилди'
-    CONFIRMED = 'confirmed', 'Тасдиқланди'
-    REJECTED = 'rejected', 'Рад этилди'
-    CANCELLED = 'cancelled', 'Бекор қилинди'
+    PENDING = 'pending', _('Кутилмоқда')
+    ACCEPTED = 'accepted', _('Қабул қилинди')
+    REFUSED = 'refused', _('Рад этилди')
+    IN_PROGRESS = 'in_progress', _('Жараёнда')
+    COMPLETED = 'completed', _('Бажарилди')
+    CONFIRMED = 'confirmed', _('Тасдиқланди')
+    REJECTED = 'rejected', _('Рад этилди')
+    CANCELLED = 'cancelled', _('Бекор қилинди')
 
 
 class RefusalReason(models.TextChoices):
@@ -48,12 +49,12 @@ class RefusalReason(models.TextChoices):
     EQUIPMENT_BUSY: оборудование занято
     OTHER: другая причина
     """
-    MATERIAL_INSUFFICIENT = 'material_insufficient', 'Материал етарли эмас'
-    NO_TIME = 'no_time', 'Вақтим йўқ'
-    WRONG_SIZE = 'wrong_size', 'Ўлчам нотўғри'
-    NEED_HELPER = 'need_helper', 'Ёрдамчи керак'
-    EQUIPMENT_BUSY = 'equipment_busy', 'Ускуна банд'
-    OTHER = 'other', 'Бошқа сабаб'
+    MATERIAL_INSUFFICIENT = 'material_insufficient', _('Материал етарли эмас')
+    NO_TIME = 'no_time', _('Вақтим йўқ')
+    WRONG_SIZE = 'wrong_size', _('Ўлчам нотўғри')
+    NEED_HELPER = 'need_helper', _('Ёрдамчи керак')
+    EQUIPMENT_BUSY = 'equipment_busy', _('Ускуна банд')
+    OTHER = 'other', _('Бошқа сабаб')
 
 
 class Task(TimestampedModel):
@@ -239,9 +240,9 @@ class WorkRecord(TimestampedModel):
         CONFIRMED: подтверждена
         REJECTED: отклонена
         """
-        AWAITING_CONFIRMATION = 'awaiting_confirmation', 'Тасдиқлаш кутилмоқда'
-        CONFIRMED = 'confirmed', 'Тасдиқланди'
-        REJECTED = 'rejected', 'Рад этилди'
+        AWAITING_CONFIRMATION = 'awaiting_confirmation', _('Тасдиқлаш кутилмоқда')
+        CONFIRMED = 'confirmed', _('Тасдиқланди')
+        REJECTED = 'rejected', _('Рад этилди')
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='work_records', null=True, verbose_name='Компания')
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='work_records', null=True, blank=True, verbose_name='Задача')

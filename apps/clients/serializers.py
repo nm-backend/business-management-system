@@ -4,6 +4,10 @@ Serializers for clients API.
 ClientAdminSerializer - для администратора: только булевы статусы оплаты,
 без сумм. ClientOwnerSerializer - полная финансовая карточка клиента.
 """
+from __future__ import annotations
+
+from typing import Any
+
 from rest_framework import serializers
 
 from apps.core.validators import validate_phone
@@ -12,6 +16,7 @@ from .models import Client, Payment
 
 
 class PaymentSerializer(serializers.ModelSerializer):
+    """Сериализатор оплаты клиента."""
     received_by_name = serializers.CharField(source='received_by.username', read_only=True)
 
     class Meta:
@@ -25,6 +30,7 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 
 class ClientAdminSerializer(serializers.ModelSerializer):
+    """Сериализатор клиента для admin — с has_debt и has_active_orders без сумм."""
     has_debt = serializers.BooleanField(read_only=True)
     # DRF не подхватывает field-валидаторы с модели: без явного валидатора
     # телефон «привет» спокойно сохранялся через API (в админке ModelForm
@@ -52,6 +58,7 @@ class ClientAdminSerializer(serializers.ModelSerializer):
 
 
 class ClientOwnerSerializer(ClientAdminSerializer):
+    """Сериализатор клиента для владельца — с полной финансовой карточкой."""
     payments = PaymentSerializer(many=True, read_only=True)
 
     class Meta(ClientAdminSerializer.Meta):

@@ -10,6 +10,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Sum
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from rest_framework.exceptions import ValidationError
 
 from apps.core.models import TimestampedModel, SoftDeleteModel
@@ -20,21 +21,21 @@ from apps.warehouse.models import FinishedProduct, UnitChoices
 
 class Order(TimestampedModel, SoftDeleteModel):
     class Status(models.TextChoices):
-        NEW = 'new', 'Новый'
-        AWAITING_MATERIAL = 'awaiting_material', 'Ожидает материала'
-        SENT_TO_WORKER = 'sent_to_worker', 'Отправлен работнику'
-        ACCEPTED = 'accepted', 'Принят работником'
-        WORKER_REFUSED = 'worker_refused', 'Работник отказался'
-        IN_PROGRESS = 'in_progress', 'В работе'
-        AWAITING_CONFIRMATION = 'awaiting_confirmation', 'Ожидает подтверждения'
-        READY = 'ready', 'Готов'
-        DELIVERED = 'delivered', 'Выдан клиенту'
-        CANCELLED = 'cancelled', 'Отменен'
+        NEW = 'new', _('Янги')
+        AWAITING_MATERIAL = 'awaiting_material', _('Материал кутилмоқда')
+        SENT_TO_WORKER = 'sent_to_worker', _('Ишчига юборилган')
+        ACCEPTED = 'accepted', _('Қабул қилинди')
+        WORKER_REFUSED = 'worker_refused', _('Рад этилди')
+        IN_PROGRESS = 'in_progress', _('Жараёнда')
+        AWAITING_CONFIRMATION = 'awaiting_confirmation', _('Тасдиқлаш кутилмоқда')
+        READY = 'ready', _('Тайёр')
+        DELIVERED = 'delivered', _('Мижозга берилди')
+        CANCELLED = 'cancelled', _('Бекор қилинди')
 
     class PaymentStatus(models.TextChoices):
-        UNPAID = 'unpaid', 'Не оплачено'
-        PARTIAL = 'partial', 'Частичная оплата'
-        PAID = 'paid', 'Оплачено'
+        UNPAID = 'unpaid', _('Тўлов қилинмаган')
+        PARTIAL = 'partial', _('Қисман тўланган')
+        PAID = 'paid', _('Тўланган')
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='orders', null=True, verbose_name='Компания')
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='orders', verbose_name='Клиент')

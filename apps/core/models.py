@@ -4,10 +4,14 @@ Core models - базовые абстрактные модели для всег
 Этот модуль содержит фундаментальные модели, которые используются
 в других приложениях как базовые классы для обеспечения единообразия.
 """
+from __future__ import annotations
+
 from decimal import Decimal
+from typing import Any
 
 from django.core.validators import MinValueValidator
 from django.db import IntegrityError, models, transaction
+from django.utils import timezone as tz
 
 
 class TimestampedModel(models.Model):
@@ -48,19 +52,18 @@ class SoftDeleteModel(models.Model):
     class Meta:
         abstract = True
 
-    def archive(self):
+    def archive(self) -> None:
         """
         Помечает запись как архивированную.
 
         Устанавливает is_archived=True и записывает текущее время в archived_at.
         Использует update_fields для оптимизации SQL запроса.
         """
-        from django.utils import timezone
         self.is_archived = True
-        self.archived_at = timezone.now()
+        self.archived_at = tz.now()
         self.save(update_fields=['is_archived', 'archived_at'])
 
-    def restore(self):
+    def restore(self) -> None:
         """
         Восстанавливает архивированную запись.
 
@@ -84,10 +87,6 @@ class Currency(TimestampedModel):
         is_default: BooleanField - флаг валюты по умолчанию (только одна может быть True)
         is_active: BooleanField - флаг активности валюты
         decimal_places: PositiveSmallIntegerField - количество десятичных знаков (по умолчанию 2)
-
-    Особенности:
-        - При сохранении автоматически снимает флаг is_default с других валют
-        - Используется для конвертации цен и отображения в разных валютах
     """
     code = models.CharField(max_length=3, unique=True, help_text='ISO 4217 code (e.g. KGS, USD)', verbose_name='Код')
     name = models.CharField(max_length=100, help_text='Currency name', verbose_name='Название')
@@ -101,21 +100,15 @@ class Currency(TimestampedModel):
         verbose_name_plural = 'Валюты'
         ordering = ['-is_default', 'code']
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'{self.code} ({self.symbol})'
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         """
         Переопределенный метод save для обеспечения единственности валюты по умолчанию.
 
-        Если устанавливается is_default=True, автоматически сбрасывает этот флаг
-        у всех других валют. Это гарантирует, что всегда будет только одна
-        валюта по умолчанию в системе.
-
         Параллельные записи защищены частичным уникальным индексом
-        (core_currency_single_default): при одновременной вставке двух валют
-        с is_default=True одна ловится вставкой и повторяет сброс после того,
-        как вторая уже закоммитилась.
+        (core_currency_single_default).
         """
         if self.is_default:
             try:
@@ -161,11 +154,16 @@ class ExchangeRate(TimestampedModel):
         ordering = ['-effective_date']
         unique_together = ['from_currency', 'to_currency', 'effective_date']
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'{self.from_currency.code} -> {self.to_currency.code}: {self.rate} ({self.effective_date})'
 
     @classmethod
-    def get_rate(cls, from_code, to_code, date=None):
+    def get_rate(
+        cls,
+        from_code: str,
+        to_code: str,
+        date: datetime.date | None = None,
+    ) -> ExchangeRate | None:
         """
         Получает актуальный курс обмена на указанную дату.
 
@@ -181,11 +179,9 @@ class ExchangeRate(TimestampedModel):
             - Ищет курсы с effective_date <= указанной даты
             - Возвращает самый свежий курс (сортировка по дате убывания)
         """
-        from django.utils import timezone
+        import datetime as _dt
         if date is None:
-            date = timezone.now().date()
-        # .first() возвращает None, когда курса нет — DoesNotExist здесь не
-        # выбрасывается, поэтому прежний try/except был мёртвым кодом.
+            date = tz.now().date()
         return cls.objects.filter(
             from_currency__code=from_code,
             to_currency__code=to_code,
