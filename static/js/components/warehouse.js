@@ -546,6 +546,7 @@ class WarehouseComponent {
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadMaterials();
+                    this.loadSummary();
                 } catch (error) {
                     window.toast.error(window.ui.errorText(error));
                 }

@@ -7,6 +7,7 @@ import io
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
@@ -122,9 +123,13 @@ class FinanceExportConsistencyTests(TestCase):
     def test_export_shows_worker_payments(self):
         worker = User.objects.create_user(username='fin_worker', password='p',
                                           role=User.Role.WORKER, company=self.company)
+        # Дата относительно «сегодня»: финансовый экспорт по умолчанию берёт
+        # текущий месяц (period=month), поэтому жёстко зашитая дата делала тест
+        # зависимым от дня запуска (например 2026-08-01 проваливал его в сентябре).
+        today = timezone.localdate()
         WorkerPayment.objects.create(
             company=self.company, worker=worker, amount=Decimal('150'),
-            payment_date='2026-08-01', created_by=self.owner)
+            payment_date=today, created_by=self.owner)
         resp = self.api.get(FINANCE)
         self.assertEqual(resp.status_code, 200, resp.content[:200])
         content = resp.content.decode('utf-8')
