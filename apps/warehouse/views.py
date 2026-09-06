@@ -150,12 +150,31 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
         Итоговые показатели склада сырья (макет «Хомашё омбори»).
 
         GET /api/v1/warehouse/raw-materials/summary/
-        Возвращает общий остаток (жами қолдиқ) и, для владельца, общую
-        стоимость (умумий қиймат = остаток * средняя себестоимость).
+        Возвращает остатки, сгруппированные по единице измерения, и, для
+        владельца, общую стоимость (умумий қиймат = остаток * средняя
+        себестоимость).
+
+        Складывать количество в РАЗНЫХ единицах нельзя (кг + м² + шт —
+        бессмысленное число), поэтому «общий остаток» (total_quantity)
+        отдаётся только когда всё сырьё в ОДНОЙ единице; при смешанных
+        единицах отдаём разбивку unit_totals, а total_quantity = null.
         """
         qs = RawMaterial.objects.filter(company_id=request.user.company_id, is_archived=False)
-        total_quantity = qs.aggregate(s=Sum('quantity'))['s'] or 0
-        data = {'total_quantity': total_quantity}
+        unit_rows = (
+            qs.values('unit')
+            .annotate(quantity=Sum('quantity'))
+            .order_by('-quantity', 'unit')
+        )
+        unit_totals = [
+            {'unit': row['unit'], 'quantity': row['quantity'] or 0}
+            for row in unit_rows
+        ]
+        data = {
+            'unit_totals': unit_totals,
+            'total_quantity': (
+                unit_totals[0]['quantity'] if len(unit_totals) == 1 else None
+            ),
+        }
         if request.user.is_owner:
             data['total_value'] = sum(
                 (m.quantity or 0) * (m.avg_cost_price or 0) for m in qs.only('quantity', 'avg_cost_price')

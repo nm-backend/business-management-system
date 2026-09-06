@@ -144,3 +144,95 @@ class FinanceExportConsistencyTests(TestCase):
         active.refresh_from_db()
         data = self.api.get(OWNER).json()
         self.assertEqual(Decimal(str(data['client_debts'])), Decimal('100'))
+
+
+class WorkerAggregatesUnitTests(TestCase):
+    """
+    Агрегаты по работникам не суммируют количество в разных единицах
+    (тот же баг, что был в summary склада): total_quantity отдаётся только
+    при единой единице, иначе unit_totals + ранжирование по числу работ.
+    """
+    ADMIN = '/api/v1/reports/analytics/admin/'
+
+    def setUp(self):
+        self.company = Company.objects.create(name='WorkCo', is_active=True)
+        self.owner = User.objects.create_user(username='work_owner', password='p',
+                                              role=User.Role.OWNER, company=self.company)
+        self.api = APIClient()
+        self.api.force_authenticate(self.owner)
+        self.worker_a = User.objects.create_user(username='worker_a', password='p',
+                                                 role=User.Role.WORKER, company=self.company,
+                                                 full_name='Работник А')
+        self.worker_b = User.objects.create_user(username='worker_b', password='p',
+                                                 role=User.Role.WORKER, company=self.company,
+                                                 full_name='Работник Б')
+
+    def _work(self, worker, quantity, unit, confirmed=True):
+        return WorkRecord.objects.create(
+            company=self.company, worker=worker, quantity=Decimal(str(quantity)),
+            unit=unit,
+            status=(WorkRecord.WorkStatus.CONFIRMED if confirmed
+                    else WorkRecord.WorkStatus.AWAITING_CONFIRMATION),
+            confirmed_at=timezone.now() if confirmed else None,
+        )
+
+    def test_single_unit_worker_has_plain_total(self):
+        for q in (2, 3, 5):
+            self._work(self.worker_a, q, 'dona')
+        # Неподтверждённая работа не влияет на агрегаты.
+        self._work(self.worker_a, 999, 'dona', confirmed=False)
+        data = self.api.get(OWNER).json()
+        w = data['most_active_worker']
+        self.assertIsNotNone(w)
+        self.assertEqual(w['name'], 'Работник А')
+        self.assertEqual(Decimal(str(w['total_quantity'])), Decimal('10'))
+        self.assertEqual(w['unit_totals'], [{'unit': 'dona', 'total_quantity': 10}])
+        self.assertEqual(w['works'], 3)
+
+    def test_mixed_units_never_summed(self):
+        self._work(self.worker_a, 2, 'dona')
+        self._work(self.worker_a, 3, 'm')
+        data = self.api.get(OWNER).json()
+        w = data['most_active_worker']
+        self.assertIsNone(w['total_quantity'], 'разные единицы — общего количества нет')
+        self.assertEqual(w['unit_totals'], [
+            {'unit': 'm', 'total_quantity': 3},
+            {'unit': 'dona', 'total_quantity': 2},
+        ])
+        self.assertEqual(w['works'], 2)
+
+    def test_ranking_by_works_when_units_mixed(self):
+        # А: 10 шт в 2 работах; Б: 20 м в 1 работе. Сумма по количеству дала бы
+        # победителем Б (20 > 10), но 10 шт и 20 м несравнимы — побеждает тот,
+        # у кого больше подтверждённых работ.
+        self._work(self.worker_a, 10, 'dona')
+        self._work(self.worker_a, 4, 'dona')
+        self._work(self.worker_b, 20, 'm')
+        data = self.api.get(OWNER).json()
+        self.assertEqual(data['most_active_worker']['worker_id'], self.worker_a.id)
+
+    def test_ranking_by_quantity_when_single_unit(self):
+        self._work(self.worker_a, 5, 'dona')
+        self._work(self.worker_b, 10, 'dona')
+        data = self.api.get(OWNER).json()
+        w = data['most_active_worker']
+        self.assertEqual(w['worker_id'], self.worker_b.id)
+        self.assertEqual(Decimal(str(w['total_quantity'])), Decimal('10'))
+
+    def test_admin_worker_performance_per_unit(self):
+        self._work(self.worker_a, 2, 'dona')
+        self._work(self.worker_a, 3, 'm')
+        self._work(self.worker_b, 7, 'dona')
+        data = self.api.get(self.ADMIN).json()
+        rows = {r['worker_id']: r for r in data['worker_performance']}
+        self.assertIn(self.worker_a.id, rows)
+        self.assertIn(self.worker_b.id, rows)
+        a = rows[self.worker_a.id]
+        self.assertIsNone(a['total_quantity'])
+        self.assertEqual(a['unit_totals'], [
+            {'unit': 'm', 'total_quantity': 3},
+            {'unit': 'dona', 'total_quantity': 2},
+        ])
+        b = rows[self.worker_b.id]
+        self.assertEqual(Decimal(str(b['total_quantity'])), Decimal('7'))
+        self.assertEqual(b['unit_totals'], [{'unit': 'dona', 'total_quantity': 7}])

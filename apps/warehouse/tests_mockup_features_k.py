@@ -161,13 +161,42 @@ class OutgoingTests(_Base):
 
 
 class SummaryTests(_Base):
-    def test_summary_shows_total_quantity(self):
+    def test_summary_single_unit_shows_total(self):
         RawMaterial.objects.create(company=self.company, name='Мрамор',
                                    quantity=Decimal('30'), unit='m2')
         r = self.api().get(f'{MATERIALS}summary/')
         self.assertEqual(r.status_code, 200, r.content[:300])
+        body = r.json()
+        # Всё сырьё в одной единице (м²) — общий остаток корректен.
         # DRF сериализует Decimal как float (130.0) — сравниваем численно.
-        self.assertEqual(Decimal(str(r.json()['total_quantity'])), Decimal('130'))
+        self.assertEqual(Decimal(str(body['total_quantity'])), Decimal('130'))
+        self.assertEqual(len(body['unit_totals']), 1)
+        self.assertEqual(body['unit_totals'][0]['unit'], 'm2')
+        self.assertEqual(Decimal(str(body['unit_totals'][0]['quantity'])), Decimal('130'))
+
+    def test_summary_does_not_mix_units(self):
+        # Второй материал в ДРУГОЙ единице: складывать 100 м² + 10 кг нельзя,
+        # поэтому total_quantity отсутствует, а остатки сгруппированы по единицам.
+        RawMaterial.objects.create(company=self.company, name='Клей',
+                                   quantity=Decimal('10'), unit='kg')
+        r = self.api().get(f'{MATERIALS}summary/')
+        self.assertEqual(r.status_code, 200, r.content[:300])
+        body = r.json()
+        self.assertIsNone(body['total_quantity'])
+        by_unit = {row['unit']: row['quantity'] for row in body['unit_totals']}
+        self.assertEqual(set(by_unit), {'m2', 'kg'})
+        self.assertEqual(Decimal(str(by_unit['m2'])), Decimal('100'))
+        self.assertEqual(Decimal(str(by_unit['kg'])), Decimal('10'))
+
+    def test_summary_archived_excluded(self):
+        RawMaterial.objects.create(company=self.company, name='В архиве',
+                                   quantity=Decimal('999'), unit='kg',
+                                   is_archived=True)
+        r = self.api().get(f'{MATERIALS}summary/')
+        body = r.json()
+        self.assertEqual(len(body['unit_totals']), 1)
+        self.assertEqual(body['unit_totals'][0]['unit'], 'm2')
+        self.assertEqual(Decimal(str(body['unit_totals'][0]['quantity'])), Decimal('100'))
 
     def test_summary_value_only_for_owner(self):
         r = self.api().get(f'{MATERIALS}summary/')
@@ -179,7 +208,7 @@ class SummaryTests(_Base):
     def test_worker_can_see_summary_counts(self):
         r = self.api(self.worker).get(f'{MATERIALS}summary/')
         self.assertEqual(r.status_code, 200, r.content[:300])
-        self.assertIn('total_quantity', r.json())
+        self.assertIn('unit_totals', r.json())
 
 
 class RecipeAPITests(_Base):

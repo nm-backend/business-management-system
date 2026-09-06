@@ -119,14 +119,28 @@ class WarehouseComponent {
         this.loadSummary();
     }
 
-    /** Итоговые показатели склада: общий остаток и стоимость (для owner). */
+    /** Итоговые показатели склада: остатки по единицам и стоимость (для owner). */
     async loadSummary() {
         const wrap = document.getElementById('warehouse-summary');
         if (!wrap || window.listStates.gone(wrap)) return;
         try {
             const data = await window.api.request('/warehouse/raw-materials/summary/');
             const totalEl = document.getElementById('summary-total');
-            if (totalEl) totalEl.textContent = window.ui.qty(data.total_quantity);
+            if (totalEl) {
+                const totals = data.unit_totals || [];
+                if (!totals.length) {
+                    totalEl.textContent = window.ui.qty(0);
+                } else if (totals.length === 1) {
+                    // Всё сырьё в одной единице — показываем честный общий остаток.
+                    const t = totals[0];
+                    totalEl.textContent = `${window.ui.qty(t.quantity)} ${window.ui.t('units.' + t.unit)}`;
+                } else {
+                    // Единицы разные — складывать их нельзя, показываем разбивку.
+                    totalEl.innerHTML = totals.map((t) =>
+                        `<div>${window.ui.qty(t.quantity)} ${window.ui.escape(window.ui.t('units.' + t.unit))}</div>`
+                    ).join('');
+                }
+            }
             const valueEl = document.getElementById('summary-value');
             if (valueEl) valueEl.textContent = window.ui.money(data.total_value ?? 0);
             wrap.style.display = 'flex';

@@ -131,7 +131,7 @@ class DashboardComponent {
                         <div class="section-title" data-i18n="finance.most_active_worker"></div>
                         <div class="list-row" style="cursor:default; justify-content: space-between;">
                             <span>${window.ui.escape(data.most_active_worker.name || data.most_active_worker.username)}</span>
-                            <span class="font-bold">${window.ui.qty(data.most_active_worker.total_quantity)}</span>
+                            ${this.workerOutput(data.most_active_worker)}
                         </div>` : ''}
                 </div>
             </div>
@@ -149,6 +149,18 @@ class DashboardComponent {
         if (clientDebtsCard) clientDebtsCard.addEventListener('click', () => window.router.navigate('/clients'));
 
         this.renderRevenueChart(container, data);
+    }
+
+    /** Выработка работника: с единицей измерения, а при разных единицах — разбивкой (складывать нельзя). */
+    workerOutput(worker) {
+        const totals = worker.unit_totals || [];
+        if (!totals.length) return `<span class="font-bold">${window.ui.qty(0)}</span>`;
+        if (totals.length === 1) {
+            return `<span class="font-bold">${window.ui.qty(totals[0].total_quantity)} ${window.ui.escape(window.ui.t('units.' + totals[0].unit))}</span>`;
+        }
+        return `<span class="font-bold">${totals.map((t) =>
+            `${window.ui.qty(t.total_quantity)} ${window.ui.escape(window.ui.t('units.' + t.unit))}`
+        ).join('<br>')}</span>`;
     }
 
     async renderRevenueChart(container, data) {

@@ -113,6 +113,63 @@ def _pct_change(current: Decimal | int, previous: Decimal | int) -> float | None
     return round((current_f - previous_f) / previous_f * 100, 1)
 
 
+def _finalize_worker_totals(records_qs) -> list[dict[str, Any]]:
+    """
+    Честные агрегаты по работникам: количество НЕ суммируется через разные
+    единицы (кг + м + шт = число без физического смысла, тот же баг, что был
+    в summary склада). Итог по каждому работнику:
+        total_quantity — только если ВСЕ его работы в одной единице;
+        unit_totals    — разбивка по единицам (по убыванию количества);
+        works          — число подтверждённых работ (единица-агностик).
+
+    Ранжирование: если в выборке встречается больше одной единицы, сравнение
+    по количеству некорректно для ЛЮБЫХ работников (500 шт vs 300 м несравнимы)
+    — сортируем по числу подтверждённых работ; при единой единице — по
+    количеству, как раньше.
+    """
+    rows = list(
+        records_qs.values('worker_id', 'unit')
+        .annotate(total_quantity=Sum('quantity'))
+        .order_by('worker_id')
+    )
+    works = dict(
+        records_qs.values('worker_id')
+        .annotate(w=Count('id'))
+        .values_list('worker_id', 'w')
+    )
+    by_worker: dict[int, dict[str, Any]] = {}
+    units: set[str] = set()
+    for row in rows:
+        bucket = by_worker.setdefault(row['worker_id'], {'unit_totals': []})
+        bucket['unit_totals'].append({
+            'unit': row['unit'], 'total_quantity': row['total_quantity'],
+        })
+        units.add(row['unit'])
+
+    users = User.objects.in_bulk(by_worker)
+    result: list[dict[str, Any]] = []
+    for worker_id, bucket in by_worker.items():
+        totals = sorted(
+            bucket['unit_totals'],
+            key=lambda t: t['total_quantity'],
+            reverse=True,
+        )
+        user = users.get(worker_id)
+        result.append({
+            'worker_id': worker_id,
+            'name': user.full_name if user else '',
+            'username': user.username if user else '',
+            'works': works.get(worker_id, 0),
+            'total_quantity': totals[0]['total_quantity'] if len(totals) == 1 else None,
+            'unit_totals': totals,
+        })
+    if len(units) > 1:
+        result.sort(key=lambda r: r['works'], reverse=True)
+    else:
+        result.sort(key=lambda r: r['total_quantity'] or 0, reverse=True)
+    return result
+
+
 def _quarter_bounds(year: int, quarter: int) -> tuple[datetime.date, datetime.date]:
     """Calendar quarter boundaries: Q1=Jan–Mar, Q2=Apr–Jun, Q3=Jul–Sep, Q4=Oct–Dec."""
     start_month = 3 * (quarter - 1) + 1
@@ -282,21 +339,14 @@ def get_owner_analytics_data(
         )
         .order_by('-total_quantity')[:5]
     )
-    top_worker: dict[str, Any] | None = (
+    workers = _finalize_worker_totals(
         WorkRecord.objects.filter(
             company_id=company_id,
             status=WorkRecord.WorkStatus.CONFIRMED,
             confirmed_at__date__range=(date_from, date_to),
-        ).values('worker_id')
-        .annotate(
-            name=Max('worker__full_name'),
-            username=Max('worker__username'),
-            total_quantity=Sum('quantity'),
-            works=Count('id'),
         )
-        .order_by('-total_quantity')
-        .first()
     )
+    top_worker: dict[str, Any] | None = workers[0] if workers else None
 
     # --- Period comparison (for delta % arrows) ---
     orders_qs = Order.objects.filter(
@@ -406,16 +456,11 @@ def get_admin_operational_analytics(company_id: int) -> AdminAnalyticsData:
         ) if m.is_low_stock
     ]
 
-    worker_performance = list(
+    worker_performance = _finalize_worker_totals(
         WorkRecord.objects.filter(
             company_id=company_id,
             status=WorkRecord.WorkStatus.CONFIRMED,
-        ).values(
-            worker_username=F('worker__username'),
-            worker_full_name=F('worker__full_name'),
         )
-        .annotate(total_quantity=Sum('quantity'), works=Count('id'))
-        .order_by('-total_quantity')
     )
 
     unpaid_clients = list(
