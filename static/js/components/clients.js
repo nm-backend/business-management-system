@@ -125,6 +125,9 @@ class ClientsComponent {
                 ${user.is_owner ? row('clients.total_amount', window.ui.money(c.total_orders_amount)) : ''}
                 ${user.is_owner ? row('clients.paid', window.ui.money(c.total_paid)) : ''}
                 ${user.is_owner ? row('clients.debt', window.ui.money(c.debt), c.has_debt) : ''}
+                ${user.is_owner ? row('clients.profit',
+                    `<span class="${Number(c.profit) < 0 ? 'text-danger' : ''}" style="${Number(c.profit) >= 0 ? 'color:var(--success-color);' : ''}">${window.ui.money(c.profit)}</span>`,
+                    Number(c.profit) < 0) : ''}
                 ${row('common.status', `<span class="badge ${c.has_debt ? 'badge-cancel' : 'badge-ready'}" data-i18n="payment_statuses.${c.has_debt ? 'unpaid' : 'paid'}"></span>`)}
                 ${row('warehouse.comment', window.ui.escape(c.comment || ''))}
             </div>

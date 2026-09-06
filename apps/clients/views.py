@@ -4,7 +4,11 @@ Views for clients API.
 Клиенты доступны владельцу и администратору (работник клиентов не видит).
 Оплаты - только владельцу; создание оплаты обновляет заказ и долг клиента.
 """
-from django.db.models import Exists, OuterRef
+from decimal import Decimal
+
+from django.db.models import (DecimalField, Exists, ExpressionWrapper, F,
+                              OuterRef, Subquery, Sum, Value)
+from django.db.models.functions import Coalesce
 from django.db import transaction
 from rest_framework import filters
 from rest_framework.decorators import action
@@ -65,6 +69,42 @@ class ClientViewSet(CompanyScopedViewSet):
         queryset = super().get_queryset().prefetch_related('payments').annotate(
             active_orders_exists=Exists(active_orders),
         )
+        # Прибыль по клиенту — только владельцу и только по ВЫДАННЫМ заказам:
+        # себестоимость считается по снимку cost_price на момент выдачи (как
+        # COGS в отчётах), невыданные/отменённые заказы прибыли не дают.
+        # Два коррелированных подзапроса + вычитание на уровне SQL: один
+        # запрос на весь список вместо per-client aggregate (N+1). Админу
+        # аннотация не нужна: поле живёт только в ClientOwnerSerializer.
+        if self.request.user.is_owner:
+            delivered = Order.objects.filter(
+                client=OuterRef('pk'),
+                status=Order.Status.DELIVERED,
+                is_archived=False,
+            )
+            revenue_sq = delivered.values('client').annotate(
+                s=Sum('total_amount'),
+            ).values('s')[:1]
+            cogs_sq = delivered.values('client').annotate(
+                s=Sum(ExpressionWrapper(
+                    F('quantity') * F('cost_price'),
+                    output_field=DecimalField(max_digits=15, decimal_places=2),
+                )),
+            ).values('s')[:1]
+            queryset = queryset.annotate(
+                _client_revenue=Subquery(
+                    revenue_sq,
+                    output_field=DecimalField(max_digits=15, decimal_places=2),
+                ),
+                _client_cogs=Subquery(
+                    cogs_sq,
+                    output_field=DecimalField(max_digits=15, decimal_places=2),
+                ),
+            ).annotate(
+                profit=Coalesce(
+                    F('_client_revenue') - F('_client_cogs'),
+                    Value(Decimal('0'), output_field=DecimalField(max_digits=15, decimal_places=2)),
+                ),
+            )
         search = self.request.query_params.get('search')
         if search:
             from apps.core.translit import translit_search_qs

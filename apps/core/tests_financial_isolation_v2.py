@@ -273,7 +273,9 @@ class ClientLeakTests(_IsolationBase):
     def test_client_admin_no_financial_aggregates(self):
         resp = self._api(self.admin).get('/api/v1/clients/clients/')
         self.assertEqual(resp.status_code, 200)
-        leaks = deep_find_keys(resp.json(), {'debt', 'total_paid', 'total_orders_amount'})
+        # profit — прибыль по клиенту из полной карточки владельца (ClientOwnerSerializer),
+        # админу сервер её не отправляет вовсе.
+        leaks = deep_find_keys(resp.json(), {'debt', 'total_paid', 'total_orders_amount', 'profit'})
         self.assertEqual(leaks, [], f'Admin увидел финагрегаты: {leaks}')
 
     def test_client_admin_sees_has_debt_boolean(self):

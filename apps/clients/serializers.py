@@ -6,11 +6,14 @@ ClientAdminSerializer - для администратора: только бул
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
+from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 from rest_framework import serializers
 
 from apps.core.validators import validate_phone
+from apps.orders.models import Order
 
 from .models import Client, Payment
 
@@ -60,14 +63,39 @@ class ClientAdminSerializer(serializers.ModelSerializer):
 class ClientOwnerSerializer(ClientAdminSerializer):
     """Сериализатор клиента для владельца — с полной финансовой карточкой."""
     payments = PaymentSerializer(many=True, read_only=True)
+    # Прибыль по выданным заказам: читает аннотацию profit из get_queryset
+    # (один SQL-запрос на весь список). Fallback ниже — для прямого вызова
+    # сериализатора без аннотации (тесты/админка): считается тем же правилом.
+    profit = serializers.SerializerMethodField()
 
     class Meta(ClientAdminSerializer.Meta):
         fields = ClientAdminSerializer.Meta.fields + [
-            'total_orders_amount', 'total_paid', 'debt', 'payments',
+            'total_orders_amount', 'total_paid', 'debt', 'profit', 'payments',
         ]
         # Производные финполя считает recalculate_financials из заказов/платежей.
         # Прямой записи через API быть не должно — иначе owner PATCH-ем подменял
         # бы долг клиента (искажение отчётов) до следующего пересчёта.
         read_only_fields = ClientAdminSerializer.Meta.read_only_fields + [
-            'total_orders_amount', 'total_paid', 'debt',
+            'total_orders_amount', 'total_paid', 'debt', 'profit',
         ]
+
+    def get_profit(self, obj):
+        annotated = getattr(obj, 'profit', None)
+        if annotated is not None:
+            profit = annotated
+        else:
+            delivered = obj.orders.filter(
+                status=Order.Status.DELIVERED,
+                is_archived=False,
+            )
+            revenue = delivered.aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
+            cogs = delivered.aggregate(
+                s=Sum(ExpressionWrapper(
+                    F('quantity') * F('cost_price'),
+                    output_field=DecimalField(max_digits=15, decimal_places=2),
+                )),
+            )['s'] or Decimal('0')
+            profit = revenue - cogs
+        # Строка, как остальные денежные поля (DecimalField с COERCE_DECIMAL_TO_STRING):
+        # float потерял бы копейки на больших суммах (метод-поля минуют DecimalField).
+        return '{:.2f}'.format(profit)
