@@ -226,6 +226,25 @@ class CompaniesComponent {
         }
     }
 
+    renderPagination(response) {
+        const pagination = this.container.querySelector('#companies-pagination');
+        if (!pagination) return;
+        const pageSize = response.page_size || response.results?.length || 20;
+        const totalPages = response.count ? Math.max(1, Math.ceil(response.count / pageSize)) : 1;
+        if (response.count && totalPages > 1) {
+            pagination.style.display = 'flex';
+            pagination.innerHTML = `
+                <button class="btn btn-sm btn-secondary" ${this.page <= 1 ? 'disabled' : ''} id="companies-prev">← ${window.ui.t('common.previous')}</button>
+                <span style="padding:8px 12px;font-weight:600;">${this.page} / ${totalPages}</span>
+                <button class="btn btn-sm btn-secondary" ${this.page >= totalPages ? 'disabled' : ''} id="companies-next">${window.ui.t('common.next')} →</button>
+            `;
+            pagination.querySelector('#companies-prev')?.addEventListener('click', () => { this.page--; this.loadCompanies(); });
+            pagination.querySelector('#companies-next')?.addEventListener('click', () => { this.page++; this.loadCompanies(); });
+        } else {
+            pagination.style.display = 'none';
+        }
+    }
+
     async openDetail(c) {
         const modal = window.ui.modal('companies.title', `
             <div class="card-title">

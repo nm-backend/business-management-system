@@ -84,7 +84,13 @@ class Router {
         window.i18n.applyTranslations();
 
         try {
-            await component.render(appElement);
+            if (typeof component === 'function') {
+                // Плоская функция-роут (403-заглушки бизнес-маршрутов суперадмина
+                // в app.js): у неё нет метода render(), вызываем с контейнером.
+                component(appElement);
+            } else {
+                await component.render(appElement);
+            }
             window.i18n.applyTranslations();
             const titleText = document.getElementById('page-title')?.textContent?.trim();
             if (titleText) {
