@@ -13,6 +13,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.core.models import TimestampedModel
+from apps.core.validators import validate_attachment_extension, validate_file_size
 
 
 class Conversation(TimestampedModel):
@@ -119,7 +120,21 @@ class ChatMessage(TimestampedModel):
     sender = models.ForeignKey(
         'accounts.User', on_delete=models.CASCADE, related_name='chat_messages', verbose_name='Отправитель'
     )
-    content = models.TextField(verbose_name='Текст сообщения')
+    # blank=True: сообщение может состоять из одного вложения (макет чата —
+    # отправка фото/чертежа без подписи). Пустое сообщение БЕЗ вложения
+    # запрещено CheckConstraint ниже, чтобы «пустышки» не создавались в обход
+    # сериализатора (импорт, админка, скрипты).
+    content = models.TextField(blank=True, default='', verbose_name='Текст сообщения')
+    attachment = models.FileField(
+        upload_to='chat/attachments/%Y/%m/', blank=True, null=True,
+        validators=[validate_file_size, validate_attachment_extension],
+        verbose_name='Вложение',
+    )
+    # Исходное имя файла: upload_to обезличивает путь, а в чате нужно показать
+    # «Договор.pdf», а не «chat/attachments/2026/09/Dogovor_x7Fk2.pdf».
+    attachment_name = models.CharField(
+        max_length=255, blank=True, default='', verbose_name='Имя файла',
+    )
 
     class Meta:
         verbose_name = 'Сообщение чата'
@@ -129,9 +144,26 @@ class ChatMessage(TimestampedModel):
             models.Index(fields=['conversation', 'created_at']),
             models.Index(fields=['company', 'created_at']),
         ]
+        constraints = [
+            models.CheckConstraint(
+                check=~models.Q(content='') | (
+                    models.Q(attachment__isnull=False) & ~models.Q(attachment='')
+                ),
+                name='chatmessage_content_or_attachment',
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.sender_id}: {self.content[:40]}"
+        return f"{self.sender_id}: {(self.content or self.attachment_name)[:40]}"
+
+    @property
+    def preview_text(self):
+        """Короткое описание сообщения для списка бесед и уведомлений."""
+        if self.content:
+            return self.content
+        if self.attachment_name:
+            return f'📎 {self.attachment_name}'
+        return ''
 
 
 class Notification(TimestampedModel):

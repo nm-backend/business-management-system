@@ -367,7 +367,7 @@ class MessagesComponent {
                 </div>
             </div>
             <div class="chat-input">
-                <button class="chat-attach" id="chat-attach" title="Прикрепить файл" style="background:none;border:none;cursor:pointer;padding:6px;font-size:18px;">📎</button>
+                <button class="chat-attach" id="chat-attach" data-i18n-attr="title,aria-label" data-i18n="chat.attach_file" style="background:none;border:none;cursor:pointer;padding:6px;font-size:18px;">📎</button>
                 <input type="file" id="chat-file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="display:none;">
                 <textarea id="chat-textarea" rows="1" data-i18n-attr="placeholder" data-i18n="chat.type_message"></textarea>
                 <button class="chat-send" id="chat-send" data-i18n-attr="aria-label" data-i18n="chat.send">
@@ -466,7 +466,7 @@ class MessagesComponent {
             if (isImage) {
                 attachmentHtml = `<div class="msg-attachment" style="margin-top:6px;"><img src="${window.ui.escape(m.attachment)}" alt="" style="max-width:200px;border-radius:8px;cursor:pointer;" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')"></div>`;
             } else {
-                attachmentHtml = `<div class="msg-attachment" style="margin-top:6px;"><a href="${window.ui.escape(m.attachment)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.15);border-radius:6px;text-decoration:none;color:inherit;font-size:13px;">📎 ${window.ui.escape(m.attachment_name || 'Файл')}</a></div>`;
+                attachmentHtml = `<div class="msg-attachment" style="margin-top:6px;"><a href="${window.ui.escape(m.attachment)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.15);border-radius:6px;text-decoration:none;color:inherit;font-size:13px;">📎 ${window.ui.escape(m.attachment_name || window.ui.t('chat.file'))}</a></div>`;
             }
         }
         return `
@@ -490,20 +490,16 @@ class MessagesComponent {
         try {
             let msg;
             if (this.selectedFile) {
-                // Отправка с файлом через FormData
+                // Отправка с файлом: multipart через api.request — он подставит
+                // токен и, если access протух, повторит запрос после refresh
+                // (прямой fetch этого не умел и терял файл при 401).
                 const formData = new FormData();
                 formData.append('conversation', this.activeId);
                 if (content) formData.append('content', content);
                 formData.append('attachment', this.selectedFile);
-                // Используем fetch напрямую для multipart
-                const tokens = window.api.getTokens();
-                const response = await fetch('/api/v1/messaging/messages/', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${tokens.access}` },
-                    body: formData,
+                msg = await window.api.request('/messaging/messages/', {
+                    method: 'POST', body: formData, timeout: 120000,
                 });
-                if (!response.ok) throw new Error('Upload failed');
-                msg = await response.json();
                 // Сбрасываем файл
                 this.selectedFile = null;
                 fileInput.value = '';
@@ -770,9 +766,9 @@ class MessagesComponent {
             this.notificationFilter = this.notificationFilter || 'all';
             const filterTabs = `
                 <div class="tabs" id="notif-filter-tabs" style="margin-bottom:10px;gap:4px;">
-                    <button class="tab-btn ${this.notificationFilter === 'all' ? 'active' : ''}" data-notif-filter="all">Все (${notifications.length})</button>
-                    <button class="tab-btn ${this.notificationFilter === 'unread' ? 'active' : ''}" data-notif-filter="unread">Непрочитанные (${unread})</button>
-                    <button class="tab-btn ${this.notificationFilter === 'read' ? 'active' : ''}" data-notif-filter="read">Прочитанные (${read})</button>
+                    <button class="tab-btn ${this.notificationFilter === 'all' ? 'active' : ''}" data-notif-filter="all">${window.ui.t('common.all')} (${notifications.length})</button>
+                    <button class="tab-btn ${this.notificationFilter === 'unread' ? 'active' : ''}" data-notif-filter="unread">${window.ui.t('notifications.unread')} (${unread})</button>
+                    <button class="tab-btn ${this.notificationFilter === 'read' ? 'active' : ''}" data-notif-filter="read">${window.ui.t('notifications.read')} (${read})</button>
                 </div>`;
             let filtered = notifications;
             if (this.notificationFilter === 'unread') filtered = notifications.filter(n => !n.is_read);

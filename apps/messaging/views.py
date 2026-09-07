@@ -80,6 +80,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                     Subquery(my_last_read), Value(epoch, output_field=DateTimeField()),
                 ),
                 last_msg_content=Subquery(last_msg.values('content')[:1]),
+                last_msg_attachment_name=Subquery(last_msg.values('attachment_name')[:1]),
                 last_msg_created=Subquery(last_msg.values('created_at')[:1]),
                 last_msg_sender=Subquery(last_msg.values('sender_id')[:1]),
                 last_msg_sender_name=Subquery(last_msg.values('sender__full_name')[:1]),
@@ -154,6 +155,7 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
     Отправка сообщений в чат.
 
     POST /api/v1/messaging/messages/  {conversation, content}
+    POST multipart/form-data          {conversation, content?, attachment}
     """
     permission_classes = [IsCompanyMember]
     serializer_class = ChatMessageCreateSerializer
@@ -164,12 +166,17 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         conversation = serializer.validated_data['conversation']
+        attachment = serializer.validated_data.get('attachment')
 
         message = ChatMessage.objects.create(
             company_id=conversation.company_id,
             conversation=conversation,
             sender=request.user,
-            content=serializer.validated_data['content'],
+            content=serializer.validated_data.get('content', ''),
+            attachment=attachment,
+            # Имя берём из исходного файла: в storage путь будет обезличен,
+            # а получателю нужно видеть «Договор.pdf».
+            attachment_name=(getattr(attachment, 'name', '') or '')[:255],
         )
 
         # Беседа поднимается наверх списка; авто-поля обходим явным update.
@@ -211,7 +218,7 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
                     participant.user,
                     Notification.NotificationType.NEW_MESSAGE,
                     request.user.full_name or request.user.username,
-                    message.content[:200],
+                    message.preview_text[:200],
                 )
 
         out = ChatMessageSerializer(message, context={'request': request})

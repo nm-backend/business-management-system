@@ -310,12 +310,12 @@ class WarehouseComponent {
             const materials = response.results || [];
             const typeCounts = {};
             materials.forEach(m => {
-                const type = m.stone_type || 'Другое';
+                const type = m.stone_type || window.ui.t('common.other');
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
             });
             const types = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
             tabsEl.innerHTML = [
-                `<button class="tab-btn ${!this.stoneTypeFilter ? 'active' : ''}" data-stone-type="">Все (${materials.length})</button>`,
+                `<button class="tab-btn ${!this.stoneTypeFilter ? 'active' : ''}" data-stone-type="">${window.ui.t('common.all')} (${materials.length})</button>`,
                 ...types.map(([type, count]) => 
                     `<button class="tab-btn ${this.stoneTypeFilter === type ? 'active' : ''}" data-stone-type="${window.ui.escape(type)}">${window.ui.escape(type)} (${count})</button>`
                 )
@@ -406,8 +406,8 @@ class WarehouseComponent {
         const maxStock = m.max_stock || totalQty * 1.3;
         const lowStock = m.is_low_stock;
         const statusBadge = m.is_archived 
-            ? `<span class="badge badge-cancel">Архив</span>` 
-            : (lowStock ? `<span class="badge badge-warning">Критик</span>` : `<span class="badge badge-ready">Актив</span>`);
+            ? `<span class="badge badge-cancel">${window.ui.t('common.archived')}</span>` 
+            : (lowStock ? `<span class="badge badge-warning">${window.ui.t('warehouse.critical')}</span>` : `<span class="badge badge-ready">${window.ui.t('common.active')}</span>`);
         
         const modal = window.ui.modal('warehouse.title', `
             ${m.photo ? `<div style="margin:-20px -20px 14px;border-radius:12px;overflow:hidden;height:180px;background:var(--bg-secondary);">
@@ -424,19 +424,19 @@ class WarehouseComponent {
             <!-- Разбивка количества по макету -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
                 <div class="card" style="margin:0;padding:10px;${lowStock ? 'border-color:var(--danger-color);' : ''}">
-                    <div class="text-sm text-muted">Жами колдик</div>
+                    <div class="text-sm text-muted" data-i18n="warehouse.total_stock"></div>
                     <div style="font-weight:700;font-size:18px;${lowStock ? 'color:var(--danger-color);' : ''}">${window.ui.qty(totalQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
                 <div class="card" style="margin:0;padding:10px;">
-                    <div class="text-sm text-muted">Минимум</div>
+                    <div class="text-sm text-muted" data-i18n="warehouse.min_stock"></div>
                     <div style="font-weight:700;font-size:18px;">${window.ui.qty(minStock)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
                 <div class="card" style="margin:0;padding:10px;">
-                    <div class="text-sm text-muted">Резерв</div>
+                    <div class="text-sm text-muted" data-i18n="warehouse.reserved"></div>
                     <div style="font-weight:700;font-size:18px;">${window.ui.qty(reservedQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
                 <div class="card" style="margin:0;padding:10px;">
-                    <div class="text-sm text-muted">Мавжуд</div>
+                    <div class="text-sm text-muted" data-i18n="warehouse.available"></div>
                     <div style="font-weight:700;font-size:18px;color:var(--success-color);">${window.ui.qty(availableQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
             </div>

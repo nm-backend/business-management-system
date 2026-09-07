@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Клиенты: активные / архив, красная карточка при долге,
  * owner видит суммы и историю оплат, admin - только статусы.
  */
@@ -13,12 +13,12 @@ class ClientsComponent {
             <div id="debt-monitoring" style="display:none;margin-bottom:14px;">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
                     <div class="card" style="margin:0;padding:12px;border-left:4px solid var(--danger-color);">
-                        <div class="text-sm text-muted">Кардорли мижозлар</div>
-                        <div style="font-weight:700;font-size:20px;color:var(--danger-color);" id="debt-clients-count">0 та</div>
+                        <div class="text-sm text-muted" data-i18n="clients.debtors"></div>
+                        <div style="font-weight:700;font-size:20px;color:var(--danger-color);" id="debt-clients-count">—</div>
                     </div>
                     <div class="card" style="margin:0;padding:12px;border-left:4px solid var(--warning-color, #f59e0b);">
-                        <div class="text-sm text-muted">Жами карз суммаси</div>
-                        <div style="font-weight:700;font-size:20px;color:var(--warning-color, #f59e0b);" id="debt-total-amount">0 сум</div>
+                        <div class="text-sm text-muted" data-i18n="clients.total_debt"></div>
+                        <div style="font-weight:700;font-size:20px;color:var(--warning-color, #f59e0b);" id="debt-total-amount">—</div>
                     </div>
                 </div>
             </div>` : '';
@@ -65,13 +65,16 @@ class ClientsComponent {
         const panel = document.getElementById('debt-monitoring');
         if (!panel || !window.currentUser.is_owner) return;
         try {
-            const response = await window.api.request('/clients/clients/?is_archived=false');
-            const clients = response.results || response;
-            const debtClients = clients.filter(c => c.has_debt && c.debt > 0);
-            const totalDebt = debtClients.reduce((sum, c) => sum + (c.debt || 0), 0);
+            // Считает сервер: сумма долга приходит строкой (Decimal), и
+            // складывать её в JS нельзя — получалась конкатенация и NaN;
+            // плюс список клиентов постраничный, в сумму попадала только
+            // первая страница.
+            const summary = await window.api.request('/clients/clients/debt_summary/');
             panel.style.display = 'block';
-            document.getElementById('debt-clients-count').textContent = `${debtClients.length} та`;
-            document.getElementById('debt-total-amount').textContent = window.ui.money(totalDebt);
+            document.getElementById('debt-clients-count').textContent =
+                `${summary.debtors_count} ${window.ui.t('common.pcs_short')}`;
+            document.getElementById('debt-total-amount').textContent =
+                window.ui.money(summary.total_debt);
         } catch (e) {
             // Панель некритична
         }

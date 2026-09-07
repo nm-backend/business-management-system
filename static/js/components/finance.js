@@ -30,7 +30,7 @@ class FinanceComponent {
                 <button class="tab-btn" data-tab="expenses" role="tab" aria-selected="false" data-i18n="finance.expenses"></button>
                 <button class="tab-btn" data-tab="payments" role="tab" aria-selected="false" data-i18n="nav.worker_payments"></button>
                 <button class="tab-btn" data-tab="rates" role="tab" aria-selected="false" data-i18n="finance.labor_rates"></button>
-                <button class="tab-btn" data-tab="quarterly" role="tab" aria-selected="false">Квартал</button>
+                <button class="tab-btn" data-tab="quarterly" role="tab" aria-selected="false" data-i18n="finance.quarterly"></button>
             </div>
             <div id="finance-content" role="tabpanel" aria-live="polite"></div>
         `;
@@ -75,7 +75,7 @@ class FinanceComponent {
                 const start = `${year}-${String(startMonth + 1).padStart(2, '0')}-01`;
                 const end = new Date(year, endMonth + 1, 0);
                 const endStr = `${year}-${String(endMonth + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-                quarters.push({ label: `${quarter} квартал ${year}`, start, end: endStr });
+                quarters.push({ label: window.ui.t('finance.quarter_label', { quarter, year }), start, end: endStr });
             }
             let rows = '';
             for (const q of quarters) {
@@ -97,10 +97,10 @@ class FinanceComponent {
                     <table style="width:100%;border-collapse:collapse;font-size:13px;">
                         <thead>
                             <tr style="background:var(--bg-secondary);">
-                                <th style="padding:8px;text-align:left;">Квартал</th>
-                                <th style="padding:8px;text-align:right;">Выручка</th>
-                                <th style="padding:8px;text-align:right;">COGS</th>
-                                <th style="padding:8px;text-align:right;">Прибыль</th>
+                                <th style="padding:8px;text-align:left;">${window.ui.t('finance.quarterly')}</th>
+                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.revenue')}</th>
+                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.cost_of_goods')}</th>
+                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.net_profit')}</th>
                             </tr>
                         </thead>
                         <tbody>${rows}</tbody>

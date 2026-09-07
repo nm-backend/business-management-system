@@ -43,6 +43,11 @@ class ClientViewSet(CompanyScopedViewSet):
         archive/restore): только owner/admin. Работник клиентов не видит вовсе.
         """
         if self.request.method in SAFE_METHODS:
+            # Сводка по долгам — финансовые суммы, только владельцу.
+            # (permission_classes у @action не применяются: get_permissions
+            # перекрывает их целиком, поэтому проверяем action явно.)
+            if getattr(self, 'action', None) == 'debt_summary':
+                return [IsCompanyMember(), IsOwner()]
             return [IsCompanyMember(), IsOwnerOrAdminOrManager()]
         return [IsCompanyMember(), IsOwnerOrAdmin()]
 
@@ -115,6 +120,33 @@ class ClientViewSet(CompanyScopedViewSet):
         if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
             return ClientOwnerSerializer
         return ClientAdminSerializer
+
+    @action(detail=False, methods=['get'], permission_classes=[IsCompanyMember, IsOwner])
+    def debt_summary(self, request):
+        """
+        GET /api/v1/clients/clients/debt_summary/ — сводка по долгам (владелец).
+
+        Панель «Қарз назорати» раньше считалась на фронте: он брал ПЕРВУЮ
+        страницу списка клиентов (20 из N) и складывал c.debt в JS. Debt
+        приходит из DRF строкой, поэтому сложение превращалось в конкатенацию
+        («0» + «100.00» + «500.00») и на экране выводилось NaN, а счётчик
+        учитывал только первую страницу. Считаем в SQL по всем неархивным
+        клиентам компании.
+        """
+        qs = Client.objects.filter(company_id=request.user.company_id, is_archived=False)
+        debtors = qs.filter(debt__gt=0)
+        zero = Value(Decimal('0'), output_field=DecimalField(max_digits=15, decimal_places=2))
+        totals = debtors.aggregate(total=Coalesce(Sum('debt'), zero))
+        top = list(
+            debtors.order_by('-debt')
+            .values('id', 'name', 'phone', 'debt')[:10]
+        )
+        return Response({
+            'debtors_count': debtors.count(),
+            'total_debt': totals['total'],
+            'no_debt_count': qs.filter(debt__lte=0).count(),
+            'top_debtors': top,
+        })
 
     def perform_create(self, serializer):
         client = serializer.save(company=self.request.user.company)

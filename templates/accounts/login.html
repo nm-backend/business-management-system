@@ -91,10 +91,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearError = () => { errorMsg.style.display = 'none'; };
 
     if (sessionStorage.getItem('session_expired')) {
-        // i18n.init() ещё не вызван — берём текст из localStorage-языка или фоллбэк.
-        const expiredMsg = t('auth.session_expired');
-        showError(expiredMsg !== 'auth.session_expired' ? expiredMsg : 'Сессия муддати тугади. Қайта киринг');
+        // Ждём словарь: до его загрузки translate() вернул бы сам ключ,
+        // а держать запасной текст в коде запрещено (тексты — в locale/*.json).
         sessionStorage.removeItem('session_expired');
+        Promise.resolve(window.i18n.ready).then(() => showError(t('auth.session_expired')));
     }
 
     // ── Login ──

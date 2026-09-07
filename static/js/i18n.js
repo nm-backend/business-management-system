@@ -13,6 +13,14 @@ class I18nManager {
     }
 
     async init() {
+        // Промис готовности: страницы, которые показывают текст ДО применения
+        // переводов (например, экран логина с «сессия истекла»), ждут его —
+        // иначе приходилось держать запасную строку прямо в коде.
+        this.ready = this._init();
+        return this.ready;
+    }
+
+    async _init() {
         await this.loadTranslations(this.currentLang);
         if (this.currentLang !== this.fallbackLang) {
             await this.loadFallback();

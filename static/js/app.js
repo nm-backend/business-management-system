@@ -13,13 +13,13 @@
 window.addEventListener('error', (event) => {
     console.error('Uncaught error:', event.error || event.message);
     try {
-        window.toast.error(window.ui?.t('common.error') || 'Ошибка');
+        window.toast.error(window.ui?.t('common.error'));
     } catch (e) { /* toast недоступен на странице логина */ }
 });
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled rejection:', event.reason);
     try {
-        window.toast.error(window.ui?.t('common.error') || 'Ошибка');
+        window.toast.error(window.ui?.t('common.error'));
     } catch (e) { /* toast недоступен на странице логина */ }
 });
 
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Блокируем прямой доступ к бизнес-маршрутам
         ['/orders', '/warehouse', '/finished-products', '/production', '/clients', '/finance', '/subscription', '/audit', '/backup'].forEach(function(path) {
             window.router.addRoute(path, function(container) {
-                container.innerHTML = '<div class="card route-error"><p class="eyebrow">403</p><h1 data-i18n="common.forbidden">Доступ запрещён</h1><p data-i18n="superadmin.no_business_access"></p><a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard">Платформа</a></div>';
+                container.innerHTML = '<div class="card route-error"><p class="eyebrow">403</p><h1 data-i18n="common.forbidden"></h1><p data-i18n="superadmin.no_business_access"></p><a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard"></a></div>';
                 window.i18n.applyTranslations();
             });
         });
@@ -269,7 +269,7 @@ function onRealtimeMessage(msg) {
     refreshNotificationBadge();
     playNotificationSound();
     sendSWNotification({
-        title: `✉️ ${msg.sender_name || window.ui?.t('notifications.message_default') || 'Сообщение'}`,
+        title: `✉️ ${msg.sender_name || window.ui?.t('notifications.message_default')}`,
         body: (msg.content || '').slice(0, 120),
         tag: 'chat_message',
         data: { url: '#/messages' },

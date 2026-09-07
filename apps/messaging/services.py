@@ -247,6 +247,8 @@ def broadcast_message(message):
                 'sender': message.sender_id,
                 'sender_name': message.sender.full_name or message.sender.username,
                 'content': message.content,
+                'attachment': message.attachment.url if message.attachment else None,
+                'attachment_name': message.attachment_name,
                 'created_at': message.created_at.isoformat(),
             },
         }

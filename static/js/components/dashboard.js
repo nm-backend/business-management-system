@@ -172,8 +172,8 @@ class DashboardComponent {
             const wrap = document.createElement('div');
             wrap.innerHTML = `
                 <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-                    <span>Касса операциялари</span>
-                    <a href="#/finance" class="text-sm" style="color:var(--primary);">Барчаси ›</a>
+                    <span data-i18n="dashboard.cash_operations"></span>
+                    <a href="#/finance" class="text-sm" style="color:var(--primary);"><span data-i18n="common.view_all"></span> ›</a>
                 </div>
                 <div class="list-group list-group-compact">
                     ${operations.map(op => `
