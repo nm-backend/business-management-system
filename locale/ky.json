@@ -869,7 +869,12 @@
         "material_shortage": "Жетишсиздик",
         "worker_performance": "Жумушчулардын натыйжалуулугу",
         "pending_confirmations": "Тастыктоо күтүп жаткан иштер",
-        "unpaid_clients": "Төлөбөгөн кардарлар"
+        "unpaid_clients": "Төлөбөгөн кардарлар",
+        "quarterly": "Кварталдык отчёт",
+        "orders_total": "Бардык буйрутмалар",
+        "orders_delivered": "Тапшырылган",
+        "produced": "Өндүрүлгөн",
+        "defects": "Брак"
     },
     "worker_section": {
         "my_tasks": "Менин тапшырмаларым",

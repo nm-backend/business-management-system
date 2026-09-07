@@ -869,7 +869,12 @@
         "material_shortage": "Нехватка",
         "worker_performance": "Производительность работников",
         "pending_confirmations": "Ожидают подтверждения",
-        "unpaid_clients": "Неоплатившие клиенты"
+        "unpaid_clients": "Неоплатившие клиенты",
+        "quarterly": "Квартальный отчёт",
+        "orders_total": "Всего заказов",
+        "orders_delivered": "Выдано",
+        "produced": "Произведено",
+        "defects": "Брак"
     },
     "worker_section": {
         "my_tasks": "Мои задачи",

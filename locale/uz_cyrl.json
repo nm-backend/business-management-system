@@ -869,7 +869,12 @@
         "material_shortage": "Етишмовчилик",
         "worker_performance": "Ишчилар самарадорлиги",
         "pending_confirmations": "Тасдиқлаш кутаётган ишлар",
-        "unpaid_clients": "Тўлов қилмаган мижозлар"
+        "unpaid_clients": "Тўлов қилмаган мижозлар",
+        "quarterly": "Чораклик ҳисобот",
+        "orders_total": "Жами буюртмалар",
+        "orders_delivered": "Топширилган",
+        "produced": "Ишлаб чиқарилган",
+        "defects": "Брак"
     },
     "worker_section": {
         "my_tasks": "Менинг вазифаларим",

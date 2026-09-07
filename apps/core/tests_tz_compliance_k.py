@@ -642,3 +642,175 @@ class ClientArchiveRuleTests(TzScenarioMixin, TestCase):
         self.client_obj.refresh_from_db()
         self.assertTrue(self.client_obj.is_archived)
         self.assertIsNotNone(self.client_obj.archived_at)
+
+
+class IdempotencyAndRaceTests(TzScenarioMixin, TestCase):
+    """
+    Повтор операции не должен применяться дважды.
+
+    Двойной клик, ретрай мобильной сети или повторно отправленная форма — самый
+    частый источник «двойного списания»: склад уезжает, а работнику начисляют
+    дважды.
+    """
+
+    def _confirmed_work(self):
+        api = self.api_as(self.worker)
+        task = Task.objects.create(
+            company=self.company, order=self.order, worker=self.worker,
+            assigned_by=self.owner, status=TaskStatus.ACCEPTED, title='Столешница',
+        )
+        response = api.post('/api/v1/production/works/', {
+            'task': task.id, 'product': self.product.id,
+            'quantity': '1', 'unit': 'sht',
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        return WorkRecord.objects.get(pk=response.data['id'])
+
+    def test_double_confirm_applies_once(self):
+        work = self._confirmed_work()
+        api = self.api_as(self.owner)
+
+        first = api.post(f'/api/v1/production/works/{work.id}/confirm/', {}, format='json')
+        self.assertEqual(first.status_code, 200, first.data)
+        self.material.refresh_from_db()
+        self.product.refresh_from_db()
+        material_after_first = self.material.quantity
+        product_after_first = self.product.quantity
+
+        second = api.post(f'/api/v1/production/works/{work.id}/confirm/', {}, format='json')
+        self.assertEqual(second.status_code, 400, 'повторное подтверждение должно отклоняться')
+
+        self.material.refresh_from_db()
+        self.product.refresh_from_db()
+        self.assertEqual(self.material.quantity, material_after_first)
+        self.assertEqual(self.product.quantity, product_after_first)
+
+    def test_confirmed_work_cannot_be_rejected_afterwards(self):
+        work = self._confirmed_work()
+        api = self.api_as(self.owner)
+        api.post(f'/api/v1/production/works/{work.id}/confirm/', {}, format='json')
+        response = api.post(
+            f'/api/v1/production/works/{work.id}/reject/', {'reason': 'передумал'}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_double_delivery_does_not_double_write_off(self):
+        api = self.api_as(self.owner)
+        self.product.quantity = Decimal('10')
+        self.product.save(update_fields=['quantity'])
+
+        first = api.post(f'/api/v1/orders/orders/{self.order.id}/deliver/', {}, format='json')
+        self.product.refresh_from_db()
+        after_first = self.product.quantity
+
+        second = api.post(f'/api/v1/orders/orders/{self.order.id}/deliver/', {}, format='json')
+        self.product.refresh_from_db()
+        self.assertIn(first.status_code, (200, 400))
+        if first.status_code == 200:
+            self.assertEqual(second.status_code, 400, 'повторная выдача должна отклоняться')
+        self.assertEqual(self.product.quantity, after_first)
+
+    def test_overpayment_rejected(self):
+        """Оплата больше долга — ошибка валидации, а не «отрицательный долг»."""
+        api = self.api_as(self.owner)
+        response = api.post('/api/v1/clients/payments/', {
+            'client': self.client_obj.id, 'order': self.order.id,
+            'amount': '100000.00',
+        }, format='json')
+        self.assertEqual(response.status_code, 400, response.data)
+
+    def test_negative_quantities_rejected(self):
+        """Отрицательные количества — 400, а не 500 и не порча остатка."""
+        api = self.api_as(self.owner)
+        for payload in (
+            {'quantity': '-5'},
+            {'quantity': '0'},
+        ):
+            response = api.post(
+                f'/api/v1/warehouse/raw-materials/{self.material.id}/incoming/',
+                payload, format='json',
+            )
+            self.assertEqual(response.status_code, 400, response.data)
+
+
+class LanguageAndLocaleTests(TzScenarioMixin, TestCase):
+    """Язык хранится на сервере и переживает выход; локали содержат оба языка."""
+
+    def test_language_persisted_for_user(self):
+        api = self.api_as(self.owner)
+        response = api.post('/api/v1/accounts/me/language/', {'language': 'ru'}, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.owner.refresh_from_db()
+        self.assertEqual(self.owner.language, 'ru')
+
+        # Повторный вход отдаёт сохранённый язык — переключение не теряется.
+        fresh = self.api_as(self.owner).get('/api/v1/accounts/me/')
+        self.assertEqual(fresh.data['language'], 'ru')
+
+    def test_unknown_language_rejected(self):
+        api = self.api_as(self.owner)
+        response = api.post('/api/v1/accounts/me/language/', {'language': 'fr'}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_locale_endpoint_serves_both_required_languages(self):
+        api = self.api_as(self.owner)
+        for lang in ('uz_cyrl', 'ru'):
+            response = api.get(f'/api/v1/core/locale/{lang}/')
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('common', response.json())
+
+    def test_russian_falls_back_to_uzbek_for_missing_key(self):
+        """Пропуск в ru.json не должен превращаться в пустоту — есть fallback."""
+        from core.utils import get_locale
+
+        ru = get_locale('ru')
+        uz = get_locale('uz_cyrl')
+        # get_locale сливает ru поверх uz: набор ключей совпадает.
+        self.assertEqual(set(uz.keys()) - set(ru.keys()), set())
+
+
+class ChatRoutingTests(TzScenarioMixin, TestCase):
+    """Маршрутизация чата по ролям (ТЗ: кто с кем может переписываться)."""
+
+    def test_owner_sees_all_employees(self):
+        api = self.api_as(self.owner)
+        response = api.get('/api/v1/messaging/employees/')
+        self.assertEqual(response.status_code, 200)
+        rows = response.data['results'] if 'results' in response.data else response.data
+        usernames = {row['username'] for row in rows}
+        self.assertIn('tz_admin', usernames)
+        self.assertIn('tz_worker', usernames)
+
+    def test_worker_sees_staff_contacts(self):
+        api = self.api_as(self.worker)
+        response = api.get('/api/v1/messaging/employees/')
+        self.assertEqual(response.status_code, 200)
+        rows = response.data['results'] if 'results' in response.data else response.data
+        usernames = {row['username'] for row in rows}
+        self.assertIn('tz_admin', usernames)
+        self.assertIn('tz_owner', usernames)
+
+    def test_contacts_are_company_scoped(self):
+        other_company = Company.objects.create(name='OtherCo2')
+        User.objects.create_user(
+            username='foreign_admin', password='pw', role=User.Role.ADMIN,
+            company=other_company,
+        )
+        api = self.api_as(self.owner)
+        rows = api.get('/api/v1/messaging/employees/').data
+        rows = rows['results'] if 'results' in rows else rows
+        self.assertNotIn('foreign_admin', {row['username'] for row in rows})
+
+    def test_cannot_post_message_into_foreign_conversation(self):
+        """IDOR в чате: беседа чужой компании недоступна даже по прямому id."""
+        from apps.messaging.models import Conversation
+
+        other_company = Company.objects.create(name='OtherCo3')
+        foreign = Conversation.objects.create(
+            company=other_company, kind=Conversation.Kind.GENERAL,
+        )
+        api = self.api_as(self.owner)
+        response = api.post('/api/v1/messaging/messages/', {
+            'conversation': foreign.id, 'content': 'подмена',
+        }, format='json')
+        self.assertIn(response.status_code, (400, 403, 404), response.data)
