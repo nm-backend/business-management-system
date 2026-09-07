@@ -306,13 +306,45 @@ class StockMovementLimitedSerializer(StockMovementSerializer):
 
 
 class RecipeItemSerializer(serializers.ModelSerializer):
-    """Сериализатор компонента рецепта."""
+    """
+    Сериализатор компонента рецепта.
+
+    Единица позиции обязана совпадать с единицей материала. Расход по рецепту
+    вычитается из остатка КАК ЕСТЬ (см. get_recipe_requirements: количество
+    просто умножается на объём партии), пересчёта единиц в системе нет.
+    Поэтому «2 кг» у материала, который меряется в м², молча списали бы 2 м²:
+    остаток, себестоимость и расчёт нехватки поехали бы, а в карточке рецепта
+    рядом стояли бы «требуется 2 кг» и «доступно 100 м²».
+
+    Интерфейс единицу не присылает вовсе — раньше подставлялся дефолт модели
+    («шт»), из-за чего несовпадение возникало на каждом рецепте, созданном из
+    карточки товара. Теперь единица берётся у материала.
+    """
     material_name = serializers.CharField(source='material.name', read_only=True)
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
 
     class Meta:
         model = RecipeItem
         fields = '__all__'
+
+    def validate(self, attrs):
+        material = attrs.get('material') or getattr(self.instance, 'material', None)
+        if material is None:
+            return attrs
+
+        unit = attrs.get('unit')
+        if unit is None:
+            # Единицу не прислали (обычный случай из интерфейса) — берём у материала.
+            attrs['unit'] = material.unit
+        elif unit != material.unit:
+            raise serializers.ValidationError({
+                'unit': (
+                    f'Единица позиции рецепта ({unit}) не совпадает с единицей '
+                    f'материала «{material.name}» ({material.unit}). Пересчёта '
+                    f'единиц нет: расход списывается в единицах материала.'
+                ),
+            })
+        return attrs
 
 class RecipeSerializer(serializers.ModelSerializer):
     """Сериализатор рецепта с вложенными компонентами."""

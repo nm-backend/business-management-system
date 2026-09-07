@@ -28,11 +28,17 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         now = timezone.now()
-        # Просроченный долг: срок прошёл, оплачено меньше суммы, заказ не отменён,
-        # компания активна. paid_amount < total_amount гарантирует реальный долг.
+        # Просроченный долг: срок прошёл, оплачено меньше суммы, заказ не отменён
+        # и НЕ архивный, компания активна. paid_amount < total_amount
+        # гарантирует реальный долг.
+        #
+        # Архивные исключены намеренно: такой заказ выведен из активного учёта,
+        # его нет ни в списках, ни в отчётах. Уведомление по нему отправляло
+        # владельца искать заказ, которого он на экранах не найдёт.
         overdue = list(
             Order.objects.filter(
                 company__is_active=True,
+                is_archived=False,
                 deadline__lt=now,
                 paid_amount__lt=F('total_amount'),
             )

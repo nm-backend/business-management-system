@@ -317,8 +317,21 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         from django.db.models import Sum
         from apps.accounts.models import User
 
+        # Тип по умолчанию — «зарплата» (default у поля модели). Раньше здесь
+        # стояло сравнение с validated_data.get('payment_type'): если клиент
+        # поле не прислал (обычный случай), ключа нет, значение None, и вся
+        # блокирующая перепроверка ниже ПРОПУСКАЛАСЬ. Потолок держался только
+        # проверкой в сериализаторе, а она читает агрегаты вне транзакции —
+        # два параллельных запроса по 800 при начислении 1000 проходили оба,
+        # и работнику выплачивали 1600. В perform_update этот случай учтён,
+        # здесь — нет.
+        effective_type = (
+            serializer.validated_data.get('payment_type')
+            or WorkerPayment.PaymentType.SALARY
+        )
+
         with transaction.atomic():
-            if serializer.validated_data.get('payment_type') == WorkerPayment.PaymentType.SALARY:
+            if effective_type == WorkerPayment.PaymentType.SALARY:
                 # Сериализуем concurrent salary payments одного работника;
                 # Revalidate после захвата блокировки, иначе два параллельных
                 # запроса могут оба пройти на старых данных.
