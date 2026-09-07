@@ -206,7 +206,29 @@
         "required_for_orders_hint": "Буюртмалар түзүлгөндө автоматтык эсептелет. Калдыктан ашып кетиши мүмкүн — бул жетишпестикти билдирет.",
         "total_stock": "Жалпы калдык",
         "reserved": "Резерв",
-        "critical": "Критикалык"
+        "critical": "Критикалык",
+        "warehouse": "Кампа",
+        "all_warehouses": "Бардык кампалар",
+        "cells_map": "Кампадагы жайгашуу",
+        "cell": "Уяча",
+        "total_area": "Жалпы аянт",
+        "occupied": "Ээленген",
+        "free": "Бош",
+        "capacity": "Сыйымдуулугу",
+        "severity_critical": "Критикалык",
+        "severity_low": "Минимумдан төмөн",
+        "severity_ok": "Жетиштүү",
+        "quick_stats": "Тез маалымат",
+        "at_minimum": "Минимумда",
+        "critical_low": "Критикалык аз",
+        "recent_arrivals": "Жакында келгендер",
+        "in_reserve": "Резервде",
+        "today_summary": "Кампанын жыйынтыгы (бүгүн)",
+        "today_incoming": "Келди",
+        "today_outgoing": "Колдонулду",
+        "returned": "Кайтарылган",
+        "return_material": "Материалды кайтаруу",
+        "condition": "Абалы"
     },
     "units": {
         "sht": "даана",
@@ -900,5 +922,20 @@
         "10": "Окт",
         "11": "Ноя",
         "12": "Дек"
+    },
+    "material_conditions": {
+        "excellent": "Эң жакшы",
+        "good": "Жакшы",
+        "poor": "Ортодон төмөн",
+        "critical": "Критикалык"
+    },
+    "movement_types": {
+        "incoming": "Кирим",
+        "outgoing": "Чыгым",
+        "production_in": "Өндүрүштөн",
+        "production_out": "Өндүрүшкө",
+        "adjustment": "Тууралоо",
+        "loss": "Жоготуу/Брак",
+        "return": "Кайтарылган"
     }
 }

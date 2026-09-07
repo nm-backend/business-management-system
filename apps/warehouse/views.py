@@ -1,21 +1,30 @@
+import datetime
+from decimal import Decimal
+
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.response import Response
+from django.db import transaction
+from django.utils import timezone
 from django.db.models import Sum
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrManager
-from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
+from .models import (
+    FinishedProduct, RawMaterial, Recipe, RecipeItem, StockMovement,
+    Warehouse, WarehouseCell,
+)
 from .serializers import (
     IncomingSerializer, OutgoingSerializer,
     RawMaterialSerializer, RawMaterialOwnerSerializer,
     FinishedProductSerializer, FinishedProductOwnerSerializer,
-    StockMovementSerializer, StockMovementLimitedSerializer, RecipeSerializer, RecipeItemSerializer
+    StockMovementSerializer, StockMovementLimitedSerializer, RecipeSerializer, RecipeItemSerializer,
+    WarehouseSerializer, WarehouseCellSerializer, ReturnSerializer,
 )
-from .services import record_incoming, record_outgoing
+from .services import record_incoming, record_outgoing, record_return
 from apps.core.views import CompanyScopedViewSet
 
 
@@ -95,6 +104,39 @@ class StockOperationsMixin:
         return Response(self.get_serializer(updated).data)
 
     @action(detail=True, methods=['post'])
+    def returned(self, request, pk=None):
+        """
+        Возврат на склад (макет «Материал ҳаракатлари» → вкладка «Қайтарилган»).
+
+        POST .../{id}/returned/
+        Тело: {"quantity": 5, "return_date": "2026-09-07",
+               "document_number": "К-1258", "reason": "..."}
+        Отдельный тип движения: возврат неиспользованного остатка из цеха —
+        не поставка, среднюю себестоимость он не меняет.
+        """
+        target = self.get_object()
+        serializer = ReturnSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        updated = record_return(
+            target=target,
+            quantity=data['quantity'],
+            return_date=data.get('return_date'),
+            document_number=data.get('document_number', ''),
+            user=request.user,
+            reason=data.get('reason', ''),
+        )
+        write_audit_log(
+            action=AuditLog.Action.UPDATE,
+            actor=request.user,
+            target=updated,
+            changes={'quantity': [str(target.quantity), str(updated.quantity)]},
+            request=request,
+        )
+        return Response(self.get_serializer(updated).data)
+
+    @action(detail=True, methods=['post'])
     def archive(self, request, pk=None):
         obj = self.get_object()
         obj.archive()
@@ -121,6 +163,169 @@ class StockOperationsMixin:
         )
         return Response(self.get_serializer(obj).data)
 
+class WarehouseViewSet(CompanyScopedViewSet):
+    """
+    Склады компании (макет «Асосий омбор» с переключателем складов).
+
+    Читают все сотрудники компании — им нужно знать, где лежит материал.
+    Меняют владелец и администратор: склад и его ячейки — часть учёта, а не
+    справочник «на каждый день».
+    """
+    queryset = Warehouse.objects.all()  # для интроспекции схемы; фильтрация ниже
+    serializer_class = WarehouseSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'code', 'address']
+    filterset_fields = ['is_archived', 'is_default']
+    ordering_fields = ['name', 'created_at']
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
+        return [IsCompanyMember()]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Warehouse.objects.none()
+        qs = super().get_queryset().prefetch_related('cells__materials')
+        # Архивные склады видит владелец (ему их и восстанавливать).
+        if not self.request.user.is_owner:
+            qs = qs.filter(is_archived=False)
+        return qs
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            # Флаг у прежнего склада снимаем ДО сохранения: иначе на мгновение
+            # существуют два склада по умолчанию и срабатывает констрейнт.
+            if serializer.validated_data.get('is_default'):
+                self._clear_default(self.request.user.company_id)
+            warehouse = serializer.save(company=self.request.user.company)
+        write_audit_log(
+            action=AuditLog.Action.CREATE, actor=self.request.user,
+            target=warehouse, request=self.request,
+        )
+
+    def perform_update(self, serializer):
+        changes = collect_model_changes(serializer.instance, serializer.validated_data)
+        with transaction.atomic():
+            if serializer.validated_data.get('is_default'):
+                self._clear_default(serializer.instance.company_id, exclude_pk=serializer.instance.pk)
+            warehouse = serializer.save()
+        if changes:
+            write_audit_log(
+                action=AuditLog.Action.UPDATE, actor=self.request.user,
+                target=warehouse, changes=changes, request=self.request,
+            )
+
+    def perform_destroy(self, instance):
+        """
+        Склад архивируется, а не удаляется (ТЗ: удаления нет).
+
+        Склад с материалами не архивируем: остатки повисли бы в невидимом
+        месте, и «где лежит материал» перестало бы отвечать.
+        """
+        if instance.materials.filter(is_archived=False).exists():
+            raise PermissionDenied(
+                'На складе есть материалы — сначала переместите их на другой склад.'
+            )
+        instance.archive()
+        write_audit_log(
+            action=AuditLog.Action.ARCHIVE, actor=self.request.user,
+            target=instance, request=self.request,
+        )
+
+    def _clear_default(self, company_id, exclude_pk=None):
+        """Склад по умолчанию ровно один: назначили новый — сняли флаг у старого."""
+        qs = Warehouse.objects.filter(company_id=company_id, is_default=True)
+        if exclude_pk is not None:
+            qs = qs.exclude(pk=exclude_pk)
+        qs.update(is_default=False)
+
+    @action(detail=True, methods=['get'])
+    def occupancy(self, request, pk=None):
+        """
+        Карта занятости склада (макет: «Жами майдон 420 м², банд 86.1 %»).
+
+        GET /api/v1/warehouse/warehouses/{id}/occupancy/
+        Отдаёт общую площадь, занятую площадь, проценты занято/свободно и
+        список ячеек А-01…А-08 с их загрузкой. Занятость считает сервер по
+        размещённым материалам — вводить её руками нельзя.
+        """
+        warehouse = self.get_object()
+        cells = warehouse.cells.filter(is_archived=False).prefetch_related('materials')
+        occupied = sum((cell.occupied_area for cell in cells), Decimal('0'))
+        base = warehouse.total_area or sum(
+            (cell.capacity_area for cell in cells), Decimal('0')
+        )
+        percent = (occupied / base * 100).quantize(Decimal('0.1')) if base else Decimal('0')
+        return Response({
+            'warehouse': warehouse.id,
+            'name': warehouse.name,
+            'total_area': warehouse.total_area,
+            'capacity_area': sum((cell.capacity_area for cell in cells), Decimal('0')),
+            'occupied_area': occupied,
+            'occupancy_percent': percent,
+            'free_percent': max(Decimal('100') - percent, Decimal('0')).quantize(Decimal('0.1')),
+            'cells': WarehouseCellSerializer(cells, many=True).data,
+        })
+
+
+class WarehouseCellViewSet(CompanyScopedViewSet):
+    """Ячейки хранения А-01…А-08 (макет «Омбордаги жойлашув»)."""
+    queryset = WarehouseCell.objects.all()  # для интроспекции схемы; фильтрация ниже
+    serializer_class = WarehouseCellSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['code']
+    filterset_fields = ['warehouse', 'zone', 'is_archived']
+    ordering_fields = ['code', 'created_at']
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
+        return [IsCompanyMember()]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return WarehouseCell.objects.none()
+        qs = super().get_queryset().select_related('warehouse').prefetch_related('materials')
+        if not self.request.user.is_owner:
+            qs = qs.filter(is_archived=False)
+        return qs
+
+    def perform_create(self, serializer):
+        warehouse = serializer.validated_data.get('warehouse')
+        if warehouse and warehouse.company_id != self.request.user.company_id:
+            raise PermissionDenied('Склад другой компании')
+        cell = serializer.save(company=self.request.user.company)
+        write_audit_log(
+            action=AuditLog.Action.CREATE, actor=self.request.user,
+            target=cell, request=self.request,
+        )
+
+    def perform_update(self, serializer):
+        warehouse = serializer.validated_data.get('warehouse')
+        if warehouse and warehouse.company_id != self.request.user.company_id:
+            raise PermissionDenied('Склад другой компании')
+        changes = collect_model_changes(serializer.instance, serializer.validated_data)
+        cell = serializer.save()
+        if changes:
+            write_audit_log(
+                action=AuditLog.Action.UPDATE, actor=self.request.user,
+                target=cell, changes=changes, request=self.request,
+            )
+
+    def perform_destroy(self, instance):
+        """Ячейку с материалами не архивируем — сначала их надо переложить."""
+        if instance.materials.filter(is_archived=False).exists():
+            raise PermissionDenied(
+                'В ячейке есть материалы — сначала переместите их в другую ячейку.'
+            )
+        instance.archive()
+        write_audit_log(
+            action=AuditLog.Action.ARCHIVE, actor=self.request.user,
+            target=instance, request=self.request,
+        )
+
+
 class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
     """
     API склада сырья с разделением финансовых полей по роли.
@@ -132,12 +337,13 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
     queryset = RawMaterial.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'stone_type', 'color', 'supplier', 'barcode']
-    filterset_fields = ['is_archived', 'unit', 'storage_zone']
+    # Фильтр «Қайси омбор» из макета: остатки конкретного склада и ячейки.
+    filterset_fields = ['is_archived', 'unit', 'storage_zone', 'warehouse', 'cell']
     ordering_fields = ['name', 'quantity', 'created_at']
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy',
-                           'incoming', 'outgoing', 'archive', 'restore']:
+                           'incoming', 'outgoing', 'returned', 'archive', 'restore']:
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         # Чтение склада: все сотрудники компании (owner/admin/worker/manager) —
         # цены (purchase_price/avg_cost_price) скрыты не-owner сериализатором,
@@ -169,11 +375,59 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
             {'unit': row['unit'], 'quantity': row['quantity'] or 0}
             for row in unit_rows
         ]
+        # «Тезкор маълумот» из макета: сколько позиций на минимуме, сколько
+        # критично мало, сколько пришло недавно и сколько зарезервировано под
+        # заказы. Считаем по тем же правилам, что и карточка материала
+        # (stock_severity), иначе цифры в шапке и в списке расходятся.
+        recent_since = timezone.localdate() - datetime.timedelta(days=7)
+        low_count = critical_count = 0
+        for material in qs.only('quantity', 'min_stock', 'required_for_orders'):
+            severity = material.stock_severity
+            if severity == 'critical':
+                critical_count += 1
+            elif severity == 'low':
+                low_count += 1
+        quick_stats = {
+            'low_stock_count': low_count,
+            'critical_count': critical_count,
+            'recent_arrivals_count': qs.filter(arrival_date__gte=recent_since).count(),
+            'reserved_count': qs.filter(required_for_orders__gt=0).count(),
+        }
+
+        # «Склад якуний (бугун)»: сколько сегодня пришло и сколько ушло.
+        # Возврат считаем приходом склада, но он остаётся отдельным типом
+        # движения — в истории видно, что это возврат, а не поставка.
+        today = timezone.localdate()
+        movements = StockMovement.objects.filter(
+            company_id=request.user.company_id,
+            material__isnull=False,
+            created_at__date=today,
+        )
+        incoming_types = (
+            StockMovement.MovementType.INCOMING,
+            StockMovement.MovementType.RETURN,
+        )
+        outgoing_types = (
+            StockMovement.MovementType.OUTGOING,
+            StockMovement.MovementType.PRODUCTION_OUT,
+            StockMovement.MovementType.LOSS,
+        )
+        today_in = movements.filter(movement_type__in=incoming_types).aggregate(
+            total=Sum('quantity'))['total'] or 0
+        today_out = movements.filter(movement_type__in=outgoing_types).aggregate(
+            total=Sum('quantity'))['total'] or 0
+
         data = {
             'unit_totals': unit_totals,
             'total_quantity': (
                 unit_totals[0]['quantity'] if len(unit_totals) == 1 else None
             ),
+            'quick_stats': quick_stats,
+            'today': {
+                'incoming': today_in,
+                'outgoing': today_out,
+                'net': today_in - today_out,
+            },
         }
         if request.user.is_owner:
             data['total_value'] = sum(
@@ -242,7 +496,7 @@ class FinishedProductViewSet(StockOperationsMixin, CompanyScopedViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy',
-                           'incoming', 'outgoing', 'archive', 'restore']:
+                           'incoming', 'outgoing', 'returned', 'archive', 'restore']:
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         # Чтение склада: все сотрудники компании (owner/admin/worker/manager) —
         # цены (purchase_price/avg_cost_price) скрыты не-owner сериализатором,

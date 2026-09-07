@@ -39,6 +39,16 @@ class WarehouseComponent {
                     <div class="font-bold" id="summary-value"></div>
                 </div>` : ''}
             </div>
+            <!-- «Тезкор маълумот» и «Склад якуний (бугун)» из макета:
+                 раньше сводка показывала только остатки и стоимость. -->
+            <div class="card" id="warehouse-quick" style="display:none;margin:0 0 10px;"></div>
+            <!-- Переключатель складов из макета «Асосий омбор»: до появления
+                 модели Warehouse склад был один и подразумевался неявно. -->
+            <div class="form-group" id="warehouse-picker" style="display:none;margin-bottom:10px;">
+                <label class="text-sm text-muted" data-i18n="warehouse.warehouse"></label>
+                <select id="warehouse-select" class="form-control"></select>
+            </div>
+            <div id="warehouse-cells" style="margin-bottom:10px;"></div>
             <div id="stone-type-tabs" class="tabs" role="tablist" aria-label="Stone type filters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
             <div class="search-box search-box--with-action">
                 <div class="search-field">
@@ -116,7 +126,9 @@ class WarehouseComponent {
         }
 
         this.stoneTypeFilter = '';
+        this.warehouseFilter = '';
         window.i18n.applyTranslations();
+        await this.loadWarehouses();
         await this.loadStoneTypes();
         await this.loadMaterials();
         this.loadSummary();
@@ -147,9 +159,47 @@ class WarehouseComponent {
             const valueEl = document.getElementById('summary-value');
             if (valueEl) valueEl.textContent = window.ui.money(data.total_value ?? 0);
             wrap.style.display = 'flex';
+            this.renderQuickStats(data);
         } catch (e) {
             /* итоги некритичны */
         }
+    }
+
+    /**
+     * «Тезкор маълумот» и «Склад якуний (бугун)» из макета «Хом ашё омбори».
+     *
+     * Цифры считает сервер по тем же правилам, что и карточка материала
+     * (stock_severity), иначе шапка и список показывали бы разное.
+     */
+    renderQuickStats(data) {
+        const box = document.getElementById('warehouse-quick');
+        if (!box) return;
+        const stats = data.quick_stats;
+        const today = data.today;
+        if (!stats && !today) { box.style.display = 'none'; return; }
+        const chip = (labelKey, value, cls = '') => `
+            <div style="flex:1 1 100px;text-align:center;">
+                <div class="font-bold ${cls}">${window.ui.escape(String(value))}</div>
+                <div class="text-sm text-muted" data-i18n="${labelKey}"></div>
+            </div>`;
+        box.innerHTML = `
+            <div class="card-title" style="margin-bottom:6px;"><span data-i18n="warehouse.quick_stats"></span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                ${chip('warehouse.at_minimum', stats?.low_stock_count ?? 0, 'text-warning')}
+                ${chip('warehouse.critical_low', stats?.critical_count ?? 0, 'text-danger')}
+                ${chip('warehouse.recent_arrivals', stats?.recent_arrivals_count ?? 0)}
+                ${chip('warehouse.in_reserve', stats?.reserved_count ?? 0)}
+            </div>
+            ${today ? `
+                <div class="text-sm text-muted" style="margin-top:8px;">
+                    <span data-i18n="warehouse.today_summary"></span>:
+                    <span class="text-success">+${window.ui.qty(today.incoming)}</span>
+                    <span data-i18n="warehouse.today_incoming"></span> ·
+                    <span class="text-danger">−${window.ui.qty(today.outgoing)}</span>
+                    <span data-i18n="warehouse.today_outgoing"></span>
+                </div>` : ''}`;
+        box.style.display = '';
+        window.i18n.applyTranslations();
     }
 
     /**
@@ -333,6 +383,77 @@ class WarehouseComponent {
         }
     }
 
+    /**
+     * Список складов и карта ячеек (макеты «Асосий омбор», «Омбордаги жойлашув»).
+     *
+     * Если склад один, селектор не показываем — лишний элемент управления в
+     * интерфейсе, где выбирать не из чего.
+     */
+    async loadWarehouses() {
+        const picker = document.getElementById('warehouse-picker');
+        const select = document.getElementById('warehouse-select');
+        if (!picker || !select) return;
+        try {
+            const response = await window.api.request('/warehouse/warehouses/?is_archived=false');
+            const warehouses = response.results || response;
+            this.warehouses = warehouses;
+            if (warehouses.length < 2) {
+                picker.style.display = 'none';
+            } else {
+                picker.style.display = '';
+                select.innerHTML = `<option value="">${window.ui.escape(window.ui.t('warehouse.all_warehouses'))}</option>`
+                    + warehouses.map((w) => `<option value="${w.id}">${window.ui.escape(w.name)}</option>`).join('');
+                select.addEventListener('change', () => {
+                    this.warehouseFilter = select.value;
+                    this.loadMaterials();
+                    this.loadCells();
+                });
+            }
+            const preselected = warehouses.find((w) => w.is_default) || warehouses[0];
+            this.currentWarehouse = preselected ? preselected.id : null;
+            await this.loadCells();
+        } catch (e) {
+            // Карта складов некритична: список материалов должен открыться в любом случае.
+            picker.style.display = 'none';
+        }
+    }
+
+    /** Карта ячеек А-01…А-08 с занятостью (проценты считает сервер). */
+    async loadCells() {
+        const wrap = document.getElementById('warehouse-cells');
+        if (!wrap || window.listStates.gone(wrap)) return;
+        const warehouseId = this.warehouseFilter || this.currentWarehouse;
+        if (!warehouseId) { wrap.innerHTML = ''; return; }
+        try {
+            const data = await window.api.request(`/warehouse/warehouses/${warehouseId}/occupancy/`);
+            if (!data.cells || !data.cells.length) { wrap.innerHTML = ''; return; }
+            wrap.innerHTML = `
+                <div class="card" style="margin:0;">
+                    <div class="card-title" style="margin-bottom:6px;">
+                        <span data-i18n="warehouse.cells_map"></span>
+                    </div>
+                    <div class="text-sm text-muted" style="margin-bottom:8px;">
+                        <span data-i18n="warehouse.total_area"></span>: ${window.ui.qty(data.total_area)} m²
+                        · <span data-i18n="warehouse.occupied"></span>: ${data.occupancy_percent}%
+                        · <span data-i18n="warehouse.free"></span>: ${data.free_percent}%
+                    </div>
+                    <div class="cell-grid" style="display:flex;flex-wrap:wrap;gap:6px;">
+                        ${data.cells.map((c) => `
+                            <div class="cell-chip" style="flex:1 1 90px;padding:8px;border-radius:8px;
+                                 background:var(--surface-2, #f5f5f7);text-align:center;">
+                                <div class="font-bold">${window.ui.escape(c.code)}</div>
+                                <div class="text-sm ${Number(c.occupancy_percent) >= 90 ? 'text-danger' : 'text-muted'}">
+                                    ${c.occupancy_percent}%
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                </div>`;
+            window.i18n.applyTranslations();
+        } catch (e) {
+            wrap.innerHTML = '';
+        }
+    }
+
     async loadMaterials() {
         const listEl = document.getElementById('materials-list');
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
@@ -342,6 +463,8 @@ class WarehouseComponent {
         try {
             let query = `?is_archived=${this.tab === 'archive'}`;
             if (this.search) query += `&search=${encodeURIComponent(this.search)}`;
+            // Фильтр «Қайси омбор» из макета.
+            if (this.warehouseFilter) query += `&warehouse=${encodeURIComponent(this.warehouseFilter)}`;
             const response = await window.api.request(`/warehouse/raw-materials/${query}`);
             let materials = response.results || [];
             if (this.stoneTypeFilter) {
@@ -390,9 +513,26 @@ class WarehouseComponent {
                     <div style="font-size:15px;font-weight:600;" class="${m.is_low_stock ? 'text-danger' : ''}">
                         ${window.ui.qty(m.quantity)} <span data-i18n="units.${m.unit}"></span>
                     </div>
-                    ${m.is_low_stock ? `<div class="text-sm text-danger" data-i18n="warehouse.low_stock_warning"></div>` : ''}
+                    ${this.severityLabel(m)}
+                    ${m.cell_code ? `<div class="text-sm text-muted">${window.ui.escape(m.cell_code)}</div>` : ''}
                 </div>
             </div>`;
+    }
+
+    /**
+     * Подпись остатка по градации сервера (макет «Минимум қолдиқлар»).
+     *
+     * Раньше был единственный флаг is_low_stock, и «почти закончилось»
+     * выглядело так же, как «уже не хватает под заказы».
+     */
+    severityLabel(m) {
+        if (m.stock_severity === 'critical') {
+            return `<div class="text-sm text-danger" data-i18n="warehouse.severity_critical"></div>`;
+        }
+        if (m.stock_severity === 'low' || m.is_low_stock) {
+            return `<div class="text-sm text-warning" data-i18n="warehouse.severity_low"></div>`;
+        }
+        return '';
     }
 
     openDetail(m) {
@@ -461,6 +601,11 @@ class WarehouseComponent {
                     <button class="btn btn-primary btn-sm" id="edit-material" data-i18n="common.edit"></button>
                     <button class="btn btn-danger btn-sm" id="outgoing-material" data-i18n="warehouse.outgoing"></button>
                 </div>
+                <!-- Возврат («Қайтарилган») отдельной кнопкой: раньше его
+                     проводили обычным приходом и в истории он был неотличим
+                     от новой поставки. -->
+                <button class="btn btn-secondary btn-sm btn-block" id="return-material"
+                        style="margin-top:8px;" data-i18n="warehouse.return_material"></button>
                 <button class="btn btn-secondary btn-sm btn-block" id="archive-material" style="margin-top:8px;" data-i18n="common.archive"></button>` 
                 : (canEdit ? `
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
@@ -481,6 +626,10 @@ class WarehouseComponent {
             modal.querySelector('#outgoing-material')?.addEventListener('click', () => {
                 window.ui.closeModal(modal);
                 this.openOutgoingForm(m);
+            });
+            modal.querySelector('#return-material')?.addEventListener('click', () => {
+                window.ui.closeModal(modal);
+                this.openReturnForm(m);
             });
             modal.querySelector('#archive-material')?.addEventListener('click', async () => {
                 if (!m.is_archived && !(await window.confirmation.confirm(
@@ -514,6 +663,7 @@ class WarehouseComponent {
                 window.listStates.empty(listEl, window.ui.t('common.no_data'));
                 return;
             }
+            // Возврат («Қайтарилган») пополняет склад — знак и цвет как у прихода.
             const sign = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? '−' : '+');
             const colour = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? 'text-danger' : 'text-success');
             listEl.innerHTML = rows.map((r) => `
@@ -523,7 +673,7 @@ class WarehouseComponent {
                             ${window.ui.escape(r.material_name || r.product_name || '-')}
                         </div>
                         <div class="text-sm text-muted">
-                            ${window.ui.escape(r.movement_type_display || r.movement_type)}
+                            ${window.ui.escape(window.ui.t('movement_types.' + r.movement_type))}
                             · ${window.ui.datetime(r.created_at)}
                             ${r.created_by_name ? ` · ${window.ui.escape(r.created_by_name)}` : ''}
                         </div>
@@ -589,6 +739,30 @@ class WarehouseComponent {
                 </div>
                 <div class="form-group"><label data-i18n="warehouse.storage_location"></label>
                     <input name="storage_location" class="form-control" value="${window.ui.escape(m?.storage_location || '')}"></div>
+                <!-- Размещение и состояние партии (макеты «Асосий омбор» и
+                     «Хом ашё омбори»): раньше место было только текстом, а
+                     треснувшая плита выглядела как обычный остаток. -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="form-group"><label data-i18n="warehouse.warehouse"></label>
+                        <select name="warehouse" class="form-control" id="material-warehouse">
+                            <option value="" data-i18n="common.select"></option>
+                            ${(this.warehouses || []).map((w) => `
+                                <option value="${w.id}" ${String(m?.warehouse) === String(w.id) ? 'selected' : ''}>
+                                    ${window.ui.escape(w.name)}
+                                </option>`).join('')}
+                        </select></div>
+                    <div class="form-group"><label data-i18n="warehouse.cell"></label>
+                        <select name="cell" class="form-control" id="material-cell">
+                            <option value="" data-i18n="common.select"></option>
+                        </select></div>
+                </div>
+                <div class="form-group"><label data-i18n="warehouse.condition"></label>
+                    <select name="condition" class="form-control">
+                        <option value="" data-i18n="common.select"></option>
+                        ${['excellent', 'good', 'poor', 'critical'].map((c) => `
+                            <option value="${c}" ${m?.condition === c ? 'selected' : ''}
+                                    data-i18n="material_conditions.${c}"></option>`).join('')}
+                    </select></div>
                 <div class="form-group"><label data-i18n="warehouse.supplier"></label>
                     <input name="supplier" class="form-control" value="${window.ui.escape(m?.supplier || '')}"></div>
                 <div class="form-group"><label data-i18n="warehouse.arrival_date"></label>
@@ -605,17 +779,45 @@ class WarehouseComponent {
             </form>
         `);
 
+        // Ячейки зависят от выбранного склада: показывать чужие бессмысленно —
+        // сервер такое размещение отклонит.
+        const whSelect = modal.querySelector('#material-warehouse');
+        const cellSelect = modal.querySelector('#material-cell');
+        const loadCellOptions = async (warehouseId, selected = '') => {
+            cellSelect.innerHTML = `<option value=""></option>`;
+            if (!warehouseId) return;
+            try {
+                const resp = await window.api.request(
+                    `/warehouse/cells/?warehouse=${encodeURIComponent(warehouseId)}&is_archived=false`
+                );
+                const cells = resp.results || resp;
+                cellSelect.innerHTML = `<option value=""></option>` + cells.map((c) => `
+                    <option value="${c.id}" ${String(selected) === String(c.id) ? 'selected' : ''}>
+                        ${window.ui.escape(c.code)}
+                    </option>`).join('');
+            } catch (err) {
+                /* без ячеек форма всё равно работает */
+            }
+        };
+        if (whSelect && cellSelect) {
+            loadCellOptions(m?.warehouse || '', m?.cell || '');
+            whSelect.addEventListener('change', () => loadCellOptions(whSelect.value));
+        }
+
         modal.querySelector('#material-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             // formBody сам выберет multipart, если приложили фото: JSON.stringify
             // выбрасывал файл, и картинка не доходила до сервера.
             const body = await window.ui.formBody(e.target);
+            // Пустые значения выпиливаем: DRF ждёт id или отсутствие поля,
+            // пустая строка приводит к 400.
+            const optional = ['arrival_date', 'warehouse', 'cell', 'condition'];
             if (body instanceof FormData) {
-                if (!body.get('arrival_date')) body.delete('arrival_date');
+                optional.forEach((name) => { if (!body.get(name)) body.delete(name); });
             }
             const payload = body instanceof FormData ? body : (() => {
                 const data = JSON.parse(body);
-                if (!data.arrival_date) delete data.arrival_date;
+                optional.forEach((name) => { if (!data[name]) delete data[name]; });
                 return JSON.stringify(data);
             })();
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
@@ -727,6 +929,44 @@ class WarehouseComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request(`/warehouse/raw-materials/${m.id}/outgoing/`, {
+                        method: 'POST',
+                        body: JSON.stringify(data),
+                    });
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadMaterials();
+                    this.loadSummary();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    /** Возврат материала на склад (вкладка «Қайтарилган» в истории движений). */
+    openReturnForm(m) {
+        const today = new Date().toISOString().slice(0, 10);
+        const modal = window.ui.modal('warehouse.return_material', `
+            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(m.name)}</p>
+            <form id="return-form">
+                <div class="form-group"><label data-i18n="warehouse.quantity"></label>
+                    <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
+                <div class="form-group"><label data-i18n="warehouse.document_number"></label>
+                    <input name="document_number" class="form-control"></div>
+                <div class="form-group"><label data-i18n="warehouse.arrival_date"></label>
+                    <input name="return_date" type="date" class="form-control" value="${today}" max="${today}"></div>
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <input name="reason" class="form-control"></div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="warehouse.return_material"></button>
+            </form>
+        `);
+        modal.querySelector('#return-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            Object.keys(data).forEach((k) => { if (data[k] === '') delete data[k]; });
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request(`/warehouse/raw-materials/${m.id}/returned/`, {
                         method: 'POST',
                         body: JSON.stringify(data),
                     });

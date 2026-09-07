@@ -206,7 +206,29 @@
         "required_for_orders_hint": "Учитывается автоматически при создании заказов. Может превышать остаток — тогда возникает нехватка.",
         "total_stock": "Всего остаток",
         "reserved": "Резерв",
-        "critical": "Критично"
+        "critical": "Критично",
+        "warehouse": "Склад",
+        "all_warehouses": "Все склады",
+        "cells_map": "Расположение на складе",
+        "cell": "Ячейка",
+        "total_area": "Общая площадь",
+        "occupied": "Занято",
+        "free": "Свободно",
+        "capacity": "Вместимость",
+        "severity_critical": "Критично",
+        "severity_low": "Ниже минимума",
+        "severity_ok": "В норме",
+        "quick_stats": "Быстрая сводка",
+        "at_minimum": "На минимуме",
+        "critical_low": "Критично мало",
+        "recent_arrivals": "Недавние поступления",
+        "in_reserve": "В резерве",
+        "today_summary": "Итоги склада (сегодня)",
+        "today_incoming": "Пришло",
+        "today_outgoing": "Использовано",
+        "returned": "Возврат",
+        "return_material": "Возврат материала",
+        "condition": "Состояние"
     },
     "units": {
         "sht": "шт",
@@ -900,5 +922,20 @@
         "10": "Окт",
         "11": "Ноя",
         "12": "Дек"
+    },
+    "material_conditions": {
+        "excellent": "Отличное",
+        "good": "Хорошее",
+        "poor": "Ниже среднего",
+        "critical": "Критическое"
+    },
+    "movement_types": {
+        "incoming": "Приход",
+        "outgoing": "Расход",
+        "production_in": "С производства",
+        "production_out": "На производство",
+        "adjustment": "Корректировка",
+        "loss": "Потеря/Брак",
+        "return": "Возврат"
     }
 }

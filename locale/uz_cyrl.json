@@ -206,7 +206,29 @@
         "required_for_orders_hint": "Буюртмалар яратилганда автоматик ҳисобланади. Қолдиқдан ошиб кетиши мумкин — бу нехваткани билдиради.",
         "total_stock": "Жами қолдиқ",
         "reserved": "Резерв",
-        "critical": "Критик"
+        "critical": "Критик",
+        "warehouse": "Омбор",
+        "all_warehouses": "Барча омборлар",
+        "cells_map": "Омбордаги жойлашув",
+        "cell": "Ячейка",
+        "total_area": "Жами майдон",
+        "occupied": "Банд",
+        "free": "Бўш",
+        "capacity": "Сиғими",
+        "severity_critical": "Критик",
+        "severity_low": "Минимумдан паст",
+        "severity_ok": "Етарли",
+        "quick_stats": "Тезкор маълумот",
+        "at_minimum": "Минимумда",
+        "critical_low": "Критик кам",
+        "recent_arrivals": "Яқинда келганлар",
+        "in_reserve": "Резервда",
+        "today_summary": "Склад якуний (бугун)",
+        "today_incoming": "Келди",
+        "today_outgoing": "Ишлатилди",
+        "returned": "Қайтарилган",
+        "return_material": "Материални қайтариш",
+        "condition": "Ҳолати"
     },
     "units": {
         "sht": "шт",
@@ -900,5 +922,20 @@
         "10": "Окт",
         "11": "Ноя",
         "12": "Дек"
+    },
+    "material_conditions": {
+        "excellent": "Аъло",
+        "good": "Яхши",
+        "poor": "Қуйида",
+        "critical": "Критик"
+    },
+    "movement_types": {
+        "incoming": "Келган",
+        "outgoing": "Ишлатилган",
+        "production_in": "Ишлаб чиқаришдан",
+        "production_out": "Ишлаб чиқаришга",
+        "adjustment": "Тузатиш",
+        "loss": "Йўқотиш/Брак",
+        "return": "Қайтарилган"
     }
 }

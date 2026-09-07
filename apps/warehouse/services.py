@@ -99,6 +99,51 @@ def record_incoming(
 
 
 @transaction.atomic
+def record_return(
+    *,
+    target: RawMaterial | FinishedProduct,
+    quantity: Decimal | int | float,
+    return_date: Any | None = None,
+    document_number: str | None = None,
+    user: Any | None = None,
+    reason: str = '',
+) -> RawMaterial | FinishedProduct:
+    """
+    Возврат материала на склад (макет «Материал ҳаракатлари» → «Қайтарилган»).
+
+    Цех вернул неиспользованный остаток — количество возвращается на склад,
+    но в истории это ОТДЕЛЬНЫЙ тип движения, а не приход: возврат не является
+    поставкой, он не должен влиять на среднюю себестоимость и попадать в
+    отчёты как новая закупка. Раньше возврат проводили обычным приходом, и в
+    истории он был неотличим от поставки.
+    """
+    is_material = isinstance(target, RawMaterial)
+    model = RawMaterial if is_material else FinishedProduct
+
+    locked = model.objects.select_for_update().get(pk=target.pk)
+    quantity = Decimal(quantity)
+
+    locked.quantity = locked.quantity + quantity
+    locked.save(update_fields=['quantity', 'updated_at'])
+
+    reason_text = reason or f'Возврат {timezone.localdate().isoformat()}'
+    if return_date:
+        reason_text = f'{reason_text} (дата документа: {return_date.isoformat()})'
+
+    StockMovement.objects.create(
+        company_id=locked.company_id,
+        movement_type=StockMovement.MovementType.RETURN,
+        material=locked if is_material else None,
+        product=None if is_material else locked,
+        quantity=quantity,
+        document_number=document_number or '',
+        reason=reason_text,
+        created_by=user,
+    )
+    return locked
+
+
+@transaction.atomic
 def record_outgoing(
     *,
     target: RawMaterial | FinishedProduct,
