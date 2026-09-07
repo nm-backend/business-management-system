@@ -263,8 +263,9 @@ class PaymentViewSet(CompanyScopedViewSet):
         notify(
             self.request.user,
             Notification.NotificationType.CASH_CHANGE,
-            'Касса ўзгариши',
-            f'{payment.client.name}: +{payment.amount}',
+            title_key='notifications.cash_change',
+            message_key='notifications.msg_cash_change',
+            params={'client': payment.client.name, 'amount': str(payment.amount)},
             order=payment.order,
         )
         write_audit_log(

@@ -249,6 +249,18 @@ class Notification(TimestampedModel):
     type = models.CharField(max_length=30, choices=NotificationType.choices, db_index=True, verbose_name='Тип')
     title = models.CharField(max_length=255, verbose_name='Заголовок')
     message = models.TextField(verbose_name='Сообщение')
+    # Локализация уведомлений (требование ТЗ). Текст хранится не только
+    # готовой строкой, но и ключом локали + параметрами: получатель может
+    # сменить язык, и старые уведомления тоже должны перевестись.
+    # title/message остаются как снимок на момент отправки — их используют
+    # Web Push (он уходит сразу) и записи, созданные до этой доработки.
+    title_key = models.CharField(
+        max_length=100, blank=True, default='', verbose_name='Ключ заголовка',
+    )
+    message_key = models.CharField(
+        max_length=100, blank=True, default='', verbose_name='Ключ текста',
+    )
+    params = models.JSONField(default=dict, blank=True, verbose_name='Параметры текста')
     is_read = models.BooleanField(default=False, verbose_name='Прочитано')
     read_at = models.DateTimeField(null=True, blank=True, verbose_name='Когда прочитано')
     related_order = models.ForeignKey('orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications', verbose_name='Связанный заказ')
@@ -280,6 +292,20 @@ class Notification(TimestampedModel):
         Возвращает тип и заголовок.
         """
         return f"{self.get_type_display()} - {self.title}"
+
+    def localized_title(self, lang_code):
+        """Заголовок на языке получателя (или снимок, если ключа нет)."""
+        from core.utils import translate
+        if self.title_key:
+            return translate(self.title_key, lang_code, self.params or {})
+        return self.title
+
+    def localized_message(self, lang_code):
+        """Текст на языке получателя (или снимок, если ключа нет)."""
+        from core.utils import translate
+        if self.message_key:
+            return translate(self.message_key, lang_code, self.params or {})
+        return self.message
 
     @property
     def is_unread(self):

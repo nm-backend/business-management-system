@@ -224,6 +224,10 @@ class NotificationSerializer(serializers.ModelSerializer):
     related_client = serializers.IntegerField(
         source='related_order.client_id', read_only=True, default=None,
     )
+    # Текст рендерится на языке ТЕКУЩЕГО пользователя: сменил язык в
+    # настройках — переведётся и лента уведомлений, а не только новые записи.
+    title = serializers.SerializerMethodField()
+    message = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
@@ -234,3 +238,14 @@ class NotificationSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at', 'read_at']
+
+    def _lang(self):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        return getattr(user, 'language', None) or 'uz_cyrl'
+
+    def get_title(self, obj):
+        return obj.localized_title(self._lang())
+
+    def get_message(self, obj):
+        return obj.localized_message(self._lang())

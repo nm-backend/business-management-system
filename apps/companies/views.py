@@ -28,6 +28,8 @@ from apps.audit.services import write_audit_log
 from apps.core.permissions import IsOwnerOrAdmin, IsSuperAdmin
 from .models import Company, SubscriptionChange, SubscriptionPlan
 from .serializers import CompanySerializer, CompanyCreateSerializer
+from core.utils import translate
+
 from .subscriptions import (
     SubscriptionError,
     activate_subscription,
@@ -452,15 +454,16 @@ class CompanyViewSet(viewsets.ModelViewSet):
         notify(
             superadmins,
             Notification.NotificationType.SUBSCRIPTION_RENEWAL_REQUEST,
-            company.name,
-            f'{company.name} — {end_text}',
+            title=company.name,
+            message_key='notifications.msg_subscription_renewal_request',
+            params={'company': company.name, 'end': end_text},
             company=company,
         )
         for admin in superadmins:
             send_push_to_user(
                 admin,
                 company.name,
-                f'Запрос на продление подписки — {end_text}',
+                translate('notifications.push_renewal_request', admin.language, {'end': end_text}),
                 data={'url': '/#/companies'},
             )
         write_audit_log(

@@ -95,6 +95,52 @@ def get_locale(lang_code='uz_cyrl'):
     return data
 
 
+def translate(key, lang_code='uz_cyrl', params=None):
+    """
+    Серверный аналог фронтового i18n.translate: точечный ключ + плейсхолдеры.
+
+    Нужен уведомлениям и отчётам: их текст формирует сервер, а по ТЗ он должен
+    быть на языке получателя. Раньше тексты уведомлений были захардкожены
+    (узбекские в бизнес-событиях, русские в подписках), и язык пользователя
+    вообще не учитывался.
+
+    Соглашение для параметров: значение ключа-параметра, имя которого
+    оканчивается на «_key», само считается ключом локали и переводится
+    (например reason_key='refusal_reasons.no_time' подставится в {reason}).
+
+    Аргументы:
+        key: str - точечный ключ, например 'notifications.new_order'
+        lang_code: str - язык получателя ('uz_cyrl', 'ru', 'ky')
+        params: dict - подстановки вида {'id': 5} для шаблона «#{id}»
+
+    Возвращает:
+        str - переведённая строка; если ключа нет ни в языке, ни в uz_cyrl,
+        возвращается сам ключ (как на фронтенде — видно, что перевод забыт).
+    """
+    if not key:
+        return ''
+    data = get_locale(lang_code or 'uz_cyrl')
+    value = data
+    for part in str(key).split('.'):
+        if isinstance(value, dict) and part in value:
+            value = value[part]
+        else:
+            return key
+    if not isinstance(value, str):
+        return key
+
+    if params:
+        resolved = {}
+        for name, val in params.items():
+            if name.endswith('_key') and isinstance(val, str):
+                resolved[name[:-4]] = translate(val, lang_code)
+            else:
+                resolved[name] = val
+        for name, val in resolved.items():
+            value = value.replace('{%s}' % name, '' if val is None else str(val))
+    return value
+
+
 def format_currency(amount, currency_symbol='som', decimal_places=0):
     """
     Форматирует число как строку валюты.

@@ -10,14 +10,26 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from core.utils import translate
+
 from .models import ChatMessage, Conversation, ConversationParticipant, Notification, WsTicket
 
 
 # ─────────────────────────── Уведомления ───────────────────────────
 
-def notify(users, notification_type, title, message, order=None, task=None, company=None):
+def notify(users, notification_type, title=None, message=None, order=None, task=None,
+           company=None, *, title_key=None, message_key=None, params=None):
     """
     Создаёт уведомление каждому пользователю из users (одному или списку).
+
+    Локализация (требование ТЗ «уведомления переводятся на оба языка»):
+    вместо готовой строки передаётся ключ локали + параметры
+    (title_key/message_key/params). Тогда каждому получателю в title/message
+    кладётся снимок текста НА ЕГО языке (его читает Web Push, который уходит
+    сразу), а сериализатор потом рендерит текст заново по текущему языку
+    пользователя. Явные title/message тоже поддерживаются — там, где текст
+    непереводим по своей природе (имя отправителя, название компании,
+    комментарий работника).
 
     company: явная привязка к компании-источнику. По умолчанию — компания
     пользователя; нужна платформенным уведомлениям супер-админа (у него
@@ -28,22 +40,27 @@ def notify(users, notification_type, title, message, order=None, task=None, comp
         return []
     if not hasattr(users, '__iter__'):
         users = [users]
-    notifications = [
-        Notification(
+    params = params or {}
+    notifications = []
+    for user in users:
+        lang = getattr(user, 'language', None) or 'uz_cyrl'
+        notifications.append(Notification(
             company_id=(company.id if company is not None else user.company_id),
             user=user,
             type=notification_type,
-            title=title,
-            message=message,
+            title=(translate(title_key, lang, params) if title_key else (title or '')),
+            message=(translate(message_key, lang, params) if message_key else (message or '')),
+            title_key=title_key or '',
+            message_key=message_key or '',
+            params=params,
             related_order=order,
             related_task=task,
-        )
-        for user in users
-    ]
+        ))
     return Notification.objects.bulk_create(notifications)
 
 
-def notify_staff(company, notification_type, title, message, order=None, task=None):
+def notify_staff(company, notification_type, title=None, message=None, order=None, task=None,
+                 *, title_key=None, message_key=None, params=None):
     """Уведомляет владельца и администраторов указанной компании."""
     from apps.accounts.models import User
     if company is None:
@@ -52,7 +69,10 @@ def notify_staff(company, notification_type, title, message, order=None, task=No
     staff = User.objects.filter(
         role__in=('owner', 'admin'), is_active=True, company_id=company_id,
     )
-    return notify(list(staff), notification_type, title, message, order=order, task=task)
+    return notify(
+        list(staff), notification_type, title, message, order=order, task=task,
+        title_key=title_key, message_key=message_key, params=params,
+    )
 
 
 # ─────────────────────────── Чат ───────────────────────────

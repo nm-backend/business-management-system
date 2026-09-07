@@ -121,8 +121,12 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             notify(
                 task.worker,
                 Notification.NotificationType.TASK_ASSIGNED,
-                'Янги вазифа',
-                f'Вазифа #{task.id}' + (f' (буюртма #{task.order_id})' if task.order_id else ''),
+                title_key='notifications.task_assigned',
+                message_key=(
+                    'notifications.msg_task_assigned_order' if task.order_id
+                    else 'notifications.msg_task_assigned'
+                ),
+                params={'id': task.id, 'order': task.order_id},
                 order=task.order,
                 task=task,
             )
@@ -141,8 +145,12 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             notify(
                 task.assigned_by,
                 Notification.NotificationType.TASK_CHANGED,
-                'Вазифа қабул қилинди',
-                f'{request.user.full_name or request.user.username} вазифа #{task.id} ни қабул қилди',
+                title_key='notifications.task_changed',
+                message_key='notifications.msg_task_accepted',
+                params={
+                    'id': task.id,
+                    'worker': request.user.full_name or request.user.username,
+                },
                 order=task.order, task=task,
             )
         return Response(TaskSerializer(task).data)
@@ -172,9 +180,14 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         notify_staff(
             task.company_id,
             Notification.NotificationType.WORKER_REFUSED,
-            'Ишчи рад этди',
-            f'{request.user.full_name or request.user.username} вазифа #{task.id} дан бош тортди: '
-            f'{RefusalReason(reason).label}',
+            title_key='notifications.worker_refused',
+            message_key='notifications.msg_task_refused',
+            params={
+                'id': task.id,
+                'worker': request.user.full_name or request.user.username,
+                # *_key разворачивается переводчиком в {reason} на языке получателя
+                'reason_key': f'refusal_reasons.{reason}',
+            },
             order=task.order, task=task,
         )
         return Response(TaskSerializer(task).data)
@@ -209,8 +222,9 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         notify(
             task.worker,
             Notification.NotificationType.TASK_CANCELLED,
-            'Вазифа бекор қилинди',
-            f'Вазифа #{task.id} бекор қилинди',
+            title_key='notifications.task_cancelled',
+            message_key='notifications.msg_task_cancelled',
+            params={'id': task.id},
             order=task.order, task=task,
         )
         return Response(TaskSerializer(task).data)
@@ -327,9 +341,13 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         notify_staff(
             work.company_id,
             Notification.NotificationType.WORK_AWAITING,
-            'Иш тасдиқлашни кутмоқда',
-            f'{work.worker.full_name or work.worker.username}: '
-            f'{work.product.name if work.product else ""} x {work.quantity}',
+            title_key='notifications.work_awaiting',
+            message_key='notifications.msg_work_awaiting',
+            params={
+                'worker': work.worker.full_name or work.worker.username,
+                'product': (work.product.name if work.product else ''),
+                'qty': str(work.quantity),
+            },
             task=work.task,
         )
         if work.task and work.task.worker_id == work.worker_id:

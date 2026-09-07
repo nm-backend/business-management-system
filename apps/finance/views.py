@@ -76,8 +76,12 @@ class ExpenseViewSet(CompanyScopedViewSet):
         notify(
             self.request.user,
             Notification.NotificationType.NEW_EXPENSE,
-            'Янги харажат',
-            f'{expense.get_category_display()}: {expense.amount}',
+            title_key='notifications.new_expense',
+            message_key='notifications.msg_new_expense',
+            params={
+                'category_key': f'expense_categories.{expense.category}',
+                'amount': str(expense.amount),
+            },
         )
         write_audit_log(
             action=AuditLog.Action.CREATE,

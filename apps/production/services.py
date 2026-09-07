@@ -264,8 +264,13 @@ def confirm_work(
     notify(
         work.worker,
         Notification.NotificationType.WORK_CONFIRMED,
-        'Иш тасдиқланди',
-        f'Иш #{work.id} тасдиқланди: {product.name if product else ""} x {work.quantity}',
+        title_key='notifications.work_confirmed',
+        message_key='notifications.msg_work_confirmed',
+        params={
+            'id': work.id,
+            'product': (product.name if product else ''),
+            'qty': str(work.quantity),
+        },
         task=work.task,
     )
     write_audit_log(
@@ -304,11 +309,14 @@ def reject_work(work, rejected_by, reason, request=None):
             task.order.status = task.order.Status.IN_PROGRESS
             task.order.save(update_fields=['status'])
 
+    # Причину пишет человек — её не переводим, показываем как есть.
     notify(
         work.worker,
         Notification.NotificationType.WORK_REJECTED,
-        'Иш рад этилди',
-        reason or f'Иш #{work.id} рад этилди',
+        message=reason or None,
+        title_key='notifications.work_rejected',
+        message_key=(None if reason else 'notifications.msg_work_rejected'),
+        params={'id': work.id},
         task=work.task,
     )
     write_audit_log(

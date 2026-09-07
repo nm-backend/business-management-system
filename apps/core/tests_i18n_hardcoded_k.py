@@ -207,3 +207,55 @@ class NoHardcodedUiTextTests(SimpleTestCase):
             'Текст интерфейса зашит в шаблоне вместо locale/*.json:\n  '
             + '\n  '.join(offenders),
         )
+
+
+class NoHardcodedNotificationTextTests(SimpleTestCase):
+    """
+    Тексты уведомлений тоже интерфейс: они должны приходить из locale/*.json
+    на языке получателя, а не строкой из кода.
+
+    Раньше бизнес-события уведомляли всегда по-узбекски, а события подписки —
+    всегда по-русски, независимо от языка пользователя.
+    """
+
+    # Функции, чьи текстовые аргументы попадают пользователю на экран.
+    USER_FACING_CALLS = {'notify', 'notify_staff', 'send_push_to_user', '_notify_owner'}
+
+    def test_notification_calls_use_locale_keys(self):
+        import ast
+
+        root = Path(settings.BASE_DIR) / 'apps'
+        offenders = []
+        for path in sorted(root.rglob('*.py')):
+            if 'tests' in path.name or 'migrations' in path.parts:
+                continue
+            tree = ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = getattr(func, 'id', None) or getattr(func, 'attr', None)
+                if name not in self.USER_FACING_CALLS:
+                    continue
+                # Определение самой функции пропускаем — там нет литералов.
+                values = list(node.args) + [kw.value for kw in node.keywords]
+                for value in values:
+                    literals = []
+                    if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                        literals.append(value.value)
+                    elif isinstance(value, ast.JoinedStr):  # f-строка
+                        literals += [
+                            part.value for part in value.values
+                            if isinstance(part, ast.Constant) and isinstance(part.value, str)
+                        ]
+                    for literal in literals:
+                        for match in CYRILLIC_RUN.findall(literal):
+                            offenders.append(
+                                f'{path.relative_to(settings.BASE_DIR)}:{value.lineno} '
+                                f'— {name}(… «{match}» …)'
+                            )
+        self.assertFalse(
+            offenders,
+            'Текст уведомления зашит в коде — используйте title_key/message_key '
+            'или core.utils.translate(key, user.language):\n  ' + '\n  '.join(offenders),
+        )

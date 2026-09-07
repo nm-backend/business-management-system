@@ -55,8 +55,9 @@ class Command(BaseCommand):
                 recipients = notify_staff(
                     order.company_id,
                     Notification.NotificationType.OVERDUE_DEBT,
-                    'Қарз муддати ўтди',
-                    f'Буюртма #{order.id}, мижоз: {order.client.name}',
+                    title_key='notifications.overdue_debt',
+                    message_key='notifications.msg_overdue_debt',
+                    params={'id': order.id, 'client': order.client.name},
                     order=order,
                 )
                 created += len(recipients)
