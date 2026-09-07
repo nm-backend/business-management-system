@@ -21,6 +21,7 @@ from apps.orders.models import Order
 from apps.production.models import WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
 from core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAdminOrManager
+from core.utils import translate
 
 # Service layer — all calculations
 from .services import (
@@ -30,6 +31,22 @@ from .services import (
     get_quarterly_report_data,
     _quarter_bounds,
 )
+
+
+def _lang(request):
+    """
+    Язык получателя отчёта.
+
+    По ТЗ отчёты и экспорты локализованы: заголовки и шапки таблиц брались
+    из кода (жёстко по-узбекски) независимо от языка пользователя.
+    """
+    return getattr(request.user, 'language', None) or 'uz_cyrl'
+
+
+def _report_title(request, key):
+    """«SkladPro.Nod — <название отчёта>» на языке пользователя."""
+    lang = _lang(request)
+    return f"{translate('app.name', lang)} - {translate(key, lang)}"
 
 
 def _parse_period(request):
@@ -88,7 +105,7 @@ class RevenueTimelineView(APIView):
     permission_classes = [IsCompanyMember, IsOwner]
 
     def get(self, request):
-        return Response(get_revenue_timeline_data(request.user.company_id))
+        return Response(get_revenue_timeline_data(request.user.company_id, _lang(request)))
 
 
 class AdminAnalyticsView(APIView):
@@ -256,30 +273,32 @@ class OwnerFinanceExportView(APIView):
     def get(self, request):
         date_from, date_to = _parse_period(request)
         data = get_owner_analytics_data(request.user.company_id, date_from, date_to)
+        lang = _lang(request)
+        t = lambda key: translate(key, lang)  # noqa: E731 — короткая локальная обёртка
         rows = [
-            ['Кўрсаткич', 'Қиймат'],
-            ['Давр', f"{date_from} - {date_to}"],
-            ['Даромад', data['revenue']],
-            ['Таннарх', data['cost_of_goods']],
-            ['Ялпи фойда', data['gross_profit']],
-            ['Харажатлар', data['expenses_total']],
-            ['Иш ҳақилар', data['salaries']],
+            [t('export.col_indicator'), t('export.col_value')],
+            [t('export.col_period'), f"{date_from} - {date_to}"],
+            [t('finance.revenue'), data['revenue']],
+            [t('finance.cost_of_goods'), data['cost_of_goods']],
+            [t('finance.gross_profit'), data['gross_profit']],
+            [t('finance.expenses'), data['expenses_total']],
+            [t('finance.salaries'), data['salaries']],
             # Выплаты работникам — отдельный отток (не Expense): без этой строки
             # «Харажатлар» + «Иш ҳақилар» не сходились с «Соф фойда», которая их
             # вычитает (см. owner_analytics_data: net_profit = revenue - cogs -
             # expenses - worker_payments).
-            ['Ишчиларга тўловлар', data['worker_payments']],
-            ['Солиқлар', data['taxes']],
-            ['Йўқотишлар', data['losses']],
-            ['Эгаси чиқими', data['owner_withdrawal']],
-            ['Соф фойда', data['net_profit']],
-            ['Касса', data['cash']],
-            ['Мижозлар қарзи', data['client_debts']],
-            ['Ишчилар қарзи', data['worker_debts']],
-            ['Буюртмалар', data['orders_count']],
+            [t('export.worker_payments'), data['worker_payments']],
+            [t('finance.taxes'), data['taxes']],
+            [t('finance.losses'), data['losses']],
+            [t('finance.owner_withdrawal'), data['owner_withdrawal']],
+            [t('finance.net_profit'), data['net_profit']],
+            [t('finance.cash_in_register'), data['cash']],
+            [t('finance.client_debts'), data['client_debts']],
+            [t('finance.worker_debts'), data['worker_debts']],
+            [t('export.orders_count'), data['orders_count']],
         ]
         if request.query_params.get('format') == 'pdf':
-            return pdf_response('SkladPro.Nod - Молиявий ҳисобот', rows, 'finance-report.pdf')
+            return pdf_response(_report_title(request, 'export.report_finance'), rows, 'finance-report.pdf')
         if request.query_params.get('format') == 'csv':
             return csv_response(rows, 'finance-report.csv')
         return xlsx_response(rows, 'finance-report.xlsx', 'Finance')
@@ -291,21 +310,27 @@ class AdminStockExportView(APIView):
 
     def get(self, request):
         company_id = request.user.company_id
-        rows = [['Номи', 'Тури', 'Миқдор', 'Бирлик', 'Мин. қолдиқ', 'Етишмайди']]
+        lang = _lang(request)
+        t = lambda key: translate(key, lang)  # noqa: E731
+        yes = t('export.yes')
+        rows = [[
+            t('export.col_name'), t('export.col_type'), t('export.col_quantity'),
+            t('export.col_unit'), t('export.col_min_stock'), t('export.col_is_low'),
+        ]]
         for m in RawMaterial.objects.filter(company_id=company_id, is_archived=False).order_by('name'):
             rows.append([
-                m.name, m.stone_type, m.quantity, m.get_unit_display(),
-                m.min_stock, 'Ха' if m.is_low_stock else '',
+                m.name, m.stone_type, m.quantity, t(f'units.{m.unit}'),
+                m.min_stock, yes if m.is_low_stock else '',
             ])
         rows.append([])
-        rows.append(['Тайёр маҳсулот', '', '', '', '', ''])
+        rows.append([t('export.section_finished'), '', '', '', '', ''])
         for p in FinishedProduct.objects.filter(company_id=company_id, is_archived=False).order_by('name'):
             rows.append([
-                p.name, p.category, p.quantity, p.get_unit_display(),
-                p.min_stock, 'Ха' if p.is_low_stock else '',
+                p.name, p.category, p.quantity, t(f'units.{p.unit}'),
+                p.min_stock, yes if p.is_low_stock else '',
             ])
         if request.query_params.get('format') == 'pdf':
-            return pdf_response('SkladPro.Nod - Омбор қолдиқлари', rows, 'stock-report.pdf')
+            return pdf_response(_report_title(request, 'export.report_stock'), rows, 'stock-report.pdf')
         if request.query_params.get('format') == 'csv':
             return csv_response(rows, 'stock-report.csv')
         return xlsx_response(rows, 'stock-report.xlsx', 'Stock')
@@ -317,14 +342,20 @@ class AdminOrdersExportView(APIView):
 
     def get(self, request):
         is_owner = request.user.is_owner
-        rows = [['#', 'Мижоз', 'Маҳсулот', 'Миқдор', 'Ҳолат', 'Тўлов', 'Муддат']]
+        lang = _lang(request)
+        t = lambda key: translate(key, lang)  # noqa: E731
+        rows = [[
+            t('export.col_number'), t('export.col_client'), t('export.col_product'),
+            t('export.col_quantity'), t('export.col_status'), t('export.col_payment'),
+            t('export.col_deadline'),
+        ]]
         # Колонка долга — только для владельца: суммы (total_amount, paid_amount)
         # администратору не видны нигде в системе, и в отчёте их быть не должно.
         # Раньше в экспорте не было и для владельца — «сколько клиент ещё
         # должен по этому заказу» приходилось считать вручную из двух других
         # отчётов. Долг = сумма заказа минус фактически оплаченное.
         if is_owner:
-            rows[0].append('Қарз')
+            rows[0].append(t('export.col_debt'))
         orders = Order.objects.filter(
             company_id=request.user.company_id, is_archived=False,
         ).select_related('client', 'product')
@@ -340,14 +371,14 @@ class AdminOrdersExportView(APIView):
             row = [
                 o.id, o.client.name,
                 o.product.name if o.product else o.custom_product_name,
-                o.quantity, o.get_status_display(), o.get_payment_status_display(),
+                o.quantity, t(f'statuses.{o.status}'), t(f'payment_statuses.{o.payment_status}'),
                 o.deadline.date() if o.deadline else '',
             ]
             if is_owner:
                 row.append(o.total_amount - (paid_by_order.get(o.id) or 0))
             rows.append(row)
         if request.query_params.get('format') == 'pdf':
-            return pdf_response('SkladPro.Nod - Буюртмалар', rows, 'orders-report.pdf')
+            return pdf_response(_report_title(request, 'export.report_orders'), rows, 'orders-report.pdf')
         if request.query_params.get('format') == 'csv':
             return csv_response(rows, 'orders-report.csv')
         return xlsx_response(rows, 'orders-report.xlsx', 'Orders')
@@ -366,9 +397,14 @@ class AdminWorkExportView(APIView):
     def get(self, request):
         company_id = request.user.company_id
         is_owner = request.user.is_owner
-        rows = [['Ишчи', 'Тасдиқланган ишлар', 'Умумий миқдор']]
+        lang = _lang(request)
+        t = lambda key: translate(key, lang)  # noqa: E731
+        rows = [[
+            t('export.col_worker'), t('export.col_confirmed_works'),
+            t('export.col_total_quantity'),
+        ]]
         if is_owner:
-            rows[0].append('Начислено')
+            rows[0].append(t('export.col_accrued'))
         qs = (
             WorkRecord.objects.filter(company_id=company_id, status=WorkRecord.WorkStatus.CONFIRMED)
             .values(worker_username=F('worker__username'), worker_full_name=F('worker__full_name'))
@@ -386,7 +422,7 @@ class AdminWorkExportView(APIView):
                 line.append(row.get('labor') or 0)
             rows.append(line)
         if request.query_params.get('format') == 'pdf':
-            return pdf_response('SkladPro.Nod - Ишчилар иши', rows, 'work-report.pdf')
+            return pdf_response(_report_title(request, 'export.report_work'), rows, 'work-report.pdf')
         if request.query_params.get('format') == 'csv':
             return csv_response(rows, 'work-report.csv')
         return xlsx_response(rows, 'work-report.xlsx', 'Work')
@@ -400,7 +436,12 @@ class ExportReportAPIView(APIView):
         report_type = request.query_params.get('report_type')
         if report_type == 'material_shortage':
             company_id = request.user.company_id
-            rows = [['Номи', 'Тури', 'Миқдор', 'Бирлик', 'Мин. қолдиқ', 'Камомад']]
+            lang = _lang(request)
+            t = lambda key: translate(key, lang)  # noqa: E731
+            rows = [[
+                t('export.col_name'), t('export.col_type'), t('export.col_quantity'),
+                t('export.col_unit'), t('export.col_min_stock'), t('export.col_shortage'),
+            ]]
             # Считаем по ДОСТУПНОМУ остатку (минус потребность под заказы), как
             # карточка склада (is_low_stock): иначе материал «в норме» по
             # физическому остатку, но целиком требуемый под заказы, не попадает
@@ -409,12 +450,12 @@ class ExportReportAPIView(APIView):
                 company_id=company_id, is_archived=False,
             ).annotate(available=F('quantity') - F('required_for_orders')).filter(available__lt=F('min_stock')).order_by('name'):
                 rows.append([
-                    m.name, m.stone_type, m.quantity, m.get_unit_display(),
+                    m.name, m.stone_type, m.quantity, t(f'units.{m.unit}'),
                     m.min_stock, m.min_stock - m.available
                 ])
             format_type = request.query_params.get('format_type', 'xlsx')
             if format_type == 'pdf':
-                return pdf_response('SkladPro.Nod - Материал етишмовчилиги', rows, 'shortage-report.pdf')
+                return pdf_response(_report_title(request, 'export.report_shortage'), rows, 'shortage-report.pdf')
             if format_type == 'csv':
                 return csv_response(rows, 'shortage-report.csv')
             return xlsx_response(rows, 'shortage-report.xlsx', 'Shortage')

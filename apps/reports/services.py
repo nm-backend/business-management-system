@@ -21,6 +21,7 @@ from apps.finance.models import Expense, ExpenseCategory, WorkerPayment
 from apps.orders.models import Order
 from apps.production.models import WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
+from core.utils import translate
 
 
 # ── Typed dicts for return values ────────────────────────────────────────────
@@ -490,8 +491,13 @@ def get_admin_operational_analytics(company_id: int) -> AdminAnalyticsData:
 
 # ── Revenue timeline (6-month chart data) ────────────────────────────────────
 
-def get_revenue_timeline_data(company_id: int) -> RevenueTimelineData:
-    """Monthly revenue and net profit for the last 6 months (chart data)."""
+def get_revenue_timeline_data(company_id: int, lang: str = 'uz_cyrl') -> RevenueTimelineData:
+    """
+    Monthly revenue and net profit for the last 6 months (chart data).
+
+    lang: язык подписей месяцев. Раньше они были захардкожены в коде и
+    приходили одинаковыми во всех языках интерфейса.
+    """
     today = timezone.localdate()
     six_months_ago = today - datetime.timedelta(days=180)
 
@@ -577,16 +583,11 @@ def get_revenue_timeline_data(company_id: int) -> RevenueTimelineData:
     months = sorted(months_set, reverse=True)[:6]
     months.reverse()
 
-    MONTH_NAMES: dict[int, str] = {
-        1: 'Янв', 2: 'Фев', 3: 'Мар', 4: 'Апр', 5: 'Май', 6: 'Июн',
-        7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек',
-    }
-
     labels: list[str] = []
     revenues: list[Decimal | int] = []
     net_profits: list[Decimal | int] = []
     for m in months:
-        label = f"{MONTH_NAMES.get(m.month, m.month)}'{str(m.year)[2:]}"
+        label = f"{translate(f'months_short.{m.month}', lang)}'{str(m.year)[2:]}"
         labels.append(label)
         rev = rev_map.get(m, 0)
         exp = exp_map.get(m, 0)

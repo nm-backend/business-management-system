@@ -259,3 +259,46 @@ class NoHardcodedNotificationTextTests(SimpleTestCase):
             'Текст уведомления зашит в коде — используйте title_key/message_key '
             'или core.utils.translate(key, user.language):\n  ' + '\n  '.join(offenders),
         )
+
+
+class NoHardcodedReportTextTests(SimpleTestCase):
+    """
+    Отчёты и экспорты (PDF/Excel/CSV) — тоже пользовательский текст.
+
+    Шапки таблиц и заголовки отчётов должны приходить из locale/*.json на
+    языке владельца/администратора, а не из строк в apps/reports.
+    """
+
+    def test_report_module_has_no_ui_literals(self):
+        import ast
+
+        root = Path(settings.BASE_DIR) / 'apps' / 'reports'
+        offenders = []
+        for path in sorted(root.glob('*.py')):
+            # apps.py/admin.py/models.py — подписи Django-админки (интерфейс
+            # суперадмина, он русскоязычный), проверяем слой отчётов.
+            if path.name.startswith('tests') or path.name in {'apps.py', 'admin.py', 'models.py'}:
+                continue
+            tree = ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+            # Докстринги — документация, не интерфейс: собираем их, чтобы пропустить.
+            docstrings = set()
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    doc = ast.get_docstring(node, clean=False)
+                    if doc:
+                        docstrings.add(doc)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                    continue
+                if node.value in docstrings:
+                    continue
+                for match in CYRILLIC_RUN.findall(node.value):
+                    offenders.append(
+                        f'{path.relative_to(settings.BASE_DIR)}:{node.lineno} — «{match}»'
+                    )
+        self.assertFalse(
+            offenders,
+            'Текст отчёта зашит в коде вместо locale/*.json '
+            '(используйте core.utils.translate(key, user.language)):\n  '
+            + '\n  '.join(offenders),
+        )

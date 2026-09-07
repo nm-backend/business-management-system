@@ -210,14 +210,19 @@ class EndToEndReconciliationTests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.content[:200])
         self.assertEqual(resp['Content-Type'], 'text/csv; charset=utf-8')
         body = resp.content.decode('utf-8', 'replace').replace(' ', '')
-        for label, value in (
-            ('Даромад', '70000'),       # revenue
-            ('Таннарх', '5500'),        # COGS
-            ('Соффойда', '52500'),      # net profit
-            ('Касса', '58000'),         # cash
-            ('Мижозларқарзи', '30000'),  # client debt
-            ('Ишчиларқарзи', '3000'),    # worker debt
+        # Ярлыки берём из локали: с локализацией отчётов они больше не зашиты
+        # в коде экспорта и зависят от языка пользователя.
+        from core.utils import translate
+        lang = self.owner.language or 'uz_cyrl'
+        for key, value in (
+            ('finance.revenue', '70000'),
+            ('finance.cost_of_goods', '5500'),
+            ('finance.net_profit', '52500'),
+            ('finance.cash_in_register', '58000'),
+            ('finance.client_debts', '30000'),
+            ('finance.worker_debts', '3000'),
         ):
+            label = translate(key, lang).replace(' ', '')
             self.assertIn(f'{label};{value}', body, f'в CSV нет {label};{value}')
 
         # XLSX: те же числа в ячейках (парсим openpyxl).
@@ -230,11 +235,11 @@ class EndToEndReconciliationTests(TestCase):
         for row in sheet.iter_rows(values_only=True):
             if row and row[0] is not None:
                 cells[str(row[0])] = row[1]
-        # Ключи совпадают с CSV (по тексту отчёта).
-        self.assertEqual(str(cells.get('Даромад')), '70000')
-        self.assertEqual(str(cells.get('Таннарх')), '5500')
-        self.assertEqual(str(cells.get('Соф фойда')), '52500')
-        self.assertEqual(str(cells.get('Касса')), '58000')
+        # Ключи совпадают с CSV (по тексту отчёта на языке пользователя).
+        self.assertEqual(str(cells.get(translate('finance.revenue', lang))), '70000')
+        self.assertEqual(str(cells.get(translate('finance.cost_of_goods', lang))), '5500')
+        self.assertEqual(str(cells.get(translate('finance.net_profit', lang))), '52500')
+        self.assertEqual(str(cells.get(translate('finance.cash_in_register', lang))), '58000')
 
         # PDF: 200 + content-type (числа не парсим — тот же rows-источник).
         resp = self.api.get(EXPORT, {'format': 'pdf'})
