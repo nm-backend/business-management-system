@@ -55,6 +55,20 @@ class LaborRateSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
+class LaborRateNoMoneySerializer(LaborRateSerializer):
+    """
+    Ставка БЕЗ суммы — для администратора (и менеджера).
+
+    По ТЗ администратору запрещена «зарплата работников в деньгах», но список
+    операций ему нужен: он оформляет и подтверждает работы. Поэтому отдаём
+    товар, операцию и единицу, а rate_per_unit убираем на уровне сервера, а не
+    прячем во фронтенде.
+    """
+
+    class Meta(LaborRateSerializer.Meta):
+        fields = [f for f in LaborRateSerializer.Meta.fields if f != 'rate_per_unit']
+
+
 class LaborRateCreateSerializer(serializers.ModelSerializer):
     """Сериализатор для создания ставки оплаты труда."""
     class Meta:

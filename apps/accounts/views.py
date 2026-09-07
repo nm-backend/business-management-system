@@ -60,29 +60,33 @@ class SetupCheckView(APIView):
         AllowAny - доступен без аутентификации
 
     Возвращает:
-        {'setup_required': bool} - True если владелец еще не создан
+        {'setup_required': bool} - True только на полностью пустой базе
     """
     permission_classes = [AllowAny]
     authentication_classes = []  # публичный эндпоинт: без сессии/CSRF
 
     def get(self, request):
         """
-        Проверяет, существует ли платформенный супер-администратор.
+        Первичная настройка нужна, только пока в системе НЕТ пользователей.
+
+        Раньше проверялось лишь наличие супер-администратора: компания с
+        владельцем и работниками, но без платформенного супер-админа,
+        считалась «ненастроенной», и публичный setup оставался открыт.
 
         Возвращает:
             Response с {'setup_required': True/False}
         """
-        superadmin_exists = User.objects.filter(role=User.Role.SUPERADMIN).exists()
-        return Response({'setup_required': not superadmin_exists})
+        return Response({'setup_required': not User.objects.exists()})
 
 
 class SetupOwnerView(APIView):
     """
-    API для создания владельца системы (начальная настройка).
+    API первичной настройки: создание платформенного супер-администратора.
 
-    Используется только при первом запуске для создания первого
-    пользователя с ролью owner. После создания владельца этот endpoint
-    блокируется.
+    Работает ТОЛЬКО на полностью пустой базе (в системе нет ни одного
+    пользователя) — это разовый bootstrap свежего развёртывания, а не
+    регистрация. Публичной регистрации в SkladPro.Nod нет: аккаунты
+    владельца, администратора и работника создаются внутри системы.
 
     Endpoint: POST /api/v1/accounts/setup/owner/
 
@@ -127,7 +131,10 @@ class SetupOwnerView(APIView):
                 # с разными username оба проходят проверку «суперадмина ещё
                 # нет» и создают двух суперадминов.
                 SetupGate.objects.select_for_update().get(pk=1)
-                if User.objects.filter(role=User.Role.SUPERADMIN).exists():
+                # Любой существующий пользователь закрывает bootstrap: иначе
+                # в компании без супер-админа посторонний мог создать себе
+                # платформенный аккаунт через публичный эндпоинт.
+                if User.objects.exists():
                     return Response(
                         {'error': 'Setup is already complete.'},
                         status=status.HTTP_403_FORBIDDEN,

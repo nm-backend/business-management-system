@@ -26,6 +26,7 @@ from core.utils import translate
 # Service layer — all calculations
 from .services import (
     get_owner_analytics_data,
+    get_quarterly_operational_report,
     get_admin_operational_analytics,
     get_revenue_timeline_data,
     get_quarterly_report_data,
@@ -106,6 +107,43 @@ class RevenueTimelineView(APIView):
 
     def get(self, request):
         return Response(get_revenue_timeline_data(request.user.company_id, _lang(request)))
+
+
+class QuarterlyReportView(APIView):
+    """
+    GET /api/v1/reports/analytics/quarterly/?year=2026&quarter=3
+
+    Квартальный отчёт в двух вариантах, как требует ТЗ:
+      * владелец — финансовый (выручка, себестоимость, прибыль, расходы);
+      * администратор — операционный, без единой денежной цифры.
+
+    Раньше квартальный расчёт существовал только в services и наружу не
+    выходил: фронтенд собирал квартал сам из шести обычных периодов, а
+    администратору квартальный отчёт был недоступен вовсе.
+    """
+    permission_classes = [IsCompanyMember, IsOwnerOrAdminOrManager]
+
+    def get(self, request):
+        today = datetime.date.today()
+        year = parse_int_param(request.query_params.get('year', today.year), 'year')
+        quarter = parse_int_param(
+            request.query_params.get('quarter', (today.month - 1) // 3 + 1), 'quarter',
+        )
+        if quarter < 1 or quarter > 4:
+            raise ValidationError({'quarter': 'Quarter must be 1..4'})
+        if year < 2000 or year > today.year + 1:
+            raise ValidationError({'year': 'Year is out of range'})
+
+        company_id = request.user.company_id
+        if request.user.is_owner:
+            data = get_quarterly_report_data(company_id, year, quarter)
+            data['kind'] = 'financial'
+            return Response(data)
+
+        # Администратор и менеджер: только операционные показатели.
+        data = get_quarterly_operational_report(company_id, year, quarter)
+        data['kind'] = 'operational'
+        return Response(data)
 
 
 class AdminAnalyticsView(APIView):

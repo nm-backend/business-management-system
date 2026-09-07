@@ -21,7 +21,8 @@ from apps.production.models import WorkRecord
 from .models import Expense, LaborRate, WorkerPayment
 from .serializers import (
     ExpenseSerializer, ExpenseCreateSerializer,
-    LaborRateSerializer, LaborRateCreateSerializer,
+    LaborRateSerializer,
+    LaborRateNoMoneySerializer, LaborRateCreateSerializer,
     WorkerPaymentSerializer, WorkerPaymentCreateSerializer
 )
 from apps.core.views import CompanyScopedViewSet
@@ -146,10 +147,17 @@ class LaborRateViewSet(CompanyScopedViewSet):
 
     def get_serializer_class(self):
         """
-        Возвращает сериализатор в зависимости от действия.
+        Сериализатор по действию и роли.
+
+        Администратор и менеджер получают ставку без суммы: список операций им
+        нужен для оформления работ, а деньги по ТЗ им недоступны.
         """
         if self.action == 'create':
             return LaborRateCreateSerializer
+        user = getattr(self.request, 'user', None)
+        if not getattr(self, 'swagger_fake_view', False) and user is not None:
+            if getattr(user, 'is_admin', False) or getattr(user, 'is_manager', False):
+                return LaborRateNoMoneySerializer
         return LaborRateSerializer
 
     def get_queryset(self):

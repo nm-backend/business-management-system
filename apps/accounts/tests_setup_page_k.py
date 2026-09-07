@@ -6,11 +6,11 @@
 существует (выдавать некому), поэтому свежий деплой было НЕ ОТКРЫТЬ вообще.
 Воспроизведено на проде.
 
-СТАЛО (как задумано): страница входа доступна всегда. Сам вход — только
-логин/пароль (по ТЗ самостоятельной регистрации нет, аккаунты создаёт
-владелец), а активация по выданному коду доступа живёт на отдельной странице
-/accounts/setup/. Платформенный супер-администратор создаётся командой
-`manage.py createsuperuser`, коды доступа сотрудникам выдаются из админки.
+СТАЛО (как задумано): страница входа доступна всегда и даёт два способа
+ВОЙТИ — логин/пароль или ключ доступа, выданный владельцем/администратором.
+Публичной регистрации нет (см. tests_login_page_k). Платформенный
+супер-администратор создаётся командой `manage.py createsuperuser`, коды
+доступа сотрудникам выдаются из админки и раздела управления аккаунтами.
 """
 from django.test import TestCase
 
@@ -30,15 +30,15 @@ class EmptyDatabaseEntryTests(TestCase):
         resp = self.client.get(LOGIN_PAGE)
         self.assertEqual(resp.status_code, 200)
 
-    def test_login_page_offers_only_credentials(self):
+    def test_login_page_offers_both_ways_in(self):
         html = self.client.get(LOGIN_PAGE).content.decode()
-        # Вход — это только логин/пароль.
+        # 1) логин/пароль
         self.assertIn('id="login-form"', html)
         self.assertIn('id="username"', html)
         self.assertIn('id="password"', html)
-        # Создания/активации аккаунта на входе быть не должно.
-        self.assertNotIn('id="access-key-panel"', html)
-        self.assertNotIn('id="show-access-key"', html)
+        # 2) ключ доступа (аккаунт уже создан владельцем/администратором)
+        self.assertIn('id="access-key-panel"', html)
+        self.assertIn('id="show-access-key"', html)
 
     def test_key_activation_page_opens_with_empty_database(self):
         resp = self.client.get(KEY_PAGE)

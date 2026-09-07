@@ -655,3 +655,56 @@ def get_quarterly_report_data(
         'total_worker_payments': total_worker_payments,
         'total_net_profit': total_revenue - total_cogs - total_expenses - total_worker_payments,
     }
+
+
+def get_quarterly_operational_report(
+    company_id: int,
+    year: int,
+    quarter: int,
+) -> dict[str, Any]:
+    """
+    Квартальный ОПЕРАЦИОННЫЙ отчёт — вариант для администратора.
+
+    По ТЗ квартальный отчёт есть у обеих ролей, но администратору деньги
+    недоступны: здесь только количества (заказы, производство, брак,
+    выполнившие работники). Раньше квартальный отчёт существовал единственный
+    — финансовый, поэтому администратору его нельзя было показать вообще.
+    """
+    date_from, date_to = _quarter_bounds(year, quarter)
+
+    orders = Order.objects.filter(
+        company_id=company_id,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+    )
+    works = WorkRecord.objects.filter(
+        company_id=company_id,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+    )
+    confirmed = works.filter(status=WorkRecord.WorkStatus.CONFIRMED)
+
+    produced = confirmed.aggregate(total=Sum('quantity'))['total'] or 0
+    defects = confirmed.aggregate(total=Sum('defect_quantity'))['total'] or 0
+
+    return {
+        'year': year,
+        'quarter': quarter,
+        'date_from': date_from,
+        'date_to': date_to,
+        'orders_total': orders.count(),
+        'orders_delivered': orders.filter(status=Order.Status.DELIVERED).count(),
+        'orders_cancelled': orders.filter(status=Order.Status.CANCELLED).count(),
+        'orders_overdue': orders.filter(deadline__date__lt=date_to).exclude(
+            status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED),
+        ).count(),
+        'works_total': works.count(),
+        'works_confirmed': confirmed.count(),
+        'works_rejected': works.filter(status=WorkRecord.WorkStatus.REJECTED).count(),
+        'works_awaiting': works.filter(
+            status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION,
+        ).count(),
+        'produced_quantity': produced,
+        'defect_quantity': defects,
+        'workers': _finalize_worker_totals(confirmed),
+    }
