@@ -29,6 +29,10 @@ class TaskSerializer(serializers.ModelSerializer):
     worker_name = serializers.SerializerMethodField()
     assigned_by_name = serializers.CharField(source='assigned_by.username', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
+    # Чертёж отдаём абсолютной ссылкой + исходным именем файла: в интерфейсе
+    # показывается «Чизма.pdf», а не сгенерированный путь в media.
+    attachment = serializers.FileField(read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
 
     def get_order_product(self, obj):
         if not obj.order:
@@ -45,6 +49,8 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order', 'order_id', 'order_product', 'worker', 'worker_name',
             'assigned_by', 'assigned_by_name', 'status',
+            'title', 'description', 'deadline', 'workshop', 'size', 'thickness',
+            'attachment', 'attachment_name', 'is_overdue',
             'refusal_reason', 'refusal_comment',
             'assigned_at', 'accepted_at', 'completed_at',
             'confirmed_at', 'confirmed_by', 'confirmed_by_name',
@@ -54,16 +60,53 @@ class TaskSerializer(serializers.ModelSerializer):
         # (accept/refuse/cancel/confirm) и perform_create, а не прямым PATCH.
         read_only_fields = [
             'status', 'worker', 'order', 'assigned_by', 'confirmed_by',
-            'is_self_assigned',
+            'is_self_assigned', 'attachment_name',
             'assigned_at', 'accepted_at', 'completed_at', 'confirmed_at',
         ]
 
 
 class TaskCreateSerializer(serializers.ModelSerializer):
-    """Сериализатор для создания задачи."""
+    """
+    Сериализатор для создания задачи.
+
+    Помимо связки «заказ + работник» принимает постановку из макета
+    «Вазифа юбериш»: название, описание, срок, цех, размер, толщина и
+    чертёж (multipart). Раньше этих данных не было вовсе.
+    """
     class Meta:
         model = Task
-        fields = ['order', 'worker', 'is_self_assigned']
+        fields = [
+            'order', 'worker', 'is_self_assigned',
+            'title', 'description', 'deadline', 'workshop', 'size', 'thickness',
+            'attachment',
+        ]
+
+    def validate_deadline(self, value):
+        """Срок в прошлом — почти всегда опечатка в дате, задача сразу просрочена."""
+        from django.utils import timezone
+        if value and value < timezone.now():
+            raise serializers.ValidationError('Срок выполнения не может быть в прошлом.')
+        return value
+
+    def validate(self, attrs):
+        """
+        Назначенная задача без заказа должна хотя бы называться.
+
+        Иначе работник получает пустую карточку «Вазифа #12» без единого
+        слова о том, что делать. Самостоятельную работу работника это не
+        касается: он сам знает, что взял, а содержание опишет при сдаче.
+        """
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if attrs.get('is_self_assigned') or getattr(user, 'is_worker', False):
+            return attrs
+        order = attrs.get('order')
+        title = (attrs.get('title') or '').strip()
+        if not order and not title:
+            raise serializers.ValidationError({
+                'title': 'Укажите название задачи или свяжите её с заказом.',
+            })
+        return attrs
 
 
 class _ConfirmedWorkGuardMixin:

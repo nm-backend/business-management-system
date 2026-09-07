@@ -58,13 +58,14 @@ class ProductionComponent {
             contentEl.innerHTML = tasks.map((t) => `
                 <div class="card">
                     <div class="card-title" style="margin-bottom:4px;">
-                        <span>#${t.id} ${window.ui.escape(t.order_product || '')}</span>
+                        <span>#${t.id} ${window.ui.escape(t.title || t.order_product || '')}</span>
                         ${window.ui.workBadge(t.status)}
                     </div>
                     <div class="text-sm text-muted">
                         ${user.is_worker ? '' : `<span data-i18n="production.worker"></span>: ${window.ui.escape(t.worker_name)} · `}
                         ${window.ui.datetime(t.assigned_at)}
                     </div>
+                    ${this.taskDetails(t)}
                     ${t.refusal_reason ? `<div class="text-sm text-danger" style="margin-top:6px;">✕ <span data-i18n="refusal_reasons.${t.refusal_reason}"></span> ${window.ui.escape(t.refusal_comment || '')}</div>` : ''}
                     ${user.is_worker && t.status === 'pending' ? `
                         <div style="display:flex;gap:10px;margin-top:12px;">
@@ -113,6 +114,43 @@ class ProductionComponent {
                     </a>`).join('')}
                 ${rest > 0 ? `<span class="work-photo-more">+${rest}</span>` : ''}
             </div>`;
+    }
+
+    /**
+     * Постановка задачи в карточке: описание, срок, цех, размеры, чертёж.
+     *
+     * Эти поля появились по макетам «Вазифа юбориш» / «Вазифа тафсилоти» —
+     * раньше работник видел только номер задачи и товар из заказа и шёл
+     * уточнять детали устно. Пустые поля не рисуем, чтобы карточка старой
+     * задачи выглядела как раньше.
+     */
+    taskDetails(t) {
+        const rows = [];
+        if (t.description) {
+            rows.push(`<div class="text-sm" style="margin-top:6px;">${window.ui.escape(t.description)}</div>`);
+        }
+        const facts = [];
+        if (t.deadline) {
+            facts.push(`<span data-i18n="production.task_deadline"></span>: ${window.ui.datetime(t.deadline)}`);
+        }
+        if (t.workshop) facts.push(`<span data-i18n="production.workshop"></span>: ${window.ui.escape(t.workshop)}`);
+        if (t.size) facts.push(`<span data-i18n="production.task_size"></span>: ${window.ui.escape(t.size)}`);
+        if (t.thickness) facts.push(`<span data-i18n="production.task_thickness"></span>: ${window.ui.escape(t.thickness)}`);
+        if (facts.length) {
+            rows.push(`<div class="text-sm text-muted" style="margin-top:6px;">${facts.join(' · ')}</div>`);
+        }
+        if (t.attachment) {
+            rows.push(`
+                <div class="text-sm" style="margin-top:6px;">
+                    📎 <a href="${window.ui.escape(t.attachment)}" target="_blank" rel="noopener">
+                        ${window.ui.escape(t.attachment_name || window.ui.t('production.task_attachment'))}
+                    </a>
+                </div>`);
+        }
+        if (t.is_overdue) {
+            rows.push(`<div class="text-sm text-danger" style="margin-top:6px;">⏰ <span data-i18n="production.overdue"></span></div>`);
+        }
+        return rows.join('');
     }
 
     async loadWorks() {

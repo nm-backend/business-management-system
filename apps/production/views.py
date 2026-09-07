@@ -43,6 +43,17 @@ class ReadAfterCreateMixin(CreateModelMixin):
         return Response(read_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
+def _attachment_name(serializer):
+    """
+    Исходное имя загруженного чертежа.
+
+    Django переименовывает файл при коллизии («Chizma_x7Fk2.pdf»), поэтому
+    показываемое имя храним отдельно — как у вложений чата.
+    """
+    uploaded = serializer.validated_data.get('attachment')
+    return getattr(uploaded, 'name', '') or ''
+
+
 class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
     """Задачи работников: назначение, принятие, отказ."""
     queryset = Task.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
@@ -111,9 +122,11 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
                              'задачу без привязки к заказу.',
                 })
             task = serializer.save(company=user.company, worker=user, assigned_by=user,
-                                   is_self_assigned=True, status=TaskStatus.ACCEPTED)
+                                   is_self_assigned=True, status=TaskStatus.ACCEPTED,
+                                   attachment_name=_attachment_name(serializer))
         else:
-            task = serializer.save(company=user.company, assigned_by=user)
+            task = serializer.save(company=user.company, assigned_by=user,
+                                   attachment_name=_attachment_name(serializer))
             if task.order:
                 task.order.worker = task.worker
                 task.order.status = task.order.Status.SENT_TO_WORKER

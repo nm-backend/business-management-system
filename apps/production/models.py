@@ -10,7 +10,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from apps.core.models import TimestampedModel
-from apps.core.validators import validate_file_size
+from apps.core.validators import validate_attachment_extension, validate_file_size
 from apps.finance.models import LaborRate
 from apps.warehouse.models import UnitChoices
 
@@ -66,6 +66,14 @@ class Task(TimestampedModel):
 
     Поля:
         order: ForeignKey - связанный заказ
+        title: CharField - название задачи (макет «Вазифа юбориш»)
+        description: TextField - что именно нужно сделать
+        deadline: DateTimeField - срок выполнения задачи
+        workshop: CharField - цех (Цех-1 / Цех-2)
+        size: CharField - размер изделия (2000×600)
+        thickness: DecimalField - толщина изделия, мм
+        attachment: FileField - чертёж/эскиз
+        attachment_name: CharField - исходное имя файла вложения
         worker: ForeignKey - назначенный работник
         assigned_by: ForeignKey - кто назначил задачу
         status: CharField - статус задачи
@@ -90,6 +98,30 @@ class Task(TimestampedModel):
     """
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='tasks', null=True, verbose_name='Компания')
     order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='tasks', null=True, blank=True, verbose_name='Заказ')
+    # ── Постановка задачи (макеты «Вазифа юбориш» / «Вазифа тафсилоти») ──
+    # Раньше задача состояла только из заказа и работника: что именно делать,
+    # к какому сроку, в каком цехе и по какому чертежу — работник узнавал
+    # устно. Задача без заказа (самостоятельная работа) вообще не имела
+    # описания.
+    title = models.CharField(max_length=200, blank=True, default='', verbose_name='Название задачи')
+    description = models.TextField(blank=True, default='', verbose_name='Описание')
+    deadline = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name='Срок выполнения')
+    workshop = models.CharField(max_length=100, blank=True, default='', verbose_name='Цех')
+    # Размер и толщина изделия: в макете стоят прямо в карточке задачи,
+    # потому что у одного товара бывают разные габариты под заказ.
+    size = models.CharField(max_length=100, blank=True, default='', verbose_name='Размер изделия')
+    thickness = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Толщина, мм',
+    )
+    attachment = models.FileField(
+        upload_to='tasks/attachments/%Y/%m/', blank=True, null=True,
+        validators=[validate_file_size, validate_attachment_extension],
+        verbose_name='Вложение (чертёж)',
+    )
+    attachment_name = models.CharField(
+        max_length=255, blank=True, default='', verbose_name='Имя файла вложения',
+    )
     worker = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='tasks', verbose_name='Работник')
     assigned_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, related_name='assigned_tasks', verbose_name='Кем назначено')
     status = models.CharField(max_length=20, choices=TaskStatus.choices, default=TaskStatus.PENDING, db_index=True, verbose_name='Статус')
@@ -128,6 +160,23 @@ class Task(TimestampedModel):
         Возвращает информацию о задаче с работником и статусом.
         """
         return f"Task #{self.id} - {self.worker.username} ({self.get_status_display()})"
+
+    @property
+    def is_overdue(self):
+        """
+        Срок вышел, а задача ещё не сдана.
+
+        Считаем по собственному сроку задачи (deadline), а если он не задан —
+        по сроку заказа: работник видит красную отметку там же, где её видит
+        админ в списке заказов.
+        """
+        from django.utils import timezone
+        deadline = self.deadline or (self.order.deadline if self.order else None)
+        if not deadline:
+            return False
+        if self.status in (TaskStatus.COMPLETED, TaskStatus.CONFIRMED, TaskStatus.CANCELLED):
+            return False
+        return deadline < timezone.now()
 
     def accept(self):
         """Работник принимает задачу; связанный заказ переходит в 'принят работником'."""
