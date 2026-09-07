@@ -116,30 +116,34 @@ class ClientsComponent {
                 <span class="text-sm font-bold text-success">+${window.ui.money(p.amount)}</span>
             </div>`).join('');
 
-        const modal = window.ui.modal('clients.title', `
+        const modal = window.ui.modal(c.name, `
             ${c.has_debt ? `<div class="alert-box">⚠️ <span data-i18n="clients.not_paid_warning"></span></div>` : ''}
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
-                ${row('clients.name', window.ui.escape(c.name))}
-                ${row('clients.phone', window.ui.escape(c.phone || ''))}
-                ${row('clients.address', window.ui.escape(c.address || ''))}
-                ${user.is_owner ? row('clients.total_amount', window.ui.money(c.total_orders_amount)) : ''}
-                ${user.is_owner ? row('clients.paid', window.ui.money(c.total_paid)) : ''}
-                ${user.is_owner ? row('clients.debt', window.ui.money(c.debt), c.has_debt) : ''}
-                ${user.is_owner ? row('clients.profit',
-                    `<span class="${Number(c.profit) < 0 ? 'text-danger' : ''}" style="${Number(c.profit) >= 0 ? 'color:var(--success-color);' : ''}">${window.ui.money(c.profit)}</span>`,
-                    Number(c.profit) < 0) : ''}
-                ${row('common.status', `<span class="badge ${c.has_debt ? 'badge-cancel' : 'badge-ready'}" data-i18n="payment_statuses.${c.has_debt ? 'unpaid' : 'paid'}"></span>`)}
-                ${row('warehouse.comment', window.ui.escape(c.comment || ''))}
+            <div style="display:flex;gap:4px;margin-bottom:12px;" class="tabs" id="client-detail-tabs">
+                <button class="tab-btn active" data-client-tab="info" data-i18n="clients.info"></button>
+                <button class="tab-btn" data-client-tab="orders" data-i18n="clients.orders"></button>
+                ${user.is_owner ? `<button class="tab-btn" data-client-tab="payments" data-i18n="clients.payment_history"></button>` : ''}
+                ${user.is_owner ? `<button class="tab-btn" data-client-tab="debts" data-i18n="clients.debts"></button>` : ''}
             </div>
-            ${user.is_owner && payments ? `
-                <div class="section-title" data-i18n="clients.payment_history"></div>
-                <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">${payments}</div>` : ''}
+            <div id="client-tab-content">
+                <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+                    ${row('clients.name', window.ui.escape(c.name))}
+                    ${row('clients.phone', window.ui.escape(c.phone || ''))}
+                    ${row('clients.address', window.ui.escape(c.address || ''))}
+                    ${user.is_owner ? row('clients.total_amount', window.ui.money(c.total_orders_amount)) : ''}
+                    ${user.is_owner ? row('clients.paid', window.ui.money(c.total_paid)) : ''}
+                    ${user.is_owner ? row('clients.debt', window.ui.money(c.debt), c.has_debt) : ''}
+                    ${user.is_owner ? row('clients.profit',
+                        `<span class="${Number(c.profit) < 0 ? 'text-danger' : ''}" style="${Number(c.profit) >= 0 ? 'color:var(--success-color);' : ''}">${window.ui.money(c.profit)}</span>`,
+                        Number(c.profit) < 0) : ''}
+                    ${row('common.status', `<span class="badge ${c.has_debt ? 'badge-cancel' : 'badge-ready'}" data-i18n="payment_statuses.${c.has_debt ? 'unpaid' : 'paid'}"></span>`)}
+                    ${row('warehouse.comment', window.ui.escape(c.comment || ''))}
+                </div>
+            </div>
             <div style="display:flex;gap:10px;margin-top:14px;">
                 ${canEdit ? `<button class="btn btn-secondary btn-sm" id="edit-client" style="flex:1;" data-i18n="common.edit"></button>` : ''}
-                <button class="btn btn-primary btn-sm" id="client-orders" style="flex:1;" data-i18n="clients.orders"></button>
+                ${canEdit ? `<button class="btn btn-secondary btn-sm btn-block" id="archive-client" style="margin-top:10px;"
+                    data-i18n="${c.is_archived ? 'common.restore' : 'common.archive'}"></button>` : ''}
             </div>
-            ${canEdit ? `<button class="btn btn-secondary btn-sm btn-block" id="archive-client" style="margin-top:10px;"
-                data-i18n="${c.is_archived ? 'common.restore' : 'common.archive'}"></button>` : ''}
         `);
 
         const editBtn = modal.querySelector('#edit-client');
@@ -147,13 +151,54 @@ class ClientsComponent {
             window.ui.closeModal(modal);
             this.openForm(c);
         });
-        modal.querySelector('#client-orders').addEventListener('click', () => {
-            // Окно закроет сам роутер на смене адреса. Закрывать его здесь
-            // нельзя: history.back() из closeModal откатывал переход обратно.
-            // Раньше открывались ВСЕ заказы — чтобы увидеть долг клиента,
-            // его приходилось выискивать глазами в общем списке. Теперь
-            // список сразу отфильтрован по клиенту.
-            window.router.navigate(`/orders?client=${c.id}`);
+        // Client detail tabs
+        modal.querySelectorAll('[data-client-tab]').forEach(tab => {
+            tab.addEventListener('click', () => {
+                modal.querySelectorAll('[data-client-tab]').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const tabName = tab.dataset.clientTab;
+                const contentEl = modal.querySelector('#client-tab-content');
+                if (tabName === 'orders') {
+                    window.router.navigate(`/orders?client=${c.id}`);
+                    return;
+                }
+                if (tabName === 'payments') {
+                    contentEl.innerHTML = `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">${payments || '<div class="text-sm text-muted" style="padding:12px;text-align:center;">' + window.ui.t('common.no_data') + '</div>'}</div>`;
+                } else if (tabName === 'debts') {
+                    const debtInfo = c.has_debt ? 
+                        `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+                            <div class="list-row" style="cursor:default;">
+                                <span class="text-sm text-muted" data-i18n="clients.total_amount"></span>
+                                <span class="text-sm font-bold">${window.ui.money(c.total_orders_amount)}</span>
+                            </div>
+                            <div class="list-row" style="cursor:default;">
+                                <span class="text-sm text-muted" data-i18n="clients.paid"></span>
+                                <span class="text-sm font-bold text-success">${window.ui.money(c.total_paid)}</span>
+                            </div>
+                            <div class="list-row" style="cursor:default;">
+                                <span class="text-sm text-muted" data-i18n="clients.debt"></span>
+                                <span class="text-sm font-bold text-danger">${window.ui.money(c.debt)}</span>
+                            </div>
+                        </div>` : 
+                        `<div class="text-sm text-muted" style="padding:12px;text-align:center;">✅ ${window.ui.t('clients.no_debt')}</div>`;
+                    contentEl.innerHTML = debtInfo;
+                } else {
+                    contentEl.innerHTML = `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+                        ${row('clients.name', window.ui.escape(c.name))}
+                        ${row('clients.phone', window.ui.escape(c.phone || ''))}
+                        ${row('clients.address', window.ui.escape(c.address || ''))}
+                        ${window.currentUser.is_owner ? row('clients.total_amount', window.ui.money(c.total_orders_amount)) : ''}
+                        ${window.currentUser.is_owner ? row('clients.paid', window.ui.money(c.total_paid)) : ''}
+                        ${window.currentUser.is_owner ? row('clients.debt', window.ui.money(c.debt), c.has_debt) : ''}
+                        ${window.currentUser.is_owner ? row('clients.profit',
+                            `<span class="${Number(c.profit) < 0 ? 'text-danger' : ''}" style="${Number(c.profit) >= 0 ? 'color:var(--success-color);' : ''}">${window.ui.money(c.profit)}</span>`,
+                            Number(c.profit) < 0) : ''}
+                        ${row('common.status', `<span class="badge ${c.has_debt ? 'badge-cancel' : 'badge-ready'}" data-i18n="payment_statuses.${c.has_debt ? 'unpaid' : 'paid'}"></span>`)}
+                        ${row('warehouse.comment', window.ui.escape(c.comment || ''))}
+                    </div>`;
+                }
+                window.i18n.applyTranslations();
+            });
         });
         // Вкладка «Архив» была только на чтение: убрать клиента в архив или
         // вернуть его оттуда из интерфейса было нечем.

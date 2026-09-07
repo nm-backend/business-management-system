@@ -39,6 +39,7 @@ class WarehouseComponent {
                     <div class="font-bold" id="summary-value"></div>
                 </div>` : ''}
             </div>
+            <div id="stone-type-tabs" class="tabs" role="tablist" aria-label="Stone type filters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
             <div class="search-box search-box--with-action">
                 <div class="search-field">
                     <span class="search-icon" aria-hidden="true">🔍</span>
@@ -114,7 +115,9 @@ class WarehouseComponent {
             scanBtn.addEventListener('click', () => this.openBarcodeScanner());
         }
 
+        this.stoneTypeFilter = '';
         window.i18n.applyTranslations();
+        await this.loadStoneTypes();
         await this.loadMaterials();
         this.loadSummary();
     }
@@ -299,6 +302,37 @@ class WarehouseComponent {
         });
     }
 
+    async loadStoneTypes() {
+        const tabsEl = document.getElementById('stone-type-tabs');
+        if (!tabsEl) return;
+        try {
+            const response = await window.api.request('/warehouse/raw-materials/?is_archived=false&page_size=500');
+            const materials = response.results || [];
+            const typeCounts = {};
+            materials.forEach(m => {
+                const type = m.stone_type || 'Другое';
+                typeCounts[type] = (typeCounts[type] || 0) + 1;
+            });
+            const types = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+            tabsEl.innerHTML = [
+                `<button class="tab-btn ${!this.stoneTypeFilter ? 'active' : ''}" data-stone-type="">Все (${materials.length})</button>`,
+                ...types.map(([type, count]) => 
+                    `<button class="tab-btn ${this.stoneTypeFilter === type ? 'active' : ''}" data-stone-type="${window.ui.escape(type)}">${window.ui.escape(type)} (${count})</button>`
+                )
+            ].join('');
+            tabsEl.querySelectorAll('[data-stone-type]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    this.stoneTypeFilter = btn.dataset.stoneType;
+                    tabsEl.querySelectorAll('[data-stone-type]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    this.loadMaterials();
+                });
+            });
+        } catch (e) {
+            tabsEl.innerHTML = '';
+        }
+    }
+
     async loadMaterials() {
         const listEl = document.getElementById('materials-list');
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
@@ -309,7 +343,10 @@ class WarehouseComponent {
             let query = `?is_archived=${this.tab === 'archive'}`;
             if (this.search) query += `&search=${encodeURIComponent(this.search)}`;
             const response = await window.api.request(`/warehouse/raw-materials/${query}`);
-            const materials = response.results || response;
+            let materials = response.results || [];
+            if (this.stoneTypeFilter) {
+                materials = materials.filter(m => m.stone_type === this.stoneTypeFilter);
+            }
 
             if (!materials.length) {
                 const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
@@ -343,7 +380,7 @@ class WarehouseComponent {
         return `
             <div class="list-row" role="button" tabindex="0" data-id="${m.id}">
                 <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-                    <div class="thumb">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="">` : '🪨'}</div>
+                    <div class="thumb">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML='🪨'">` : '🪨'}</div>
                     <div style="min-width:0;">
                         <div style="font-size:14px;font-weight:600;">${window.ui.escape(m.name)}</div>
                         <div class="text-sm text-muted">${window.ui.escape([m.stone_type, m.size].filter(Boolean).join(' · ') || '-')}</div>
@@ -363,7 +400,7 @@ class WarehouseComponent {
         const canEdit = user.is_owner || user.is_admin;
         const modal = window.ui.modal('warehouse.title', `
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-                <div class="thumb" style="width:56px;height:56px;">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="">` : '🪨'}</div>
+                <div class="thumb" style="width:56px;height:56px;">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML='🪨'">` : '🪨'}</div>
                 <div>
                     <div style="font-weight:600;font-size:16px;">${window.ui.escape(m.name)}</div>
                     <div class="text-sm text-muted">${window.ui.escape(m.stone_type || '')}</div>

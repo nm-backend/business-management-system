@@ -691,14 +691,33 @@ class MessagesComponent {
                 return;
             }
             const unread = notifications.filter((n) => !n.is_read).length;
-            const groups = this.groupByDay(notifications);
+            const read = notifications.filter((n) => n.is_read).length;
+            this.notificationFilter = this.notificationFilter || 'all';
+            const filterTabs = `
+                <div class="tabs" id="notif-filter-tabs" style="margin-bottom:10px;gap:4px;">
+                    <button class="tab-btn ${this.notificationFilter === 'all' ? 'active' : ''}" data-notif-filter="all">Все (${notifications.length})</button>
+                    <button class="tab-btn ${this.notificationFilter === 'unread' ? 'active' : ''}" data-notif-filter="unread">Непрочитанные (${unread})</button>
+                    <button class="tab-btn ${this.notificationFilter === 'read' ? 'active' : ''}" data-notif-filter="read">Прочитанные (${read})</button>
+                </div>`;
+            let filtered = notifications;
+            if (this.notificationFilter === 'unread') filtered = notifications.filter(n => !n.is_read);
+            else if (this.notificationFilter === 'read') filtered = notifications.filter(n => n.is_read);
+            const groups = this.groupByDay(filtered);
             el.innerHTML = `
+                ${filterTabs}
                 ${unread ? `<button class="btn btn-secondary btn-sm btn-block" id="mark-all-read" style="margin-bottom:12px;" data-i18n="messages_section.mark_all_read"></button>` : ''}
                 ${groups.map((g) => `
                     <div class="section-title">${window.ui.escape(g.label)}</div>
                     <div class="list-group">
                         ${g.items.map((n) => this.renderNotification(n)).join('')}
                     </div>`).join('')}`;
+            // Filter tab click handlers
+            el.querySelectorAll('[data-notif-filter]').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    this.notificationFilter = tab.dataset.notifFilter;
+                    this.loadNotifications();
+                });
+            });
             el.querySelectorAll('[data-notif-id]').forEach((row) => {
                 const open = () => this.openNotification(row.dataset.notifId);
                 row.addEventListener('click', open);

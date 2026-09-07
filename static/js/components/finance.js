@@ -30,6 +30,7 @@ class FinanceComponent {
                 <button class="tab-btn" data-tab="expenses" role="tab" aria-selected="false" data-i18n="finance.expenses"></button>
                 <button class="tab-btn" data-tab="payments" role="tab" aria-selected="false" data-i18n="nav.worker_payments"></button>
                 <button class="tab-btn" data-tab="rates" role="tab" aria-selected="false" data-i18n="finance.labor_rates"></button>
+                <button class="tab-btn" data-tab="quarterly" role="tab" aria-selected="false">Квартал</button>
             </div>
             <div id="finance-content" role="tabpanel" aria-live="polite"></div>
         `;
@@ -53,8 +54,60 @@ class FinanceComponent {
             expenses: () => this.loadExpenses(),
             payments: () => this.loadPayments(),
             rates: () => this.loadRates(),
+            quarterly: () => this.loadQuarterly(),
         };
         return map[this.tab]();
+    }
+
+    async loadQuarterly() {
+        const el = this.contentEl;
+        if (window.listStates.gone(el)) return;
+        window.listStates.loading(el, window.ui.t('common.loading'));
+        try {
+            const now = new Date();
+            const quarters = [];
+            for (let i = 0; i < 4; i++) {
+                const year = now.getFullYear() - Math.floor(i / 4);
+                const quarter = 4 - (i % 4);
+                const startMonth = (quarter - 1) * 3;
+                const endMonth = startMonth + 2;
+                const start = `${year}-${String(startMonth + 1).padStart(2, '0')}-01`;
+                const end = new Date(year, endMonth + 1, 0);
+                const endStr = `${year}-${String(endMonth + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+                quarters.push({ label: `${quarter} квартал ${year}`, start, end: endStr });
+            }
+            let rows = '';
+            for (const q of quarters) {
+                try {
+                    const data = await window.api.request(`/reports/analytics/owner/?period=custom&start=${q.start}&end=${q.end}`);
+                    rows += `
+                        <tr>
+                            <td style="padding:8px;border-bottom:1px solid var(--border);">${q.label}</td>
+                            <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.revenue || 0)}</td>
+                            <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.cogs || 0)}</td>
+                            <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;color:${Number(data.net_profit) >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${window.ui.money(data.net_profit || 0)}</td>
+                        </tr>`;
+                } catch (e) {
+                    rows += `<tr><td style="padding:8px;border-bottom:1px solid var(--border);">${q.label}</td><td colspan="3" style="padding:8px;border-bottom:1px solid var(--border);text-align:center;">—</td></tr>`;
+                }
+            }
+            el.innerHTML = `
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="background:var(--bg-secondary);">
+                                <th style="padding:8px;text-align:left;">Квартал</th>
+                                <th style="padding:8px;text-align:right;">Выручка</th>
+                                <th style="padding:8px;text-align:right;">COGS</th>
+                                <th style="padding:8px;text-align:right;">Прибыль</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        } catch (e) {
+            window.listStates.error(el, window.ui.t('common.error'), () => this.loadQuarterly());
+        }
     }
 
     get contentEl() {
