@@ -2,6 +2,16 @@
 {% load static %}
 
 {% block content %}
+{#
+   Экран входа (макет «Кириш»): ТОЛЬКО логин и пароль.
+
+   Здесь раньше жила вторая панель — «У меня есть ключ доступа»: ввод кода,
+   установка пароля и активация аккаунта. По ТЗ аккаунтов ровно три типа
+   (Эгаси / Администратор / Ишчи) и создаёт их владелец, самостоятельной
+   регистрации нет — поэтому создание/активация учётной записи убрана со
+   страницы входа. Активация по выданному коду осталась на отдельной
+   странице /accounts/setup/, ссылку на неё сотрудник получает от владельца.
+#}
 <div style="display: flex; justify-content: center; align-items: center; min-height: 90vh;">
     <div class="card" style="width: 100%; max-width: 400px; padding: 32px 28px; text-align: center;">
         <!-- Brand mark -->
@@ -25,44 +35,17 @@
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
             </form>
-            <button type="button" id="show-access-key" class="btn btn-block login-secondary-btn" data-i18n="auth.have_access_key"></button>
 
             <div class="login-trust" role="note">
                 <p class="login-trust-row">
                     <span class="login-trust-icon" aria-hidden="true">🔒</span>
-                    <span data-i18n="auth.trust_secure">Ваши данные защищены</span>
+                    <span data-i18n="auth.trust_secure"></span>
                 </p>
                 <p class="login-trust-row">
                     <span class="login-trust-icon" aria-hidden="true">💬</span>
-                    <span data-i18n="auth.trust_support">Проблемы со входом? Обратитесь к администратору</span>
+                    <span data-i18n="auth.trust_support"></span>
                 </p>
             </div>
-        </div>
-
-        <!-- Access Key panel -->
-        <div id="access-key-panel" style="display: none;">
-            <p class="text-sm text-muted" style="margin-bottom: 16px;" data-i18n="auth.access_key_hint"></p>
-
-            <form id="ak-verify-form">
-                <div class="form-group" style="text-align: left;">
-                    <label data-i18n="auth.access_key"></label>
-                    <input type="text" id="ak-code" class="form-control" placeholder="SKP-XXXX-XXXX-XXXX"
-                           autocomplete="one-time-code" required style="text-transform: uppercase; letter-spacing: 1px;">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.continue"></button>
-            </form>
-
-            <form id="ak-redeem-form" style="display: none;">
-                <p id="ak-welcome" style="margin-bottom: 12px; font-weight: 600; color: var(--primary);"></p>
-                <div class="form-group" style="text-align: left;">
-                    <label data-i18n="auth.set_password"></label>
-                    <input type="password" id="ak-password" class="form-control" required minlength="8"
-                           autocomplete="new-password">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.activate"></button>
-            </form>
-
-            <button type="button" id="show-login" class="btn btn-block login-secondary-btn" data-i18n="auth.back_to_login"></button>
         </div>
 
         <div style="margin-top: 24px;">
@@ -85,8 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
     langSelect.addEventListener('change', (e) => window.i18n.setLanguage(e.target.value));
 
     const errorMsg = document.getElementById('error-message');
-    const loginPanel = document.getElementById('login-panel');
-    const akPanel = document.getElementById('access-key-panel');
     const showError = (msg) => { errorMsg.textContent = msg; errorMsg.style.display = 'flex'; };
     const clearError = () => { errorMsg.style.display = 'none'; };
 
@@ -113,67 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             showError(error.data?.detail || t('auth.login_error'));
             btn.disabled = false;
-        }
-    });
-
-    // ── Toggle panels ──
-    document.getElementById('show-access-key').addEventListener('click', (e) => {
-        e.preventDefault(); clearError();
-        loginPanel.style.display = 'none'; akPanel.style.display = 'block';
-    });
-    document.getElementById('show-login').addEventListener('click', (e) => {
-        e.preventDefault(); clearError();
-        akPanel.style.display = 'none'; loginPanel.style.display = 'block';
-    });
-
-    // ── Access Key: step 1 ──
-    const verifyForm = document.getElementById('ak-verify-form');
-    const redeemForm = document.getElementById('ak-redeem-form');
-    verifyForm.addEventListener('submit', async (e) => {
-        e.preventDefault(); clearError();
-        const vBtn = e.target.querySelector('button[type=submit]');
-        if (vBtn.disabled) return;
-        vBtn.disabled = true;
-        const code = document.getElementById('ak-code').value.trim().toUpperCase();
-        try {
-            const resp = await window.api.request('/accounts/access-key/verify/', {
-                method: 'POST', noAuth: true, body: JSON.stringify({ access_key: code }),
-            });
-            if (!resp.valid) { showError(t('auth.access_key_invalid')); return; }
-            document.getElementById('ak-welcome').textContent =
-                `${t('auth.welcome')}, ${resp.employee.full_name} — ${resp.employee.company}`;
-            verifyForm.style.display = 'none';
-            redeemForm.style.display = 'block';
-            document.getElementById('ak-password').focus();
-        } catch (error) {
-            showError(t('auth.access_key_invalid'));
-        } finally {
-            vBtn.disabled = false;
-        }
-    });
-
-    // ── Access Key: step 2 ──
-    redeemForm.addEventListener('submit', async (e) => {
-        e.preventDefault(); clearError();
-        const rBtn = e.target.querySelector('button[type=submit]');
-        if (rBtn.disabled) return;
-        rBtn.disabled = true;
-        const code = document.getElementById('ak-code').value.trim().toUpperCase();
-        const password = document.getElementById('ak-password').value;
-        try {
-            const fpr = window.api.getFingerprint();
-            const resp = await window.api.request('/accounts/access-key/redeem/', {
-                method: 'POST', noAuth: true,
-                body: JSON.stringify({ access_key: code, new_password: password, fingerprint: fpr }),
-            });
-            window.api.setTokens(resp.tokens.access, resp.tokens.refresh);
-            window.location.href = '/';
-        } catch (error) {
-            const detail = error.data?.detail
-                || (error.data?.new_password && error.data.new_password[0])
-                || t('auth.access_key_invalid');
-            showError(detail);
-            rBtn.disabled = false;
         }
     });
 });
