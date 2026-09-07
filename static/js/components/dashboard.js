@@ -148,7 +148,50 @@ class DashboardComponent {
         const clientDebtsCard = container.querySelector('#client-debts-card');
         if (clientDebtsCard) clientDebtsCard.addEventListener('click', () => window.router.navigate('/clients'));
 
+        // Лента операций кассы
+        this.renderCashFeed(container);
         this.renderRevenueChart(container, data);
+    }
+
+    /** Лента операций кассы (для владельца) */
+    async renderCashFeed(container) {
+        try {
+            const [expensesResp, paymentsResp] = await Promise.all([
+                window.api.request('/finance/expenses/?page_size=5'),
+                window.api.request('/finance/worker-payments/?page_size=5'),
+            ]);
+            const expenses = (expensesResp.results || expensesResp).slice(0, 5);
+            const payments = (paymentsResp.results || paymentsResp).slice(0, 5);
+            // Объединяем и сортируем по дате
+            const operations = []
+                .concat(expenses.map(e => ({ type: 'expense', date: e.date, amount: -e.amount, desc: window.ui.t('expense_categories.' + e.category) })))
+                .concat(payments.map(p => ({ type: 'payment', date: p.payment_date, amount: -p.amount, desc: window.ui.t('payment_types.' + p.payment_type) + ': ' + (p.worker_name || '') })))
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .slice(0, 7);
+            if (!operations.length) return;
+            const wrap = document.createElement('div');
+            wrap.innerHTML = `
+                <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>Касса операциялари</span>
+                    <a href="#/finance" class="text-sm" style="color:var(--primary);">Барчаси ›</a>
+                </div>
+                <div class="list-group list-group-compact">
+                    ${operations.map(op => `
+                        <div class="list-row" style="cursor:default;">
+                            <div style="min-width:0;">
+                                <div style="font-weight:600;font-size:14px;">${window.ui.escape(op.desc)}</div>
+                                <div class="text-sm text-muted">${window.ui.date(op.date)}</div>
+                            </div>
+                            <span class="font-bold" style="color:var(--danger-color);">${window.ui.money(op.amount)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            container.appendChild(wrap);
+            window.i18n.applyTranslations();
+        } catch (e) {
+            // Лента некритична
+        }
     }
 
     /** Выработка работника: с единицей измерения, а при разных единицах — разбивкой (складывать нельзя). */

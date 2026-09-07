@@ -398,24 +398,55 @@ class WarehouseComponent {
     openDetail(m) {
         const user = window.currentUser;
         const canEdit = user.is_owner || user.is_admin;
+        // Количество: Жами колдик, Резерв, Ёш вазн
+        const totalQty = m.quantity || 0;
+        const reservedQty = m.reserved_quantity || 0;
+        const availableQty = m.available_quantity || 0;
+        const minStock = m.min_stock || 0;
+        const maxStock = m.max_stock || totalQty * 1.3;
+        const lowStock = m.is_low_stock;
+        const statusBadge = m.is_archived 
+            ? `<span class="badge badge-cancel">Архив</span>` 
+            : (lowStock ? `<span class="badge badge-warning">Критик</span>` : `<span class="badge badge-ready">Актив</span>`);
+        
         const modal = window.ui.modal('warehouse.title', `
+            ${m.photo ? `<div style="margin:-20px -20px 14px;border-radius:12px;overflow:hidden;height:180px;background:var(--bg-secondary);">
+                <img src="${window.ui.escape(m.photo)}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;font-size:48px;\'>🪨</div>'">
+            </div>` : ''}
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
                 <div class="thumb" style="width:56px;height:56px;">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML='🪨'">` : '🪨'}</div>
-                <div>
+                <div style="flex:1;min-width:0;">
                     <div style="font-weight:600;font-size:16px;">${window.ui.escape(m.name)}</div>
-                    <div class="text-sm text-muted">${window.ui.escape(m.stone_type || '')}</div>
+                    <div class="text-sm text-muted">${window.ui.escape(m.stone_type || '')} · ${window.ui.escape(m.color || '')}</div>
+                </div>
+                ${statusBadge}
+            </div>
+            <!-- Разбивка количества по макету -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+                <div class="card" style="margin:0;padding:10px;${lowStock ? 'border-color:var(--danger-color);' : ''}">
+                    <div class="text-sm text-muted">Жами колдик</div>
+                    <div style="font-weight:700;font-size:18px;${lowStock ? 'color:var(--danger-color);' : ''}">${window.ui.qty(totalQty)} <span data-i18n="units.${m.unit}"></span></div>
+                </div>
+                <div class="card" style="margin:0;padding:10px;">
+                    <div class="text-sm text-muted">Минимум</div>
+                    <div style="font-weight:700;font-size:18px;">${window.ui.qty(minStock)} <span data-i18n="units.${m.unit}"></span></div>
+                </div>
+                <div class="card" style="margin:0;padding:10px;">
+                    <div class="text-sm text-muted">Резерв</div>
+                    <div style="font-weight:700;font-size:18px;">${window.ui.qty(reservedQty)} <span data-i18n="units.${m.unit}"></span></div>
+                </div>
+                <div class="card" style="margin:0;padding:10px;">
+                    <div class="text-sm text-muted">Мавжуд</div>
+                    <div style="font-weight:700;font-size:18px;color:var(--success-color);">${window.ui.qty(availableQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
             </div>
+            <!-- Характеристики -->
             <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
-                ${this.detailRow('warehouse.quantity', `${window.ui.qty(m.quantity)} ${window.ui.t('units.' + m.unit)}`, m.is_low_stock)}
-                ${this.detailRow('warehouse.required_for_orders', window.ui.qty(m.required_for_orders))}
-                ${this.detailRow('warehouse.available', window.ui.qty(m.available_quantity))}
-                ${this.detailRow('warehouse.min_stock', window.ui.qty(m.min_stock))}
                 ${this.detailRow('warehouse.barcode', m.barcode)}
-                ${this.detailRow('warehouse.storage_zone', m.storage_zone_display)}
-                ${this.detailRow('warehouse.color', m.color)}
                 ${this.detailRow('warehouse.size', m.size)}
                 ${this.detailRow('warehouse.thickness', m.thickness)}
+                ${this.detailRow('warehouse.color', m.color)}
+                ${this.detailRow('warehouse.storage_zone', m.storage_zone_display)}
                 ${this.detailRow('warehouse.storage_location', m.storage_location)}
                 ${this.detailRow('warehouse.supplier', m.supplier)}
                 ${this.detailRow('warehouse.arrival_date', m.arrival_date ? window.ui.date(m.arrival_date) : '')}
@@ -423,15 +454,19 @@ class WarehouseComponent {
                 ${user.is_owner ? this.detailRow('warehouse.avg_cost', window.ui.money(m.avg_cost_price)) : ''}
                 ${this.detailRow('warehouse.comment', m.comment)}
             </div>
-            ${canEdit ? `
+            <!-- Кнопки действий по макету -->
+            ${canEdit && !m.is_archived ? `
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px;">
+                    <button class="btn btn-success btn-sm" id="income-material" data-i18n="warehouse.incoming"></button>
+                    <button class="btn btn-primary btn-sm" id="edit-material" data-i18n="common.edit"></button>
+                    <button class="btn btn-danger btn-sm" id="outgoing-material" data-i18n="warehouse.outgoing"></button>
+                </div>
+                <button class="btn btn-secondary btn-sm btn-block" id="archive-material" style="margin-top:8px;" data-i18n="common.archive"></button>` 
+                : (canEdit ? `
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
                     <button class="btn btn-secondary btn-sm" id="edit-material" data-i18n="common.edit"></button>
-                    ${m.is_archived ? '' : `<button class="btn btn-success btn-sm" id="income-material" data-i18n="warehouse.incoming"></button>`}
-                    ${m.is_archived ? '' : `<button class="btn btn-danger btn-sm" id="outgoing-material" data-i18n="warehouse.outgoing"></button>`}
-                </div>
-                ${user.is_owner ? `
-                    <button class="btn btn-secondary btn-sm btn-block" id="archive-material" style="margin-top:10px;"
-                        data-i18n="${m.is_archived ? 'common.restore' : 'common.archive'}"></button>` : ''}` : ''}
+                    <button class="btn btn-secondary btn-sm" id="archive-material" data-i18n="common.restore"></button>
+                </div>` : '')}
         `);
 
         if (canEdit) {

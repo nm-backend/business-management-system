@@ -61,6 +61,7 @@ class FinanceComponent {
 
     async loadQuarterly() {
         const el = this.contentEl;
+        if (!el) return;
         if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
@@ -111,11 +112,12 @@ class FinanceComponent {
     }
 
     get contentEl() {
-        return this.container.querySelector('#finance-content');
+        return this.container ? this.container.querySelector('#finance-content') : null;
     }
 
     async loadAnalytics() {
         const el = this.contentEl;
+        if (!el) return;
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
         // больше нет, рисовать некуда.
         if (window.listStates.gone(el)) return;
@@ -220,6 +222,7 @@ class FinanceComponent {
 
     async loadExpenses() {
         const el = this.contentEl;
+        if (!el) return;
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
         // больше нет, рисовать некуда.
         if (window.listStates.gone(el)) return;
@@ -328,6 +331,7 @@ class FinanceComponent {
 
     async loadPayments() {
         const el = this.contentEl;
+        if (!el) return;
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
         // больше нет, рисовать некуда.
         if (window.listStates.gone(el)) return;
@@ -462,6 +466,7 @@ class FinanceComponent {
 
     async loadRates() {
         const el = this.contentEl;
+        if (!el) return;
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
         // больше нет, рисовать некуда.
         if (window.listStates.gone(el)) return;

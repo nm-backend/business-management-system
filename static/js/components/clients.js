@@ -8,7 +8,23 @@ class ClientsComponent {
         this.currentTab = 'active';
         const canEdit = window.currentUser.is_owner || window.currentUser.is_admin;
 
+        // Панель мониторинга долгов для владельца
+        const debtDashboard = window.currentUser.is_owner ? `
+            <div id="debt-monitoring" style="display:none;margin-bottom:14px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                    <div class="card" style="margin:0;padding:12px;border-left:4px solid var(--danger-color);">
+                        <div class="text-sm text-muted">Кардорли мижозлар</div>
+                        <div style="font-weight:700;font-size:20px;color:var(--danger-color);" id="debt-clients-count">0 та</div>
+                    </div>
+                    <div class="card" style="margin:0;padding:12px;border-left:4px solid var(--warning-color, #f59e0b);">
+                        <div class="text-sm text-muted">Жами карз суммаси</div>
+                        <div style="font-weight:700;font-size:20px;color:var(--warning-color, #f59e0b);" id="debt-total-amount">0 сум</div>
+                    </div>
+                </div>
+            </div>` : '';
+
         container.innerHTML = `
+            ${debtDashboard}
             <div class="tabs">
                 <button class="tab-btn active" data-tab="active" data-i18n="clients.active"></button>
                 <button class="tab-btn" data-tab="archive" data-i18n="clients.archive"></button>
@@ -40,7 +56,25 @@ class ClientsComponent {
         }
 
         window.i18n.applyTranslations();
+        await this.loadDebtMonitoring();
         await this.loadClients();
+    }
+
+    /** Панель мониторинга долгов (только для владельца) */
+    async loadDebtMonitoring() {
+        const panel = document.getElementById('debt-monitoring');
+        if (!panel || !window.currentUser.is_owner) return;
+        try {
+            const response = await window.api.request('/clients/clients/?is_archived=false');
+            const clients = response.results || response;
+            const debtClients = clients.filter(c => c.has_debt && c.debt > 0);
+            const totalDebt = debtClients.reduce((sum, c) => sum + (c.debt || 0), 0);
+            panel.style.display = 'block';
+            document.getElementById('debt-clients-count').textContent = `${debtClients.length} та`;
+            document.getElementById('debt-total-amount').textContent = window.ui.money(totalDebt);
+        } catch (e) {
+            // Панель некритична
+        }
     }
 
     async loadClients(search = '') {

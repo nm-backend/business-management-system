@@ -359,7 +359,16 @@ class MessagesComponent {
                 </div>
             </div>
             <div class="chat-messages" id="chat-messages" aria-live="polite"></div>
+            <div id="chat-file-preview" style="display:none;padding:8px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span id="chat-file-icon">📎</span>
+                    <span id="chat-file-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;"></span>
+                    <button id="chat-file-remove" style="background:none;border:none;cursor:pointer;font-size:16px;">✕</button>
+                </div>
+            </div>
             <div class="chat-input">
+                <button class="chat-attach" id="chat-attach" title="Прикрепить файл" style="background:none;border:none;cursor:pointer;padding:6px;font-size:18px;">📎</button>
+                <input type="file" id="chat-file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="display:none;">
                 <textarea id="chat-textarea" rows="1" data-i18n-attr="placeholder" data-i18n="chat.type_message"></textarea>
                 <button class="chat-send" id="chat-send" data-i18n-attr="aria-label" data-i18n="chat.send">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -384,6 +393,34 @@ class MessagesComponent {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); }
         });
         mainEl.querySelector('#chat-send').addEventListener('click', () => this.sendMessage());
+
+        // Обработчики для загрузки файлов
+        this.selectedFile = null;
+        const attachBtn = mainEl.querySelector('#chat-attach');
+        const fileInput = mainEl.querySelector('#chat-file-input');
+        const filePreview = mainEl.querySelector('#chat-file-preview');
+        const fileName = mainEl.querySelector('#chat-file-name');
+        const fileIcon = mainEl.querySelector('#chat-file-icon');
+        const fileRemove = mainEl.querySelector('#chat-file-remove');
+
+        attachBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            this.selectedFile = file;
+            // Показываем превью
+            filePreview.style.display = 'block';
+            fileName.textContent = file.name;
+            // Иконка по типу
+            if (file.type.startsWith('image/')) fileIcon.textContent = '🖼️';
+            else if (file.type === 'application/pdf') fileIcon.textContent = '📄';
+            else fileIcon.textContent = '📎';
+        });
+        fileRemove.addEventListener('click', () => {
+            this.selectedFile = null;
+            fileInput.value = '';
+            filePreview.style.display = 'none';
+        });
 
         await this.loadMessages(id);
         textarea.focus();
@@ -421,23 +458,61 @@ class MessagesComponent {
         const mine = this.isMine(m);
         const conv = this.conversations.find((c) => c.id === this.activeId);
         const showSender = !mine && conv && conv.kind === 'general';
+        // Вложение файла
+        let attachmentHtml = '';
+        if (m.attachment) {
+            const ext = (m.attachment_name || m.attachment.split('.').pop() || '').toLowerCase();
+            const isImage = /^jpg|jpeg|png|gif|webp|svg$/.test(ext);
+            if (isImage) {
+                attachmentHtml = `<div class="msg-attachment" style="margin-top:6px;"><img src="${window.ui.escape(m.attachment)}" alt="" style="max-width:200px;border-radius:8px;cursor:pointer;" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')"></div>`;
+            } else {
+                attachmentHtml = `<div class="msg-attachment" style="margin-top:6px;"><a href="${window.ui.escape(m.attachment)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.15);border-radius:6px;text-decoration:none;color:inherit;font-size:13px;">📎 ${window.ui.escape(m.attachment_name || 'Файл')}</a></div>`;
+            }
+        }
         return `
             <div class="msg ${mine ? 'mine' : 'theirs'}" data-msg="${m.id}">
                 ${showSender ? `<div class="msg-sender">${window.ui.escape(m.sender_name)}</div>` : ''}
-                <span>${window.ui.escape(m.content)}</span><span class="msg-time">${this.shortTime(m.created_at)}</span>
+                ${m.content ? `<span>${window.ui.escape(m.content)}</span>` : ''}
+                ${attachmentHtml}
+                <span class="msg-time">${this.shortTime(m.created_at)}</span>
             </div>`;
     }
 
     async sendMessage() {
         const textarea = this.bodyEl.querySelector('#chat-textarea');
         const content = textarea.value.trim();
-        if (!content || !this.activeId) return;
+        if ((!content && !this.selectedFile) || !this.activeId) return;
         textarea.value = '';
         textarea.style.height = 'auto';
+        const filePreview = this.bodyEl.querySelector('#chat-file-preview');
+        const fileInput = this.bodyEl.querySelector('#chat-file-input');
+        
         try {
-            const msg = await window.api.request('/messaging/messages/', {
-                method: 'POST', body: JSON.stringify({ conversation: this.activeId, content }),
-            });
+            let msg;
+            if (this.selectedFile) {
+                // Отправка с файлом через FormData
+                const formData = new FormData();
+                formData.append('conversation', this.activeId);
+                if (content) formData.append('content', content);
+                formData.append('attachment', this.selectedFile);
+                // Используем fetch напрямую для multipart
+                const tokens = window.api.getTokens();
+                const response = await fetch('/api/v1/messaging/messages/', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${tokens.access}` },
+                    body: formData,
+                });
+                if (!response.ok) throw new Error('Upload failed');
+                msg = await response.json();
+                // Сбрасываем файл
+                this.selectedFile = null;
+                fileInput.value = '';
+                filePreview.style.display = 'none';
+            } else {
+                msg = await window.api.request('/messaging/messages/', {
+                    method: 'POST', body: JSON.stringify({ conversation: this.activeId, content }),
+                });
+            }
             this.appendMessage(msg);
             this.bumpConversation(this.activeId, msg, true);
         } catch (e) {
