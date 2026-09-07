@@ -857,7 +857,8 @@
         "restore": "Архивдан қайтариш",
         "archive_confirm": "Ёзув архивга кўчирилсинми?",
         "copied": "Нусхаланди",
-        "pcs_short": "та"
+        "pcs_short": "та",
+        "no_access_hint": "Бу бўлимга кириш ҳуқуқингиз йўқ"
     },
     "admin_analytics": {
         "title": "Операцион таҳлил",

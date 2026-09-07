@@ -7,7 +7,7 @@ Production models - управление производством и зада�
 from decimal import Decimal
 
 from django.core.validators import MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 from apps.core.models import TimestampedModel
 from apps.core.validators import validate_attachment_extension, validate_file_size
@@ -208,6 +208,7 @@ class Task(TimestampedModel):
             self.order.status = self.order.Status.AWAITING_CONFIRMATION
             self.order.save(update_fields=['status'])
 
+    @transaction.atomic
     def confirm(self, confirmed_by):
         """Администратор/владелец подтверждает задачу; заказ становится готовым.
 
@@ -216,6 +217,13 @@ class Task(TimestampedModel):
         заказ READY, и выдача падала с not_enough_stock — «готов», а товара
         нет. Заказ остаётся в awaiting_confirmation до тех пор, пока партия
         не произведена целиком (повторная сдача доделки переводит в READY).
+
+        Метод сам открывает транзакцию: внутри есть select_for_update, а он в
+        режиме autocommit падает с TransactionManagementError. Раньше это
+        работало лишь потому, что единственный вызывающий (confirm_work) был
+        обёрнут в atomic — любой новый вызов из вьюхи давал бы 500. Вложенный
+        atomic внутри confirm_work превращается в точку сохранения и ничего
+        не стоит.
         """
         from django.utils import timezone
         from apps.warehouse.models import FinishedProduct

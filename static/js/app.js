@@ -111,20 +111,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         link.removeAttribute('aria-current');
     });
 
-    // Маршруты SPA
-    window.router.addRoute('/', window.DashboardComponent);
-    window.router.addRoute('/warehouse', window.WarehouseComponent);
-    window.router.addRoute('/finished-products', window.FinishedProductsComponent);
-    window.router.addRoute('/clients', window.ClientsComponent);
-    window.router.addRoute('/orders', window.OrdersComponent);
-    window.router.addRoute('/orders/kanban', window.KanbanComponent);
-    window.router.addRoute('/production', window.ProductionComponent);
-    window.router.addRoute('/finance', window.FinanceComponent);
-    window.router.addRoute('/messages', window.MessagesComponent);
-    window.router.addRoute('/subscription', window.SubscriptionComponent);
-    window.router.addRoute('/settings', window.SettingsComponent);
-    window.router.addRoute('/audit', window.AuditComponent);
-    window.router.addRoute('/backup', window.SettingsComponent);
+    // Маршруты SPA с ролевой защитой.
+    //
+    // Раньше все маршруты регистрировались всем: пункты меню роль не видела,
+    // но по прямому адресу (#/finance у работника) страница открывалась и
+    // начинала бить в закрытые эндпоинты — пользователь получал сломанный
+    // экран с ошибками вместо честного «нет доступа». Данные при этом не
+    // утекали (сервер отвечает 403), но так вести себя нельзя.
+    //
+    // Список ролей у каждого маршрута совпадает с правами API:
+    //   /finance, /audit  -> IsOwner
+    //   /clients          -> IsOwnerOrAdmin (+ manager на чтение)
+    //   /subscription     -> владелец и администратор компании
+    const forbiddenRoute = function(container) {
+        container.innerHTML = '<div class="card route-error"><p class="eyebrow">403</p>'
+            + '<h1 data-i18n="common.forbidden"></h1>'
+            + '<p data-i18n="common.no_access_hint"></p>'
+            + '<a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard"></a></div>';
+        window.i18n.applyTranslations();
+    };
+    const addGuardedRoute = function(path, component, allowed) {
+        const permitted = allowed === null || allowed.indexOf(user.role) !== -1;
+        window.router.addRoute(path, permitted ? component : forbiddenRoute);
+    };
+
+    addGuardedRoute('/', window.DashboardComponent, null);
+    addGuardedRoute('/warehouse', window.WarehouseComponent, null);
+    addGuardedRoute('/finished-products', window.FinishedProductsComponent, null);
+    addGuardedRoute('/clients', window.ClientsComponent, ['owner', 'admin', 'manager']);
+    addGuardedRoute('/orders', window.OrdersComponent, null);
+    addGuardedRoute('/orders/kanban', window.KanbanComponent, ['owner', 'admin', 'manager']);
+    addGuardedRoute('/production', window.ProductionComponent, null);
+    addGuardedRoute('/finance', window.FinanceComponent, ['owner']);
+    addGuardedRoute('/messages', window.MessagesComponent, null);
+    addGuardedRoute('/subscription', window.SubscriptionComponent, ['owner', 'admin']);
+    addGuardedRoute('/settings', window.SettingsComponent, null);
+    addGuardedRoute('/audit', window.AuditComponent, ['owner']);
+    addGuardedRoute('/backup', window.SettingsComponent, ['owner']);
 
     window.router.handleRoute();
     setupBottomNav(user);

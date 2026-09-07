@@ -857,7 +857,8 @@
         "restore": "Вернуть из архива",
         "archive_confirm": "Убрать запись в архив?",
         "copied": "Скопировано",
-        "pcs_short": "шт."
+        "pcs_short": "шт.",
+        "no_access_hint": "У вас нет доступа к этому разделу"
     },
     "admin_analytics": {
         "title": "Операционная аналитика",

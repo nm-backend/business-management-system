@@ -265,3 +265,6 @@ tempCodeRunnerFile.py
 # Локальный дымовой прогон в песочнице (sqlite вместо Postgres) — не часть проекта.
 preview_settings.py
 preview.sqlite3
+
+# Аудит на локальном PostgreSQL: настройки песочницы, не часть проекта.
+pg_settings.py
