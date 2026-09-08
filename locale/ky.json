@@ -32,7 +32,13 @@
         "access_key_admin_hint": "Кириш кодун администратор же жетекчиңизден алыңыз",
         "trust_secure": "Маалыматтарыңыз корголгон",
         "trust_support": "Кирүүдө көйгөй болсо, администраторго кайрылыңыз",
-        "login_with_key": "Кирүү ачкычы менен кирүү"
+        "login_with_key": "Кирүү ачкычы менен кирүү",
+        "show_password": "Сырсөздү көрсөтүү",
+        "hide_password": "Сырсөздү жашыруу",
+        "signing_in": "Кирүүдө…",
+        "or_divider": "же",
+        "language": "Тил",
+        "set_password_hint": "Кеминде 8 белги"
     },
     "setup": {
         "title": "Системаны жөндөө",
@@ -410,7 +416,12 @@
         "added_date": "Кошулган күнү",
         "active_orders": "Активдүү буйрутмалар",
         "open_all_orders": "Бардык буйрутмалар",
-        "has_debt": "Карызы бар"
+        "has_debt": "Карызы бар",
+        "overdue_control": "Карыз көзөмөлү",
+        "overdue_1_7": "1–7 күн",
+        "overdue_8_14": "8–14 күн",
+        "overdue_15_plus": "15+ күн",
+        "not_due": "Мөөнөтү бар"
     },
     "finance": {
         "title": "Финансылык аналитика",
@@ -451,7 +462,8 @@
         "open_finance": "Финансыга ўтиш",
         "quarterly": "Чейрек",
         "quarter_label": "{quarter}-чейрек {year}",
-        "profitability": "Кирешелүүлүк"
+        "profitability": "Кирешелүүлүк",
+        "client_payment": "Кардар төлөмү"
     },
     "payment_types": {
         "salary": "Эмгек акы",
@@ -936,7 +948,9 @@
         "paid_out": "Төлөнгөн",
         "remaining": "Калганы",
         "payment_history": "Төлөм тарыхы",
-        "material_check": "Материал калдыктары"
+        "material_check": "Материал калдыктары",
+        "this_month": "Ушул ай",
+        "last_month": "Өткөн ай"
     },
     "chat": {
         "title": "Чат",

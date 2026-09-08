@@ -156,16 +156,25 @@ class DashboardComponent {
     /** Лента операций кассы (для владельца) */
     async renderCashFeed(container) {
         try {
-            const [expensesResp, paymentsResp] = await Promise.all([
+            const [expensesResp, paymentsResp, clientPaysResp] = await Promise.all([
                 window.api.request('/finance/expenses/?page_size=5'),
                 window.api.request('/finance/worker-payments/?page_size=5'),
+                window.api.request('/clients/payments/?page_size=5').catch(() => ({ results: [] })),
             ]);
             const expenses = (expensesResp.results || expensesResp).slice(0, 5);
             const payments = (paymentsResp.results || paymentsResp).slice(0, 5);
-            // Объединяем и сортируем по дате
+            const incoming = (clientPaysResp.results || clientPaysResp).slice(0, 5);
+            // Объединяем и сортируем по дате. Приходы клиентов — плюс, расходы
+            // и выплаты работникам — минус (макет ленты кассы).
             const operations = []
                 .concat(expenses.map(e => ({ type: 'expense', date: e.date, amount: -e.amount, desc: window.ui.t('expense_categories.' + e.category) })))
                 .concat(payments.map(p => ({ type: 'payment', date: p.payment_date, amount: -p.amount, desc: window.ui.t('payment_types.' + p.payment_type) + ': ' + (p.worker_name || '') })))
+                .concat(incoming.map(p => ({
+                    type: 'in',
+                    date: p.payment_date,
+                    amount: Number(p.amount),
+                    desc: window.ui.t('finance.client_payment') + ': ' + (p.client_name || ''),
+                })))
                 .sort((a, b) => new Date(b.date) - new Date(a.date))
                 .slice(0, 7);
             if (!operations.length) return;
@@ -182,7 +191,8 @@ class DashboardComponent {
                                 <div style="font-weight:600;font-size:14px;">${window.ui.escape(op.desc)}</div>
                                 <div class="text-sm text-muted">${window.ui.date(op.date)}</div>
                             </div>
-                            <span class="font-bold" style="color:var(--danger-color);">${window.ui.money(op.amount)}</span>
+                            <span class="font-bold ${Number(op.amount) >= 0 ? 'text-success' : ''}"
+                                  style="${Number(op.amount) >= 0 ? '' : 'color:var(--danger-color);'}">${Number(op.amount) > 0 ? '+' : ''}${window.ui.money(op.amount)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -330,6 +340,7 @@ class DashboardComponent {
                 ${window.ui.statCard({ icon: window.icon('clock', 18), color: 'orange', titleKey: 'dashboard.in_progress', value: data.orders_in_progress })}
                 ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'blue', titleKey: 'statuses.ready', value: data.orders_ready })}
                 ${window.ui.statCard({ icon: window.icon('alert-triangle', 18), color: 'red', titleKey: 'dashboard.overdue_orders', value: data.orders_overdue })}
+                ${window.ui.statCard({ icon: window.icon('layers', 18), color: 'purple', titleKey: 'dashboard.pending_confirmations', value: data.awaiting_confirmation || 0, id: 'awaiting-confirm-card' })}
             </div>
 
             ${data.low_stock_materials.length ? `
@@ -360,6 +371,11 @@ class DashboardComponent {
                     <div class="list-row"><span data-i18n="admin_analytics.defects"></span><span>${window.ui.qty(quarter.defect_quantity)}</span></div>
                 </div>` : ''}
         `;
+        const confirmCard = container.querySelector('#awaiting-confirm-card');
+        if (confirmCard) {
+            confirmCard.style.cursor = 'pointer';
+            confirmCard.addEventListener('click', () => window.router.navigate('/production'));
+        }
     }
 
     async renderWorker(container) {

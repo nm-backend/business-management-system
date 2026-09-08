@@ -32,7 +32,13 @@
         "access_key_admin_hint": "Получите код доступа у администратора или руководителя",
         "trust_secure": "Ваши данные защищены",
         "trust_support": "Проблемы со входом? Обратитесь к администратору",
-        "login_with_key": "Войти по ключу доступа"
+        "login_with_key": "Войти по ключу доступа",
+        "show_password": "Показать пароль",
+        "hide_password": "Скрыть пароль",
+        "signing_in": "Входим…",
+        "or_divider": "или",
+        "language": "Язык",
+        "set_password_hint": "Не менее 8 символов"
     },
     "setup": {
         "title": "Настройка системы",
@@ -410,7 +416,12 @@
         "added_date": "Дата добавления",
         "active_orders": "Активные заказы",
         "open_all_orders": "Все заказы",
-        "has_debt": "С долгом"
+        "has_debt": "С долгом",
+        "overdue_control": "Контроль долгов",
+        "overdue_1_7": "1–7 дней",
+        "overdue_8_14": "8–14 дней",
+        "overdue_15_plus": "15+ дней",
+        "not_due": "Срок не вышел"
     },
     "finance": {
         "title": "Финансовая аналитика",
@@ -451,7 +462,8 @@
         "open_finance": "Перейти в финансы",
         "quarterly": "Квартал",
         "quarter_label": "{quarter} квартал {year}",
-        "profitability": "Рентабельность"
+        "profitability": "Рентабельность",
+        "client_payment": "Оплата клиента"
     },
     "payment_types": {
         "salary": "Зарплата",
@@ -936,7 +948,9 @@
         "paid_out": "Выплачено",
         "remaining": "Остаток",
         "payment_history": "История выплат",
-        "material_check": "Остатки материалов"
+        "material_check": "Остатки материалов",
+        "this_month": "Этот месяц",
+        "last_month": "Прошлый месяц"
     },
     "chat": {
         "title": "Чат",

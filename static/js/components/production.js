@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Производство.
  * Worker: мои задачи (принять/отказаться), мои работы, добавить работу, заработок.
  * Owner/Admin: задачи работников и подтверждение работ (меняет склад).
@@ -8,6 +8,8 @@ class ProductionComponent {
         document.getElementById('page-title').setAttribute('data-i18n', 'production.title');
         this.container = container;
         this.tab = 'tasks';
+        this.taskFilter = '';
+        this.workFilter = '';
         const user = window.currentUser;
 
         container.innerHTML = `
@@ -41,6 +43,34 @@ class ProductionComponent {
         return this.loadEarnings();
     }
 
+    /**
+     * Вкладки статуса. Счётчики — по загруженной выборке (page_size=100).
+     */
+    statusTabs(current, items) {
+        return `
+            <div class="tabs" style="margin-bottom:10px;">
+                ${items.map(([value, key, count]) => `
+                    <button class="tab-btn ${current === value ? 'active' : ''}"
+                            data-status-filter="${value}">
+                        <span data-i18n="${key}"></span> (${count})
+                    </button>`).join('')}
+            </div>`;
+    }
+
+    bindStatusTabs(contentEl, kind) {
+        contentEl.querySelectorAll('[data-status-filter]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (kind === 'task') {
+                    this.taskFilter = btn.dataset.statusFilter;
+                    this.loadTasks();
+                } else {
+                    this.workFilter = btn.dataset.statusFilter;
+                    this.loadWorks();
+                }
+            });
+        });
+    }
+
     async loadTasks() {
         const contentEl = this.container.querySelector('#production-content');
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
@@ -48,14 +78,33 @@ class ProductionComponent {
         if (window.listStates.gone(contentEl)) return;
         window.listStates.loading(contentEl, window.ui.t('common.loading'));
         try {
-            const response = await window.api.request('/production/tasks/');
-            const tasks = response.results || response;
+            const response = await window.api.request('/production/tasks/?page_size=100');
+            const all = response.results || response;
+            const filter = this.taskFilter || '';
+            const counts = {
+                '': all.length,
+                pending: all.filter((t) => t.status === 'pending').length,
+                accepted: all.filter((t) => ['accepted', 'in_progress'].includes(t.status)).length,
+                refused: all.filter((t) => t.status === 'refused').length,
+            };
+            let tasks = all;
+            if (filter === 'pending') tasks = all.filter((t) => t.status === 'pending');
+            else if (filter === 'accepted') tasks = all.filter((t) => ['accepted', 'in_progress'].includes(t.status));
+            else if (filter === 'refused') tasks = all.filter((t) => t.status === 'refused');
+            const tabs = this.statusTabs(filter, [
+                ['', 'common.all', counts['']],
+                ['pending', 'work_statuses.pending', counts.pending],
+                ['accepted', 'work_statuses.accepted', counts.accepted],
+                ['refused', 'work_statuses.refused', counts.refused],
+            ]);
             if (!tasks.length) {
-                window.listStates.empty(contentEl, window.ui.t('common.no_data'));
+                contentEl.innerHTML = tabs + `<div class="card list-state" data-i18n="common.no_data"></div>`;
+                this.bindStatusTabs(contentEl, 'task');
+                window.i18n.applyTranslations();
                 return;
             }
             const user = window.currentUser;
-            contentEl.innerHTML = tasks.map((t) => `
+            contentEl.innerHTML = tabs + tasks.map((t) => `
                 <div class="card">
                     <div class="card-title" style="margin-bottom:4px;">
                         <span>#${t.id} ${window.ui.escape(t.title || t.order_product || '')}</span>
@@ -78,6 +127,7 @@ class ProductionComponent {
                         <button class="btn btn-secondary btn-sm" style="margin-top:12px;" data-cancel-task="${t.id}" data-i18n="common.cancel"></button>` : ''}
                 </div>`).join('');
 
+            this.bindStatusTabs(contentEl, 'task');
             contentEl.querySelectorAll('[data-accept]').forEach((b) => b.addEventListener('click', () => this.acceptTask(b.dataset.accept)));
             contentEl.querySelectorAll('[data-refuse]').forEach((b) => b.addEventListener('click', () => this.refuseTask(b.dataset.refuse)));
             contentEl.querySelectorAll('[data-cancel-task]').forEach((b) => b.addEventListener('click', () => this.cancelTask(b.dataset.cancelTask)));
@@ -166,15 +216,31 @@ class ProductionComponent {
         if (window.listStates.gone(contentEl)) return;
         window.listStates.loading(contentEl, window.ui.t('common.loading'));
         try {
-            const response = await window.api.request('/production/works/');
-            const works = response.results || response;
+            const response = await window.api.request('/production/works/?page_size=100');
+            const all = response.results || response;
+            const filter = this.workFilter || '';
+            const counts = {
+                '': all.length,
+                awaiting_confirmation: all.filter((w) => w.status === 'awaiting_confirmation').length,
+                confirmed: all.filter((w) => w.status === 'confirmed').length,
+                rejected: all.filter((w) => w.status === 'rejected').length,
+            };
+            const works = filter ? all.filter((w) => w.status === filter) : all;
+            const tabs = this.statusTabs(filter, [
+                ['', 'common.all', counts['']],
+                ['awaiting_confirmation', 'work_statuses.awaiting_confirmation', counts.awaiting_confirmation],
+                ['confirmed', 'work_statuses.confirmed', counts.confirmed],
+                ['rejected', 'work_statuses.rejected', counts.rejected],
+            ]);
             if (!works.length) {
-                window.listStates.empty(contentEl, window.ui.t('common.no_data'));
+                contentEl.innerHTML = tabs + `<div class="card list-state" data-i18n="common.no_data"></div>`;
+                this.bindStatusTabs(contentEl, 'work');
+                window.i18n.applyTranslations();
                 return;
             }
             const user = window.currentUser;
             const canConfirm = user.is_owner || user.is_admin;
-            contentEl.innerHTML = works.map((w) => `
+            contentEl.innerHTML = tabs + works.map((w) => `
                 <div class="card">
                     <div class="card-title" style="margin-bottom:4px;">
                         <span>#${w.id} ${window.ui.escape(w.product_name || '-')}</span>
@@ -204,6 +270,7 @@ class ProductionComponent {
                         </div>` : ''}
                 </div>`).join('');
 
+            this.bindStatusTabs(contentEl, 'work');
             contentEl.querySelectorAll('[data-confirm]').forEach((b) => b.addEventListener('click', () => this.confirmWork(b.dataset.confirm)));
             contentEl.querySelectorAll('[data-reject]').forEach((b) => b.addEventListener('click', () => this.rejectWork(b.dataset.reject)));
             window.i18n.applyTranslations();
@@ -230,11 +297,31 @@ class ProductionComponent {
                         <div class="metric-title" data-i18n="worker_section.paid_out"></div>
                         <div class="metric-value" style="font-size:17px;">${window.ui.money(data.paid_out)}</div>
                     </div>
+                    <div class="metric-card">
+                        <div class="metric-title" data-i18n="worker_section.this_month"></div>
+                        <div class="metric-value" style="font-size:17px;">${window.ui.money(data.this_month)}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title" data-i18n="worker_section.last_month"></div>
+                        <div class="metric-value" style="font-size:17px;">${window.ui.money(data.last_month)}</div>
+                    </div>
                 </div>
                 <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
                     <span data-i18n="worker_section.remaining"></span>
                     <span class="metric-value" style="font-size:20px;">${window.ui.money(data.remaining)}</span>
-                </div>`;
+                </div>
+                ${(data.payments || []).length ? `
+                    <div class="section-title" data-i18n="worker_section.payment_history"></div>
+                    <div class="list-group list-group-compact">
+                        ${(data.payments || []).map((p) => `
+                            <div class="list-row" style="cursor:default;">
+                                <div style="min-width:0;">
+                                    <div style="font-weight:600;">${window.ui.escape(window.ui.t('payment_types.' + p.payment_type))}</div>
+                                    <div class="text-sm text-muted">${window.ui.date(p.payment_date)}</div>
+                                </div>
+                                <span class="font-bold text-success">+${window.ui.money(p.amount)}</span>
+                            </div>`).join('')}
+                    </div>` : ''}`;
             window.i18n.applyTranslations();
         } catch (e) {
             window.listStates.error(contentEl, window.ui.t('common.error'), () => this.loadEarnings());
@@ -455,7 +542,7 @@ class ProductionComponent {
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('production.work_submitted'));
                     this.tab = 'works';
-                    this.container.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === 'works'));
+                    this.container.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === 'works'));
                     await this.loadWorks();
                 } catch (error) {
                     window.toast.error(window.ui.errorText(error));

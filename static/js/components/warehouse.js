@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Склад сырья: список с поиском, низкие остатки красным,
  * добавление/редактирование (owner/admin), закупочные цены видит только owner.
  */
@@ -607,10 +607,16 @@ class WarehouseComponent {
                 ${this.detailRow('warehouse.color', m.color)}
                 ${this.detailRow('warehouse.storage_zone', m.storage_zone_display)}
                 ${this.detailRow('warehouse.storage_location', m.storage_location)}
+                ${this.detailRow('warehouse.warehouse', m.warehouse_name)}
+                ${this.detailRow('warehouse.cell', m.cell_code)}
+                ${this.detailRow('warehouse.condition', m.condition ? window.ui.t('material_conditions.' + m.condition) : '')}
                 ${this.detailRow('warehouse.supplier', m.supplier)}
                 ${this.detailRow('warehouse.arrival_date', m.arrival_date ? window.ui.date(m.arrival_date) : '')}
                 ${user.is_owner ? this.detailRow('warehouse.purchase_price', window.ui.money(m.purchase_price)) : ''}
                 ${user.is_owner ? this.detailRow('warehouse.avg_cost', window.ui.money(m.avg_cost_price)) : ''}
+                ${user.is_owner && m.avg_cost_price != null && m.avg_cost_price !== ''
+                    ? this.detailRow('warehouse.summary_value', window.ui.money(Number(m.quantity || 0) * Number(m.avg_cost_price || 0)))
+                    : ''}
                 ${this.detailRow('warehouse.comment', m.comment)}
             </div>
             <!-- Кнопки действий по макету -->
@@ -737,6 +743,8 @@ class WarehouseComponent {
                             ${window.ui.escape(window.ui.t('movement_types.' + r.movement_type))}
                             · ${window.ui.datetime(r.created_at)}
                             ${r.created_by_name ? ` · ${window.ui.escape(r.created_by_name)}` : ''}
+                            ${r.document_number ? ` · ${window.ui.escape(r.document_number)}` : ''}
+                            ${r.related_order_id ? ` · ${window.ui.escape(window.ui.t('warehouse.outgoing_order'))} #${r.related_order_id}` : ''}
                         </div>
                     </div>
                     <div style="text-align:right;flex-shrink:0;">
@@ -795,6 +803,8 @@ class WarehouseComponent {
                             <option value="" data-i18n="common.select"></option>
                             <option value="a" ${m?.storage_zone === 'a' ? 'selected' : ''} data-i18n="warehouse.zone_a"></option>
                             <option value="b" ${m?.storage_zone === 'b' ? 'selected' : ''} data-i18n="warehouse.zone_b"></option>
+                            <option value="c" ${m?.storage_zone === 'c' ? 'selected' : ''} data-i18n="warehouse.zone_c"></option>
+                            <option value="on value="b" ${m?.storage_zone === 'b' ? 'selected' : ''} data-i18n="warehouse.zone_b"></option>
                             <option value="c" ${m?.storage_zone === 'c' ? 'selected' : ''} data-i18n="warehouse.zone_c"></option>
                             <option value="other" ${m?.storage_zone === 'other' ? 'selected' : ''} data-i18n="warehouse.zone_other"></option>
                         </select></div>
