@@ -13,6 +13,16 @@ MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 МБ
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 ALLOWED_IMAGE_CONTENT_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
 
+# Вложения чата и задач: картинки + офисные документы. Белый список, а не
+# чёрный: любой .exe/.sh/.php/.html, переименованный в разрешённое расширение,
+# всё равно отдаётся из /media/ как файл, но исполняемым содержимым не станет,
+# а html/svg исключены намеренно — они выполняют скрипты в контексте домена
+# (хранимый XSS через ссылку на вложение).
+ALLOWED_ATTACHMENT_EXTENSIONS = {
+    '.jpg', '.jpeg', '.png', '.webp', '.gif',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt',
+}
+
 
 def parse_int_param(value, field_name):
     """
@@ -79,6 +89,20 @@ def validate_file_size(value):
         raise ValidationError(
             f'Файл хажми {limit // (1024 * 1024)} МБ дан ошмаслиги керак.'
         )
+
+
+def validate_attachment_extension(value):
+    """
+    Белый список расширений для вложений (чат, задачи).
+
+    Размер проверяет validate_file_size; здесь отсекаем типы, которые опасно
+    отдавать обратно браузеру (.html, .svg — хранимый XSS) или бессмысленно
+    хранить (.exe, .sh).
+    """
+    ext = os.path.splitext(value.name)[1].lower()
+    if ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
+        allowed = ', '.join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS))
+        raise ValidationError(f'Файл тури қўллаб-қувватланмайди. Рухсат этилган: {allowed}')
 
 
 def validate_not_future(value):

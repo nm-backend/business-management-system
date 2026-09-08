@@ -24,7 +24,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
+from .fingerprint_jwt import FINGERPRINT_CLAIM
 from .fingerprint_jwt import RefreshToken as FingerprintRefreshToken
+from .sessions import (
+    record_session, revoke_other_sessions, revoke_session, serialize_sessions,
+)
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
@@ -60,29 +64,33 @@ class SetupCheckView(APIView):
         AllowAny - доступен без аутентификации
 
     Возвращает:
-        {'setup_required': bool} - True если владелец еще не создан
+        {'setup_required': bool} - True только на полностью пустой базе
     """
     permission_classes = [AllowAny]
     authentication_classes = []  # публичный эндпоинт: без сессии/CSRF
 
     def get(self, request):
         """
-        Проверяет, существует ли платформенный супер-администратор.
+        Первичная настройка нужна, только пока в системе НЕТ пользователей.
+
+        Раньше проверялось лишь наличие супер-администратора: компания с
+        владельцем и работниками, но без платформенного супер-админа,
+        считалась «ненастроенной», и публичный setup оставался открыт.
 
         Возвращает:
             Response с {'setup_required': True/False}
         """
-        superadmin_exists = User.objects.filter(role=User.Role.SUPERADMIN).exists()
-        return Response({'setup_required': not superadmin_exists})
+        return Response({'setup_required': not User.objects.exists()})
 
 
 class SetupOwnerView(APIView):
     """
-    API для создания владельца системы (начальная настройка).
+    API первичной настройки: создание платформенного супер-администратора.
 
-    Используется только при первом запуске для создания первого
-    пользователя с ролью owner. После создания владельца этот endpoint
-    блокируется.
+    Работает ТОЛЬКО на полностью пустой базе (в системе нет ни одного
+    пользователя) — это разовый bootstrap свежего развёртывания, а не
+    регистрация. Публичной регистрации в SkladPro.Nod нет: аккаунты
+    владельца, администратора и работника создаются внутри системы.
 
     Endpoint: POST /api/v1/accounts/setup/owner/
 
@@ -127,7 +135,10 @@ class SetupOwnerView(APIView):
                 # с разными username оба проходят проверку «суперадмина ещё
                 # нет» и создают двух суперадминов.
                 SetupGate.objects.select_for_update().get(pk=1)
-                if User.objects.filter(role=User.Role.SUPERADMIN).exists():
+                # Любой существующий пользователь закрывает bootstrap: иначе
+                # в компании без супер-админа посторонний мог создать себе
+                # платформенный аккаунт через публичный эндпоинт.
+                if User.objects.exists():
                     return Response(
                         {'error': 'Setup is already complete.'},
                         status=status.HTTP_403_FORBIDDEN,
@@ -147,6 +158,12 @@ class SetupOwnerView(APIView):
         refresh = FingerprintRefreshToken.for_user(user)
         if fingerprint:
             refresh.set_fingerprint(fingerprint)
+        # Запоминаем устройство сессии: список «Актив сеанслар»
+        # показывает не идентификаторы, а понятные строки.
+        try:
+            record_session(user, refresh, request)
+        except Exception:  # noqa: BLE001 — метаданные не должны ломать вход
+            pass
 
         write_audit_log(
             action=AuditLog.Action.SETUP_OWNER,
@@ -232,6 +249,12 @@ class LoginView(APIView):
         refresh = FingerprintRefreshToken.for_user(user)
         if fingerprint:
             refresh.set_fingerprint(fingerprint)
+        # Запоминаем устройство сессии: список «Актив сеанслар»
+        # показывает не идентификаторы, а понятные строки.
+        try:
+            record_session(user, refresh, request)
+        except Exception:  # noqa: BLE001 — метаданные не должны ломать вход
+            pass
 
         write_audit_log(
             action=AuditLog.Action.LOGIN,
@@ -244,6 +267,76 @@ class LoginView(APIView):
             'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)},
             'fingerprint_required': bool(fingerprint),
         })
+
+
+
+class MySessionsView(APIView):
+    """
+    Активные сессии текущего пользователя (макет «Сеансларни бошқариш»).
+
+    GET  /api/v1/accounts/me/sessions/           — список своих сессий
+    POST /api/v1/accounts/me/sessions/revoke/    — отозвать одну: {"jti": "..."}
+    POST /api/v1/accounts/me/sessions/revoke-others/ — закрыть все, кроме текущей
+
+    Строго свои сессии: чужие не видны и не отзываются — ни владельцу, ни
+    супер-администратору. Управление чужим доступом делается блокировкой
+    аккаунта (is_active), а не захватом его сессии.
+
+    Отзыв работает штатным механизмом simplejwt (blacklist refresh-токена):
+    обновить токен по отозванной сессии нельзя. Уже выданный access-токен
+    остаётся действительным до истечения своего срока (45 минут) — это
+    свойство stateless-JWT, а не недоработка; для немедленной блокировки
+    пользователя есть is_active.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _current_fingerprint(self, request):
+        """Отпечаток устройства из access-токена (claim fpr копируется в него)."""
+        token = getattr(request, 'auth', None)
+        if token is None:
+            return ''
+        try:
+            return token.payload.get(FINGERPRINT_CLAIM, '') or ''
+        except AttributeError:
+            return ''
+
+    def get(self, request):
+        return Response({
+            'results': serialize_sessions(request.user, self._current_fingerprint(request)),
+        })
+
+    def post(self, request):
+        jti = request.data.get('jti')
+        if not jti:
+            return Response({'jti': 'Укажите сессию.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not revoke_session(request.user, jti):
+            # 404, а не 403: существование чужой сессии не подтверждаем.
+            return Response({'detail': 'Сессия не найдена.'}, status=status.HTTP_404_NOT_FOUND)
+        write_audit_log(
+            action=AuditLog.Action.LOGOUT, actor=request.user, target=request.user,
+            metadata={'revoked_session': jti}, request=request,
+        )
+        return Response({'detail': 'Сессия закрыта.'})
+
+
+class RevokeOtherSessionsView(APIView):
+    """Закрывает все сессии пользователя, кроме текущей."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = getattr(request, 'auth', None)
+        fingerprint = ''
+        if token is not None:
+            try:
+                fingerprint = token.payload.get(FINGERPRINT_CLAIM, '') or ''
+            except AttributeError:
+                fingerprint = ''
+        revoked = revoke_other_sessions(request.user, fingerprint)
+        write_audit_log(
+            action=AuditLog.Action.LOGOUT, actor=request.user, target=request.user,
+            metadata={'revoked_sessions': revoked}, request=request,
+        )
+        return Response({'revoked': revoked})
 
 
 class LogoutView(APIView):
@@ -606,6 +699,12 @@ class AccessKeyRedeemView(APIView):
         refresh = FingerprintRefreshToken.for_user(user)
         if fingerprint:
             refresh.set_fingerprint(fingerprint)
+        # Запоминаем устройство сессии: список «Актив сеанслар»
+        # показывает не идентификаторы, а понятные строки.
+        try:
+            record_session(user, refresh, request)
+        except Exception:  # noqa: BLE001 — метаданные не должны ломать вход
+            pass
 
         write_audit_log(
             action=AuditLog.Action.ACCESS_KEY_REDEEMED,
@@ -725,7 +824,7 @@ class UserViewSet(CompanyScopedViewSet):
             return [IsOwner()]
         # Кастомные @action: их permission_classes не применяются автоматически,
         # т.к. get_permissions переопределён — задаём права явно здесь.
-        if self.action == 'access_key':
+        if self.action in ('access_key', 'role_counts'):
             return [IsOwnerOrAdmin()]
         if self.action in ('toggle_active', 'reset_password'):
             return [IsOwner()]
@@ -829,6 +928,40 @@ class UserViewSet(CompanyScopedViewSet):
             MethodNotAllowed - удаление запрещено
         """
         raise MethodNotAllowed('DELETE', detail='Account deletion is prohibited. Block the account instead.')
+
+    @action(detail=False, methods=['get'], url_path='role-counts',
+            permission_classes=[IsOwnerOrAdmin])
+    def role_counts(self, request):
+        """
+        Сколько АКТИВНЫХ сотрудников в каждой роли (макет «Роллар ва аккаунтлар»).
+
+        «Активный» = может войти: is_active=True и не заблокирован владельцем.
+        Уволенный или заблокированный в счётчик роли не попадает — иначе
+        владелец видел бы штат больше фактического. Супер-администратор вне
+        компаний, поэтому в счётчиках компании не участвует.
+
+        Один запрос, строго по своей компании.
+        """
+        from django.db.models import Count
+
+        rows = (
+            User.objects
+            .filter(
+                company_id=request.user.company_id,
+                is_active=True,
+                blocked_by_owner=False,
+            )
+            .exclude(role=User.Role.SUPERADMIN)
+            .values('role')
+            .annotate(total=Count('id'))
+        )
+        counts = {row['role']: row['total'] for row in rows}
+        payload = {
+            role: counts.get(role, 0)
+            for role in (User.Role.OWNER, User.Role.ADMIN, User.Role.WORKER, User.Role.MANAGER)
+        }
+        payload['total'] = sum(payload.values())
+        return Response(payload)
 
     @action(detail=True, methods=['post'], permission_classes=[IsOwner])
     def toggle_active(self, request, pk=None):

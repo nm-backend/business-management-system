@@ -24,6 +24,7 @@ from apps.audit.models import AuditLog
 from apps.audit.services import write_audit_log
 from apps.messaging.models import Notification
 from apps.messaging.services import notify, notify_staff
+from core.utils import translate
 
 from .models import Invoice, Subscription, SubscriptionEvent
 from .payments import get_provider
@@ -111,14 +112,23 @@ def _write_audit(sub, action, *, actor=None, request=None, changes=None, metadat
     )
 
 
-def _notify_owner(sub, notification_type, title, message):
-    """Уведомление владельцу компании (+ Web Push, если подписан)."""
+def _notify_owner(sub, notification_type, title_key, message_key, params=None):
+    """
+    Уведомление владельцу компании (+ Web Push, если подписан).
+
+    Текст берётся из локали на языке владельца: раньше он был зашит
+    по-русски, хотя основной язык интерфейса — узбекский.
+    """
     owner = User.objects.filter(
         company_id=sub.company_id, role=User.Role.OWNER, is_active=True,
     ).first()
     if owner is None:
         return
-    notify(owner, notification_type, title, message)
+    params = params or {}
+    notify(owner, notification_type, title_key=title_key, message_key=message_key, params=params)
+    lang = owner.language or 'uz_cyrl'
+    title = translate(title_key, lang, params)
+    message = translate(message_key, lang, params)
     try:
         from apps.accounts.push_service import send_push_to_user
         send_push_to_user(owner, title, message, data={'url': '#/settings'})
@@ -186,8 +196,9 @@ def _extend(sub, days, action, *, actor=None, request=None, note=''):
     _sync_company_fields(sub)
     _notify_owner(
         sub, Notification.NotificationType.SUBSCRIPTION_RENEWED,
-        'Подписка продлена',
-        f'Подписка действует до {sub.expires_at:%d.%m.%Y}.',
+        'notifications.subscription_renewed_title',
+        'notifications.msg_subscription_renewed',
+        {'end': f'{sub.expires_at:%d.%m.%Y}'},
     )
     return sub
 
@@ -280,9 +291,8 @@ def freeze_subscription(sub, *, actor=None, request=None):
         _sync_company_fields(sub)
         notify_staff(
             sub.company, Notification.NotificationType.SUBSCRIPTION_FROZEN,
-            'Подписка истекла',
-            'Срок подписки компании истёк — бизнес-функции приостановлены '
-            'до продления. Вход в систему доступен.',
+            title_key='notifications.subscription_frozen',
+            message_key='notifications.msg_subscription_frozen',
         )
     return True
 
@@ -314,8 +324,9 @@ def unfreeze_subscription(sub, *, actor=None, request=None, note=''):
         _sync_company_fields(sub)
         _notify_owner(
             sub, Notification.NotificationType.SUBSCRIPTION_RENEWED,
-            'Подписка возобновлена',
-            f'Компания снова в работе. Подписка действует до {sub.expires_at:%d.%m.%Y}.',
+            'notifications.subscription_unfrozen_title',
+            'notifications.msg_subscription_unfrozen',
+            {'end': f'{sub.expires_at:%d.%m.%Y}'},
         )
     return sub
 
@@ -422,9 +433,9 @@ def send_expiry_reminders():
         days_left = max(1, sub.days_left)
         _notify_owner(
             sub, Notification.NotificationType.SUBSCRIPTION_EXPIRING,
-            'Подписка скоро истечёт',
-            f'До окончания подписки осталось {days_left} дн. Продлите, '
-            'чтобы компания продолжила работу без перерыва.',
+            'notifications.subscription_expiring',
+            'notifications.msg_subscription_expiring_days',
+            {'days': days_left},
         )
         sent += 1
     return sent

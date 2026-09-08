@@ -6,7 +6,7 @@ Views for clients API.
 """
 from decimal import Decimal
 
-from django.db.models import (DecimalField, Exists, ExpressionWrapper, F,
+from django.db.models import (DecimalField, Exists, ExpressionWrapper, F, Q,
                               OuterRef, Subquery, Sum, Value)
 from django.db.models.functions import Coalesce
 from django.db import transaction
@@ -43,6 +43,11 @@ class ClientViewSet(CompanyScopedViewSet):
         archive/restore): только owner/admin. Работник клиентов не видит вовсе.
         """
         if self.request.method in SAFE_METHODS:
+            # Сводка по долгам — финансовые суммы, только владельцу.
+            # (permission_classes у @action не применяются: get_permissions
+            # перекрывает их целиком, поэтому проверяем action явно.)
+            if getattr(self, 'action', None) == 'debt_summary':
+                return [IsCompanyMember(), IsOwner()]
             return [IsCompanyMember(), IsOwnerOrAdminOrManager()]
         return [IsCompanyMember(), IsOwnerOrAdmin()]
 
@@ -50,7 +55,8 @@ class ClientViewSet(CompanyScopedViewSet):
     # SearchFilter убираем: поиск по имени должен понимать транслит
     # («Gulnora» -> «Гулнора»). Для этого строим OR-фильтр по вариантам
     # запроса сами (apps/core/translit.py).
-    filterset_fields = ['is_archived']
+    # Тип и ответственный — рабочие фильтры карточки клиента из макета.
+    filterset_fields = ['is_archived', 'client_type', 'responsible_employee']
     ordering_fields = ['name', 'created_at', 'debt', 'total_orders_amount']
 
     def get_queryset(self):
@@ -105,6 +111,24 @@ class ClientViewSet(CompanyScopedViewSet):
                     Value(Decimal('0'), output_field=DecimalField(max_digits=15, decimal_places=2)),
                 ),
             )
+        # Вкладки списка из макета «Мижозлар»: «Қарзи бор» и «Фаол».
+        # Это БУЛЕВЫ фильтры, а не суммы, поэтому доступны и администратору:
+        # факт долга он видеть должен (красная карточка), сумму — нет.
+        has_debt = self.request.query_params.get('has_debt')
+        if has_debt is not None:
+            wants_debt = has_debt.lower() == 'true'
+            queryset = queryset.filter(debt__gt=0) if wants_debt else queryset.filter(debt__lte=0)
+
+        # «Фаол» по правилу ТЗ: есть долг ИЛИ есть незавершённый заказ.
+        is_active_client = self.request.query_params.get('is_active_client')
+        if is_active_client is not None:
+            condition = Q(debt__gt=0) | Q(active_orders_exists=True)
+            queryset = (
+                queryset.filter(condition)
+                if is_active_client.lower() == 'true'
+                else queryset.exclude(condition)
+            )
+
         search = self.request.query_params.get('search')
         if search:
             from apps.core.translit import translit_search_qs
@@ -115,6 +139,84 @@ class ClientViewSet(CompanyScopedViewSet):
         if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
             return ClientOwnerSerializer
         return ClientAdminSerializer
+
+    @action(detail=False, methods=['get'], permission_classes=[IsCompanyMember, IsOwner])
+    def debt_summary(self, request):
+        """
+        GET /api/v1/clients/clients/debt_summary/ — сводка по долгам (владелец).
+
+        Панель «Қарз назорати» раньше считалась на фронте: он брал ПЕРВУЮ
+        страницу списка клиентов (20 из N) и складывал c.debt в JS. Debt
+        приходит из DRF строкой, поэтому сложение превращалось в конкатенацию
+        («0» + «100.00» + «500.00») и на экране выводилось NaN, а счётчик
+        учитывал только первую страницу. Считаем в SQL по всем неархивным
+        клиентам компании.
+        """
+        qs = Client.objects.filter(company_id=request.user.company_id, is_archived=False)
+        debtors = qs.filter(debt__gt=0)
+        zero = Value(Decimal('0'), output_field=DecimalField(max_digits=15, decimal_places=2))
+        totals = debtors.aggregate(total=Coalesce(Sum('debt'), zero))
+        top = list(
+            debtors.order_by('-debt')
+            .values('id', 'name', 'phone', 'debt')[:10]
+        )
+        # Бакеты просрочки из макета «Қарз назорати»: «Муддати ўтган» с
+        # подписями «7/10/15 кундан ошган» против «Муддати бор». Возраст долга
+        # считаем по сроку ОПЛАТЫ заказа (payment_due_date), а если он не
+        # задан — по сроку изготовления, как было раньше.
+        from apps.orders.models import Order
+
+        unpaid_orders = (
+            Order.objects.filter(
+                company_id=request.user.company_id,
+                is_archived=False,
+                paid_amount__lt=F('total_amount'),
+            )
+            .exclude(status=Order.Status.CANCELLED)
+            .select_related('client')
+        )
+
+        buckets = {'not_due': [], 'overdue_1_7': [], 'overdue_8_14': [], 'overdue_15_plus': []}
+        overdue_total = Decimal('0')
+        for order in unpaid_orders:
+            days = order.payment_overdue_days
+            debt = (order.total_amount or Decimal('0')) - (order.paid_amount or Decimal('0'))
+            if days <= 0:
+                buckets['not_due'].append((order, days, debt))
+                continue
+            overdue_total += debt
+            if days >= 15:
+                buckets['overdue_15_plus'].append((order, days, debt))
+            elif days >= 8:
+                buckets['overdue_8_14'].append((order, days, debt))
+            else:
+                buckets['overdue_1_7'].append((order, days, debt))
+
+        def bucket_payload(rows):
+            return {
+                'count': len(rows),
+                'total': sum((debt for _, _, debt in rows), Decimal('0')),
+                'orders': [
+                    {
+                        'order': order.id,
+                        'client': order.client_id,
+                        'client_name': order.client.name,
+                        'days_overdue': days,
+                        'debt': debt,
+                    }
+                    # Самые старые долги первыми — с них и начинают работу.
+                    for order, days, debt in sorted(rows, key=lambda r: -r[1])[:20]
+                ],
+            }
+
+        return Response({
+            'debtors_count': debtors.count(),
+            'total_debt': totals['total'],
+            'no_debt_count': qs.filter(debt__lte=0).count(),
+            'top_debtors': top,
+            'overdue_total': overdue_total,
+            'buckets': {name: bucket_payload(rows) for name, rows in buckets.items()},
+        })
 
     def perform_create(self, serializer):
         client = serializer.save(company=self.request.user.company)
@@ -149,12 +251,28 @@ class ClientViewSet(CompanyScopedViewSet):
         )
 
     def _assert_no_debt(self, client):
-        # Клиент с долгом исчезал из активного учёта: архивные клиенты
-        # исключаются из отчётов, и долг «пропадал» без следа.
+        """
+        Условия архивации из ТЗ: заказ завершён, товар выдан, долг закрыт.
+
+        Проверка долга была и раньше (архивные клиенты выпадают из отчётов, и
+        долг «пропадал» без следа), но незавершённый заказ архивации не мешал:
+        клиент с товаром в производстве уезжал в архив, и заказ терялся из
+        активного учёта.
+        """
+        from apps.orders.models import Order
+
         if (client.debt or 0) > 0:
             raise DRFValidationError({
                 'detail': 'У клиента есть долг — архивировать нельзя. '
                           'Сначала закройте долг оплатой.',
+            })
+        unfinished = client.orders.exclude(
+            status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED),
+        ).filter(is_archived=False)
+        if unfinished.exists():
+            raise DRFValidationError({
+                'detail': 'У клиента есть незавершённые заказы — архивировать нельзя. '
+                          'Сначала выдайте товар или отмените заказ.',
             })
 
     # Вкладка «Архив» была только на чтение: положить туда клиента или вернуть
@@ -231,8 +349,9 @@ class PaymentViewSet(CompanyScopedViewSet):
         notify(
             self.request.user,
             Notification.NotificationType.CASH_CHANGE,
-            'Касса ўзгариши',
-            f'{payment.client.name}: +{payment.amount}',
+            title_key='notifications.cash_change',
+            message_key='notifications.msg_cash_change',
+            params={'client': payment.client.name, 'amount': str(payment.amount)},
             order=payment.order,
         )
         write_audit_log(

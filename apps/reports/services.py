@@ -21,6 +21,7 @@ from apps.finance.models import Expense, ExpenseCategory, WorkerPayment
 from apps.orders.models import Order
 from apps.production.models import WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
+from core.utils import translate
 
 
 # ── Typed dicts for return values ────────────────────────────────────────────
@@ -95,6 +96,7 @@ class QuarterlyReportData(TypedDict):
     total_expenses: Decimal | int
     total_worker_payments: Decimal | int
     total_net_profit: Decimal | int
+    profitability_percent: Decimal | None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -490,8 +492,13 @@ def get_admin_operational_analytics(company_id: int) -> AdminAnalyticsData:
 
 # ── Revenue timeline (6-month chart data) ────────────────────────────────────
 
-def get_revenue_timeline_data(company_id: int) -> RevenueTimelineData:
-    """Monthly revenue and net profit for the last 6 months (chart data)."""
+def get_revenue_timeline_data(company_id: int, lang: str = 'uz_cyrl') -> RevenueTimelineData:
+    """
+    Monthly revenue and net profit for the last 6 months (chart data).
+
+    lang: язык подписей месяцев. Раньше они были захардкожены в коде и
+    приходили одинаковыми во всех языках интерфейса.
+    """
     today = timezone.localdate()
     six_months_ago = today - datetime.timedelta(days=180)
 
@@ -577,16 +584,11 @@ def get_revenue_timeline_data(company_id: int) -> RevenueTimelineData:
     months = sorted(months_set, reverse=True)[:6]
     months.reverse()
 
-    MONTH_NAMES: dict[int, str] = {
-        1: 'Янв', 2: 'Фев', 3: 'Мар', 4: 'Апр', 5: 'Май', 6: 'Июн',
-        7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек',
-    }
-
     labels: list[str] = []
     revenues: list[Decimal | int] = []
     net_profits: list[Decimal | int] = []
     for m in months:
-        label = f"{MONTH_NAMES.get(m.month, m.month)}'{str(m.year)[2:]}"
+        label = f"{translate(f'months_short.{m.month}', lang)}'{str(m.year)[2:]}"
         labels.append(label)
         rev = rev_map.get(m, 0)
         exp = exp_map.get(m, 0)
@@ -653,4 +655,66 @@ def get_quarterly_report_data(
         'total_expenses': total_expenses,
         'total_worker_payments': total_worker_payments,
         'total_net_profit': total_revenue - total_cogs - total_expenses - total_worker_payments,
+        # Рентабельность = доля чистой прибыли в выручке (макет: «Рентабеллик
+        # 71.2 %»). Семантика однозначная, поэтому показатель считается, а не
+        # берётся «с потолка». При нулевой выручке возвращаем None, а не ноль:
+        # «0 %» означало бы убыточность, хотя продаж просто не было.
+        'profitability_percent': (
+            ((total_revenue - total_cogs - total_expenses - total_worker_payments)
+             / total_revenue * 100).quantize(Decimal('0.1'))
+            if total_revenue else None
+        ),
+    }
+
+
+def get_quarterly_operational_report(
+    company_id: int,
+    year: int,
+    quarter: int,
+) -> dict[str, Any]:
+    """
+    Квартальный ОПЕРАЦИОННЫЙ отчёт — вариант для администратора.
+
+    По ТЗ квартальный отчёт есть у обеих ролей, но администратору деньги
+    недоступны: здесь только количества (заказы, производство, брак,
+    выполнившие работники). Раньше квартальный отчёт существовал единственный
+    — финансовый, поэтому администратору его нельзя было показать вообще.
+    """
+    date_from, date_to = _quarter_bounds(year, quarter)
+
+    orders = Order.objects.filter(
+        company_id=company_id,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+    )
+    works = WorkRecord.objects.filter(
+        company_id=company_id,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+    )
+    confirmed = works.filter(status=WorkRecord.WorkStatus.CONFIRMED)
+
+    produced = confirmed.aggregate(total=Sum('quantity'))['total'] or 0
+    defects = confirmed.aggregate(total=Sum('defect_quantity'))['total'] or 0
+
+    return {
+        'year': year,
+        'quarter': quarter,
+        'date_from': date_from,
+        'date_to': date_to,
+        'orders_total': orders.count(),
+        'orders_delivered': orders.filter(status=Order.Status.DELIVERED).count(),
+        'orders_cancelled': orders.filter(status=Order.Status.CANCELLED).count(),
+        'orders_overdue': orders.filter(deadline__date__lt=date_to).exclude(
+            status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED),
+        ).count(),
+        'works_total': works.count(),
+        'works_confirmed': confirmed.count(),
+        'works_rejected': works.filter(status=WorkRecord.WorkStatus.REJECTED).count(),
+        'works_awaiting': works.filter(
+            status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION,
+        ).count(),
+        'produced_quantity': produced,
+        'defect_quantity': defects,
+        'workers': _finalize_worker_totals(confirmed),
     }

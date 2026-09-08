@@ -10,7 +10,7 @@ OVERDUE_DEBT-уведомления (повторные запуски не сп
     python manage.py notify_overdue_debts
 """
 from django.core.management.base import BaseCommand
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from apps.messaging.models import Notification
@@ -28,13 +28,25 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         now = timezone.now()
-        # Просроченный долг: срок прошёл, оплачено меньше суммы, заказ не отменён,
-        # компания активна. paid_amount < total_amount гарантирует реальный долг.
+        # Просроченный долг: срок прошёл, оплачено меньше суммы, заказ не отменён
+        # и НЕ архивный, компания активна. paid_amount < total_amount
+        # гарантирует реальный долг.
+        #
+        # Архивные исключены намеренно: такой заказ выведен из активного учёта,
+        # его нет ни в списках, ни в отчётах. Уведомление по нему отправляло
+        # владельца искать заказ, которого он на экранах не найдёт.
+        # Просрочка считается по сроку ОПЛАТЫ. Если он не задан — по сроку
+        # изготовления, как было до появления payment_due_date: поведение
+        # существующих заказов не меняется.
         overdue = list(
             Order.objects.filter(
                 company__is_active=True,
-                deadline__lt=now,
+                is_archived=False,
                 paid_amount__lt=F('total_amount'),
+            )
+            .filter(
+                Q(payment_due_date__lt=now)
+                | Q(payment_due_date__isnull=True, deadline__lt=now)
             )
             .exclude(status=Order.Status.CANCELLED)
             .select_related('client')
@@ -55,8 +67,9 @@ class Command(BaseCommand):
                 recipients = notify_staff(
                     order.company_id,
                     Notification.NotificationType.OVERDUE_DEBT,
-                    'Қарз муддати ўтди',
-                    f'Буюртма #{order.id}, мижоз: {order.client.name}',
+                    title_key='notifications.overdue_debt',
+                    message_key='notifications.msg_overdue_debt',
+                    params={'id': order.id, 'client': order.client.name},
                     order=order,
                 )
                 created += len(recipients)

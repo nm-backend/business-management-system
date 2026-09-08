@@ -43,6 +43,17 @@ class ReadAfterCreateMixin(CreateModelMixin):
         return Response(read_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
+def _attachment_name(serializer):
+    """
+    Исходное имя загруженного чертежа.
+
+    Django переименовывает файл при коллизии («Chizma_x7Fk2.pdf»), поэтому
+    показываемое имя храним отдельно — как у вложений чата.
+    """
+    uploaded = serializer.validated_data.get('attachment')
+    return getattr(uploaded, 'name', '') or ''
+
+
 class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
     """Задачи работников: назначение, принятие, отказ."""
     queryset = Task.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
@@ -111,9 +122,19 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
                              'задачу без привязки к заказу.',
                 })
             task = serializer.save(company=user.company, worker=user, assigned_by=user,
-                                   is_self_assigned=True, status=TaskStatus.ACCEPTED)
+                                   is_self_assigned=True, status=TaskStatus.ACCEPTED,
+                                   attachment_name=_attachment_name(serializer))
         else:
-            task = serializer.save(company=user.company, assigned_by=user)
+            # План не указали, но задача под заказ — берём объём заказа:
+            # иначе работник видит «Режалаштирилган миқдор» пустым, хотя
+            # плановое количество очевидно из самого заказа.
+            extra = {}
+            if order and not serializer.validated_data.get('planned_quantity'):
+                extra['planned_quantity'] = order.quantity
+                extra['planned_unit'] = order.unit
+            task = serializer.save(company=user.company, assigned_by=user,
+                                   attachment_name=_attachment_name(serializer),
+                                   **extra)
             if task.order:
                 task.order.worker = task.worker
                 task.order.status = task.order.Status.SENT_TO_WORKER
@@ -121,8 +142,12 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             notify(
                 task.worker,
                 Notification.NotificationType.TASK_ASSIGNED,
-                'Янги вазифа',
-                f'Вазифа #{task.id}' + (f' (буюртма #{task.order_id})' if task.order_id else ''),
+                title_key='notifications.task_assigned',
+                message_key=(
+                    'notifications.msg_task_assigned_order' if task.order_id
+                    else 'notifications.msg_task_assigned'
+                ),
+                params={'id': task.id, 'order': task.order_id},
                 order=task.order,
                 task=task,
             )
@@ -141,8 +166,12 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             notify(
                 task.assigned_by,
                 Notification.NotificationType.TASK_CHANGED,
-                'Вазифа қабул қилинди',
-                f'{request.user.full_name or request.user.username} вазифа #{task.id} ни қабул қилди',
+                title_key='notifications.task_changed',
+                message_key='notifications.msg_task_accepted',
+                params={
+                    'id': task.id,
+                    'worker': request.user.full_name or request.user.username,
+                },
                 order=task.order, task=task,
             )
         return Response(TaskSerializer(task).data)
@@ -172,9 +201,14 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         notify_staff(
             task.company_id,
             Notification.NotificationType.WORKER_REFUSED,
-            'Ишчи рад этди',
-            f'{request.user.full_name or request.user.username} вазифа #{task.id} дан бош тортди: '
-            f'{RefusalReason(reason).label}',
+            title_key='notifications.worker_refused',
+            message_key='notifications.msg_task_refused',
+            params={
+                'id': task.id,
+                'worker': request.user.full_name or request.user.username,
+                # *_key разворачивается переводчиком в {reason} на языке получателя
+                'reason_key': f'refusal_reasons.{reason}',
+            },
             order=task.order, task=task,
         )
         return Response(TaskSerializer(task).data)
@@ -209,8 +243,9 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         notify(
             task.worker,
             Notification.NotificationType.TASK_CANCELLED,
-            'Вазифа бекор қилинди',
-            f'Вазифа #{task.id} бекор қилинди',
+            title_key='notifications.task_cancelled',
+            message_key='notifications.msg_task_cancelled',
+            params={'id': task.id},
             order=task.order, task=task,
         )
         return Response(TaskSerializer(task).data)
@@ -327,9 +362,13 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         notify_staff(
             work.company_id,
             Notification.NotificationType.WORK_AWAITING,
-            'Иш тасдиқлашни кутмоқда',
-            f'{work.worker.full_name or work.worker.username}: '
-            f'{work.product.name if work.product else ""} x {work.quantity}',
+            title_key='notifications.work_awaiting',
+            message_key='notifications.msg_work_awaiting',
+            params={
+                'worker': work.worker.full_name or work.worker.username,
+                'product': (work.product.name if work.product else ''),
+                'qty': str(work.quantity),
+            },
             task=work.task,
         )
         if work.task and work.task.worker_id == work.worker_id:

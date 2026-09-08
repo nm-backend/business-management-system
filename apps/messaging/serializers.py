@@ -23,10 +23,14 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     """Сообщение чата для чтения."""
     sender_name = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
+    attachment = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatMessage
-        fields = ['id', 'conversation', 'sender', 'sender_name', 'content', 'is_mine', 'created_at']
+        fields = [
+            'id', 'conversation', 'sender', 'sender_name', 'content',
+            'attachment', 'attachment_name', 'is_mine', 'created_at',
+        ]
         read_only_fields = fields
 
     def get_sender_name(self, obj):
@@ -36,23 +40,43 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         return bool(request and obj.sender_id == request.user.id)
 
+    def get_attachment(self, obj):
+        """Абсолютный URL вложения (или null). Относительный — если нет request."""
+        if not obj.attachment:
+            return None
+        url = obj.attachment.url
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
+
 
 class ChatMessageCreateSerializer(serializers.ModelSerializer):
     """
     Создание сообщения. Пользователь может писать только в свою беседу
     своей компании (проверяется по участию и company).
+
+    Сообщение может быть текстовым, с вложением или и тем, и другим —
+    но не пустым (проверяется в validate()).
     """
+    content = serializers.CharField(required=False, allow_blank=True, default='')
+
     class Meta:
         model = ChatMessage
-        fields = ['conversation', 'content']
+        fields = ['conversation', 'content', 'attachment']
 
     def validate_content(self, value):
         value = (value or '').strip()
-        if not value:
-            raise serializers.ValidationError('Сообщение не может быть пустым.')
         if len(value) > 10000:
             raise serializers.ValidationError('Сообщение слишком длинное (максимум 10000 символов).')
         return value
+
+    def validate(self, attrs):
+        # Раньше пустой content отклонялся в validate_content, из-за чего
+        # сообщение из одного файла (без подписи) вообще нельзя было отправить.
+        if not attrs.get('content') and not attrs.get('attachment'):
+            raise serializers.ValidationError(
+                {'content': 'Сообщение не может быть пустым.'},
+            )
+        return attrs
 
     def validate_conversation(self, conversation):
         user = self.context['request'].user
@@ -123,7 +147,9 @@ class ConversationSerializer(serializers.ModelSerializer):
             if obj.last_msg_created is None:
                 return None
             return {
-                'content': (obj.last_msg_content or '')[:120],
+                'content': self._preview(
+                    obj.last_msg_content, getattr(obj, 'last_msg_attachment_name', ''),
+                ),
                 'created_at': obj.last_msg_created.isoformat(),
                 'sender': obj.last_msg_sender,
                 'sender_name': obj.last_msg_sender_name or obj.last_msg_sender_username,
@@ -133,11 +159,20 @@ class ConversationSerializer(serializers.ModelSerializer):
         if not last:
             return None
         return {
-            'content': last.content[:120],
+            'content': self._preview(last.content, last.attachment_name),
             'created_at': last.created_at.isoformat(),
             'sender': last.sender_id,
             'sender_name': last.sender.full_name or last.sender.username,
         }
+
+    @staticmethod
+    def _preview(content, attachment_name):
+        """Превью последнего сообщения: текст, а для файла без подписи — имя файла."""
+        if content:
+            return content[:120]
+        if attachment_name:
+            return f'📎 {attachment_name}'[:120]
+        return ''
 
     def get_unread_count(self, obj):
         if hasattr(obj, 'unread_total'):
@@ -189,13 +224,30 @@ class NotificationSerializer(serializers.ModelSerializer):
     related_client = serializers.IntegerField(
         source='related_order.client_id', read_only=True, default=None,
     )
+    # Текст рендерится на языке ТЕКУЩЕГО пользователя: сменил язык в
+    # настройках — переведётся и лента уведомлений, а не только новые записи.
+    title = serializers.SerializerMethodField()
+    message = serializers.SerializerMethodField()
+    # Группа для экрана уведомлений; выводится из типа, в БД не хранится.
+    category = serializers.CharField(read_only=True)
 
     class Meta:
         model = Notification
         fields = [
             'id', 'user', 'company', 'type', 'type_display', 'title', 'message',
-            'is_read', 'read_at', 'is_unread',
+            'category', 'is_read', 'read_at', 'is_unread', 'is_archived', 'archived_at',
             'related_order', 'related_task', 'related_client',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at', 'read_at']
+
+    def _lang(self):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        return getattr(user, 'language', None) or 'uz_cyrl'
+
+    def get_title(self, obj):
+        return obj.localized_title(self._lang())
+
+    def get_message(self, obj):
+        return obj.localized_message(self._lang())

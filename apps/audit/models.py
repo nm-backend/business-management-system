@@ -69,6 +69,9 @@ class AuditLog(TimestampedModel):
         RESET_PASSWORD = 'reset_password', 'Сброс пароля'
         CHANGE_PASSWORD = 'change_password', 'Смена пароля'
         CHANGE_LANGUAGE = 'change_language', 'Смена языка'
+        # Выгрузка данных компании владельцем: это вынос всей базы клиента,
+        # поэтому у неё отдельное действие, а не общее «изменение».
+        EXPORT = 'export', 'Экспорт данных'
         ACCESS_KEY_ISSUED = 'access_key_issued', 'Код доступа выдан'
         ACCESS_KEY_REDEEMED = 'access_key_redeemed', 'Код доступа активирован'
         ACCESS_KEY_REVOKED = 'access_key_revoked', 'Код доступа отозван'

@@ -411,3 +411,39 @@ class SetupGate(models.Model):
 
     def __str__(self):
         return 'Setup gate'
+
+
+class UserSession(TimestampedModel):
+    """
+    Метаданные активной сессии — устройство рядом с выданным refresh-токеном.
+
+    Это НЕ вторая система аутентификации: источник истины остаётся прежним —
+    OutstandingToken и BlacklistedToken из simplejwt. Здесь хранится только то,
+    чего в них нет: с какого устройства и адреса вошли, чтобы владелец экрана
+    «Сеансларни бошқариш» видел не список идентификаторов, а понятные строки.
+
+    Связь с токеном — по jti. Отзыв сессии выполняется штатным механизмом
+    (запись в blacklist), а не удалением строки отсюда: удаление метаданных
+    не отзывает токен.
+    """
+    user = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE, related_name='sessions',
+        verbose_name='Пользователь',
+    )
+    jti = models.CharField(max_length=255, unique=True, db_index=True, verbose_name='JTI токена')
+    # Хеш отпечатка устройства (claim fpr). По нему определяется «текущая
+    # сессия»: этот же claim копируется в access-токен запроса.
+    fingerprint_hash = models.CharField(
+        max_length=64, blank=True, default='', verbose_name='Отпечаток устройства',
+    )
+    user_agent = models.CharField(max_length=400, blank=True, default='', verbose_name='Устройство')
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name='IP-адрес')
+    last_used_at = models.DateTimeField(null=True, blank=True, verbose_name='Последняя активность')
+
+    class Meta:
+        verbose_name = 'Сессия пользователя'
+        verbose_name_plural = 'Сессии пользователей'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.user_id}: {self.user_agent[:40] or self.jti[:8]}'

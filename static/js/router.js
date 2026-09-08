@@ -100,8 +100,8 @@ class Router {
             console.error('Error rendering route:', e);
             appElement.innerHTML = `
                 <div class="card route-error">
-                    <h1 data-i18n="common.error">Хатолик</h1>
-                    <p data-i18n="common.page_load_error">Саҳифани юклаб бўлмади.</p>
+                    <h1 data-i18n="common.error"></h1>
+                    <p data-i18n="common.page_load_error"></p>
                 </div>`;
             window.i18n.applyTranslations();
         }
@@ -111,9 +111,9 @@ class Router {
         appElement.innerHTML = `
             <div class="card route-error">
                 <p class="eyebrow">404</p>
-                <h1 data-i18n="common.page_not_found">Саҳифа топилмади</h1>
+                <h1 data-i18n="common.page_not_found"></h1>
                 <p><strong>${window.ui.escape(path)}</strong></p>
-                <a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard">Бош панел</a>
+                <a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard"></a>
             </div>`;
         window.i18n.applyTranslations();
         document.title = `${window.ui.t('common.page_not_found')} · SkladPro`;

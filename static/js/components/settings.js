@@ -101,6 +101,25 @@ class SettingsComponent {
 
             ${user.is_owner || user.is_admin ? `
                 <div class="section-title" data-i18n="settings.export"></div>
+                <!-- Тумблеры из макета «Ҳисобот экспорти». Каждый реально
+                     меняет файл: график рисуется в PDF, пояснения добавляют
+                     формулы показателей, детализация — сами операции.
+                     Права они не расширяют: у администратора детализация
+                     остаётся без сумм. -->
+                <div class="list-group" style="margin-bottom:8px;">
+                    <label class="list-row" style="cursor:pointer;">
+                        <span class="text-sm" data-i18n="export.include_charts"></span>
+                        <input type="checkbox" id="export-charts">
+                    </label>
+                    <label class="list-row" style="cursor:pointer;">
+                        <span class="text-sm" data-i18n="export.include_notes"></span>
+                        <input type="checkbox" id="export-notes">
+                    </label>
+                    <label class="list-row" style="cursor:pointer;">
+                        <span class="text-sm" data-i18n="export.include_details"></span>
+                        <input type="checkbox" id="export-details">
+                    </label>
+                </div>
                 <div class="list-group">
                     <div class="list-row" data-export="/reports/export/stock/" data-file="stock-report.xlsx" role="button" tabindex="0">
                         <span>📦 <span data-i18n="export.stock"></span></span><span>Excel</span>
@@ -122,6 +141,17 @@ class SettingsComponent {
                 <div class="list-row" id="change-password-row" role="button" tabindex="0">
                     <span>🔑 <span data-i18n="auth.change_password"></span></span><span>›</span>
                 </div>
+                <!-- «Сеансларни бошқариш» из макета: где я вошёл и как закрыть
+                     лишнее устройство. Управление только СВОИМИ сессиями. -->
+                <div class="list-row" id="sessions-row" role="button" tabindex="0">
+                    <span>💻 <span data-i18n="settings.sessions"></span></span><span>›</span>
+                </div>
+                <!-- Выгрузка данных СВОЕЙ компании (не платформенный backup:
+                     тот делает дамп всей базы и остаётся у супер-админа). -->
+                ${user.is_owner ? `
+                <div class="list-row" id="export-company-row" role="button" tabindex="0">
+                    <span>📦 <span data-i18n="settings.export_company_data"></span></span><span>›</span>
+                </div>` : ''}
                 <div class="list-row" id="about-row" role="button" tabindex="0">
                     <span>ℹ️ <span data-i18n="about.title"></span></span><span>›</span>
                 </div>
@@ -130,6 +160,13 @@ class SettingsComponent {
                 </div>
             </div>
         `;
+
+        container.querySelector('#sessions-row').addEventListener('click', () => this.openSessions());
+        container.querySelector('#export-company-row')?.addEventListener('click', () => {
+            // Переиспользуем существующий download() этого же компонента: он
+            // уже отправляет заголовок авторизации и корректно отдаёт blob.
+            this.download('/reports/export/company-data/', 'company-data.xlsx');
+        });
 
         // Dark mode toggle
         const darkToggle = container.querySelector('#dark-mode-toggle');
@@ -206,11 +243,12 @@ class SettingsComponent {
             }
         });
         container.querySelectorAll('[data-export]').forEach((row) => {
-            row.addEventListener('click', () => this.download(row.dataset.export, row.dataset.file));
+            row.addEventListener('click', () => this.download(
+                this.withExportOptions(row.dataset.export), row.dataset.file));
             row.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    this.download(row.dataset.export, row.dataset.file);
+                    this.download(this.withExportOptions(row.dataset.export), row.dataset.file);
                 }
             });
         });
@@ -243,6 +281,24 @@ class SettingsComponent {
         if (lang === window.i18n.currentLang) return;
         await window.i18n.setLanguage(lang);
         window.location.reload();
+    }
+
+    /**
+     * Дописывает к адресу выгрузки выбранные параметры из макета
+     * «Ҳисобот экспорти». Отключённые не отправляем вовсе: сервер трактует
+     * отсутствие параметра как «выключено».
+     */
+    withExportOptions(endpoint) {
+        const flags = {
+            charts: this.container?.querySelector('#export-charts')?.checked,
+            notes: this.container?.querySelector('#export-notes')?.checked,
+            detailed: this.container?.querySelector('#export-details')?.checked,
+        };
+        const params = Object.entries(flags)
+            .filter(([, enabled]) => enabled)
+            .map(([name]) => `${name}=1`);
+        if (!params.length) return endpoint;
+        return endpoint + (endpoint.includes('?') ? '&' : '?') + params.join('&');
     }
 
     async download(endpoint, filename) {
@@ -318,9 +374,27 @@ class SettingsComponent {
     async loadUsers() {
         const listEl = this.container.querySelector('#users-list');
         try {
-            const response = await window.api.request('/accounts/users/');
+            // Счётчики ролей из макета «Роллар ва аккаунтлар» («Егаси 1 киши»).
+            // Считает сервер по активным незаблокированным аккаунтам: считать
+            // по загруженной странице нельзя — список постраничный, а
+            // уволенные и заблокированные в штат не входят.
+            const [response, counts] = await Promise.all([
+                window.api.request('/accounts/users/'),
+                window.api.request('/accounts/users/role-counts/').catch(() => null),
+            ]);
             this.users = response.results || response;
-            listEl.innerHTML = this.users.map((u) => `
+
+            const rolesBlock = counts ? `
+                <div class="list-group" style="margin-bottom:12px;">
+                    ${['owner', 'admin', 'worker'].map((role) => `
+                        <div class="list-row" style="cursor:default;">
+                            <span class="text-sm" data-i18n="roles.${role}"></span>
+                            <span class="text-sm font-bold">${counts[role] ?? 0}
+                                <span data-i18n="settings.people_count"></span></span>
+                        </div>`).join('')}
+                </div>` : '';
+
+            listEl.innerHTML = rolesBlock + this.users.map((u) => `
                 <div class="list-row" data-user="${u.id}">
                     <div>
                         <div style="font-weight:600;font-size:14px;">
@@ -547,6 +621,81 @@ class SettingsComponent {
             });
         });
     }
+
+    /**
+     * Активные сессии: список устройств и завершение лишних.
+     *
+     * Работает поверх штатного JWT: сервер отдаёт выданные refresh-токены и
+     * отзывает их через blacklist. Текущее устройство помечено и не
+     * закрывается кнопкой «завершить остальные».
+     */
+    async openSessions() {
+        const modal = window.ui.modal('settings.sessions', `<div id="sessions-body"></div>`);
+        const body = modal.querySelector('#sessions-body');
+
+        const load = async () => {
+            window.listStates.loading(body, window.ui.t('common.loading'));
+            try {
+                const data = await window.api.request('/accounts/me/sessions/');
+                const rows = data.results || [];
+                body.innerHTML = `
+                    <p class="text-sm text-muted" style="margin-bottom:10px;"
+                       data-i18n="settings.sessions_hint"></p>
+                    <div class="list-group">
+                        ${rows.map((row) => `
+                            <div class="list-row" style="cursor:default;">
+                                <div style="min-width:0;">
+                                    <div class="text-sm font-bold">
+                                        ${window.ui.escape(row.user_agent || window.ui.t('settings.session_unknown_device'))}
+                                    </div>
+                                    <div class="text-sm text-muted">
+                                        ${window.ui.escape(row.ip_address || '')}
+                                        ${row.created_at ? ` · ${window.ui.datetime(row.created_at)}` : ''}
+                                    </div>
+                                </div>
+                                ${row.is_current
+                                    ? `<span class="badge badge-ready" data-i18n="settings.session_current"></span>`
+                                    : `<button class="btn btn-danger btn-sm" data-revoke="${window.ui.escape(row.jti)}"
+                                               data-i18n="settings.session_revoke"></button>`}
+                            </div>`).join('')}
+                    </div>
+                    ${rows.length > 1 ? `
+                        <button class="btn btn-secondary btn-block" id="revoke-others" style="margin-top:10px;"
+                                data-i18n="settings.session_revoke_others"></button>` : ''}`;
+
+                body.querySelectorAll('[data-revoke]').forEach((btn) => {
+                    btn.addEventListener('click', async () => {
+                        try {
+                            await window.api.request('/accounts/me/sessions/', {
+                                method: 'POST',
+                                body: JSON.stringify({ jti: btn.dataset.revoke }),
+                            });
+                            window.toast.success(window.ui.t('common.success'));
+                            await load();
+                        } catch (error) {
+                            window.toast.error(window.ui.errorText(error));
+                        }
+                    });
+                });
+                body.querySelector('#revoke-others')?.addEventListener('click', async () => {
+                    try {
+                        await window.api.request('/accounts/me/sessions/revoke-others/', {
+                            method: 'POST', body: JSON.stringify({}),
+                        });
+                        window.toast.success(window.ui.t('common.success'));
+                        await load();
+                    } catch (error) {
+                        window.toast.error(window.ui.errorText(error));
+                    }
+                });
+                window.i18n.applyTranslations();
+            } catch (e) {
+                window.listStates.error(body, window.ui.t('common.error'), () => load());
+            }
+        };
+        await load();
+    }
+
 }
 
 window.SettingsComponent = new SettingsComponent();

@@ -39,6 +39,16 @@ class WarehouseComponent {
                     <div class="font-bold" id="summary-value"></div>
                 </div>` : ''}
             </div>
+            <!-- «Тезкор маълумот» и «Склад якуний (бугун)» из макета:
+                 раньше сводка показывала только остатки и стоимость. -->
+            <div class="card" id="warehouse-quick" style="display:none;margin:0 0 10px;"></div>
+            <!-- Переключатель складов из макета «Асосий омбор»: до появления
+                 модели Warehouse склад был один и подразумевался неявно. -->
+            <div class="form-group" id="warehouse-picker" style="display:none;margin-bottom:10px;">
+                <label class="text-sm text-muted" data-i18n="warehouse.warehouse"></label>
+                <select id="warehouse-select" class="form-control"></select>
+            </div>
+            <div id="warehouse-cells" style="margin-bottom:10px;"></div>
             <div id="stone-type-tabs" class="tabs" role="tablist" aria-label="Stone type filters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
             <div class="search-box search-box--with-action">
                 <div class="search-field">
@@ -49,6 +59,7 @@ class WarehouseComponent {
                         style="padding:8px 12px;font-size:18px;">📷</button>
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;margin-top:10px;" data-i18n="warehouse.add_material"></button>` : ''}
+            ${canEdit ? `<button class="btn btn-success btn-block" id="receipt-doc-btn" style="margin-bottom:12px;" data-i18n="warehouse.receipt_document"></button>` : ''}
             <div class="list-group" id="materials-list"></div>
         `;
 
@@ -108,6 +119,7 @@ class WarehouseComponent {
 
         if (canEdit) {
             container.querySelector('#add-material-btn').addEventListener('click', () => this.openForm());
+            container.querySelector('#receipt-doc-btn').addEventListener('click', () => this.openReceiptForm());
         }
 
         const scanBtn = container.querySelector('#scan-barcode-btn');
@@ -116,7 +128,9 @@ class WarehouseComponent {
         }
 
         this.stoneTypeFilter = '';
+        this.warehouseFilter = '';
         window.i18n.applyTranslations();
+        await this.loadWarehouses();
         await this.loadStoneTypes();
         await this.loadMaterials();
         this.loadSummary();
@@ -147,9 +161,56 @@ class WarehouseComponent {
             const valueEl = document.getElementById('summary-value');
             if (valueEl) valueEl.textContent = window.ui.money(data.total_value ?? 0);
             wrap.style.display = 'flex';
+            // Разрез по видам нужен чипам: держим его на компоненте.
+            this.typeTotals = Object.fromEntries(
+                (data.type_totals || []).map((t) => [t.stone_type, t])
+            );
+            this.renderQuickStats(data);
+            this.loadStoneTypes();
         } catch (e) {
             /* итоги некритичны */
         }
+    }
+
+    /**
+     * «Тезкор маълумот» и «Склад якуний (бугун)» из макета «Хом ашё омбори».
+     *
+     * Цифры считает сервер по тем же правилам, что и карточка материала
+     * (stock_severity), иначе шапка и список показывали бы разное.
+     */
+    renderQuickStats(data) {
+        const box = document.getElementById('warehouse-quick');
+        if (!box) return;
+        const stats = data.quick_stats;
+        const today = data.today;
+        if (!stats && !today) { box.style.display = 'none'; return; }
+        const chip = (labelKey, value, cls = '') => `
+            <div style="flex:1 1 100px;text-align:center;">
+                <div class="font-bold ${cls}">${window.ui.escape(String(value))}</div>
+                <div class="text-sm text-muted" data-i18n="${labelKey}"></div>
+            </div>`;
+        box.innerHTML = `
+            <div class="card-title" style="margin-bottom:6px;"><span data-i18n="warehouse.quick_stats"></span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                ${chip('warehouse.types_count', data.types_count ?? 0)}
+                ${chip('warehouse.materials_count', data.materials_count ?? 0)}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                ${chip('warehouse.at_minimum', stats?.low_stock_count ?? 0, 'text-warning')}
+                ${chip('warehouse.critical_low', stats?.critical_count ?? 0, 'text-danger')}
+                ${chip('warehouse.recent_arrivals', stats?.recent_arrivals_count ?? 0)}
+                ${chip('warehouse.in_reserve', stats?.reserved_count ?? 0)}
+            </div>
+            ${today ? `
+                <div class="text-sm text-muted" style="margin-top:8px;">
+                    <span data-i18n="warehouse.today_summary"></span>:
+                    <span class="text-success">+${window.ui.qty(today.incoming)}</span>
+                    <span data-i18n="warehouse.today_incoming"></span> ·
+                    <span class="text-danger">−${window.ui.qty(today.outgoing)}</span>
+                    <span data-i18n="warehouse.today_outgoing"></span>
+                </div>` : ''}`;
+        box.style.display = '';
+        window.i18n.applyTranslations();
     }
 
     /**
@@ -310,15 +371,23 @@ class WarehouseComponent {
             const materials = response.results || [];
             const typeCounts = {};
             materials.forEach(m => {
-                const type = m.stone_type || 'Другое';
+                const type = m.stone_type || window.ui.t('common.other');
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
             });
             const types = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
             tabsEl.innerHTML = [
-                `<button class="tab-btn ${!this.stoneTypeFilter ? 'active' : ''}" data-stone-type="">Все (${materials.length})</button>`,
-                ...types.map(([type, count]) => 
-                    `<button class="tab-btn ${this.stoneTypeFilter === type ? 'active' : ''}" data-stone-type="${window.ui.escape(type)}">${window.ui.escape(type)} (${count})</button>`
-                )
+                `<button class="tab-btn ${!this.stoneTypeFilter ? 'active' : ''}" data-stone-type="">${window.ui.t('common.all')} (${materials.length})</button>`,
+                // В макете на чипе стоит ОСТАТОК вида («Оқ мрамор 250.75 м²»),
+                // а не число позиций. Сумму считает сервер; при смешанных
+                // единицах внутри вида она равна null — тогда показываем
+                // количество позиций, складывать м² с кг нельзя.
+                ...types.map(([type, count]) => {
+                    const totals = this.typeTotals?.[type];
+                    const label = (totals && totals.quantity !== null && totals.quantity !== undefined)
+                        ? `${window.ui.qty(totals.quantity)} ${window.ui.t('units.' + totals.unit)}`
+                        : count;
+                    return `<button class="tab-btn ${this.stoneTypeFilter === type ? 'active' : ''}" data-stone-type="${window.ui.escape(type)}">${window.ui.escape(type)} (${label})</button>`;
+                })
             ].join('');
             tabsEl.querySelectorAll('[data-stone-type]').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -333,6 +402,77 @@ class WarehouseComponent {
         }
     }
 
+    /**
+     * Список складов и карта ячеек (макеты «Асосий омбор», «Омбордаги жойлашув»).
+     *
+     * Если склад один, селектор не показываем — лишний элемент управления в
+     * интерфейсе, где выбирать не из чего.
+     */
+    async loadWarehouses() {
+        const picker = document.getElementById('warehouse-picker');
+        const select = document.getElementById('warehouse-select');
+        if (!picker || !select) return;
+        try {
+            const response = await window.api.request('/warehouse/warehouses/?is_archived=false');
+            const warehouses = response.results || response;
+            this.warehouses = warehouses;
+            if (warehouses.length < 2) {
+                picker.style.display = 'none';
+            } else {
+                picker.style.display = '';
+                select.innerHTML = `<option value="">${window.ui.escape(window.ui.t('warehouse.all_warehouses'))}</option>`
+                    + warehouses.map((w) => `<option value="${w.id}">${window.ui.escape(w.name)}</option>`).join('');
+                select.addEventListener('change', () => {
+                    this.warehouseFilter = select.value;
+                    this.loadMaterials();
+                    this.loadCells();
+                });
+            }
+            const preselected = warehouses.find((w) => w.is_default) || warehouses[0];
+            this.currentWarehouse = preselected ? preselected.id : null;
+            await this.loadCells();
+        } catch (e) {
+            // Карта складов некритична: список материалов должен открыться в любом случае.
+            picker.style.display = 'none';
+        }
+    }
+
+    /** Карта ячеек А-01…А-08 с занятостью (проценты считает сервер). */
+    async loadCells() {
+        const wrap = document.getElementById('warehouse-cells');
+        if (!wrap || window.listStates.gone(wrap)) return;
+        const warehouseId = this.warehouseFilter || this.currentWarehouse;
+        if (!warehouseId) { wrap.innerHTML = ''; return; }
+        try {
+            const data = await window.api.request(`/warehouse/warehouses/${warehouseId}/occupancy/`);
+            if (!data.cells || !data.cells.length) { wrap.innerHTML = ''; return; }
+            wrap.innerHTML = `
+                <div class="card" style="margin:0;">
+                    <div class="card-title" style="margin-bottom:6px;">
+                        <span data-i18n="warehouse.cells_map"></span>
+                    </div>
+                    <div class="text-sm text-muted" style="margin-bottom:8px;">
+                        <span data-i18n="warehouse.total_area"></span>: ${window.ui.qty(data.total_area)} m²
+                        · <span data-i18n="warehouse.occupied"></span>: ${data.occupancy_percent}%
+                        · <span data-i18n="warehouse.free"></span>: ${data.free_percent}%
+                    </div>
+                    <div class="cell-grid" style="display:flex;flex-wrap:wrap;gap:6px;">
+                        ${data.cells.map((c) => `
+                            <div class="cell-chip" style="flex:1 1 90px;padding:8px;border-radius:8px;
+                                 background:var(--surface-2, #f5f5f7);text-align:center;">
+                                <div class="font-bold">${window.ui.escape(c.code)}</div>
+                                <div class="text-sm ${Number(c.occupancy_percent) >= 90 ? 'text-danger' : 'text-muted'}">
+                                    ${c.occupancy_percent}%
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                </div>`;
+            window.i18n.applyTranslations();
+        } catch (e) {
+            wrap.innerHTML = '';
+        }
+    }
+
     async loadMaterials() {
         const listEl = document.getElementById('materials-list');
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
@@ -342,6 +482,8 @@ class WarehouseComponent {
         try {
             let query = `?is_archived=${this.tab === 'archive'}`;
             if (this.search) query += `&search=${encodeURIComponent(this.search)}`;
+            // Фильтр «Қайси омбор» из макета.
+            if (this.warehouseFilter) query += `&warehouse=${encodeURIComponent(this.warehouseFilter)}`;
             const response = await window.api.request(`/warehouse/raw-materials/${query}`);
             let materials = response.results || [];
             if (this.stoneTypeFilter) {
@@ -390,9 +532,26 @@ class WarehouseComponent {
                     <div style="font-size:15px;font-weight:600;" class="${m.is_low_stock ? 'text-danger' : ''}">
                         ${window.ui.qty(m.quantity)} <span data-i18n="units.${m.unit}"></span>
                     </div>
-                    ${m.is_low_stock ? `<div class="text-sm text-danger" data-i18n="warehouse.low_stock_warning"></div>` : ''}
+                    ${this.severityLabel(m)}
+                    ${m.cell_code ? `<div class="text-sm text-muted">${window.ui.escape(m.cell_code)}</div>` : ''}
                 </div>
             </div>`;
+    }
+
+    /**
+     * Подпись остатка по градации сервера (макет «Минимум қолдиқлар»).
+     *
+     * Раньше был единственный флаг is_low_stock, и «почти закончилось»
+     * выглядело так же, как «уже не хватает под заказы».
+     */
+    severityLabel(m) {
+        if (m.stock_severity === 'critical') {
+            return `<div class="text-sm text-danger" data-i18n="warehouse.severity_critical"></div>`;
+        }
+        if (m.stock_severity === 'low' || m.is_low_stock) {
+            return `<div class="text-sm text-warning" data-i18n="warehouse.severity_low"></div>`;
+        }
+        return '';
     }
 
     openDetail(m) {
@@ -406,8 +565,8 @@ class WarehouseComponent {
         const maxStock = m.max_stock || totalQty * 1.3;
         const lowStock = m.is_low_stock;
         const statusBadge = m.is_archived 
-            ? `<span class="badge badge-cancel">Архив</span>` 
-            : (lowStock ? `<span class="badge badge-warning">Критик</span>` : `<span class="badge badge-ready">Актив</span>`);
+            ? `<span class="badge badge-cancel">${window.ui.t('common.archived')}</span>` 
+            : (lowStock ? `<span class="badge badge-warning">${window.ui.t('warehouse.critical')}</span>` : `<span class="badge badge-ready">${window.ui.t('common.active')}</span>`);
         
         const modal = window.ui.modal('warehouse.title', `
             ${m.photo ? `<div style="margin:-20px -20px 14px;border-radius:12px;overflow:hidden;height:180px;background:var(--bg-secondary);">
@@ -424,19 +583,19 @@ class WarehouseComponent {
             <!-- Разбивка количества по макету -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
                 <div class="card" style="margin:0;padding:10px;${lowStock ? 'border-color:var(--danger-color);' : ''}">
-                    <div class="text-sm text-muted">Жами колдик</div>
+                    <div class="text-sm text-muted" data-i18n="warehouse.total_stock"></div>
                     <div style="font-weight:700;font-size:18px;${lowStock ? 'color:var(--danger-color);' : ''}">${window.ui.qty(totalQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
                 <div class="card" style="margin:0;padding:10px;">
-                    <div class="text-sm text-muted">Минимум</div>
+                    <div class="text-sm text-muted" data-i18n="warehouse.min_stock"></div>
                     <div style="font-weight:700;font-size:18px;">${window.ui.qty(minStock)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
                 <div class="card" style="margin:0;padding:10px;">
-                    <div class="text-sm text-muted">Резерв</div>
+                    <div class="text-sm text-muted" data-i18n="warehouse.reserved"></div>
                     <div style="font-weight:700;font-size:18px;">${window.ui.qty(reservedQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
                 <div class="card" style="margin:0;padding:10px;">
-                    <div class="text-sm text-muted">Мавжуд</div>
+                    <div class="text-sm text-muted" data-i18n="warehouse.available"></div>
                     <div style="font-weight:700;font-size:18px;color:var(--success-color);">${window.ui.qty(availableQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
             </div>
@@ -461,6 +620,11 @@ class WarehouseComponent {
                     <button class="btn btn-primary btn-sm" id="edit-material" data-i18n="common.edit"></button>
                     <button class="btn btn-danger btn-sm" id="outgoing-material" data-i18n="warehouse.outgoing"></button>
                 </div>
+                <!-- Возврат («Қайтарилган») отдельной кнопкой: раньше его
+                     проводили обычным приходом и в истории он был неотличим
+                     от новой поставки. -->
+                <button class="btn btn-secondary btn-sm btn-block" id="return-material"
+                        style="margin-top:8px;" data-i18n="warehouse.return_material"></button>
                 <button class="btn btn-secondary btn-sm btn-block" id="archive-material" style="margin-top:8px;" data-i18n="common.archive"></button>` 
                 : (canEdit ? `
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
@@ -481,6 +645,10 @@ class WarehouseComponent {
             modal.querySelector('#outgoing-material')?.addEventListener('click', () => {
                 window.ui.closeModal(modal);
                 this.openOutgoingForm(m);
+            });
+            modal.querySelector('#return-material')?.addEventListener('click', () => {
+                window.ui.closeModal(modal);
+                this.openReturnForm(m);
             });
             modal.querySelector('#archive-material')?.addEventListener('click', async () => {
                 if (!m.is_archived && !(await window.confirmation.confirm(
@@ -508,22 +676,65 @@ class WarehouseComponent {
         if (window.listStates.gone(listEl)) return;
         window.listStates.skeleton(listEl);
         try {
-            const response = await window.api.request('/warehouse/stock-movements/?page_size=50');
+            // Вкладки «Ҳаммаси / Келган / Ишлатилган / Қайтарилган» из макета.
+            // Фильтрует СЕРВЕР: отбор загруженной страницы врал бы начиная со
+            // второй страницы, а итоги считались бы по видимому куску.
+            const category = this.historyCategory || '';
+            const query = category ? `?page_size=50&category=${category}` : '?page_size=50';
+            const [response, totals] = await Promise.all([
+                window.api.request(`/warehouse/stock-movements/${query}`),
+                window.api.request(`/warehouse/stock-movements/totals/${category ? `?category=${category}` : ''}`)
+                    .catch(() => null),
+            ]);
             const rows = response.results || response;
+
+            const tabs = `
+                <div class="tabs" style="margin-bottom:10px;">
+                    ${[['', 'warehouse.history_all'],
+                       ['incoming', 'warehouse.history_incoming'],
+                       ['outgoing', 'warehouse.history_outgoing'],
+                       ['returned', 'warehouse.history_returned']].map(([value, key]) => `
+                        <button class="tab-btn ${category === value ? 'active' : ''}"
+                                data-history-tab="${value}" data-i18n="${key}"></button>`).join('')}
+                </div>`;
+            const totalsBlock = totals ? `
+                <div class="card" style="margin-top:10px;">
+                    <div class="text-sm">
+                        <span data-i18n="warehouse.total_incoming"></span>:
+                        <span class="text-success">+${window.ui.qty(totals.incoming)}</span>
+                        · <span data-i18n="warehouse.total_outgoing"></span>:
+                        <span class="text-danger">−${window.ui.qty(totals.outgoing)}</span>
+                        · <span data-i18n="warehouse.total_net"></span>:
+                        <span class="font-bold">${window.ui.qty(totals.net)}</span>
+                    </div>
+                </div>` : '';
+
+            const bindTabs = () => {
+                listEl.querySelectorAll('[data-history-tab]').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        this.historyCategory = btn.dataset.historyTab;
+                        this.loadHistory();
+                    });
+                });
+            };
+
             if (!rows.length) {
-                window.listStates.empty(listEl, window.ui.t('common.no_data'));
+                listEl.innerHTML = tabs + `<div class="card list-state" data-i18n="common.no_data"></div>` + totalsBlock;
+                bindTabs();
+                window.i18n.applyTranslations();
                 return;
             }
+            // Возврат («Қайтарилган») пополняет склад — знак и цвет как у прихода.
             const sign = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? '−' : '+');
             const colour = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? 'text-danger' : 'text-success');
-            listEl.innerHTML = rows.map((r) => `
+            listEl.innerHTML = tabs + rows.map((r) => `
                 <div class="list-row" style="cursor:default;">
                     <div style="min-width:0;">
                         <div style="font-size:14px;font-weight:600;">
                             ${window.ui.escape(r.material_name || r.product_name || '-')}
                         </div>
                         <div class="text-sm text-muted">
-                            ${window.ui.escape(r.movement_type_display || r.movement_type)}
+                            ${window.ui.escape(window.ui.t('movement_types.' + r.movement_type))}
                             · ${window.ui.datetime(r.created_at)}
                             ${r.created_by_name ? ` · ${window.ui.escape(r.created_by_name)}` : ''}
                         </div>
@@ -534,7 +745,8 @@ class WarehouseComponent {
                             ${r.unit ? `<span data-i18n="units.${r.unit}"></span>` : ''}
                         </div>
                     </div>
-                </div>`).join('');
+                </div>`).join('') + totalsBlock;
+            bindTabs();
             window.i18n.applyTranslations();
         } catch (e) {
             window.listStates.error(listEl, window.ui.t('common.error'), () => this.loadHistory());
@@ -589,6 +801,30 @@ class WarehouseComponent {
                 </div>
                 <div class="form-group"><label data-i18n="warehouse.storage_location"></label>
                     <input name="storage_location" class="form-control" value="${window.ui.escape(m?.storage_location || '')}"></div>
+                <!-- Размещение и состояние партии (макеты «Асосий омбор» и
+                     «Хом ашё омбори»): раньше место было только текстом, а
+                     треснувшая плита выглядела как обычный остаток. -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="form-group"><label data-i18n="warehouse.warehouse"></label>
+                        <select name="warehouse" class="form-control" id="material-warehouse">
+                            <option value="" data-i18n="common.select"></option>
+                            ${(this.warehouses || []).map((w) => `
+                                <option value="${w.id}" ${String(m?.warehouse) === String(w.id) ? 'selected' : ''}>
+                                    ${window.ui.escape(w.name)}
+                                </option>`).join('')}
+                        </select></div>
+                    <div class="form-group"><label data-i18n="warehouse.cell"></label>
+                        <select name="cell" class="form-control" id="material-cell">
+                            <option value="" data-i18n="common.select"></option>
+                        </select></div>
+                </div>
+                <div class="form-group"><label data-i18n="warehouse.condition"></label>
+                    <select name="condition" class="form-control">
+                        <option value="" data-i18n="common.select"></option>
+                        ${['excellent', 'good', 'poor', 'critical'].map((c) => `
+                            <option value="${c}" ${m?.condition === c ? 'selected' : ''}
+                                    data-i18n="material_conditions.${c}"></option>`).join('')}
+                    </select></div>
                 <div class="form-group"><label data-i18n="warehouse.supplier"></label>
                     <input name="supplier" class="form-control" value="${window.ui.escape(m?.supplier || '')}"></div>
                 <div class="form-group"><label data-i18n="warehouse.arrival_date"></label>
@@ -605,17 +841,45 @@ class WarehouseComponent {
             </form>
         `);
 
+        // Ячейки зависят от выбранного склада: показывать чужие бессмысленно —
+        // сервер такое размещение отклонит.
+        const whSelect = modal.querySelector('#material-warehouse');
+        const cellSelect = modal.querySelector('#material-cell');
+        const loadCellOptions = async (warehouseId, selected = '') => {
+            cellSelect.innerHTML = `<option value=""></option>`;
+            if (!warehouseId) return;
+            try {
+                const resp = await window.api.request(
+                    `/warehouse/cells/?warehouse=${encodeURIComponent(warehouseId)}&is_archived=false`
+                );
+                const cells = resp.results || resp;
+                cellSelect.innerHTML = `<option value=""></option>` + cells.map((c) => `
+                    <option value="${c.id}" ${String(selected) === String(c.id) ? 'selected' : ''}>
+                        ${window.ui.escape(c.code)}
+                    </option>`).join('');
+            } catch (err) {
+                /* без ячеек форма всё равно работает */
+            }
+        };
+        if (whSelect && cellSelect) {
+            loadCellOptions(m?.warehouse || '', m?.cell || '');
+            whSelect.addEventListener('change', () => loadCellOptions(whSelect.value));
+        }
+
         modal.querySelector('#material-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             // formBody сам выберет multipart, если приложили фото: JSON.stringify
             // выбрасывал файл, и картинка не доходила до сервера.
             const body = await window.ui.formBody(e.target);
+            // Пустые значения выпиливаем: DRF ждёт id или отсутствие поля,
+            // пустая строка приводит к 400.
+            const optional = ['arrival_date', 'warehouse', 'cell', 'condition'];
             if (body instanceof FormData) {
-                if (!body.get('arrival_date')) body.delete('arrival_date');
+                optional.forEach((name) => { if (!body.get(name)) body.delete(name); });
             }
             const payload = body instanceof FormData ? body : (() => {
                 const data = JSON.parse(body);
-                if (!data.arrival_date) delete data.arrival_date;
+                optional.forEach((name) => { if (!data[name]) delete data[name]; });
                 return JSON.stringify(data);
             })();
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
@@ -711,6 +975,18 @@ class WarehouseComponent {
                         <option value="loss" data-i18n="warehouse.movement_loss"></option>
                         <option value="adjustment" data-i18n="warehouse.movement_adjustment"></option>
                     </select></div>
+                <!-- «Қайси мақсадда» и «Буюртма» из макета «Материални ишлатиш»:
+                     без них списание анонимно — в истории не видно, на какой
+                     заказ ушло сырьё. -->
+                <div class="form-group"><label data-i18n="warehouse.outgoing_purpose"></label>
+                    <select name="purpose" class="form-control">
+                        <option value=""></option>
+                        ${['production', 'sample', 'internal', 'write_off', 'other'].map((v) =>
+                            `<option value="${v}" data-i18n="outgoing_purposes.${v}"></option>`).join('')}
+                    </select></div>
+                <div class="form-group" id="outgoing-order-group" style="display:none;">
+                    <label data-i18n="warehouse.outgoing_order"></label>
+                    <select name="order" class="form-control"><option value=""></option></select></div>
                 <div class="form-group"><label data-i18n="warehouse.document_number"></label>
                     <input name="document_number" class="form-control"></div>
                 <div class="form-group"><label data-i18n="warehouse.outgoing_date"></label>
@@ -720,6 +996,28 @@ class WarehouseComponent {
                 <button type="submit" class="btn btn-danger btn-block" data-i18n="warehouse.outgoing"></button>
             </form>
         `);
+        // Список заказов подгружаем только когда цель — производство:
+        // для образца или внутренних нужд заказа нет.
+        const purposeSelect = modal.querySelector('[name=purpose]');
+        const orderGroup = modal.querySelector('#outgoing-order-group');
+        const orderSelect = modal.querySelector('[name=order]');
+        let ordersLoaded = false;
+        purposeSelect?.addEventListener('change', async () => {
+            const needsOrder = purposeSelect.value === 'production';
+            orderGroup.style.display = needsOrder ? '' : 'none';
+            if (!needsOrder || ordersLoaded) return;
+            try {
+                const resp = await window.api.request('/orders/orders/?is_archived=false&page_size=100');
+                const orders = resp.results || resp;
+                orderSelect.innerHTML = '<option value=""></option>' + orders.map((o) =>
+                    `<option value="${o.id}">#${o.id} ${window.ui.escape(o.product_name || o.custom_product_name || '')}</option>`
+                ).join('');
+                ordersLoaded = true;
+            } catch (error) {
+                orderGroup.style.display = 'none';
+            }
+        });
+
         modal.querySelector('#outgoing-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const data = Object.fromEntries(new FormData(e.target));
@@ -727,6 +1025,145 @@ class WarehouseComponent {
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
                     await window.api.request(`/warehouse/raw-materials/${m.id}/outgoing/`, {
+                        method: 'POST',
+                        body: JSON.stringify(data),
+                    });
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadMaterials();
+                    this.loadSummary();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    /**
+     * Документ прихода: одна поставка — несколько материалов.
+     *
+     * Макет «Материални қабул қилиш» задаёт поставщика, номер и дату один раз,
+     * а позиции добавляются кнопкой «Яна материал қўшиш». Раньше приход
+     * оформлялся по одному материалу, и общие реквизиты приходилось вводить
+     * заново на каждую позицию.
+     */
+    async openReceiptForm() {
+        const isOwner = window.currentUser.is_owner;
+        const today = new Date().toISOString().slice(0, 10);
+        const resp = await window.api.request('/warehouse/raw-materials/?is_archived=false&page_size=200');
+        const materials = resp.results || resp;
+
+        const lineRow = () => `
+            <div class="receipt-line" style="display:grid;grid-template-columns:1fr 90px ${isOwner ? '110px' : ''} auto;gap:8px;margin-bottom:8px;">
+                <select name="material" class="form-control">
+                    <option value=""></option>
+                    ${materials.map((m) => `<option value="${m.id}">${window.ui.escape(m.name)}</option>`).join('')}
+                </select>
+                <input name="quantity" type="number" step="0.001" min="0.001" class="form-control"
+                       placeholder="${window.ui.t('warehouse.quantity')}">
+                ${isOwner ? `<input name="price_per_unit" type="number" step="0.01" min="0" class="form-control"
+                       placeholder="${window.ui.t('warehouse.purchase_price')}">` : ''}
+                <button type="button" class="icon-btn receipt-line-remove" aria-label="${window.ui.t('common.delete')}">🗑️</button>
+            </div>`;
+
+        const modal = window.ui.modal('warehouse.receipt_document', `
+            <form id="receipt-form">
+                <div class="form-group"><label data-i18n="warehouse.supplier"></label>
+                    <input name="supplier" class="form-control" maxlength="255"></div>
+                <div class="form-group"><label data-i18n="warehouse.document_number"></label>
+                    <input name="document_number" class="form-control" maxlength="100" placeholder="K-1258"></div>
+                <div class="form-group"><label data-i18n="warehouse.arrival_date"></label>
+                    <input name="receipt_date" type="date" class="form-control" value="${today}" max="${today}"></div>
+                <div class="form-group"><label data-i18n="warehouse.receipt_lines"></label>
+                    <div id="receipt-lines">${lineRow()}</div>
+                    <button type="button" class="btn btn-secondary btn-sm btn-block" id="add-line"
+                            style="margin-top:6px;" data-i18n="warehouse.add_material_line"></button>
+                </div>
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <input name="comment" class="form-control"></div>
+                <button type="submit" class="btn btn-success btn-block" data-i18n="warehouse.incoming"></button>
+            </form>
+        `);
+
+        const bindRemove = () => {
+            modal.querySelectorAll('.receipt-line-remove').forEach((btn) => {
+                btn.onclick = () => {
+                    const rows = modal.querySelectorAll('.receipt-line');
+                    if (rows.length > 1) btn.closest('.receipt-line').remove();
+                };
+            });
+        };
+        bindRemove();
+        modal.querySelector('#add-line').addEventListener('click', () => {
+            modal.querySelector('#receipt-lines').insertAdjacentHTML('beforeend', lineRow());
+            bindRemove();
+        });
+        window.i18n.applyTranslations();
+
+        modal.querySelector('#receipt-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const lines = [...form.querySelectorAll('.receipt-line')].map((row) => {
+                const material = row.querySelector('[name=material]').value;
+                const quantity = row.querySelector('[name=quantity]').value;
+                const price = row.querySelector('[name=price_per_unit]')?.value;
+                if (!material || !quantity) return null;
+                const line = { material, quantity };
+                if (price) line.price_per_unit = price;
+                return line;
+            }).filter(Boolean);
+
+            if (!lines.length) {
+                window.toast.error(window.ui.t('common.error'));
+                return;
+            }
+            const payload = {
+                supplier: form.querySelector('[name=supplier]').value.trim(),
+                document_number: form.querySelector('[name=document_number]').value.trim(),
+                receipt_date: form.querySelector('[name=receipt_date]').value,
+                comment: form.querySelector('[name=comment]').value.trim(),
+                lines,
+            };
+            await window.ui.submitGuard(form.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request('/warehouse/goods-receipts/', {
+                        method: 'POST', body: JSON.stringify(payload),
+                    });
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadMaterials();
+                    this.loadSummary();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    /** Возврат материала на склад (вкладка «Қайтарилган» в истории движений). */
+    openReturnForm(m) {
+        const today = new Date().toISOString().slice(0, 10);
+        const modal = window.ui.modal('warehouse.return_material', `
+            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(m.name)}</p>
+            <form id="return-form">
+                <div class="form-group"><label data-i18n="warehouse.quantity"></label>
+                    <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
+                <div class="form-group"><label data-i18n="warehouse.document_number"></label>
+                    <input name="document_number" class="form-control"></div>
+                <div class="form-group"><label data-i18n="warehouse.arrival_date"></label>
+                    <input name="return_date" type="date" class="form-control" value="${today}" max="${today}"></div>
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <input name="reason" class="form-control"></div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="warehouse.return_material"></button>
+            </form>
+        `);
+        modal.querySelector('#return-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            Object.keys(data).forEach((k) => { if (data[k] === '') delete data[k]; });
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request(`/warehouse/raw-materials/${m.id}/returned/`, {
                         method: 'POST',
                         body: JSON.stringify(data),
                     });

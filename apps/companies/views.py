@@ -23,11 +23,18 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.accounts.token_utils import blacklist_all_tokens
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
+
 from apps.audit.models import AuditLog
 from apps.audit.services import write_audit_log
 from apps.core.permissions import IsOwnerOrAdmin, IsSuperAdmin
 from .models import Company, SubscriptionChange, SubscriptionPlan
-from .serializers import CompanySerializer, CompanyCreateSerializer
+from .serializers import (
+    CompanySerializer, CompanyCreateSerializer, CompanySettingsSerializer,
+)
+from core.utils import translate
+
 from .subscriptions import (
     SubscriptionError,
     activate_subscription,
@@ -176,6 +183,34 @@ class CompanyViewSet(viewsets.ModelViewSet):
         return Response({'is_active': company.is_active})
 
     # ── Platform-level статистика ──────────────────────────────────
+
+    @action(detail=False, methods=['get', 'patch'], url_path='my-settings',
+            permission_classes=[IsAuthenticated])
+    def my_settings(self, request):
+        """
+        GET/PATCH /api/v1/companies/my-settings/ — настройки СВОЕЙ компании.
+
+        Читают все сотрудники (форма сдачи работы должна знать требуемый
+        минимум снимков), меняет только владелец. Ни id, ни имя чужой компании
+        сюда не передаются: работаем строго с request.user.company.
+        """
+        company = request.user.company
+        if company is None:
+            return Response({'detail': 'У пользователя нет компании'}, status=400)
+
+        if request.method == 'PATCH':
+            if not request.user.is_owner:
+                raise PermissionDenied('Настройки компании меняет только владелец')
+            serializer = CompanySettingsSerializer(company, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            updated = serializer.save()
+            write_audit_log(
+                action=AuditLog.Action.UPDATE, actor=request.user,
+                target=updated, changes=serializer.validated_data, request=request,
+            )
+            return Response(CompanySettingsSerializer(updated).data)
+
+        return Response(CompanySettingsSerializer(company).data)
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
@@ -452,15 +487,16 @@ class CompanyViewSet(viewsets.ModelViewSet):
         notify(
             superadmins,
             Notification.NotificationType.SUBSCRIPTION_RENEWAL_REQUEST,
-            company.name,
-            f'{company.name} — {end_text}',
+            title=company.name,
+            message_key='notifications.msg_subscription_renewal_request',
+            params={'company': company.name, 'end': end_text},
             company=company,
         )
         for admin in superadmins:
             send_push_to_user(
                 admin,
                 company.name,
-                f'Запрос на продление подписки — {end_text}',
+                translate('notifications.push_renewal_request', admin.language, {'end': end_text}),
                 data={'url': '/#/companies'},
             )
         write_audit_log(

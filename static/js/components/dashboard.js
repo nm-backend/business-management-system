@@ -172,8 +172,8 @@ class DashboardComponent {
             const wrap = document.createElement('div');
             wrap.innerHTML = `
                 <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-                    <span>Касса операциялари</span>
-                    <a href="#/finance" class="text-sm" style="color:var(--primary);">Барчаси ›</a>
+                    <span data-i18n="dashboard.cash_operations"></span>
+                    <a href="#/finance" class="text-sm" style="color:var(--primary);"><span data-i18n="common.view_all"></span> ›</a>
                 </div>
                 <div class="list-group list-group-compact">
                     ${operations.map(op => `
@@ -308,7 +308,12 @@ class DashboardComponent {
     }
 
     async renderAdmin(container) {
-        const data = await window.api.request('/reports/analytics/admin/');
+        // Квартальный операционный отчёт по ТЗ есть и у администратора —
+        // без единой денежной цифры (сервер отдаёт вариант kind=operational).
+        const [data, quarter] = await Promise.all([
+            window.api.request('/reports/analytics/admin/'),
+            window.api.request('/reports/analytics/quarterly/').catch(() => null),
+        ]);
         const user = window.currentUser;
 
         container.innerHTML = `
@@ -341,6 +346,18 @@ class DashboardComponent {
                             <span>${window.ui.escape(c.name)}</span>
                             <span class="badge badge-cancel" data-i18n="payment_statuses.unpaid"></span>
                         </a>`).join('')}
+                </div>` : ''}
+
+            ${quarter ? `
+                <div class="section-title">
+                    <span data-i18n="admin_analytics.quarterly"></span>
+                    · ${window.ui.t('finance.quarter_label', { quarter: quarter.quarter, year: quarter.year })}
+                </div>
+                <div class="list-group list-group-compact">
+                    <div class="list-row"><span data-i18n="admin_analytics.orders_total"></span><span>${quarter.orders_total}</span></div>
+                    <div class="list-row"><span data-i18n="admin_analytics.orders_delivered"></span><span>${quarter.orders_delivered}</span></div>
+                    <div class="list-row"><span data-i18n="admin_analytics.produced"></span><span>${window.ui.qty(quarter.produced_quantity)}</span></div>
+                    <div class="list-row"><span data-i18n="admin_analytics.defects"></span><span>${window.ui.qty(quarter.defect_quantity)}</span></div>
                 </div>` : ''}
         `;
     }

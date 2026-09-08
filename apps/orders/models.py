@@ -46,6 +46,16 @@ class Order(TimestampedModel, SoftDeleteModel):
     unit = models.CharField(max_length=20, choices=UnitChoices.choices,
                             default=UnitChoices.IZDELIE, verbose_name='Единица измерения')
     deadline = models.DateTimeField(null=True, blank=True, verbose_name='Срок выполнения')
+    # Срок ОПЛАТЫ, отдельно от срока изготовления (макет «Қарз назорати»:
+    # «Муддати ўтган қарзлар», «15 кундан ошган»). Раньше просрочку долга
+    # считали по deadline — сроку изготовления: заказ, сданный вовремя с
+    # отсрочкой платежа на месяц, немедленно считался просроченным.
+    #
+    # Не задан — поведение прежнее, просрочка по deadline. Это сохраняет
+    # смысл всех существующих заказов и отчётов (см. payment_due_or_deadline).
+    payment_due_date = models.DateTimeField(
+        null=True, blank=True, db_index=True, verbose_name='Срок оплаты',
+    )
     worker = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_orders', verbose_name='Работник')
     comment = models.TextField(blank=True, verbose_name='Комментарий')
     photo = models.ImageField(upload_to='orders/', blank=True, null=True, validators=[validate_file_size], verbose_name='Фото')
@@ -139,6 +149,31 @@ class Order(TimestampedModel, SoftDeleteModel):
         else:
             self.payment_status = self.PaymentStatus.UNPAID
         self.save(update_fields=['payment_status', 'updated_at'])
+
+    @property
+    def payment_due_or_deadline(self):
+        """Срок оплаты, а если он не задан — срок изготовления (совместимость)."""
+        return self.payment_due_date or self.deadline
+
+    @property
+    def payment_overdue_days(self):
+        """
+        На сколько дней просрочена оплата. 0 — если долга нет или срок не вышел.
+
+        Считается по фактически неоплаченной сумме: заказ с полной оплатой
+        просроченным не бывает, даже если срок давно прошёл.
+        """
+        from django.utils import timezone
+
+        due = self.payment_due_or_deadline
+        if not due:
+            return 0
+        if (self.paid_amount or Decimal('0')) >= (self.total_amount or Decimal('0')):
+            return 0
+        if self.status == self.Status.CANCELLED or self.is_archived:
+            return 0
+        delta = timezone.now() - due
+        return max(delta.days, 0)
 
     def apply_product_requirement(self):
         """

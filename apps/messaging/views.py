@@ -80,6 +80,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
                     Subquery(my_last_read), Value(epoch, output_field=DateTimeField()),
                 ),
                 last_msg_content=Subquery(last_msg.values('content')[:1]),
+                last_msg_attachment_name=Subquery(last_msg.values('attachment_name')[:1]),
                 last_msg_created=Subquery(last_msg.values('created_at')[:1]),
                 last_msg_sender=Subquery(last_msg.values('sender_id')[:1]),
                 last_msg_sender_name=Subquery(last_msg.values('sender__full_name')[:1]),
@@ -154,6 +155,7 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
     Отправка сообщений в чат.
 
     POST /api/v1/messaging/messages/  {conversation, content}
+    POST multipart/form-data          {conversation, content?, attachment}
     """
     permission_classes = [IsCompanyMember]
     serializer_class = ChatMessageCreateSerializer
@@ -164,12 +166,17 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         conversation = serializer.validated_data['conversation']
+        attachment = serializer.validated_data.get('attachment')
 
         message = ChatMessage.objects.create(
             company_id=conversation.company_id,
             conversation=conversation,
             sender=request.user,
-            content=serializer.validated_data['content'],
+            content=serializer.validated_data.get('content', ''),
+            attachment=attachment,
+            # Имя берём из исходного файла: в storage путь будет обезличен,
+            # а получателю нужно видеть «Договор.pdf».
+            attachment_name=(getattr(attachment, 'name', '') or '')[:255],
         )
 
         # Беседа поднимается наверх списка; авто-поля обходим явным update.
@@ -211,7 +218,7 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
                     participant.user,
                     Notification.NotificationType.NEW_MESSAGE,
                     request.user.full_name or request.user.username,
-                    message.content[:200],
+                    message.preview_text[:200],
                 )
 
         out = ChatMessageSerializer(message, context={'request': request})
@@ -310,6 +317,19 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         if is_read is not None:
             queryset = queryset.filter(is_read=is_read.lower() == 'true')
 
+        # Вкладка «Архив» из макета: по умолчанию основная лента архивные не
+        # показывает, но они никуда не деваются — ?is_archived=true открывает
+        # историю (ТЗ: важные записи не удаляются).
+        is_archived = self.request.query_params.get('is_archived')
+        queryset = queryset.filter(
+            is_archived=(is_archived is not None and is_archived.lower() == 'true')
+        )
+
+        category = self.request.query_params.get('category')
+        if category:
+            types = Notification.types_for_category(category)
+            queryset = queryset.filter(type__in=types) if types else queryset.none()
+
         # Пагинация требует детерминированного порядка: без order_by Django
         # предупреждает UnorderedObjectListWarning, а страницы «плавают».
         return queryset.order_by('-created_at')
@@ -326,6 +346,22 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         notification.is_read = True
         notification.read_at = timezone.now()
         notification.save()
+        return Response(self.get_serializer(notification).data)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        """
+        Убирает уведомление в архив (макет «Билдиришномалар» → «Архив»).
+
+        Именно архивирование, а не удаление: история уведомлений сохраняется.
+        """
+        notification = self.get_object()
+        if notification.user != request.user:
+            return Response(
+                {'detail': 'Можно архивировать только свои уведомления.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        notification.archive()
         return Response(self.get_serializer(notification).data)
 
     @action(detail=False, methods=['post'])

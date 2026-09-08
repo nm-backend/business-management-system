@@ -175,3 +175,18 @@ class CompanyCreateSerializer(serializers.ModelSerializer):
         # SaaS: новая компания сразу получает триал-подписку (30 дней).
         activate_for_new_company(company)
         return company
+
+
+class CompanySettingsSerializer(serializers.ModelSerializer):
+    """
+    Настройки своей компании (владелец меняет, сотрудники читают).
+
+    Сознательно узкий состав полей: подписка, активность и логотип живут в
+    платформенном CompanySerializer у супер-администратора. Здесь только то,
+    что владелец настраивает сам.
+    """
+
+    class Meta:
+        model = Company
+        fields = ['id', 'name', 'min_work_photos']
+        read_only_fields = ['id', 'name']

@@ -2,6 +2,20 @@
 {% load static %}
 
 {% block content %}
+{#
+   Экран входа (макет «Кириш»).
+
+   Ровно два способа ВОЙТИ и ни одного способа зарегистрироваться:
+     1) логин и пароль;
+     2) вход по ключу доступа (Access Key) — ключ выдаёт владелец или
+        администратор в разделе управления аккаунтами, сотрудник только
+        задаёт себе пароль при первом входе.
+
+   Самостоятельного создания аккаунта в системе нет: SkladPro.Nod — закрытая
+   корпоративная система, учётные записи заводит владелец (или администратор,
+   если владелец это разрешил). Соответствующего публичного эндпоинта в API
+   тоже не существует — см. apps/accounts/tests_login_page_k.py.
+#}
 <div style="display: flex; justify-content: center; align-items: center; min-height: 90vh;">
     <div class="card" style="width: 100%; max-width: 400px; padding: 32px 28px; text-align: center;">
         <!-- Brand mark -->
@@ -12,7 +26,7 @@
 
         <div id="error-message" class="alert-box" style="display: none;"></div>
 
-        <!-- Login panel -->
+        <!-- Способ 1: логин и пароль -->
         <div id="login-panel">
             <form id="login-form">
                 <div class="form-group" style="text-align: left;">
@@ -25,21 +39,21 @@
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
             </form>
-            <button type="button" id="show-access-key" class="btn btn-block login-secondary-btn" data-i18n="auth.have_access_key"></button>
+            <button type="button" id="show-access-key" class="btn btn-block login-secondary-btn" data-i18n="auth.login_with_key"></button>
 
             <div class="login-trust" role="note">
                 <p class="login-trust-row">
                     <span class="login-trust-icon" aria-hidden="true">🔒</span>
-                    <span data-i18n="auth.trust_secure">Ваши данные защищены</span>
+                    <span data-i18n="auth.trust_secure"></span>
                 </p>
                 <p class="login-trust-row">
                     <span class="login-trust-icon" aria-hidden="true">💬</span>
-                    <span data-i18n="auth.trust_support">Проблемы со входом? Обратитесь к администратору</span>
+                    <span data-i18n="auth.trust_support"></span>
                 </p>
             </div>
         </div>
 
-        <!-- Access Key panel -->
+        <!-- Способ 2: вход по ключу доступа, выданному владельцем/администратором -->
         <div id="access-key-panel" style="display: none;">
             <p class="text-sm text-muted" style="margin-bottom: 16px;" data-i18n="auth.access_key_hint"></p>
 
@@ -59,7 +73,7 @@
                     <input type="password" id="ak-password" class="form-control" required minlength="8"
                            autocomplete="new-password">
                 </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.activate"></button>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
             </form>
 
             <button type="button" id="show-login" class="btn btn-block login-secondary-btn" data-i18n="auth.back_to_login"></button>
@@ -91,13 +105,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearError = () => { errorMsg.style.display = 'none'; };
 
     if (sessionStorage.getItem('session_expired')) {
-        // i18n.init() ещё не вызван — берём текст из localStorage-языка или фоллбэк.
-        const expiredMsg = t('auth.session_expired');
-        showError(expiredMsg !== 'auth.session_expired' ? expiredMsg : 'Сессия муддати тугади. Қайта киринг');
+        // Ждём словарь: до его загрузки translate() вернул бы сам ключ,
+        // а держать запасной текст в коде запрещено (тексты — в locale/*.json).
         sessionStorage.removeItem('session_expired');
+        Promise.resolve(window.i18n.ready).then(() => showError(t('auth.session_expired')));
     }
 
-    // ── Login ──
+    // ── Вход по логину и паролю ──
     document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         clearError();
@@ -116,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ── Toggle panels ──
+    // ── Переключение способов входа ──
     document.getElementById('show-access-key').addEventListener('click', (e) => {
         e.preventDefault(); clearError();
         loginPanel.style.display = 'none'; akPanel.style.display = 'block';
@@ -126,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         akPanel.style.display = 'none'; loginPanel.style.display = 'block';
     });
 
-    // ── Access Key: step 1 ──
+    // ── Ключ доступа, шаг 1: проверка выданного ключа ──
     const verifyForm = document.getElementById('ak-verify-form');
     const redeemForm = document.getElementById('ak-redeem-form');
     verifyForm.addEventListener('submit', async (e) => {
@@ -152,7 +166,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ── Access Key: step 2 ──
+    // ── Ключ доступа, шаг 2: сотрудник задаёт себе пароль и входит ──
+    // Аккаунт уже создан владельцем/администратором: здесь он не создаётся,
+    // а только активируется существующая учётная запись.
     redeemForm.addEventListener('submit', async (e) => {
         e.preventDefault(); clearError();
         const rBtn = e.target.querySelector('button[type=submit]');

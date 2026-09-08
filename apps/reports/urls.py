@@ -9,9 +9,12 @@ urlpatterns = [
     path('analytics/owner/', views.OwnerAnalyticsView.as_view(), name='analytics-owner'),
     path('analytics/revenue-timeline/', views.RevenueTimelineView.as_view(), name='analytics-revenue-timeline'),
     path('analytics/admin/', views.AdminAnalyticsView.as_view(), name='analytics-admin'),
+    path('analytics/quarterly/', views.QuarterlyReportView.as_view(), name='analytics-quarterly'),
     path('export/finance/', views.OwnerFinanceExportView.as_view(), name='export-finance'),
     path('export/stock/', views.AdminStockExportView.as_view(), name='export-stock'),
     path('export/orders/', views.AdminOrdersExportView.as_view(), name='export-orders'),
     path('export/work/', views.AdminWorkExportView.as_view(), name='export-work'),
+    path('export/company-data/', views.CompanyDataExportView.as_view(),
+         name='export-company-data'),
     path('export/', views.ExportReportAPIView.as_view(), name='export-general'),
 ]

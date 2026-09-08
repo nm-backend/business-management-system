@@ -477,18 +477,55 @@ class OrdersComponent {
                         <option value="" data-i18n="common.select"></option>
                         ${workers.map((w) => `<option value="${w.id}">${window.ui.escape(w.full_name || w.username)}</option>`).join('')}
                     </select></div>
+                <!-- Постановка задачи по макету «Вазифа юбориш»: раньше работник
+                     получал карточку «Вазифа #12» без единого слова о том, что
+                     делать, к какому сроку и по какому чертежу. -->
+                <div class="form-group"><label data-i18n="production.task_title"></label>
+                    <input name="title" class="form-control" maxlength="200"
+                           value="${window.ui.escape(o.product_name || o.custom_product_name || '')}"></div>
+                <div class="form-group"><label data-i18n="production.task_description"></label>
+                    <textarea name="description" class="form-control" rows="2"></textarea></div>
+                <div class="form-group"><label data-i18n="production.task_deadline"></label>
+                    <input name="deadline" type="datetime-local" class="form-control"
+                           value="${o.deadline ? window.ui.escape(String(o.deadline).slice(0, 16)) : ''}"></div>
+                <div class="form-group"><label data-i18n="production.workshop"></label>
+                    <input name="workshop" class="form-control" maxlength="100"></div>
+                <div class="form-group"><label data-i18n="production.planned_quantity"></label>
+                    <input name="planned_quantity" type="number" step="0.001" min="0.001" class="form-control"
+                           value="${o.quantity ?? ''}"></div>
+                <div class="form-group"><label data-i18n="production.task_size"></label>
+                    <input name="size" class="form-control" maxlength="100" placeholder="2000x600"></div>
+                <div class="form-group"><label data-i18n="production.task_thickness"></label>
+                    <input name="thickness" type="number" step="0.01" min="0.01" class="form-control"></div>
+                <div class="form-group"><label data-i18n="production.task_attachment"></label>
+                    <input name="attachment" type="file" class="form-control"
+                           accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="orders.send_to_worker"></button>
             </form>
         `);
 
         modal.querySelector('#assign-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const worker = new FormData(e.target).get('worker');
+            const form = new FormData(e.target);
             await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
                 try {
+                    // multipart: вместе с задачей может уходить чертёж.
+                    // Пустые поля не отправляем — иначе DRF получит '' там,
+                    // где ждёт дату или число.
+                    const payload = new FormData();
+                    payload.append('order', o.id);
+                    payload.append('worker', form.get('worker'));
+                    ['title', 'description', 'workshop', 'size', 'deadline', 'thickness',
+                     'planned_quantity'].forEach((name) => {
+                        const value = (form.get(name) || '').toString().trim();
+                        if (value) payload.append(name, value);
+                    });
+                    const file = form.get('attachment');
+                    if (file && file.size) payload.append('attachment', file);
                     await window.api.request('/production/tasks/', {
                         method: 'POST',
-                        body: JSON.stringify({ order: o.id, worker }),
+                        body: payload,
+                        timeout: 120000,
                     });
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));

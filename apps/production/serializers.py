@@ -29,6 +29,10 @@ class TaskSerializer(serializers.ModelSerializer):
     worker_name = serializers.SerializerMethodField()
     assigned_by_name = serializers.CharField(source='assigned_by.username', read_only=True)
     confirmed_by_name = serializers.CharField(source='confirmed_by.username', read_only=True)
+    # Чертёж отдаём абсолютной ссылкой + исходным именем файла: в интерфейсе
+    # показывается «Чизма.pdf», а не сгенерированный путь в media.
+    attachment = serializers.FileField(read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
 
     def get_order_product(self, obj):
         if not obj.order:
@@ -45,6 +49,9 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order', 'order_id', 'order_product', 'worker', 'worker_name',
             'assigned_by', 'assigned_by_name', 'status',
+            'title', 'description', 'deadline', 'workshop', 'size', 'thickness',
+            'planned_quantity', 'planned_unit',
+            'attachment', 'attachment_name', 'is_overdue',
             'refusal_reason', 'refusal_comment',
             'assigned_at', 'accepted_at', 'completed_at',
             'confirmed_at', 'confirmed_by', 'confirmed_by_name',
@@ -54,16 +61,54 @@ class TaskSerializer(serializers.ModelSerializer):
         # (accept/refuse/cancel/confirm) и perform_create, а не прямым PATCH.
         read_only_fields = [
             'status', 'worker', 'order', 'assigned_by', 'confirmed_by',
-            'is_self_assigned',
+            'is_self_assigned', 'attachment_name',
             'assigned_at', 'accepted_at', 'completed_at', 'confirmed_at',
         ]
 
 
 class TaskCreateSerializer(serializers.ModelSerializer):
-    """Сериализатор для создания задачи."""
+    """
+    Сериализатор для создания задачи.
+
+    Помимо связки «заказ + работник» принимает постановку из макета
+    «Вазифа юбериш»: название, описание, срок, цех, размер, толщина и
+    чертёж (multipart). Раньше этих данных не было вовсе.
+    """
     class Meta:
         model = Task
-        fields = ['order', 'worker', 'is_self_assigned']
+        fields = [
+            'order', 'worker', 'is_self_assigned',
+            'title', 'description', 'deadline', 'workshop', 'size', 'thickness',
+            'planned_quantity', 'planned_unit',
+            'attachment',
+        ]
+
+    def validate_deadline(self, value):
+        """Срок в прошлом — почти всегда опечатка в дате, задача сразу просрочена."""
+        from django.utils import timezone
+        if value and value < timezone.now():
+            raise serializers.ValidationError('Срок выполнения не может быть в прошлом.')
+        return value
+
+    def validate(self, attrs):
+        """
+        Назначенная задача без заказа должна хотя бы называться.
+
+        Иначе работник получает пустую карточку «Вазифа #12» без единого
+        слова о том, что делать. Самостоятельную работу работника это не
+        касается: он сам знает, что взял, а содержание опишет при сдаче.
+        """
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if attrs.get('is_self_assigned') or getattr(user, 'is_worker', False):
+            return attrs
+        order = attrs.get('order')
+        title = (attrs.get('title') or '').strip()
+        if not order and not title:
+            raise serializers.ValidationError({
+                'title': 'Укажите название задачи или свяжите её с заказом.',
+            })
+        return attrs
 
 
 class _ConfirmedWorkGuardMixin:
@@ -178,6 +223,32 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
             'photo', 'uploaded_photos', 'comment'
         ]
         extra_kwargs = {'worker': {'required': False}}
+
+    def validate(self, attrs):
+        """
+        Минимум снимков — НАСТРОЙКА компании (Company.min_work_photos).
+
+        Макеты требуют «камида 1/2 та сурат», но текст ТЗ минимума не задаёт, а
+        жёсткое правило заблокировало бы сдачу работы в цеху без камеры или
+        связи. По умолчанию настройка равна нулю — поведение прежнее; владелец
+        включает требование осознанно.
+        """
+        attrs = super().validate(attrs) if hasattr(super(), 'validate') else attrs
+        request = self.context.get('request')
+        company = getattr(getattr(request, 'user', None), 'company', None)
+        minimum = getattr(company, 'min_work_photos', 0) or 0
+        if minimum:
+            uploaded = attrs.get('uploaded_photos') or []
+            single = attrs.get('photo')
+            total = len(uploaded) + (1 if single and not uploaded else 0)
+            if total < minimum:
+                raise serializers.ValidationError({
+                    'uploaded_photos': (
+                        f'Приложите минимум {minimum} фото готовой продукции '
+                        f'(сейчас {total}).'
+                    ),
+                })
+        return attrs
 
     def create(self, validated_data):
         photos = validated_data.pop('uploaded_photos', [])

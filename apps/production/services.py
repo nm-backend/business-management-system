@@ -47,14 +47,32 @@ def get_recipe_requirements(
     product: Model | None,
     quantity: Decimal | int | float,
 ) -> list[tuple[RawMaterial, Decimal]]:
-    """Возвращает [(material, required_qty), ...] по активному рецепту товара."""
+    """
+    Возвращает [(material, required_qty), ...] по активному рецепту товара.
+
+    Норма в рецепте задана на ВЫХОД партии (Recipe.output_quantity, макет
+    «Ҳосил бўладиган маҳсулот»). Раньше выход всегда подразумевался равным
+    единице, и норму умножали на количество изделий напрямую: рецепт «из одной
+    плиты выходит 4 подоконника» приходилось пересчитывать руками. Теперь
+    расход на одно изделие = норма / выход.
+
+    Для существующих рецептов output_quantity = 1, поэтому результат не
+    меняется — это зафиксировано тестом.
+    """
     if not product:
         return []
     recipe = next((r for r in product.recipes.all() if r.is_active), None)
     if not recipe:
         return []
+    output = recipe.output_quantity or Decimal('1')
+    if output <= 0:
+        # Защита от испорченных данных: делить на ноль нельзя, считаем как 1.
+        output = Decimal('1')
+    factor = Decimal(str(quantity)) / output
     return [
-        (item.material, item.quantity_required * Decimal(str(quantity)))
+        # Квантуем до тысячных — как decimal_places у количества на складе,
+        # иначе при дробном выходе в остаток попадал бы бесконечный хвост.
+        (item.material, (item.quantity_required * factor).quantize(Decimal('0.001')))
         for item in recipe.items.all()
     ]
 
@@ -264,8 +282,13 @@ def confirm_work(
     notify(
         work.worker,
         Notification.NotificationType.WORK_CONFIRMED,
-        'Иш тасдиқланди',
-        f'Иш #{work.id} тасдиқланди: {product.name if product else ""} x {work.quantity}',
+        title_key='notifications.work_confirmed',
+        message_key='notifications.msg_work_confirmed',
+        params={
+            'id': work.id,
+            'product': (product.name if product else ''),
+            'qty': str(work.quantity),
+        },
         task=work.task,
     )
     write_audit_log(
@@ -304,11 +327,14 @@ def reject_work(work, rejected_by, reason, request=None):
             task.order.status = task.order.Status.IN_PROGRESS
             task.order.save(update_fields=['status'])
 
+    # Причину пишет человек — её не переводим, показываем как есть.
     notify(
         work.worker,
         Notification.NotificationType.WORK_REJECTED,
-        'Иш рад этилди',
-        reason or f'Иш #{work.id} рад этилди',
+        message=reason or None,
+        title_key='notifications.work_rejected',
+        message_key=(None if reason else 'notifications.msg_work_rejected'),
+        params={'id': work.id},
         task=work.task,
     )
     write_audit_log(

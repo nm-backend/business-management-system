@@ -31,6 +31,152 @@ class StorageZoneChoices(models.TextChoices):
     OTHER = 'other', 'Бошқа'
 
 
+class Warehouse(TimestampedModel, SoftDeleteModel):
+    """
+    Физический склад компании (макет «Асосий омбор» с переключателем складов).
+
+    До этого склад был один и подразумевался неявно: у материала было только
+    текстовое «место хранения». Компания с двумя площадками не могла ни
+    отфильтровать остатки по складу, ни увидеть загруженность каждого.
+
+    Поля:
+        name: название («Асосий омбор»)
+        code: короткий код для ярлыков и отчётов
+        address: адрес площадки
+        total_area: общая площадь, м² (макет: «Жами майдон 420 м²»)
+        is_default: склад по умолчанию — туда попадают материалы без явного
+            указания склада; ровно один на компанию
+    """
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='warehouses',
+        null=True, verbose_name='Компания',
+    )
+    name = models.CharField(max_length=150, verbose_name='Название')
+    code = models.CharField(max_length=30, blank=True, default='', verbose_name='Код')
+    address = models.CharField(max_length=255, blank=True, default='', verbose_name='Адрес')
+    total_area = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal('0'))], verbose_name='Общая площадь, м²',
+    )
+    is_default = models.BooleanField(default=False, verbose_name='Склад по умолчанию')
+    comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
+
+    class Meta:
+        verbose_name = 'Склад'
+        verbose_name_plural = 'Склады'
+        ordering = ['-is_default', 'name']
+        constraints = [
+            # Название склада уникально внутри компании: два «Асосий омбор»
+            # в одном списке невозможно различить.
+            models.UniqueConstraint(
+                fields=['company', 'name'], name='warehouse_unique_name_per_company',
+            ),
+            # Склад по умолчанию ровно один — иначе непонятно, куда класть
+            # материал, у которого склад не указан.
+            models.UniqueConstraint(
+                fields=['company'], condition=models.Q(is_default=True),
+                name='warehouse_single_default_per_company',
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def occupied_area(self):
+        """Занятая площадь: сумма занятости ячеек этого склада."""
+        return sum((cell.occupied_area for cell in self.cells.all()), Decimal('0'))
+
+    @property
+    def occupancy_percent(self):
+        """
+        Процент занятости склада (макет: «банд 86.1 %, бўш 13.9 %»).
+
+        Считаем от общей площади склада, если она задана; иначе — от суммы
+        вместимостей ячеек, чтобы показатель не был нулевым у складов, где
+        площадь площадки не заполняли.
+        """
+        base = self.total_area or sum(
+            (cell.capacity_area for cell in self.cells.all()), Decimal('0')
+        )
+        if not base:
+            return Decimal('0')
+        return (self.occupied_area / base * 100).quantize(Decimal('0.1'))
+
+
+class WarehouseCell(TimestampedModel, SoftDeleteModel):
+    """
+    Ячейка хранения А-01…А-08 (макет «Омбордаги жойлашув»).
+
+    Занятость ячейки не вводится руками, а считается по размещённым в ней
+    материалам: руками введённая занятость мгновенно расходится с реальными
+    приходами и расходами.
+    """
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='warehouse_cells',
+        null=True, verbose_name='Компания',
+    )
+    warehouse = models.ForeignKey(
+        Warehouse, on_delete=models.CASCADE, related_name='cells', verbose_name='Склад',
+    )
+    code = models.CharField(max_length=20, verbose_name='Код ячейки')
+    zone = models.CharField(
+        max_length=10, choices=StorageZoneChoices.choices, blank=True, default='',
+        verbose_name='Зона',
+    )
+    capacity_area = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal('0'))], verbose_name='Вместимость, м²',
+    )
+
+    class Meta:
+        verbose_name = 'Ячейка хранения'
+        verbose_name_plural = 'Ячейки хранения'
+        ordering = ['warehouse', 'code']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['warehouse', 'code'], name='cell_unique_code_per_warehouse',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.warehouse_id}:{self.code}'
+
+    @property
+    def occupied_area(self):
+        """
+        Занятая площадь ячейки.
+
+        Берём площадь, указанную при размещении партии (occupied_area), а если
+        она не указана — количество материала, измеряемого в м²/м³: для таких
+        материалов количество и есть занимаемая площадь.
+        """
+        total = Decimal('0')
+        for material in self.materials.all():
+            total += material.effective_occupied_area
+        return total
+
+    @property
+    def occupancy_percent(self):
+        if not self.capacity_area:
+            return Decimal('0')
+        return (self.occupied_area / self.capacity_area * 100).quantize(Decimal('0.1'))
+
+
+class MaterialConditionChoices(models.TextChoices):
+    """
+    Состояние (качество) партии материала — макет «Хом ашё омбори».
+
+    Плита с трещиной физически на складе есть, но в дело не годится. Без
+    этого поля склад показывал её как обычный остаток, и нехватку под заказ
+    обнаруживали только в цеху.
+    """
+    EXCELLENT = 'excellent', 'Отличное'
+    GOOD = 'good', 'Хорошее'
+    POOR = 'poor', 'Ниже среднего'
+    CRITICAL = 'critical', 'Критическое'
+
+
 class UnitChoices(models.TextChoices):
     """
     Единицы измерения для материалов и продукции.
@@ -99,6 +245,28 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
     storage_zone = models.CharField(max_length=10, choices=StorageZoneChoices.choices,
                                     blank=True, default='', verbose_name='Зона хранения')
     storage_location = models.CharField(max_length=255, blank=True, verbose_name='Место хранения')
+    # ── Размещение на складе (макеты «Асосий омбор» и «Омбордаги жойлашув») ──
+    # Раньше место хранения было только текстом: по нему нельзя ни отфильтровать
+    # остатки по складу, ни посчитать занятость ячейки.
+    warehouse = models.ForeignKey(
+        'warehouse.Warehouse', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='materials', verbose_name='Склад',
+    )
+    cell = models.ForeignKey(
+        'warehouse.WarehouseCell', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='materials', verbose_name='Ячейка хранения',
+    )
+    # Состояние партии (макет «Аъло / Яхши / Қуйида / Критик»).
+    condition = models.CharField(
+        max_length=20, choices=MaterialConditionChoices.choices,
+        blank=True, default='', verbose_name='Состояние материала',
+    )
+    # Сколько площади занимает партия. Для материалов в м²/м³ можно не
+    # заполнять — тогда занятостью считается само количество.
+    occupied_area = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0'))], verbose_name='Занимает площади, м²',
+    )
     # ПОТРЕБНОСТЬ заказов (demand), а не физический резерв: сколько сырья
     # требуется активным заказам по рецептам. Может превышать quantity
     # (overbooking) — тогда shortage_quantity > 0, а доступность проверяется
@@ -195,6 +363,41 @@ class RawMaterial(TimestampedModel, SoftDeleteModel):
             bool - True если available_quantity <= min_stock
         """
         return self.available_quantity <= self.min_stock
+
+    @property
+    def effective_occupied_area(self):
+        """
+        Сколько площади реально занимает партия (для занятости ячейки).
+
+        Если площадь указана явно — берём её. Если нет, но материал меряется
+        в м²/м³, площадь и есть количество. Штучный материал без явной
+        площади ячейку «не занимает»: придумывать за пользователя габариты
+        плиты нельзя.
+        """
+        if self.occupied_area is not None:
+            return self.occupied_area
+        if self.unit in (UnitChoices.M2, UnitChoices.M3):
+            return self.quantity
+        return Decimal('0')
+
+    @property
+    def stock_severity(self):
+        """
+        Градация остатка для карточки склада (макет «Минимум қолдиқлар»).
+
+        Раньше был только булев is_low_stock, и «почти закончилось» выглядело
+        так же, как «уже не хватает под заказы»:
+            critical — доступного меньше половины минимума или уже нехватка;
+            low      — доступное не выше минимума;
+            ok       — запас в норме.
+        """
+        available = self.available_quantity
+        if available <= 0 or (self.min_stock and available < self.min_stock / 2):
+            return 'critical'
+        if available <= self.min_stock:
+            return 'low'
+        return 'ok'
+
 
 class FinishedProduct(TimestampedModel, SoftDeleteModel):
     """
@@ -346,6 +549,11 @@ class StockMovement(TimestampedModel):
         PRODUCTION_OUT: расход материалов на производство
         ADJUSTMENT: корректировка остатков
         LOSS: потеря или брак
+        RETURN: возврат материала на склад (вкладка «Қайтарилган» в макете
+            «Материал ҳаракатлари»): цех вернул неиспользованный остаток или
+            материал вернули поставщику. Раньше такой возврат приходилось
+            проводить обычным приходом, и в истории он был неотличим от
+            новой поставки.
         """
         INCOMING = 'incoming', 'Приход'
         OUTGOING = 'outgoing', 'Расход'
@@ -353,9 +561,29 @@ class StockMovement(TimestampedModel):
         PRODUCTION_OUT = 'production_out', 'Расход на производство'
         ADJUSTMENT = 'adjustment', 'Корректировка'
         LOSS = 'loss', 'Потеря/Брак'
+        RETURN = 'return', 'Возврат'
+
+    class OutgoingPurpose(models.TextChoices):
+        """
+        Назначение ручного расхода (макет «Материални ишлатиш» → «Қайси мақсадда»).
+
+        Тип движения отвечает на вопрос «что произошло» (расход, потеря,
+        корректировка), а назначение — «зачем»: в производство по заказу, на
+        образец, на внутренние нужды. Раньше это писали свободным текстом в
+        причину, и сгруппировать расход по назначению было невозможно.
+        """
+        PRODUCTION = 'production', 'Производство'
+        SAMPLE = 'sample', 'Образец'
+        INTERNAL = 'internal', 'Внутренние нужды'
+        WRITE_OFF = 'write_off', 'Списание'
+        OTHER = 'other', 'Другое'
 
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='stock_movements', null=True, verbose_name='Компания')
     movement_type = models.CharField(max_length=20, choices=MovementType.choices, db_index=True, verbose_name='Тип движения')
+    purpose = models.CharField(
+        max_length=20, choices=OutgoingPurpose.choices, blank=True, default='',
+        verbose_name='Назначение расхода',
+    )
     material = models.ForeignKey(RawMaterial, on_delete=models.CASCADE, null=True, blank=True, related_name='movements', verbose_name='Материал')
     product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, null=True, blank=True, related_name='movements', verbose_name='Товар')
     quantity = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Количество')
@@ -365,6 +593,13 @@ class StockMovement(TimestampedModel):
     # Номер документа прихода/расхода (макет: «Хужжат раками» №К-1258).
     document_number = models.CharField(max_length=100, blank=True, default='',
                                        verbose_name='Номер документа')
+    # Документ прихода, породивший движение (макет «Материални қабул қилиш»:
+    # один документ — несколько позиций). Раньше связь была только через
+    # текстовый номер документа: собрать движения одной операции было нечем.
+    receipt = models.ForeignKey(
+        'warehouse.GoodsReceipt', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='movements', verbose_name='Документ прихода',
+    )
     related_order_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного заказа')
     related_production_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного производства')
 
@@ -396,6 +631,98 @@ class StockMovement(TimestampedModel):
         if not self.material and not self.product:
             raise ValidationError("Movement must be associated with a material or a product.")
 
+class GoodsReceipt(TimestampedModel):
+    """
+    Документ прихода: одна поставка — несколько материалов.
+
+    Макет «Материални қабул қилиш» задаёт поставщика, номер документа и дату
+    ОДИН раз, а ниже перечисляет позиции («Яна материал қўшиш»). Раньше приход
+    оформлялся по одному материалу за операцию, а общие реквизиты дублировались
+    строкой в каждом движении: нельзя было ни открыть поставку целиком, ни
+    понять, какие позиции пришли вместе.
+
+    Проведение документа атомарно: либо приходуются все позиции, либо ни одна
+    (см. services.create_goods_receipt).
+    """
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='goods_receipts',
+        null=True, verbose_name='Компания',
+    )
+    supplier = models.CharField(max_length=255, blank=True, default='', verbose_name='Поставщик')
+    document_number = models.CharField(max_length=100, blank=True, default='', verbose_name='Номер документа')
+    receipt_date = models.DateField(
+        null=True, blank=True, validators=[validate_not_future], verbose_name='Дата прихода',
+    )
+    comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True,
+        related_name='goods_receipts', verbose_name='Кем создан',
+    )
+
+    class Meta:
+        verbose_name = 'Документ прихода'
+        verbose_name_plural = 'Документы прихода'
+        ordering = ['-created_at']
+        constraints = [
+            # Идемпотентность: повторная отправка той же формы (двойной клик,
+            # ретрай мобильной сети) не создаст вторую поставку с тем же
+            # номером у того же поставщика. Пустой номер не ограничивается —
+            # такие документы бывают у поставок без бумаг.
+            models.UniqueConstraint(
+                fields=['company', 'supplier', 'document_number'],
+                condition=~models.Q(document_number=''),
+                name='goods_receipt_unique_document',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.document_number or "—"} ({self.supplier or "—"})'
+
+    @property
+    def total_quantity(self):
+        return sum((line.quantity for line in self.lines.all()), Decimal('0'))
+
+    @property
+    def total_amount(self):
+        """Сумма документа — ФИНАНСОВОЕ значение, отдаётся только владельцу."""
+        return sum(
+            (line.quantity * (line.price_per_unit or Decimal('0')) for line in self.lines.all()),
+            Decimal('0'),
+        )
+
+
+class GoodsReceiptLine(models.Model):
+    """
+    Позиция документа прихода: материал, количество и цена.
+
+    Цена — финансовое поле: её задаёт и видит только владелец (как в операции
+    прихода одного материала).
+    """
+    receipt = models.ForeignKey(
+        GoodsReceipt, on_delete=models.CASCADE, related_name='lines', verbose_name='Документ',
+    )
+    material = models.ForeignKey(
+        RawMaterial, on_delete=models.RESTRICT, related_name='receipt_lines',
+        verbose_name='Материал',
+    )
+    quantity = models.DecimalField(
+        max_digits=15, decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))], verbose_name='Количество',
+    )
+    price_per_unit = models.DecimalField(
+        max_digits=15, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal('0'))], verbose_name='Цена за единицу',
+    )
+
+    class Meta:
+        verbose_name = 'Позиция прихода'
+        verbose_name_plural = 'Позиции прихода'
+        ordering = ['id']
+
+    def __str__(self):
+        return f'{self.material_id}: {self.quantity}'
+
+
 class Recipe(TimestampedModel):
     """
     Модель рецепта производства продукции.
@@ -417,6 +744,28 @@ class Recipe(TimestampedModel):
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='recipes', null=True, verbose_name='Компания')
     product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, related_name='recipes', verbose_name='Товар')
     name = models.CharField(max_length=255, verbose_name='Название')
+    # Артикул рецепта из макета («RCP-001»): по нему рецепт называют в цеху и
+    # в задании, названия товара для этого мало — у одного товара бывает
+    # несколько рецептов под разные габариты.
+    code = models.CharField(max_length=30, blank=True, default='', verbose_name='Код рецепта')
+    # Габариты изделия, на которое рассчитана норма (макет: «Ўлчам 2000 × 600
+    # мм», «Қалинлик 20 мм»). Раньше норма висела в воздухе: 2.2 м² мрамора —
+    # на какое изделие, из карточки было не понять.
+    size = models.CharField(max_length=100, blank=True, default='', verbose_name='Размер изделия')
+    thickness = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Толщина, мм',
+    )
+    # Сколько готовых изделий даёт ОДНА закладка по этому рецепту
+    # (макет: «Ҳосил бўладиган маҳсулот 1 дона»). До этого выход всегда
+    # подразумевался равным единице: норма умножалась на количество изделий
+    # напрямую. Рецепт «из одной плиты выходит 4 подоконника» описать было
+    # нечем — приходилось делить норму вручную и ошибаться.
+    output_quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, default=Decimal('1'),
+        validators=[MinValueValidator(Decimal('0.001'))],
+        verbose_name='Выход готовой продукции',
+    )
     description = models.TextField(blank=True, verbose_name='Описание')
     is_active = models.BooleanField(default=True, verbose_name='Активен')
 

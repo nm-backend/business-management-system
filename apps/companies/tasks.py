@@ -31,6 +31,8 @@ from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 
+from core.utils import translate
+
 from .models import Company
 from .subscriptions import expire_company, start_grace
 
@@ -171,15 +173,19 @@ def notify_subscription_expiry(self):
                 notify(
                     recipients,
                     alert_type,
-                    company.name,
-                    f'{company.name} — {end_text}',
+                    title=company.name,
+                    message_key='notifications.msg_subscription_expiring',
+                    params={'company': company.name, 'end': end_text},
                     company=company,
                 )
                 for user in recipients:
                     push_queue.append((
                         user,
                         company.name,
-                        f'Подписка истекает {end_text}',
+                        translate(
+                            'notifications.push_subscription_expiring',
+                            user.language, {'end': end_text},
+                        ),
                         '/#/companies' if user.is_superadmin else '/#/',
                     ))
                 notified += len(recipients)

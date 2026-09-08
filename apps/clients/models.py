@@ -22,12 +22,33 @@ ACTIVE_ORDER_STATUSES = (
 )
 
 
+class ClientType(models.TextChoices):
+    """
+    Тип клиента (макет «Мижоз тури»): физическое или юридическое лицо.
+
+    Влияет на документы и обращение; на финансовую логику не влияет.
+    """
+    INDIVIDUAL = 'individual', 'Жисмоний шахс'
+    COMPANY = 'company', 'Юридик шахс'
+
+
 class Client(TimestampedModel, SoftDeleteModel):
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='clients', null=True, verbose_name='Компания')
     name = models.CharField(max_length=255, verbose_name='Название')
     phone = models.CharField(max_length=50, blank=True, validators=[validate_phone],
                              verbose_name='Телефон')
     address = models.TextField(blank=True, verbose_name='Адрес')
+    # Тип клиента и ответственный (макет «Мижоз картаси»). Это не поля «ради
+    # макета»: тип определяет форму документов и обращение, ответственный —
+    # кто ведёт клиента (по нему строится работа и спрос с сотрудника).
+    client_type = models.CharField(
+        max_length=20, choices=ClientType.choices, default=ClientType.INDIVIDUAL,
+        verbose_name='Тип клиента',
+    )
+    responsible_employee = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='responsible_clients', verbose_name='Ответственный сотрудник',
+    )
     comment = models.TextField(blank=True, verbose_name='Комментарий')
 
     # Финансовые агрегаты (ФИНАНСОВЫЕ ПОЛЯ - только owner).

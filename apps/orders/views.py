@@ -113,9 +113,14 @@ class OrderViewSet(CompanyScopedViewSet):
             notify_staff(
                 company,
                 Notification.NotificationType.NEW_ORDER,
-                'Янги буюртма',
-                f'#{order.id} {order.client.name}: '
-                f'{order.product.name if order.product else order.custom_product_name} x {order.quantity}',
+                title_key='notifications.new_order',
+                message_key='notifications.msg_new_order',
+                params={
+                    'id': order.id,
+                    'client': order.client.name,
+                    'product': (order.product.name if order.product else order.custom_product_name),
+                    'qty': str(order.quantity),
+                },
                 order=order,
             )
             write_audit_log(
@@ -400,8 +405,9 @@ class OrderViewSet(CompanyScopedViewSet):
                 notify_staff(
                     order.company_id,
                     Notification.NotificationType.UNPAID_CLIENT,
-                    'Мижоз тўлов қилмади',
-                    f'Буюртма #{order.id}, мижоз: {order.client.name}',
+                    title_key='notifications.unpaid_client',
+                    message_key='notifications.msg_unpaid_client',
+                    params={'id': order.id, 'client': order.client.name},
                     order=order,
                 )
             else:

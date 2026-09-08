@@ -30,7 +30,7 @@ class FinanceComponent {
                 <button class="tab-btn" data-tab="expenses" role="tab" aria-selected="false" data-i18n="finance.expenses"></button>
                 <button class="tab-btn" data-tab="payments" role="tab" aria-selected="false" data-i18n="nav.worker_payments"></button>
                 <button class="tab-btn" data-tab="rates" role="tab" aria-selected="false" data-i18n="finance.labor_rates"></button>
-                <button class="tab-btn" data-tab="quarterly" role="tab" aria-selected="false">Квартал</button>
+                <button class="tab-btn" data-tab="quarterly" role="tab" aria-selected="false" data-i18n="finance.quarterly"></button>
             </div>
             <div id="finance-content" role="tabpanel" aria-live="polite"></div>
         `;
@@ -65,42 +65,65 @@ class FinanceComponent {
         if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
+            // Считает сервер: /reports/analytics/quarterly/ агрегирует квартал
+            // целиком. Раньше страница собирала квартал сама четырьмя
+            // запросами к обычной аналитике и читала поле data.cogs, которого
+            // в ответе нет (оно называется cost_of_goods) — колонка
+            // «себестоимость» всегда показывала ноль.
             const now = new Date();
-            const quarters = [];
+            const wanted = [];
+            let year = now.getFullYear();
+            let quarter = Math.floor(now.getMonth() / 3) + 1;
             for (let i = 0; i < 4; i++) {
-                const year = now.getFullYear() - Math.floor(i / 4);
-                const quarter = 4 - (i % 4);
-                const startMonth = (quarter - 1) * 3;
-                const endMonth = startMonth + 2;
-                const start = `${year}-${String(startMonth + 1).padStart(2, '0')}-01`;
-                const end = new Date(year, endMonth + 1, 0);
-                const endStr = `${year}-${String(endMonth + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-                quarters.push({ label: `${quarter} квартал ${year}`, start, end: endStr });
+                wanted.push({ year, quarter });
+                quarter -= 1;
+                if (quarter === 0) { quarter = 4; year -= 1; }
             }
-            let rows = '';
-            for (const q of quarters) {
+
+            // Кварталы независимы — грузим параллельно, а не по очереди.
+            const results = await Promise.all(wanted.map(async (q) => {
                 try {
-                    const data = await window.api.request(`/reports/analytics/owner/?period=custom&start=${q.start}&end=${q.end}`);
-                    rows += `
-                        <tr>
-                            <td style="padding:8px;border-bottom:1px solid var(--border);">${q.label}</td>
-                            <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.revenue || 0)}</td>
-                            <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.cogs || 0)}</td>
-                            <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;color:${Number(data.net_profit) >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${window.ui.money(data.net_profit || 0)}</td>
-                        </tr>`;
-                } catch (e) {
-                    rows += `<tr><td style="padding:8px;border-bottom:1px solid var(--border);">${q.label}</td><td colspan="3" style="padding:8px;border-bottom:1px solid var(--border);text-align:center;">—</td></tr>`;
+                    const data = await window.api.request(
+                        `/reports/analytics/quarterly/?year=${q.year}&quarter=${q.quarter}`
+                    );
+                    return { ...q, data };
+                } catch (error) {
+                    return { ...q, data: null };
                 }
-            }
+            }));
+
+            const rows = results.map(({ year: y, quarter: qn, data }) => {
+                const label = window.ui.t('finance.quarter_label', { quarter: qn, year: y });
+                if (!data) {
+                    return `<tr>
+                        <td style="padding:8px;border-bottom:1px solid var(--border);">${label}</td>
+                        <td colspan="4" style="padding:8px;border-bottom:1px solid var(--border);text-align:center;">—</td>
+                    </tr>`;
+                }
+                const net = Number(data.total_net_profit || 0);
+                return `<tr>
+                    <td style="padding:8px;border-bottom:1px solid var(--border);">${label}</td>
+                    <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.total_revenue || 0)}</td>
+                    <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.total_cogs || 0)}</td>
+                    <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;color:${net >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${window.ui.money(data.total_net_profit || 0)}</td>
+                    <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">
+                        ${data.profitability_percent === null || data.profitability_percent === undefined
+                            ? '—'
+                            : `${data.profitability_percent}%`}
+                    </td>
+                </tr>`;
+            }).join('');
+
             el.innerHTML = `
                 <div style="overflow-x:auto;">
                     <table style="width:100%;border-collapse:collapse;font-size:13px;">
                         <thead>
                             <tr style="background:var(--bg-secondary);">
-                                <th style="padding:8px;text-align:left;">Квартал</th>
-                                <th style="padding:8px;text-align:right;">Выручка</th>
-                                <th style="padding:8px;text-align:right;">COGS</th>
-                                <th style="padding:8px;text-align:right;">Прибыль</th>
+                                <th style="padding:8px;text-align:left;">${window.ui.t('finance.quarterly')}</th>
+                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.revenue')}</th>
+                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.cost_of_goods')}</th>
+                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.net_profit')}</th>
+                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.profitability')}</th>
                             </tr>
                         </thead>
                         <tbody>${rows}</tbody>

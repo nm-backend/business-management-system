@@ -6,7 +6,11 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.core.validators import validate_not_future
-from .models import RawMaterial, FinishedProduct, StockMovement, Recipe, RecipeItem
+from apps.orders.models import Order
+from .models import (
+    FinishedProduct, GoodsReceipt, GoodsReceiptLine, RawMaterial, Recipe,
+    RecipeItem, StockMovement, Warehouse, WarehouseCell,
+)
 
 
 class StockQuantityGuardMixin:
@@ -61,12 +65,102 @@ class OutgoingSerializer(serializers.Serializer):
         default=StockMovement.MovementType.OUTGOING,
         required=False,
     )
+    # «Қайси мақсадда» и «Буюртма» из макета. Оба поля необязательные:
+    # существующие интеграции и старые формы шлют расход без них.
+    purpose = serializers.ChoiceField(
+        choices=StockMovement.OutgoingPurpose.choices, required=False, allow_blank=True,
+    )
+    order = serializers.PrimaryKeyRelatedField(
+        queryset=Order.objects.all(), required=False, allow_null=True,
+    )
+
+    def validate_order(self, order):
+        """Заказ обязан быть своей компании: иначе расход уедет в чужую историю."""
+        request = self.context.get('request')
+        company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        if order is not None and company_id is not None and order.company_id != company_id:
+            raise serializers.ValidationError('Заказ другой компании.')
+        return order
+
+class ReturnSerializer(serializers.Serializer):
+    """
+    Вход операции возврата на склад (вкладка «Қайтарилган»).
+
+    Отдельно от прихода: возврат не поставка, среднюю себестоимость он не
+    меняет и в закупки не попадает.
+    """
+    quantity = serializers.DecimalField(max_digits=15, decimal_places=3, min_value=Decimal('0.001'))
+    return_date = serializers.DateField(required=False, validators=[validate_not_future])
+    document_number = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    reason = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+class WarehouseCellSerializer(serializers.ModelSerializer):
+    """
+    Ячейка хранения с занятостью (макет «Омбордаги жойлашув»: А-01…А-08).
+
+    Занятость только для чтения: её считает сервер по размещённым материалам,
+    руками введённая цифра сразу разошлась бы с приходами и расходами.
+    """
+    zone_display = serializers.CharField(source='get_zone_display', read_only=True)
+    occupied_area = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    occupancy_percent = serializers.DecimalField(max_digits=6, decimal_places=1, read_only=True)
+    materials_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WarehouseCell
+        fields = [
+            'id', 'warehouse', 'code', 'zone', 'zone_display', 'capacity_area',
+            'occupied_area', 'occupancy_percent', 'materials_count',
+            'is_archived', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['is_archived']
+
+    def get_materials_count(self, obj):
+        return obj.materials.filter(is_archived=False).count()
+
+
+class WarehouseSerializer(serializers.ModelSerializer):
+    """Склад компании с суммарной занятостью (макет «Асосий омбор»)."""
+    occupied_area = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    occupancy_percent = serializers.DecimalField(max_digits=6, decimal_places=1, read_only=True)
+    free_percent = serializers.SerializerMethodField()
+    cells_count = serializers.SerializerMethodField()
+    materials_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Warehouse
+        fields = [
+            'id', 'name', 'code', 'address', 'total_area', 'is_default', 'comment',
+            'occupied_area', 'occupancy_percent', 'free_percent',
+            'cells_count', 'materials_count', 'is_archived',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['is_archived']
+
+    def get_free_percent(self, obj):
+        """Свободно — то, что осталось до 100 % (макет показывает обе цифры)."""
+        free = Decimal('100') - obj.occupancy_percent
+        return max(free, Decimal('0')).quantize(Decimal('0.1'))
+
+    def get_cells_count(self, obj):
+        return obj.cells.filter(is_archived=False).count()
+
+    def get_materials_count(self, obj):
+        return obj.materials.filter(is_archived=False).count()
+
 
 class RawMaterialSerializer(StockQuantityGuardMixin, serializers.ModelSerializer):
     """Сериализатор сырья — admin/worker видит количество без цен."""
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
     storage_zone_display = serializers.CharField(source='get_storage_zone_display', read_only=True)
+    condition_display = serializers.CharField(source='get_condition_display', read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
+    # Градация остатка: «критично» отличается от «ниже минимума» (макет
+    # «Минимум қолдиқлар»), раньше был только булев флаг.
+    stock_severity = serializers.CharField(read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True, default='')
+    cell_code = serializers.CharField(source='cell.code', read_only=True, default='')
     # Потребность сырья мутируется только бизнес-флоу (заказы, подтверждение
     # работ), а не обычным PATCH-ем: иначе сотрудник мог бы выставить произвольную
     # потребность и заблокировать расход. available_quantity — производное, только чтение.
@@ -81,11 +175,41 @@ class RawMaterialSerializer(StockQuantityGuardMixin, serializers.ModelSerializer
             'id', 'name', 'stone_type', 'color', 'size', 'thickness',
             'unit', 'unit_display', 'quantity', 'barcode', 'storage_zone',
             'storage_zone_display', 'storage_location',
+            'warehouse', 'warehouse_name', 'cell', 'cell_code', 'occupied_area',
+            'condition', 'condition_display',
             'required_for_orders', 'available_quantity',
             'photo', 'min_stock', 'supplier', 'arrival_date',
-            'comment', 'is_archived', 'is_low_stock',
+            'comment', 'is_archived', 'is_low_stock', 'stock_severity',
             'created_at', 'updated_at'
         ]
+
+    def validate(self, attrs):
+        """
+        Склад и ячейка — только свои, и ячейка обязана принадлежать складу.
+
+        Без проверки материал можно было положить в ячейку чужой компании
+        (её занятость поехала бы) или в ячейку другого склада — карта
+        размещения показывала бы материал не там, где он лежит.
+        """
+        request = self.context.get('request')
+        company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        warehouse = attrs.get('warehouse', getattr(self.instance, 'warehouse', None))
+        cell = attrs.get('cell', getattr(self.instance, 'cell', None))
+
+        if company_id is not None:
+            if warehouse and warehouse.company_id != company_id:
+                raise serializers.ValidationError({'warehouse': 'Склад другой компании.'})
+            if cell and cell.company_id != company_id:
+                raise serializers.ValidationError({'cell': 'Ячейка другой компании.'})
+        if cell and warehouse and cell.warehouse_id != warehouse.id:
+            raise serializers.ValidationError({
+                'cell': 'Ячейка принадлежит другому складу.',
+            })
+        if cell and not warehouse:
+            # Ячейка без склада — потерянное размещение; подставляем её склад.
+            attrs['warehouse'] = cell.warehouse
+        return attrs
+
 
 class RawMaterialOwnerSerializer(RawMaterialSerializer):
     """Сериализатор сырья для владельца — с purchase_price и avg_cost_price."""
@@ -198,8 +322,130 @@ class StockMovementLimitedSerializer(StockMovementSerializer):
         exclude = ['price_per_unit']
 
 
+
+class GoodsReceiptLineSerializer(serializers.ModelSerializer):
+    """Позиция документа прихода. Цену видит только владелец (см. вьюсет)."""
+    material_name = serializers.CharField(source='material.name', read_only=True)
+    unit = serializers.CharField(source='material.unit', read_only=True)
+
+    class Meta:
+        model = GoodsReceiptLine
+        fields = ['id', 'material', 'material_name', 'unit', 'quantity', 'price_per_unit']
+
+
+class GoodsReceiptLineNoMoneySerializer(GoodsReceiptLineSerializer):
+    """Позиция без цены — для администратора: закупочные цены ему закрыты."""
+
+    class Meta(GoodsReceiptLineSerializer.Meta):
+        fields = [f for f in GoodsReceiptLineSerializer.Meta.fields if f != 'price_per_unit']
+
+
+class GoodsReceiptSerializer(serializers.ModelSerializer):
+    """Документ прихода на чтение: реквизиты, позиции и итоги."""
+    lines = GoodsReceiptLineSerializer(many=True, read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True, default='')
+    total_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
+    total_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = GoodsReceipt
+        fields = [
+            'id', 'supplier', 'document_number', 'receipt_date', 'comment',
+            'created_by', 'created_by_name', 'lines',
+            'total_quantity', 'total_amount', 'created_at', 'updated_at',
+        ]
+
+
+class GoodsReceiptNoMoneySerializer(GoodsReceiptSerializer):
+    """
+    Документ без сумм — для администратора.
+
+    Приход по количеству администратору разрешён (ТЗ), закупочные цены — нет.
+    Убираем и цены позиций, и итог документа.
+    """
+    lines = GoodsReceiptLineNoMoneySerializer(many=True, read_only=True)
+
+    class Meta(GoodsReceiptSerializer.Meta):
+        fields = [f for f in GoodsReceiptSerializer.Meta.fields if f != 'total_amount']
+
+
+class GoodsReceiptCreateSerializer(serializers.Serializer):
+    """
+    Вход проведения документа: общие реквизиты + список позиций.
+
+    Отдельный Serializer (не ModelSerializer): документ не просто создаётся, он
+    ПРОВОДИТСЯ — меняет остатки. Логика проведения живёт в сервисе, здесь
+    только валидация входа.
+    """
+    supplier = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    document_number = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    receipt_date = serializers.DateField(required=False, validators=[validate_not_future])
+    comment = serializers.CharField(required=False, allow_blank=True)
+    lines = serializers.ListField(child=serializers.DictField(), allow_empty=False)
+
+    def validate_lines(self, raw_lines):
+        """
+        Проверяем позиции ДО проведения: материал свой, количество больше нуля.
+
+        Так ошибка приходит как 400 с указанием строки, а не откатом уже
+        начатой транзакции.
+        """
+        request = self.context.get('request')
+        company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        is_owner = getattr(getattr(request, 'user', None), 'is_owner', False)
+
+        materials = {
+            m.id: m for m in RawMaterial.objects.filter(company_id=company_id, is_archived=False)
+        }
+        cleaned = []
+        for index, line in enumerate(raw_lines):
+            try:
+                material_id = int(line.get('material'))
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f'Позиция {index + 1}: не указан материал.')
+            material = materials.get(material_id)
+            if material is None:
+                raise serializers.ValidationError(
+                    f'Позиция {index + 1}: материал недоступен в вашей компании.'
+                )
+            try:
+                quantity = Decimal(str(line.get('quantity')))
+            except (TypeError, ValueError, ArithmeticError):
+                raise serializers.ValidationError(f'Позиция {index + 1}: неверное количество.')
+            if quantity <= 0:
+                raise serializers.ValidationError(
+                    f'Позиция {index + 1}: количество должно быть больше нуля.'
+                )
+
+            price = None
+            if is_owner and line.get('price_per_unit') not in (None, ''):
+                try:
+                    price = Decimal(str(line['price_per_unit']))
+                except (TypeError, ValueError, ArithmeticError):
+                    raise serializers.ValidationError(f'Позиция {index + 1}: неверная цена.')
+                if price < 0:
+                    raise serializers.ValidationError(
+                        f'Позиция {index + 1}: цена не может быть отрицательной.'
+                    )
+            cleaned.append({'material': material, 'quantity': quantity, 'price_per_unit': price})
+        return cleaned
+
+
 class RecipeItemSerializer(serializers.ModelSerializer):
-    """Сериализатор компонента рецепта."""
+    """
+    Сериализатор компонента рецепта.
+
+    Единица позиции обязана совпадать с единицей материала. Расход по рецепту
+    вычитается из остатка КАК ЕСТЬ (см. get_recipe_requirements: количество
+    просто умножается на объём партии), пересчёта единиц в системе нет.
+    Поэтому «2 кг» у материала, который меряется в м², молча списали бы 2 м²:
+    остаток, себестоимость и расчёт нехватки поехали бы, а в карточке рецепта
+    рядом стояли бы «требуется 2 кг» и «доступно 100 м²».
+
+    Интерфейс единицу не присылает вовсе — раньше подставлялся дефолт модели
+    («шт»), из-за чего несовпадение возникало на каждом рецепте, созданном из
+    карточки товара. Теперь единица берётся у материала.
+    """
     material_name = serializers.CharField(source='material.name', read_only=True)
     unit_display = serializers.CharField(source='get_unit_display', read_only=True)
 
@@ -207,8 +453,33 @@ class RecipeItemSerializer(serializers.ModelSerializer):
         model = RecipeItem
         fields = '__all__'
 
+    def validate(self, attrs):
+        material = attrs.get('material') or getattr(self.instance, 'material', None)
+        if material is None:
+            return attrs
+
+        unit = attrs.get('unit')
+        if unit is None:
+            # Единицу не прислали (обычный случай из интерфейса) — берём у материала.
+            attrs['unit'] = material.unit
+        elif unit != material.unit:
+            raise serializers.ValidationError({
+                'unit': (
+                    f'Единица позиции рецепта ({unit}) не совпадает с единицей '
+                    f'материала «{material.name}» ({material.unit}). Пересчёта '
+                    f'единиц нет: расход списывается в единицах материала.'
+                ),
+            })
+        return attrs
+
 class RecipeSerializer(serializers.ModelSerializer):
-    """Сериализатор рецепта с вложенными компонентами."""
+    """
+    Сериализатор рецепта с вложенными компонентами.
+
+    Помимо состава отдаёт параметры изделия из макета «Рецепт»: код, размер,
+    толщину и выход партии — без них норма расхода не привязана ни к каким
+    габаритам.
+    """
     items = RecipeItemSerializer(many=True, read_only=True)
 
     class Meta:

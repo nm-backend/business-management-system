@@ -49,6 +49,7 @@ from django.utils import timezone
 
 from apps.audit.models import AuditLog
 from apps.audit.services import write_audit_log
+from core.utils import translate
 from .models import DEFAULT_SUBSCRIPTION_DAYS, Company, SubscriptionChange, SubscriptionPlan
 
 # Верхняя граница продления: защита от опечаток (напр. 99999 дней).
@@ -202,14 +203,16 @@ def _notify_subscription_renewed(company):
     notify_staff(
         company,
         Notification.NotificationType.SUBSCRIPTION_EXTENDED,
-        company.name,
-        f'{company.name} — до {end_text}',
+        title=company.name,  # название компании не переводится
+        message_key='notifications.msg_subscription_extended',
+        params={'company': company.name, 'end': end_text},
     )
     for user in recipients:
         send_push_to_user(
             user,
             company.name,
-            f'Подписка продлена до {end_text}',
+            # Push уходит немедленно — текст сразу на языке получателя.
+            translate('notifications.push_subscription_extended', user.language, {'end': end_text}),
             data={'url': '/#/subscription'},
         )
     return recipients
@@ -241,15 +244,16 @@ def _notify_grace_started(company):
     notify(
         staff + superadmins,
         Notification.NotificationType.SUBSCRIPTION_GRACE_STARTED,
-        company.name,
-        f'{company.name} — льготный период до {deadline_text}',
+        title=company.name,
+        message_key='notifications.msg_subscription_grace',
+        params={'company': company.name, 'end': deadline_text},
         company=company,
     )
     for user in staff + superadmins:
         send_push_to_user(
             user,
             company.name,
-            f'Льготный период до {deadline_text}. Продлите подписку.',
+            translate('notifications.push_subscription_grace', user.language, {'end': deadline_text}),
             data={'url': '/#/subscription' if user.company_id else '/#/companies'},
         )
 
@@ -275,15 +279,16 @@ def _notify_subscription_expired(company):
     notify(
         staff,
         Notification.NotificationType.SUBSCRIPTION_EXPIRED,
-        company.name,
-        f'{company.name} — подписка истекла, доступ ограничен',
+        title=company.name,
+        message_key='notifications.msg_subscription_expired',
+        params={'company': company.name},
         company=company,
     )
     for user in staff:
         send_push_to_user(
             user,
             company.name,
-            'Подписка истекла. Обратитесь к администратору платформы.',
+            translate('notifications.push_subscription_expired', user.language),
             data={'url': '/#/subscription'},
         )
 
@@ -303,14 +308,15 @@ def _notify_plan_changed(company, plan):
     notify_staff(
         company,
         Notification.NotificationType.SUBSCRIPTION_PLAN_CHANGED,
-        company.name,
-        f'{company.name} — тариф «{plan.name}»',
+        title=company.name,
+        message_key='notifications.msg_subscription_plan_changed',
+        params={'company': company.name, 'plan': plan.name},
     )
     for user in recipients:
         send_push_to_user(
             user,
             company.name,
-            f'Тариф изменён: «{plan.name}»',
+            translate('notifications.push_plan_changed', user.language, {'plan': plan.name}),
             data={'url': '/#/subscription'},
         )
 

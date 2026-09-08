@@ -21,7 +21,8 @@ from apps.production.models import WorkRecord
 from .models import Expense, LaborRate, WorkerPayment
 from .serializers import (
     ExpenseSerializer, ExpenseCreateSerializer,
-    LaborRateSerializer, LaborRateCreateSerializer,
+    LaborRateSerializer,
+    LaborRateNoMoneySerializer, LaborRateCreateSerializer,
     WorkerPaymentSerializer, WorkerPaymentCreateSerializer
 )
 from apps.core.views import CompanyScopedViewSet
@@ -76,8 +77,12 @@ class ExpenseViewSet(CompanyScopedViewSet):
         notify(
             self.request.user,
             Notification.NotificationType.NEW_EXPENSE,
-            'Янги харажат',
-            f'{expense.get_category_display()}: {expense.amount}',
+            title_key='notifications.new_expense',
+            message_key='notifications.msg_new_expense',
+            params={
+                'category_key': f'expense_categories.{expense.category}',
+                'amount': str(expense.amount),
+            },
         )
         write_audit_log(
             action=AuditLog.Action.CREATE,
@@ -142,10 +147,17 @@ class LaborRateViewSet(CompanyScopedViewSet):
 
     def get_serializer_class(self):
         """
-        Возвращает сериализатор в зависимости от действия.
+        Сериализатор по действию и роли.
+
+        Администратор и менеджер получают ставку без суммы: список операций им
+        нужен для оформления работ, а деньги по ТЗ им недоступны.
         """
         if self.action == 'create':
             return LaborRateCreateSerializer
+        user = getattr(self.request, 'user', None)
+        if not getattr(self, 'swagger_fake_view', False) and user is not None:
+            if getattr(user, 'is_admin', False) or getattr(user, 'is_manager', False):
+                return LaborRateNoMoneySerializer
         return LaborRateSerializer
 
     def get_queryset(self):
@@ -305,8 +317,21 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         from django.db.models import Sum
         from apps.accounts.models import User
 
+        # Тип по умолчанию — «зарплата» (default у поля модели). Раньше здесь
+        # стояло сравнение с validated_data.get('payment_type'): если клиент
+        # поле не прислал (обычный случай), ключа нет, значение None, и вся
+        # блокирующая перепроверка ниже ПРОПУСКАЛАСЬ. Потолок держался только
+        # проверкой в сериализаторе, а она читает агрегаты вне транзакции —
+        # два параллельных запроса по 800 при начислении 1000 проходили оба,
+        # и работнику выплачивали 1600. В perform_update этот случай учтён,
+        # здесь — нет.
+        effective_type = (
+            serializer.validated_data.get('payment_type')
+            or WorkerPayment.PaymentType.SALARY
+        )
+
         with transaction.atomic():
-            if serializer.validated_data.get('payment_type') == WorkerPayment.PaymentType.SALARY:
+            if effective_type == WorkerPayment.PaymentType.SALARY:
                 # Сериализуем concurrent salary payments одного работника;
                 # Revalidate после захвата блокировки, иначе два параллельных
                 # запроса могут оба пройти на старых данных.
