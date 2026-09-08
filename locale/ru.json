@@ -404,7 +404,13 @@
         "debts": "Долги",
         "no_debt": "Долга нет",
         "debtors": "Клиенты с долгом",
-        "total_debt": "Общая сумма долга"
+        "total_debt": "Общая сумма долга",
+        "client_type": "Тип клиента",
+        "responsible": "Ответственный сотрудник",
+        "added_date": "Дата добавления",
+        "active_orders": "Активные заказы",
+        "open_all_orders": "Все заказы",
+        "has_debt": "С долгом"
     },
     "finance": {
         "title": "Финансовая аналитика",
@@ -568,7 +574,9 @@
         "push_subscription_expired": "Подписка истекла. Обратитесь к администратору платформы.",
         "push_plan_changed": "Тариф изменён: «{plan}»",
         "push_subscription_expiring": "Подписка истекает {end}",
-        "push_renewal_request": "Запрос на продление подписки — {end}"
+        "push_renewal_request": "Запрос на продление подписки — {end}",
+        "archived": "Архив",
+        "archive_action": "В архив"
     },
     "subscription": {
         "expired_title": "Подписка истекла",
@@ -775,7 +783,8 @@
         "session_current": "Текущее устройство",
         "session_revoke": "Завершить",
         "session_revoke_others": "Завершить все другие сессии",
-        "session_unknown_device": "Неизвестное устройство"
+        "session_unknown_device": "Неизвестное устройство",
+        "people_count": "чел."
     },
     "export": {
         "title": "Экспорт отчётов",
@@ -976,5 +985,18 @@
         "internal": "Внутренние нужды",
         "write_off": "Списание",
         "other": "Другое"
+    },
+    "client_types": {
+        "individual": "Физическое лицо",
+        "company": "Юридическое лицо"
+    },
+    "notification_categories": {
+        "orders": "Заказы",
+        "shortage": "Нехватка материалов",
+        "confirmations": "Подтверждения",
+        "tasks": "Задачи",
+        "messages": "Сообщения",
+        "finance": "Финансы",
+        "system": "Системные"
     }
 }

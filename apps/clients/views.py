@@ -6,7 +6,7 @@ Views for clients API.
 """
 from decimal import Decimal
 
-from django.db.models import (DecimalField, Exists, ExpressionWrapper, F,
+from django.db.models import (DecimalField, Exists, ExpressionWrapper, F, Q,
                               OuterRef, Subquery, Sum, Value)
 from django.db.models.functions import Coalesce
 from django.db import transaction
@@ -111,6 +111,24 @@ class ClientViewSet(CompanyScopedViewSet):
                     Value(Decimal('0'), output_field=DecimalField(max_digits=15, decimal_places=2)),
                 ),
             )
+        # Вкладки списка из макета «Мижозлар»: «Қарзи бор» и «Фаол».
+        # Это БУЛЕВЫ фильтры, а не суммы, поэтому доступны и администратору:
+        # факт долга он видеть должен (красная карточка), сумму — нет.
+        has_debt = self.request.query_params.get('has_debt')
+        if has_debt is not None:
+            wants_debt = has_debt.lower() == 'true'
+            queryset = queryset.filter(debt__gt=0) if wants_debt else queryset.filter(debt__lte=0)
+
+        # «Фаол» по правилу ТЗ: есть долг ИЛИ есть незавершённый заказ.
+        is_active_client = self.request.query_params.get('is_active_client')
+        if is_active_client is not None:
+            condition = Q(debt__gt=0) | Q(active_orders_exists=True)
+            queryset = (
+                queryset.filter(condition)
+                if is_active_client.lower() == 'true'
+                else queryset.exclude(condition)
+            )
+
         search = self.request.query_params.get('search')
         if search:
             from apps.core.translit import translit_search_qs

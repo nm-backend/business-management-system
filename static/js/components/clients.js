@@ -25,8 +25,14 @@ class ClientsComponent {
 
         container.innerHTML = `
             ${debtDashboard}
+            <!-- Вкладки списка из макета «Мижозлар»: все / активные /
+                 с долгом / архив. Фильтрует сервер (?is_active_client=,
+                 ?has_debt=, ?is_archived=) — отбор загруженной страницы
+                 показывал бы неверные списки при пагинации. -->
             <div class="tabs">
+                <button class="tab-btn" data-tab="all" data-i18n="common.all"></button>
                 <button class="tab-btn active" data-tab="active" data-i18n="clients.active"></button>
+                <button class="tab-btn" data-tab="debt" data-i18n="clients.has_debt"></button>
                 <button class="tab-btn" data-tab="archive" data-i18n="clients.archive"></button>
             </div>
             <div class="search-box">
@@ -87,7 +93,12 @@ class ClientsComponent {
         if (window.listStates.gone(listEl)) return;
         window.listStates.skeleton(listEl);
         try {
-            let query = `?is_archived=${this.currentTab === 'archive'}`;
+            // Каждая вкладка — свой серверный фильтр. «Все» показывает
+            // действующих клиентов (архив выделен в отдельную вкладку).
+            const tab = this.currentTab || 'active';
+            let query = `?is_archived=${tab === 'archive'}`;
+            if (tab === 'active') query += '&is_active_client=true';
+            if (tab === 'debt') query += '&has_debt=true';
             if (search) query += `&search=${encodeURIComponent(search)}`;
             const response = await window.api.request(`/clients/clients/${query}`);
             this.clients = response.results || response;
@@ -147,6 +158,28 @@ class ClientsComponent {
                 <span class="text-sm font-bold ${danger ? 'text-danger' : ''}" style="text-align:right;">${valueHtml}</span>
             </div>`);
 
+        // Вкладка «Умумий» из макета «Мижоз картаси». Финансовые строки
+        // рисуются только владельцу, но и API администратору их не отдаёт:
+        // c.debt/c.total_paid в его payload попросту отсутствуют.
+        const infoTab = () => `
+            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+                ${row('clients.name', window.ui.escape(c.name))}
+                ${row('clients.phone', window.ui.escape(c.phone || ''))}
+                ${row('clients.address', window.ui.escape(c.address || ''))}
+                ${row('clients.added_date', c.created_at ? window.ui.date(c.created_at) : '')}
+                ${row('clients.client_type', c.client_type
+                    ? `<span data-i18n="client_types.${c.client_type}"></span>` : '')}
+                ${row('clients.responsible', window.ui.escape(c.responsible_employee_name || ''))}
+                ${user.is_owner ? row('clients.total_amount', window.ui.money(c.total_orders_amount)) : ''}
+                ${user.is_owner ? row('clients.paid', window.ui.money(c.total_paid)) : ''}
+                ${user.is_owner ? row('clients.debt', window.ui.money(c.debt), c.has_debt) : ''}
+                ${user.is_owner ? row('clients.profit',
+                    `<span class="${Number(c.profit) < 0 ? 'text-danger' : ''}" style="${Number(c.profit) >= 0 ? 'color:var(--success-color);' : ''}">${window.ui.money(c.profit)}</span>`,
+                    Number(c.profit) < 0) : ''}
+                ${row('common.status', `<span class="badge ${c.has_debt ? 'badge-cancel' : 'badge-ready'}" data-i18n="payment_statuses.${c.has_debt ? 'unpaid' : 'paid'}"></span>`)}
+                ${row('warehouse.comment', window.ui.escape(c.comment || ''))}
+            </div>`;
+
         const payments = (c.payments || []).slice(0, 10).map((p) => `
             <div class="list-row" style="cursor:default;">
                 <span class="text-sm text-muted">${window.ui.datetime(p.payment_date)}</span>
@@ -161,21 +194,7 @@ class ClientsComponent {
                 ${user.is_owner ? `<button class="tab-btn" data-client-tab="payments" data-i18n="clients.payment_history"></button>` : ''}
                 ${user.is_owner ? `<button class="tab-btn" data-client-tab="debts" data-i18n="clients.debts"></button>` : ''}
             </div>
-            <div id="client-tab-content">
-                <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
-                    ${row('clients.name', window.ui.escape(c.name))}
-                    ${row('clients.phone', window.ui.escape(c.phone || ''))}
-                    ${row('clients.address', window.ui.escape(c.address || ''))}
-                    ${user.is_owner ? row('clients.total_amount', window.ui.money(c.total_orders_amount)) : ''}
-                    ${user.is_owner ? row('clients.paid', window.ui.money(c.total_paid)) : ''}
-                    ${user.is_owner ? row('clients.debt', window.ui.money(c.debt), c.has_debt) : ''}
-                    ${user.is_owner ? row('clients.profit',
-                        `<span class="${Number(c.profit) < 0 ? 'text-danger' : ''}" style="${Number(c.profit) >= 0 ? 'color:var(--success-color);' : ''}">${window.ui.money(c.profit)}</span>`,
-                        Number(c.profit) < 0) : ''}
-                    ${row('common.status', `<span class="badge ${c.has_debt ? 'badge-cancel' : 'badge-ready'}" data-i18n="payment_statuses.${c.has_debt ? 'unpaid' : 'paid'}"></span>`)}
-                    ${row('warehouse.comment', window.ui.escape(c.comment || ''))}
-                </div>
-            </div>
+            <div id="client-tab-content">${infoTab()}</div>
             <div style="display:flex;gap:10px;margin-top:14px;">
                 ${canEdit ? `<button class="btn btn-secondary btn-sm" id="edit-client" style="flex:1;" data-i18n="common.edit"></button>` : ''}
                 ${canEdit ? `<button class="btn btn-secondary btn-sm btn-block" id="archive-client" style="margin-top:10px;"
@@ -196,7 +215,55 @@ class ClientsComponent {
                 const tabName = tab.dataset.clientTab;
                 const contentEl = modal.querySelector('#client-tab-content');
                 if (tabName === 'orders') {
-                    window.router.navigate(`/orders?client=${c.id}`);
+                    // Заказы клиента показываем ВНУТРИ карточки (макет
+                    // «Мижоз картаси» → вкладка «Заказлар»). Раньше вкладка
+                    // уводила на общий список и карточка закрывалась.
+                    // Данные настоящие: /orders/orders/?client=<id>.
+                    // Суммы в ответе есть только у владельца — администратору
+                    // их не отдаёт сам API, а не прячет интерфейс.
+                    contentEl.innerHTML = `<div class="list-state" data-i18n="common.loading"></div>`;
+                    window.i18n.applyTranslations();
+                    window.api.request(`/orders/orders/?client=${c.id}&page_size=50`)
+                        .then((resp) => {
+                            const orders = resp.results || resp;
+                            const active = orders.filter(
+                                (o) => !['delivered', 'cancelled'].includes(o.status)
+                            ).length;
+                            contentEl.innerHTML = `
+                                <div class="text-sm text-muted" style="margin-bottom:8px;">
+                                    <span data-i18n="clients.active_orders"></span>: ${active}
+                                </div>
+                                <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+                                    ${orders.length ? orders.map((o) => `
+                                        <div class="list-row" style="cursor:default;">
+                                            <div style="min-width:0;">
+                                                <div class="text-sm font-bold">#${o.id}
+                                                    ${window.ui.escape(o.product_name || o.custom_product_name || '')}</div>
+                                                <div class="text-sm text-muted">
+                                                    ${window.ui.qty(o.quantity)}
+                                                    <span data-i18n="units.${o.unit}"></span>
+                                                    ${o.deadline ? ` · ${window.ui.date(o.deadline)}` : ''}
+                                                </div>
+                                            </div>
+                                            <div style="text-align:right;flex-shrink:0;">
+                                                ${window.ui.orderBadge
+                                                    ? window.ui.orderBadge(o.status)
+                                                    : `<span class="badge" data-i18n="statuses.${o.status}"></span>`}
+                                                ${o.total_amount !== undefined
+                                                    ? `<div class="text-sm font-bold">${window.ui.money(o.total_amount)}</div>`
+                                                    : ''}
+                                            </div>
+                                        </div>`).join('')
+                                        : `<div class="text-sm text-muted" style="padding:12px;text-align:center;" data-i18n="common.no_data"></div>`}
+                                </div>
+                                <a class="btn btn-secondary btn-sm btn-block" style="margin-top:10px;"
+                                   href="#/orders?client=${c.id}" data-i18n="clients.open_all_orders"></a>`;
+                            window.i18n.applyTranslations();
+                        })
+                        .catch(() => {
+                            contentEl.innerHTML = `<div class="list-state" data-i18n="common.error"></div>`;
+                            window.i18n.applyTranslations();
+                        });
                     return;
                 }
                 if (tabName === 'payments') {
@@ -220,19 +287,7 @@ class ClientsComponent {
                         `<div class="text-sm text-muted" style="padding:12px;text-align:center;">✅ ${window.ui.t('clients.no_debt')}</div>`;
                     contentEl.innerHTML = debtInfo;
                 } else {
-                    contentEl.innerHTML = `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
-                        ${row('clients.name', window.ui.escape(c.name))}
-                        ${row('clients.phone', window.ui.escape(c.phone || ''))}
-                        ${row('clients.address', window.ui.escape(c.address || ''))}
-                        ${window.currentUser.is_owner ? row('clients.total_amount', window.ui.money(c.total_orders_amount)) : ''}
-                        ${window.currentUser.is_owner ? row('clients.paid', window.ui.money(c.total_paid)) : ''}
-                        ${window.currentUser.is_owner ? row('clients.debt', window.ui.money(c.debt), c.has_debt) : ''}
-                        ${window.currentUser.is_owner ? row('clients.profit',
-                            `<span class="${Number(c.profit) < 0 ? 'text-danger' : ''}" style="${Number(c.profit) >= 0 ? 'color:var(--success-color);' : ''}">${window.ui.money(c.profit)}</span>`,
-                            Number(c.profit) < 0) : ''}
-                        ${row('common.status', `<span class="badge ${c.has_debt ? 'badge-cancel' : 'badge-ready'}" data-i18n="payment_statuses.${c.has_debt ? 'unpaid' : 'paid'}"></span>`)}
-                        ${row('warehouse.comment', window.ui.escape(c.comment || ''))}
-                    </div>`;
+                    contentEl.innerHTML = infoTab();
                 }
                 window.i18n.applyTranslations();
             });

@@ -404,7 +404,13 @@
         "debts": "Карыздар",
         "no_debt": "Карыз жок",
         "debtors": "Карызы бар кардарлар",
-        "total_debt": "Жалпы карыз суммасы"
+        "total_debt": "Жалпы карыз суммасы",
+        "client_type": "Кардардын түрү",
+        "responsible": "Жооптуу кызматкер",
+        "added_date": "Кошулган күнү",
+        "active_orders": "Активдүү буйрутмалар",
+        "open_all_orders": "Бардык буйрутмалар",
+        "has_debt": "Карызы бар"
     },
     "finance": {
         "title": "Финансылык аналитика",
@@ -568,7 +574,9 @@
         "push_subscription_expired": "Жазылуу бүттү. Платформанын администраторуна кайрылыңыз.",
         "push_plan_changed": "Тариф өзгөртүлдү: «{plan}»",
         "push_subscription_expiring": "Жазылуу {end} бүтөт",
-        "push_renewal_request": "Жазылууну узартуу сурамы — {end}"
+        "push_renewal_request": "Жазылууну узартуу сурамы — {end}",
+        "archived": "Архив",
+        "archive_action": "Архивге"
     },
     "subscription": {
         "expired_title": "Абоненттик мөөнөтү бүттү",
@@ -775,7 +783,8 @@
         "session_current": "Учурдагы түзмөк",
         "session_revoke": "Токтотуу",
         "session_revoke_others": "Башка бардык сеанстарды токтотуу",
-        "session_unknown_device": "Белгисиз түзмөк"
+        "session_unknown_device": "Белгисиз түзмөк",
+        "people_count": "адам"
     },
     "export": {
         "title": "Отчетту экспорттоо",
@@ -976,5 +985,18 @@
         "internal": "Ички муктаждык",
         "write_off": "Эсептен чыгаруу",
         "other": "Башка"
+    },
+    "client_types": {
+        "individual": "Жеке жак",
+        "company": "Юридикалык жак"
+    },
+    "notification_categories": {
+        "orders": "Буйрутмалар",
+        "shortage": "Материал жетишсиздиги",
+        "confirmations": "Ырастоолор",
+        "tasks": "Тапшырмалар",
+        "messages": "Билдирүүлөр",
+        "finance": "Каржы",
+        "system": "Системалык"
     }
 }

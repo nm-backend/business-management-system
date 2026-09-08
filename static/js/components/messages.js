@@ -719,6 +719,10 @@ class MessagesComponent {
                 <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
                     <span class="text-sm text-muted">${window.ui.datetime(n.created_at)}</span>
                     ${n.is_read ? '' : '<span style="width:8px;height:8px;border-radius:50%;background:var(--primary);display:inline-block;"></span>'}
+                    ${n.is_archived ? '' : `
+                        <button class="icon-btn" data-archive-notif="${n.id}"
+                                title="${window.ui.t('notifications.archive_action')}"
+                                aria-label="${window.ui.t('notifications.archive_action')}">🗄️</button>`}
                 </div>
             </div>`;
     }
@@ -745,6 +749,15 @@ class MessagesComponent {
         }
     }
 
+    bindNotificationTabs(el) {
+        el.querySelectorAll('[data-notif-filter]').forEach((tab) => {
+            tab.addEventListener('click', () => {
+                this.notificationFilter = tab.dataset.notifFilter;
+                this.loadNotifications();
+            });
+        });
+    }
+
     async loadNotifications() {
         const el = this.bodyEl;
         el.style.display = 'block';
@@ -754,39 +767,69 @@ class MessagesComponent {
         if (window.listStates.gone(el)) return;
         window.listStates.loading(el, window.ui.t('common.loading'));
         try {
-            const response = await window.api.request('/messaging/notifications/');
+            // Вкладки макета: «Барчаси / Ўқилмаган / Архив». Архив фильтрует
+            // СЕРВЕР (?is_archived=true) — архивные уведомления не приходят в
+            // основной ленте вовсе, а не прячутся на клиенте.
+            this.notificationFilter = this.notificationFilter || 'all';
+            const archived = this.notificationFilter === 'archived';
+            const query = archived ? '?is_archived=true' : '';
+            const response = await window.api.request(`/messaging/notifications/${query}`);
             const notifications = response.results || response;
             this.notifications = notifications;
-            if (!notifications.length) {
-                window.listStates.empty(el, window.ui.t('messages_section.no_notifications'));
-                return;
-            }
+
             const unread = notifications.filter((n) => !n.is_read).length;
-            const read = notifications.filter((n) => n.is_read).length;
-            this.notificationFilter = this.notificationFilter || 'all';
             const filterTabs = `
                 <div class="tabs" id="notif-filter-tabs" style="margin-bottom:10px;gap:4px;">
-                    <button class="tab-btn ${this.notificationFilter === 'all' ? 'active' : ''}" data-notif-filter="all">${window.ui.t('common.all')} (${notifications.length})</button>
-                    <button class="tab-btn ${this.notificationFilter === 'unread' ? 'active' : ''}" data-notif-filter="unread">${window.ui.t('notifications.unread')} (${unread})</button>
-                    <button class="tab-btn ${this.notificationFilter === 'read' ? 'active' : ''}" data-notif-filter="read">${window.ui.t('notifications.read')} (${read})</button>
+                    <button class="tab-btn ${this.notificationFilter === 'all' ? 'active' : ''}" data-notif-filter="all">${window.ui.t('common.all')}</button>
+                    <button class="tab-btn ${this.notificationFilter === 'unread' ? 'active' : ''}" data-notif-filter="unread">${window.ui.t('notifications.unread')}${archived ? '' : ` (${unread})`}</button>
+                    <button class="tab-btn ${archived ? 'active' : ''}" data-notif-filter="archived">${window.ui.t('notifications.archived')}</button>
                 </div>`;
+
+            if (!notifications.length) {
+                el.innerHTML = filterTabs
+                    + `<div class="card list-state">${window.ui.escape(window.ui.t('messages_section.no_notifications'))}</div>`;
+                this.bindNotificationTabs(el);
+                window.i18n.applyTranslations();
+                return;
+            }
+
             let filtered = notifications;
             if (this.notificationFilter === 'unread') filtered = notifications.filter(n => !n.is_read);
-            else if (this.notificationFilter === 'read') filtered = notifications.filter(n => n.is_read);
-            const groups = this.groupByDay(filtered);
+
+            // Группировка по смыслу («Янги буюртмалар», «Материал камчилиги»,
+            // «Тасдиқлар», …). Категорию считает сервер по типу уведомления —
+            // на клиенте карты типов нет, чтобы они не разошлись.
+            const byCategory = new Map();
+            filtered.forEach((n) => {
+                const key = n.category || 'system';
+                if (!byCategory.has(key)) byCategory.set(key, []);
+                byCategory.get(key).push(n);
+            });
+
             el.innerHTML = `
                 ${filterTabs}
-                ${unread ? `<button class="btn btn-secondary btn-sm btn-block" id="mark-all-read" style="margin-bottom:12px;" data-i18n="messages_section.mark_all_read"></button>` : ''}
-                ${groups.map((g) => `
-                    <div class="section-title">${window.ui.escape(g.label)}</div>
+                ${unread && !archived ? `<button class="btn btn-secondary btn-sm btn-block" id="mark-all-read" style="margin-bottom:12px;" data-i18n="messages_section.mark_all_read"></button>` : ''}
+                ${[...byCategory.entries()].map(([category, items]) => `
+                    <div class="section-title">
+                        <span data-i18n="notification_categories.${category}"></span> (${items.length})
+                    </div>
                     <div class="list-group">
-                        ${g.items.map((n) => this.renderNotification(n)).join('')}
+                        ${items.map((n) => this.renderNotification(n)).join('')}
                     </div>`).join('')}`;
-            // Filter tab click handlers
-            el.querySelectorAll('[data-notif-filter]').forEach(tab => {
-                tab.addEventListener('click', () => {
-                    this.notificationFilter = tab.dataset.notifFilter;
-                    this.loadNotifications();
+            this.bindNotificationTabs(el);
+            // Кнопка «В архив»: уведомление уходит из ленты, но сохраняется.
+            el.querySelectorAll('[data-archive-notif]').forEach((btn) => {
+                btn.addEventListener('click', async (event) => {
+                    event.stopPropagation();
+                    try {
+                        await window.api.request(
+                            `/messaging/notifications/${btn.dataset.archiveNotif}/archive/`,
+                            { method: 'POST' },
+                        );
+                        await this.loadNotifications();
+                    } catch (error) {
+                        window.toast.error(window.ui.errorText(error));
+                    }
                 });
             });
             el.querySelectorAll('[data-notif-id]').forEach((row) => {

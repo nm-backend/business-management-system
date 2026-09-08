@@ -404,7 +404,13 @@
         "debts": "Қарзлар",
         "no_debt": "Қарз йўқ",
         "debtors": "Қарздор мижозлар",
-        "total_debt": "Жами қарз суммаси"
+        "total_debt": "Жами қарз суммаси",
+        "client_type": "Мижоз тури",
+        "responsible": "Масъул ходим",
+        "added_date": "Қўшилган сана",
+        "active_orders": "Фаол заказлар",
+        "open_all_orders": "Барча буюртмалар",
+        "has_debt": "Қарзи бор"
     },
     "finance": {
         "title": "Молиявий таҳлил",
@@ -568,7 +574,9 @@
         "push_subscription_expired": "Обуна тугади. Платформа администраторига мурожаат қилинг.",
         "push_plan_changed": "Тариф ўзгартирилди: «{plan}»",
         "push_subscription_expiring": "Обуна {end} да тугайди",
-        "push_renewal_request": "Обунани узайтириш сўрови — {end}"
+        "push_renewal_request": "Обунани узайтириш сўрови — {end}",
+        "archived": "Архив",
+        "archive_action": "Архивга"
     },
     "subscription": {
         "expired_title": "Обуна муддати тугади",
@@ -775,7 +783,8 @@
         "session_current": "Жорий қурилма",
         "session_revoke": "Тугатиш",
         "session_revoke_others": "Бошқа барча сеансларни тугатиш",
-        "session_unknown_device": "Номаълум қурилма"
+        "session_unknown_device": "Номаълум қурилма",
+        "people_count": "киши"
     },
     "export": {
         "title": "Ҳисоботни экспорт қилиш",
@@ -976,5 +985,18 @@
         "internal": "Ички эҳтиёж",
         "write_off": "Ҳисобдан чиқариш",
         "other": "Бошқа"
+    },
+    "client_types": {
+        "individual": "Жисмоний шахс",
+        "company": "Юридик шахс"
+    },
+    "notification_categories": {
+        "orders": "Янги буюртмалар",
+        "shortage": "Материал камчилиги",
+        "confirmations": "Тасдиқлар",
+        "tasks": "Вазифалар",
+        "messages": "Хабарлар",
+        "finance": "Молия",
+        "system": "Система хабарлари"
     }
 }

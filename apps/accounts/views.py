@@ -824,7 +824,7 @@ class UserViewSet(CompanyScopedViewSet):
             return [IsOwner()]
         # Кастомные @action: их permission_classes не применяются автоматически,
         # т.к. get_permissions переопределён — задаём права явно здесь.
-        if self.action == 'access_key':
+        if self.action in ('access_key', 'role_counts'):
             return [IsOwnerOrAdmin()]
         if self.action in ('toggle_active', 'reset_password'):
             return [IsOwner()]
@@ -928,6 +928,40 @@ class UserViewSet(CompanyScopedViewSet):
             MethodNotAllowed - удаление запрещено
         """
         raise MethodNotAllowed('DELETE', detail='Account deletion is prohibited. Block the account instead.')
+
+    @action(detail=False, methods=['get'], url_path='role-counts',
+            permission_classes=[IsOwnerOrAdmin])
+    def role_counts(self, request):
+        """
+        Сколько АКТИВНЫХ сотрудников в каждой роли (макет «Роллар ва аккаунтлар»).
+
+        «Активный» = может войти: is_active=True и не заблокирован владельцем.
+        Уволенный или заблокированный в счётчик роли не попадает — иначе
+        владелец видел бы штат больше фактического. Супер-администратор вне
+        компаний, поэтому в счётчиках компании не участвует.
+
+        Один запрос, строго по своей компании.
+        """
+        from django.db.models import Count
+
+        rows = (
+            User.objects
+            .filter(
+                company_id=request.user.company_id,
+                is_active=True,
+                blocked_by_owner=False,
+            )
+            .exclude(role=User.Role.SUPERADMIN)
+            .values('role')
+            .annotate(total=Count('id'))
+        )
+        counts = {row['role']: row['total'] for row in rows}
+        payload = {
+            role: counts.get(role, 0)
+            for role in (User.Role.OWNER, User.Role.ADMIN, User.Role.WORKER, User.Role.MANAGER)
+        }
+        payload['total'] = sum(payload.values())
+        return Response(payload)
 
     @action(detail=True, methods=['post'], permission_classes=[IsOwner])
     def toggle_active(self, request, pk=None):

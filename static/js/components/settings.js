@@ -325,9 +325,27 @@ class SettingsComponent {
     async loadUsers() {
         const listEl = this.container.querySelector('#users-list');
         try {
-            const response = await window.api.request('/accounts/users/');
+            // Счётчики ролей из макета «Роллар ва аккаунтлар» («Егаси 1 киши»).
+            // Считает сервер по активным незаблокированным аккаунтам: считать
+            // по загруженной странице нельзя — список постраничный, а
+            // уволенные и заблокированные в штат не входят.
+            const [response, counts] = await Promise.all([
+                window.api.request('/accounts/users/'),
+                window.api.request('/accounts/users/role-counts/').catch(() => null),
+            ]);
             this.users = response.results || response;
-            listEl.innerHTML = this.users.map((u) => `
+
+            const rolesBlock = counts ? `
+                <div class="list-group" style="margin-bottom:12px;">
+                    ${['owner', 'admin', 'worker'].map((role) => `
+                        <div class="list-row" style="cursor:default;">
+                            <span class="text-sm" data-i18n="roles.${role}"></span>
+                            <span class="text-sm font-bold">${counts[role] ?? 0}
+                                <span data-i18n="settings.people_count"></span></span>
+                        </div>`).join('')}
+                </div>` : '';
+
+            listEl.innerHTML = rolesBlock + this.users.map((u) => `
                 <div class="list-row" data-user="${u.id}">
                     <div>
                         <div style="font-weight:600;font-size:14px;">
