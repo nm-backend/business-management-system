@@ -141,11 +141,62 @@ class ClientViewSet(CompanyScopedViewSet):
             debtors.order_by('-debt')
             .values('id', 'name', 'phone', 'debt')[:10]
         )
+        # Бакеты просрочки из макета «Қарз назорати»: «Муддати ўтган» с
+        # подписями «7/10/15 кундан ошган» против «Муддати бор». Возраст долга
+        # считаем по сроку ОПЛАТЫ заказа (payment_due_date), а если он не
+        # задан — по сроку изготовления, как было раньше.
+        from apps.orders.models import Order
+
+        unpaid_orders = (
+            Order.objects.filter(
+                company_id=request.user.company_id,
+                is_archived=False,
+                paid_amount__lt=F('total_amount'),
+            )
+            .exclude(status=Order.Status.CANCELLED)
+            .select_related('client')
+        )
+
+        buckets = {'not_due': [], 'overdue_1_7': [], 'overdue_8_14': [], 'overdue_15_plus': []}
+        overdue_total = Decimal('0')
+        for order in unpaid_orders:
+            days = order.payment_overdue_days
+            debt = (order.total_amount or Decimal('0')) - (order.paid_amount or Decimal('0'))
+            if days <= 0:
+                buckets['not_due'].append((order, days, debt))
+                continue
+            overdue_total += debt
+            if days >= 15:
+                buckets['overdue_15_plus'].append((order, days, debt))
+            elif days >= 8:
+                buckets['overdue_8_14'].append((order, days, debt))
+            else:
+                buckets['overdue_1_7'].append((order, days, debt))
+
+        def bucket_payload(rows):
+            return {
+                'count': len(rows),
+                'total': sum((debt for _, _, debt in rows), Decimal('0')),
+                'orders': [
+                    {
+                        'order': order.id,
+                        'client': order.client_id,
+                        'client_name': order.client.name,
+                        'days_overdue': days,
+                        'debt': debt,
+                    }
+                    # Самые старые долги первыми — с них и начинают работу.
+                    for order, days, debt in sorted(rows, key=lambda r: -r[1])[:20]
+                ],
+            }
+
         return Response({
             'debtors_count': debtors.count(),
             'total_debt': totals['total'],
             'no_debt_count': qs.filter(debt__lte=0).count(),
             'top_debtors': top,
+            'overdue_total': overdue_total,
+            'buckets': {name: bucket_payload(rows) for name, rows in buckets.items()},
         })
 
     def perform_create(self, serializer):

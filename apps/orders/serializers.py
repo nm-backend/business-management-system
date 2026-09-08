@@ -66,7 +66,8 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'client', 'client_name', 'product', 'product_name', 'custom_product_name',
-            'quantity', 'unit', 'deadline', 'worker', 'worker_name', 'comment', 'photo',
+            'quantity', 'unit', 'deadline', 'payment_due_date',
+            'worker', 'worker_name', 'comment', 'photo',
             'status', 'payment_status', 'has_material_shortage', 'material_shortages',
             'has_product_shortage', 'product_shortage',
             'is_overdue', 'created_at', 'updated_at',
