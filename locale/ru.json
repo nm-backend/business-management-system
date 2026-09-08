@@ -450,7 +450,8 @@
         "labor_rate_missing": "не задана",
         "open_finance": "Перейти в финансы",
         "quarterly": "Квартал",
-        "quarter_label": "{quarter} квартал {year}"
+        "quarter_label": "{quarter} квартал {year}",
+        "profitability": "Рентабельность"
     },
     "payment_types": {
         "salary": "Зарплата",
@@ -832,7 +833,16 @@
         "section_finished": "Готовая продукция",
         "yes": "Да",
         "worker_payments": "Выплаты работникам",
-        "orders_count": "Количество заказов"
+        "orders_count": "Количество заказов",
+        "note_net_profit": "Чистая прибыль = выручка − себестоимость − расходы − выплаты работникам",
+        "note_cash": "Касса = оплаты клиентов − расходы − выплаты работникам − вывод владельца",
+        "note_period": "Показатели рассчитаны за выбранный период",
+        "note_stock_severity": "Критично — доступный остаток меньше половины минимума",
+        "section_details": "Детализация",
+        "include_charts": "Добавить графики и диаграммы",
+        "include_notes": "Добавить пояснения",
+        "include_details": "Детализированные данные",
+        "options_title": "Дополнительные параметры"
     },
     "common": {
         "save": "Сохранить",

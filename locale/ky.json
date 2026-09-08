@@ -450,7 +450,8 @@
         "labor_rate_missing": "коюлган эмес",
         "open_finance": "Финансыга ўтиш",
         "quarterly": "Чейрек",
-        "quarter_label": "{quarter}-чейрек {year}"
+        "quarter_label": "{quarter}-чейрек {year}",
+        "profitability": "Кирешелүүлүк"
     },
     "payment_types": {
         "salary": "Эмгек акы",
@@ -832,7 +833,16 @@
         "section_finished": "Даяр продукция",
         "yes": "Ооба",
         "worker_payments": "Жумушчуларга төлөмдөр",
-        "orders_count": "Буйрутмалардын саны"
+        "orders_count": "Буйрутмалардын саны",
+        "note_net_profit": "Таза киреше = түшүм − өздүк наркы − чыгымдар − жумушчуларга төлөмдөр",
+        "note_cash": "Касса = кардар төлөмдөрү − чыгымдар − жумушчуларга төлөмдөр − ээсинин чыгымы",
+        "note_period": "Көрсөткүчтөр тандалган мезгил үчүн эсептелген",
+        "note_stock_severity": "Критикалык — жеткиликтүү калдык минимумдун жарымынан аз",
+        "section_details": "Чоо-жайы",
+        "include_charts": "Графиктерди жана диаграммаларды кошуу",
+        "include_notes": "Түшүндүрмөлөрдү кошуу",
+        "include_details": "Чоо-жайлуу маалымат",
+        "options_title": "Кошумча параметрлер"
     },
     "common": {
         "save": "Сактоо",

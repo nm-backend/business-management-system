@@ -450,7 +450,8 @@
         "labor_rate_missing": "белгиланмаган",
         "open_finance": "Финансларга ўтиш",
         "quarterly": "Чорак",
-        "quarter_label": "{quarter}-чорак {year}"
+        "quarter_label": "{quarter}-чорак {year}",
+        "profitability": "Рентабеллик"
     },
     "payment_types": {
         "salary": "Иш ҳақи",
@@ -832,7 +833,16 @@
         "section_finished": "Тайёр маҳсулот",
         "yes": "Ҳа",
         "worker_payments": "Ишчиларга тўловлар",
-        "orders_count": "Буюртмалар сони"
+        "orders_count": "Буюртмалар сони",
+        "note_net_profit": "Соф фойда = даромад − таннарх − харажатлар − ишчиларга тўловлар",
+        "note_cash": "Касса = мижоз тўловлари − харажатлар − ишчиларга тўловлар − эга чиқими",
+        "note_period": "Кўрсаткичлар танланган давр учун ҳисобланган",
+        "note_stock_severity": "Критик — мавжуд қолдиқ минимумнинг ярмидан кам",
+        "section_details": "Тафсилот",
+        "include_charts": "График ва диаграммаларни қўшиш",
+        "include_notes": "Изоҳ ва ёрдамчиларни қўшиш",
+        "include_details": "Детallashtirilgan маълумот",
+        "options_title": "Қўшимча параметрлар"
     },
     "common": {
         "save": "Сақлаш",

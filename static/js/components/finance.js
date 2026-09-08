@@ -97,7 +97,7 @@ class FinanceComponent {
                 if (!data) {
                     return `<tr>
                         <td style="padding:8px;border-bottom:1px solid var(--border);">${label}</td>
-                        <td colspan="3" style="padding:8px;border-bottom:1px solid var(--border);text-align:center;">—</td>
+                        <td colspan="4" style="padding:8px;border-bottom:1px solid var(--border);text-align:center;">—</td>
                     </tr>`;
                 }
                 const net = Number(data.total_net_profit || 0);
@@ -106,6 +106,11 @@ class FinanceComponent {
                     <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.total_revenue || 0)}</td>
                     <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.total_cogs || 0)}</td>
                     <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;color:${net >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${window.ui.money(data.total_net_profit || 0)}</td>
+                    <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">
+                        ${data.profitability_percent === null || data.profitability_percent === undefined
+                            ? '—'
+                            : `${data.profitability_percent}%`}
+                    </td>
                 </tr>`;
             }).join('');
 
@@ -118,6 +123,7 @@ class FinanceComponent {
                                 <th style="padding:8px;text-align:right;">${window.ui.t('finance.revenue')}</th>
                                 <th style="padding:8px;text-align:right;">${window.ui.t('finance.cost_of_goods')}</th>
                                 <th style="padding:8px;text-align:right;">${window.ui.t('finance.net_profit')}</th>
+                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.profitability')}</th>
                             </tr>
                         </thead>
                         <tbody>${rows}</tbody>

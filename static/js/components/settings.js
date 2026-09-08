@@ -101,6 +101,25 @@ class SettingsComponent {
 
             ${user.is_owner || user.is_admin ? `
                 <div class="section-title" data-i18n="settings.export"></div>
+                <!-- Тумблеры из макета «Ҳисобот экспорти». Каждый реально
+                     меняет файл: график рисуется в PDF, пояснения добавляют
+                     формулы показателей, детализация — сами операции.
+                     Права они не расширяют: у администратора детализация
+                     остаётся без сумм. -->
+                <div class="list-group" style="margin-bottom:8px;">
+                    <label class="list-row" style="cursor:pointer;">
+                        <span class="text-sm" data-i18n="export.include_charts"></span>
+                        <input type="checkbox" id="export-charts">
+                    </label>
+                    <label class="list-row" style="cursor:pointer;">
+                        <span class="text-sm" data-i18n="export.include_notes"></span>
+                        <input type="checkbox" id="export-notes">
+                    </label>
+                    <label class="list-row" style="cursor:pointer;">
+                        <span class="text-sm" data-i18n="export.include_details"></span>
+                        <input type="checkbox" id="export-details">
+                    </label>
+                </div>
                 <div class="list-group">
                     <div class="list-row" data-export="/reports/export/stock/" data-file="stock-report.xlsx" role="button" tabindex="0">
                         <span>📦 <span data-i18n="export.stock"></span></span><span>Excel</span>
@@ -224,11 +243,12 @@ class SettingsComponent {
             }
         });
         container.querySelectorAll('[data-export]').forEach((row) => {
-            row.addEventListener('click', () => this.download(row.dataset.export, row.dataset.file));
+            row.addEventListener('click', () => this.download(
+                this.withExportOptions(row.dataset.export), row.dataset.file));
             row.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    this.download(row.dataset.export, row.dataset.file);
+                    this.download(this.withExportOptions(row.dataset.export), row.dataset.file);
                 }
             });
         });
@@ -261,6 +281,24 @@ class SettingsComponent {
         if (lang === window.i18n.currentLang) return;
         await window.i18n.setLanguage(lang);
         window.location.reload();
+    }
+
+    /**
+     * Дописывает к адресу выгрузки выбранные параметры из макета
+     * «Ҳисобот экспорти». Отключённые не отправляем вовсе: сервер трактует
+     * отсутствие параметра как «выключено».
+     */
+    withExportOptions(endpoint) {
+        const flags = {
+            charts: this.container?.querySelector('#export-charts')?.checked,
+            notes: this.container?.querySelector('#export-notes')?.checked,
+            detailed: this.container?.querySelector('#export-details')?.checked,
+        };
+        const params = Object.entries(flags)
+            .filter(([, enabled]) => enabled)
+            .map(([name]) => `${name}=1`);
+        if (!params.length) return endpoint;
+        return endpoint + (endpoint.includes('?') ? '&' : '?') + params.join('&');
     }
 
     async download(endpoint, filename) {

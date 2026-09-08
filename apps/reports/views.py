@@ -277,20 +277,81 @@ def resolve_report_font_path():
     return None
 
 
-def pdf_response(title, rows, filename):
-    """Простой табличный PDF отчёт (reportlab)."""
+def export_options(request):
+    """
+    Параметры выгрузки из макета «Ҳисобот экспорти».
+
+    Три тумблера: «График ва диаграммаларни қўшиш», «Изоҳ ва ёрдамчиларни
+    қўшиш», «Детallashtirilgan маълумот». Каждый ДОЛЖЕН менять файл — тумблер,
+    который ничего не делает, хуже его отсутствия.
+
+    Права параметры не расширяют: детализация администратора остаётся без
+    сумм, потому что данные для него собираются тем же кодом.
+    """
+    def flag(name):
+        value = request.query_params.get(name, '')
+        return str(value).lower() in ('1', 'true', 'yes', 'on')
+
+    return {
+        'charts': flag('charts'),
+        'notes': flag('notes'),
+        'detailed': flag('detailed'),
+    }
+
+
+def _bar_chart(chart_data, font_name):
+    """
+    Столбчатая диаграмма для PDF (reportlab.graphics).
+
+    chart_data: [(подпись, число), ...]. Рисуется только по числовым строкам
+    отчёта — рисовать «график» из текста бессмысленно.
+    """
+    from reportlab.graphics.charts.barcharts import VerticalBarChart
+    from reportlab.graphics.shapes import Drawing, String
+    from reportlab.lib import colors
+
+    drawing = Drawing(460, 200)
+    chart = VerticalBarChart()
+    chart.x, chart.y = 40, 40
+    chart.width, chart.height = 380, 130
+    chart.data = [[float(value) for _, value in chart_data]]
+    chart.categoryAxis.categoryNames = [str(label)[:14] for label, _ in chart_data]
+    chart.categoryAxis.labels.fontName = font_name
+    chart.categoryAxis.labels.fontSize = 7
+    chart.categoryAxis.labels.angle = 30
+    chart.categoryAxis.labels.dy = -12
+    chart.valueAxis.labels.fontName = font_name
+    chart.valueAxis.labels.fontSize = 7
+    chart.valueAxis.valueMin = min([0] + [float(v) for _, v in chart_data])
+    chart.bars[0].fillColor = colors.HexColor('#1c64d9')
+    drawing.add(chart)
+    drawing.add(String(0, 185, '', fontName=font_name))
+    return drawing
+
+
+def pdf_response(title, rows, filename, options=None, notes=None, chart_data=None):
+    """
+    Табличный PDF отчёт (reportlab).
+
+    options — словарь из export_options(). Влияние параметров:
+      * charts — добавляет столбчатую диаграмму по числовым строкам;
+      * notes  — добавляет блок пояснений (formulas/подсказки) после таблицы.
+    Детализацию (detailed) собирает сама вьюха: она меняет СОСТАВ строк.
+    """
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import cm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     from reportlab.lib.styles import getSampleStyleSheet
 
+    options = options or {}
     font_name = register_report_font()
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=1.5 * cm)
     styles = getSampleStyleSheet()
     styles['Title'].fontName = font_name
+    styles['Normal'].fontName = font_name
     table = Table([[str(c) for c in row] for row in rows])
     table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), font_name),
@@ -300,7 +361,19 @@ def pdf_response(title, rows, filename):
         ('GRID', (0, 0), (-1, -1), 0.4, colors.grey),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f3f6fb')]),
     ]))
-    doc.build([Paragraph(title, styles['Title']), Spacer(1, 12), table])
+
+    story = [Paragraph(title, styles['Title']), Spacer(1, 12), table]
+
+    if options.get('charts') and chart_data:
+        story += [Spacer(1, 16), _bar_chart(chart_data, font_name)]
+
+    if options.get('notes') and notes:
+        story += [Spacer(1, 16)]
+        for note in notes:
+            story.append(Paragraph(str(note), styles['Normal']))
+            story.append(Spacer(1, 4))
+
+    doc.build(story)
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
@@ -366,10 +439,60 @@ class OwnerFinanceExportView(APIView):
             [t('finance.worker_debts'), data['worker_debts']],
             [t('export.orders_count'), data['orders_count']],
         ]
+        options = export_options(request)
+
+        # «Детallashtirilgan маълумот»: под итогами появляются сами операции —
+        # расходы и оплаты периода. Без параметра отчёт остаётся сводным.
+        if options['detailed']:
+            from apps.clients.models import Payment
+            from apps.finance.models import Expense
+
+            rows.append([])
+            rows.append([t('export.section_details'), '', ''])
+            rows.append([t('export.col_period'), t('finance.category'), t('common.amount')])
+            for expense in Expense.objects.filter(
+                company_id=request.user.company_id,
+                date__gte=date_from, date__lte=date_to,
+            ).order_by('date'):
+                rows.append([
+                    expense.date.isoformat() if expense.date else '',
+                    expense.get_category_display(), expense.amount,
+                ])
+            for payment in Payment.objects.filter(
+                company_id=request.user.company_id,
+                payment_date__date__gte=date_from, payment_date__date__lte=date_to,
+            ).select_related('client').order_by('payment_date'):
+                rows.append([
+                    payment.payment_date.date().isoformat(),
+                    payment.client.name, payment.amount,
+                ])
+
+        # «Изоҳ ва ёрдамчиларни қўшиш»: формулы показателей.
+        notes = [
+            t('export.note_period'),
+            t('export.note_net_profit'),
+            t('export.note_cash'),
+        ] if options['notes'] else None
+
+        # «График ва диаграммаларни қўшиш»: диаграмма по ключевым суммам.
+        chart_data = [
+            (t('finance.revenue'), data['revenue']),
+            (t('finance.cost_of_goods'), data['cost_of_goods']),
+            (t('finance.expenses'), data['expenses_total']),
+            (t('finance.net_profit'), data['net_profit']),
+        ] if options['charts'] else None
+
         if request.query_params.get('format') == 'pdf':
-            return pdf_response(_report_title(request, 'export.report_finance'), rows, 'finance-report.pdf')
+            return pdf_response(
+                _report_title(request, 'export.report_finance'), rows, 'finance-report.pdf',
+                options=options, notes=notes, chart_data=chart_data,
+            )
         if request.query_params.get('format') == 'csv':
+            if notes:
+                rows = rows + [[]] + [[note] for note in notes]
             return csv_response(rows, 'finance-report.csv')
+        if notes:
+            rows = rows + [[]] + [[note] for note in notes]
         return xlsx_response(rows, 'finance-report.xlsx', 'Finance')
 
 
@@ -509,8 +632,52 @@ class AdminStockExportView(APIView):
                 p.name, p.category, p.quantity, t(f'units.{p.unit}'),
                 p.min_stock, yes if p.is_low_stock else '',
             ])
+        options = export_options(request)
+
+        # Детализация складского отчёта — это операционные подробности
+        # (зона, ячейка, состояние, поставщик), а НЕ суммы: отчёт доступен
+        # администратору, и цены ему запрещены при любых параметрах.
+        if options['detailed']:
+            rows[0] += [
+                t('warehouse.storage_zone'), t('warehouse.cell'),
+                t('warehouse.condition'), t('warehouse.supplier'),
+            ]
+            materials = {
+                m.id: m for m in RawMaterial.objects.filter(
+                    company_id=company_id, is_archived=False,
+                ).select_related('cell')
+            }
+            index = 1
+            for material in RawMaterial.objects.filter(
+                company_id=company_id, is_archived=False,
+            ).select_related('cell').order_by('name'):
+                rows[index] += [
+                    material.get_storage_zone_display() if material.storage_zone else '',
+                    material.cell.code if material.cell else '',
+                    material.get_condition_display() if material.condition else '',
+                    material.supplier or '',
+                ]
+                index += 1
+
+        notes = [t('export.note_stock_severity')] if options['notes'] else None
+        chart_data = None
+        if options['charts']:
+            # По количеству остатка — без денег, чтобы диаграмма годилась и
+            # администратору.
+            chart_data = [
+                (m.name[:14], m.quantity)
+                for m in RawMaterial.objects.filter(
+                    company_id=company_id, is_archived=False,
+                ).order_by('-quantity')[:8]
+            ]
+
         if request.query_params.get('format') == 'pdf':
-            return pdf_response(_report_title(request, 'export.report_stock'), rows, 'stock-report.pdf')
+            return pdf_response(
+                _report_title(request, 'export.report_stock'), rows, 'stock-report.pdf',
+                options=options, notes=notes, chart_data=chart_data,
+            )
+        if notes:
+            rows = rows + [[]] + [[note] for note in notes]
         if request.query_params.get('format') == 'csv':
             return csv_response(rows, 'stock-report.csv')
         return xlsx_response(rows, 'stock-report.xlsx', 'Stock')

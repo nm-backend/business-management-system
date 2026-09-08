@@ -96,6 +96,7 @@ class QuarterlyReportData(TypedDict):
     total_expenses: Decimal | int
     total_worker_payments: Decimal | int
     total_net_profit: Decimal | int
+    profitability_percent: Decimal | None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -654,6 +655,15 @@ def get_quarterly_report_data(
         'total_expenses': total_expenses,
         'total_worker_payments': total_worker_payments,
         'total_net_profit': total_revenue - total_cogs - total_expenses - total_worker_payments,
+        # Рентабельность = доля чистой прибыли в выручке (макет: «Рентабеллик
+        # 71.2 %»). Семантика однозначная, поэтому показатель считается, а не
+        # берётся «с потолка». При нулевой выручке возвращаем None, а не ноль:
+        # «0 %» означало бы убыточность, хотя продаж просто не было.
+        'profitability_percent': (
+            ((total_revenue - total_cogs - total_expenses - total_worker_payments)
+             / total_revenue * 100).quantize(Decimal('0.1'))
+            if total_revenue else None
+        ),
     }
 
 
