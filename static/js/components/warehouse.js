@@ -161,7 +161,12 @@ class WarehouseComponent {
             const valueEl = document.getElementById('summary-value');
             if (valueEl) valueEl.textContent = window.ui.money(data.total_value ?? 0);
             wrap.style.display = 'flex';
+            // Разрез по видам нужен чипам: держим его на компоненте.
+            this.typeTotals = Object.fromEntries(
+                (data.type_totals || []).map((t) => [t.stone_type, t])
+            );
             this.renderQuickStats(data);
+            this.loadStoneTypes();
         } catch (e) {
             /* итоги некритичны */
         }
@@ -186,6 +191,10 @@ class WarehouseComponent {
             </div>`;
         box.innerHTML = `
             <div class="card-title" style="margin-bottom:6px;"><span data-i18n="warehouse.quick_stats"></span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                ${chip('warehouse.types_count', data.types_count ?? 0)}
+                ${chip('warehouse.materials_count', data.materials_count ?? 0)}
+            </div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
                 ${chip('warehouse.at_minimum', stats?.low_stock_count ?? 0, 'text-warning')}
                 ${chip('warehouse.critical_low', stats?.critical_count ?? 0, 'text-danger')}
@@ -368,9 +377,17 @@ class WarehouseComponent {
             const types = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
             tabsEl.innerHTML = [
                 `<button class="tab-btn ${!this.stoneTypeFilter ? 'active' : ''}" data-stone-type="">${window.ui.t('common.all')} (${materials.length})</button>`,
-                ...types.map(([type, count]) => 
-                    `<button class="tab-btn ${this.stoneTypeFilter === type ? 'active' : ''}" data-stone-type="${window.ui.escape(type)}">${window.ui.escape(type)} (${count})</button>`
-                )
+                // В макете на чипе стоит ОСТАТОК вида («Оқ мрамор 250.75 м²»),
+                // а не число позиций. Сумму считает сервер; при смешанных
+                // единицах внутри вида она равна null — тогда показываем
+                // количество позиций, складывать м² с кг нельзя.
+                ...types.map(([type, count]) => {
+                    const totals = this.typeTotals?.[type];
+                    const label = (totals && totals.quantity !== null && totals.quantity !== undefined)
+                        ? `${window.ui.qty(totals.quantity)} ${window.ui.t('units.' + totals.unit)}`
+                        : count;
+                    return `<button class="tab-btn ${this.stoneTypeFilter === type ? 'active' : ''}" data-stone-type="${window.ui.escape(type)}">${window.ui.escape(type)} (${label})</button>`;
+                })
             ].join('');
             tabsEl.querySelectorAll('[data-stone-type]').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -659,16 +676,58 @@ class WarehouseComponent {
         if (window.listStates.gone(listEl)) return;
         window.listStates.skeleton(listEl);
         try {
-            const response = await window.api.request('/warehouse/stock-movements/?page_size=50');
+            // Вкладки «Ҳаммаси / Келган / Ишлатилган / Қайтарилган» из макета.
+            // Фильтрует СЕРВЕР: отбор загруженной страницы врал бы начиная со
+            // второй страницы, а итоги считались бы по видимому куску.
+            const category = this.historyCategory || '';
+            const query = category ? `?page_size=50&category=${category}` : '?page_size=50';
+            const [response, totals] = await Promise.all([
+                window.api.request(`/warehouse/stock-movements/${query}`),
+                window.api.request(`/warehouse/stock-movements/totals/${category ? `?category=${category}` : ''}`)
+                    .catch(() => null),
+            ]);
             const rows = response.results || response;
+
+            const tabs = `
+                <div class="tabs" style="margin-bottom:10px;">
+                    ${[['', 'warehouse.history_all'],
+                       ['incoming', 'warehouse.history_incoming'],
+                       ['outgoing', 'warehouse.history_outgoing'],
+                       ['returned', 'warehouse.history_returned']].map(([value, key]) => `
+                        <button class="tab-btn ${category === value ? 'active' : ''}"
+                                data-history-tab="${value}" data-i18n="${key}"></button>`).join('')}
+                </div>`;
+            const totalsBlock = totals ? `
+                <div class="card" style="margin-top:10px;">
+                    <div class="text-sm">
+                        <span data-i18n="warehouse.total_incoming"></span>:
+                        <span class="text-success">+${window.ui.qty(totals.incoming)}</span>
+                        · <span data-i18n="warehouse.total_outgoing"></span>:
+                        <span class="text-danger">−${window.ui.qty(totals.outgoing)}</span>
+                        · <span data-i18n="warehouse.total_net"></span>:
+                        <span class="font-bold">${window.ui.qty(totals.net)}</span>
+                    </div>
+                </div>` : '';
+
+            const bindTabs = () => {
+                listEl.querySelectorAll('[data-history-tab]').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        this.historyCategory = btn.dataset.historyTab;
+                        this.loadHistory();
+                    });
+                });
+            };
+
             if (!rows.length) {
-                window.listStates.empty(listEl, window.ui.t('common.no_data'));
+                listEl.innerHTML = tabs + `<div class="card list-state" data-i18n="common.no_data"></div>` + totalsBlock;
+                bindTabs();
+                window.i18n.applyTranslations();
                 return;
             }
             // Возврат («Қайтарилган») пополняет склад — знак и цвет как у прихода.
             const sign = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? '−' : '+');
             const colour = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? 'text-danger' : 'text-success');
-            listEl.innerHTML = rows.map((r) => `
+            listEl.innerHTML = tabs + rows.map((r) => `
                 <div class="list-row" style="cursor:default;">
                     <div style="min-width:0;">
                         <div style="font-size:14px;font-weight:600;">
@@ -686,7 +745,8 @@ class WarehouseComponent {
                             ${r.unit ? `<span data-i18n="units.${r.unit}"></span>` : ''}
                         </div>
                     </div>
-                </div>`).join('');
+                </div>`).join('') + totalsBlock;
+            bindTabs();
             window.i18n.applyTranslations();
         } catch (e) {
             window.listStates.error(listEl, window.ui.t('common.error'), () => this.loadHistory());

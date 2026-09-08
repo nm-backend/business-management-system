@@ -24,7 +24,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
+from .fingerprint_jwt import FINGERPRINT_CLAIM
 from .fingerprint_jwt import RefreshToken as FingerprintRefreshToken
+from .sessions import (
+    record_session, revoke_other_sessions, revoke_session, serialize_sessions,
+)
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
@@ -154,6 +158,12 @@ class SetupOwnerView(APIView):
         refresh = FingerprintRefreshToken.for_user(user)
         if fingerprint:
             refresh.set_fingerprint(fingerprint)
+        # Запоминаем устройство сессии: список «Актив сеанслар»
+        # показывает не идентификаторы, а понятные строки.
+        try:
+            record_session(user, refresh, request)
+        except Exception:  # noqa: BLE001 — метаданные не должны ломать вход
+            pass
 
         write_audit_log(
             action=AuditLog.Action.SETUP_OWNER,
@@ -239,6 +249,12 @@ class LoginView(APIView):
         refresh = FingerprintRefreshToken.for_user(user)
         if fingerprint:
             refresh.set_fingerprint(fingerprint)
+        # Запоминаем устройство сессии: список «Актив сеанслар»
+        # показывает не идентификаторы, а понятные строки.
+        try:
+            record_session(user, refresh, request)
+        except Exception:  # noqa: BLE001 — метаданные не должны ломать вход
+            pass
 
         write_audit_log(
             action=AuditLog.Action.LOGIN,
@@ -251,6 +267,76 @@ class LoginView(APIView):
             'tokens': {'refresh': str(refresh), 'access': str(refresh.access_token)},
             'fingerprint_required': bool(fingerprint),
         })
+
+
+
+class MySessionsView(APIView):
+    """
+    Активные сессии текущего пользователя (макет «Сеансларни бошқариш»).
+
+    GET  /api/v1/accounts/me/sessions/           — список своих сессий
+    POST /api/v1/accounts/me/sessions/revoke/    — отозвать одну: {"jti": "..."}
+    POST /api/v1/accounts/me/sessions/revoke-others/ — закрыть все, кроме текущей
+
+    Строго свои сессии: чужие не видны и не отзываются — ни владельцу, ни
+    супер-администратору. Управление чужим доступом делается блокировкой
+    аккаунта (is_active), а не захватом его сессии.
+
+    Отзыв работает штатным механизмом simplejwt (blacklist refresh-токена):
+    обновить токен по отозванной сессии нельзя. Уже выданный access-токен
+    остаётся действительным до истечения своего срока (45 минут) — это
+    свойство stateless-JWT, а не недоработка; для немедленной блокировки
+    пользователя есть is_active.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _current_fingerprint(self, request):
+        """Отпечаток устройства из access-токена (claim fpr копируется в него)."""
+        token = getattr(request, 'auth', None)
+        if token is None:
+            return ''
+        try:
+            return token.payload.get(FINGERPRINT_CLAIM, '') or ''
+        except AttributeError:
+            return ''
+
+    def get(self, request):
+        return Response({
+            'results': serialize_sessions(request.user, self._current_fingerprint(request)),
+        })
+
+    def post(self, request):
+        jti = request.data.get('jti')
+        if not jti:
+            return Response({'jti': 'Укажите сессию.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not revoke_session(request.user, jti):
+            # 404, а не 403: существование чужой сессии не подтверждаем.
+            return Response({'detail': 'Сессия не найдена.'}, status=status.HTTP_404_NOT_FOUND)
+        write_audit_log(
+            action=AuditLog.Action.LOGOUT, actor=request.user, target=request.user,
+            metadata={'revoked_session': jti}, request=request,
+        )
+        return Response({'detail': 'Сессия закрыта.'})
+
+
+class RevokeOtherSessionsView(APIView):
+    """Закрывает все сессии пользователя, кроме текущей."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = getattr(request, 'auth', None)
+        fingerprint = ''
+        if token is not None:
+            try:
+                fingerprint = token.payload.get(FINGERPRINT_CLAIM, '') or ''
+            except AttributeError:
+                fingerprint = ''
+        revoked = revoke_other_sessions(request.user, fingerprint)
+        write_audit_log(
+            action=AuditLog.Action.LOGOUT, actor=request.user, target=request.user,
+            metadata={'revoked_sessions': revoked}, request=request,
+        )
+        return Response({'revoked': revoked})
 
 
 class LogoutView(APIView):
@@ -613,6 +699,12 @@ class AccessKeyRedeemView(APIView):
         refresh = FingerprintRefreshToken.for_user(user)
         if fingerprint:
             refresh.set_fingerprint(fingerprint)
+        # Запоминаем устройство сессии: список «Актив сеанслар»
+        # показывает не идентификаторы, а понятные строки.
+        try:
+            record_session(user, refresh, request)
+        except Exception:  # noqa: BLE001 — метаданные не должны ломать вход
+            pass
 
         write_audit_log(
             action=AuditLog.Action.ACCESS_KEY_REDEEMED,

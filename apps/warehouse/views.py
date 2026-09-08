@@ -7,11 +7,14 @@ from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.response import Response
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import Sum
+from django.db.models import (
+    Case, Count, DecimalField, ExpressionWrapper, F, Q, Sum, Value, When,
+)
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
+from apps.core.validators import parse_date_param, parse_int_param
 from core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrManager
 from .models import (
     FinishedProduct, GoodsReceipt, RawMaterial, Recipe, RecipeItem, StockMovement,
@@ -189,6 +192,9 @@ class WarehouseViewSet(CompanyScopedViewSet):
             return [IsCompanyMember(), IsOwnerOrAdmin()]
         return [IsCompanyMember()]
 
+    # Группы вкладок: какие типы движений попадают в каждую.
+    # Возврат пополняет склад, но остаётся отдельной вкладкой — в макете это
+    # разные колонки, и смешивать его с поставкой нельзя.
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Warehouse.objects.none()
@@ -455,19 +461,77 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
         # заказы. Считаем по тем же правилам, что и карточка материала
         # (stock_severity), иначе цифры в шапке и в списке расходятся.
         recent_since = timezone.localdate() - datetime.timedelta(days=7)
-        low_count = critical_count = 0
-        for material in qs.only('quantity', 'min_stock', 'required_for_orders'):
-            severity = material.stock_severity
-            if severity == 'critical':
-                critical_count += 1
-            elif severity == 'low':
-                low_count += 1
+
+        # Считаем одним запросом вместо перебора материалов в Python: на складе
+        # из сотен позиций прежний цикл тянул все строки и считал severity по
+        # одной. Правила ТЕ ЖЕ, что у RawMaterial.stock_severity:
+        #   доступно = quantity - required_for_orders
+        #   critical: доступно <= 0 или (есть минимум и доступно < минимум/2)
+        #   low:      доступно <= минимум (и не critical)
+        # Совпадение SQL и свойства модели закреплено тестом.
+        available = ExpressionWrapper(
+            F('quantity') - F('required_for_orders'),
+            output_field=DecimalField(max_digits=15, decimal_places=3),
+        )
+        half_min = ExpressionWrapper(
+            F('min_stock') / Value(Decimal('2')),
+            output_field=DecimalField(max_digits=15, decimal_places=3),
+        )
+        counters = qs.annotate(_available=available, _half_min=half_min).aggregate(
+            materials_count=Count('id'),
+            # «Турлари» — сколько РАЗНЫХ видов камня на складе. Пустой
+            # stone_type видом не считается: это «тип не заполнен».
+            types_count=Count(
+                Case(When(~Q(stone_type=''), then=F('stone_type'))),
+                distinct=True,
+            ),
+            critical_count=Count(Case(When(
+                Q(_available__lte=0) | (Q(min_stock__gt=0) & Q(_available__lt=F('_half_min'))),
+                then=1,
+            ))),
+            low_count=Count(Case(When(
+                Q(_available__lte=F('min_stock'))
+                & ~(Q(_available__lte=0) | (Q(min_stock__gt=0) & Q(_available__lt=F('_half_min')))),
+                then=1,
+            ))),
+            recent_arrivals_count=Count(Case(When(arrival_date__gte=recent_since, then=1))),
+            reserved_count=Count(Case(When(required_for_orders__gt=0, then=1))),
+        )
         quick_stats = {
-            'low_stock_count': low_count,
-            'critical_count': critical_count,
-            'recent_arrivals_count': qs.filter(arrival_date__gte=recent_since).count(),
-            'reserved_count': qs.filter(required_for_orders__gt=0).count(),
+            'low_stock_count': counters['low_count'],
+            'critical_count': counters['critical_count'],
+            'recent_arrivals_count': counters['recent_arrivals_count'],
+            'reserved_count': counters['reserved_count'],
         }
+
+        # Разрез по видам камня для чипов из макета («Оқ мрамор 250.75 м²»).
+        # Количество отдаём только когда все позиции вида в ОДНОЙ единице:
+        # складывать м² с кг нельзя, поэтому при смешанных единицах quantity
+        # остаётся null, а разбивка лежит в unit_totals вида.
+        type_rows = (
+            qs.exclude(stone_type='')
+            .values('stone_type', 'unit')
+            .annotate(quantity=Sum('quantity'), materials_count=Count('id'))
+            .order_by('stone_type', 'unit')
+        )
+        grouped_types = {}
+        for row in type_rows:
+            entry = grouped_types.setdefault(row['stone_type'], {
+                'stone_type': row['stone_type'],
+                'materials_count': 0,
+                'unit_totals': [],
+            })
+            entry['materials_count'] += row['materials_count']
+            entry['unit_totals'].append({
+                'unit': row['unit'], 'quantity': row['quantity'] or 0,
+            })
+        type_totals = []
+        for entry in grouped_types.values():
+            single = entry['unit_totals'][0] if len(entry['unit_totals']) == 1 else None
+            entry['unit'] = single['unit'] if single else None
+            entry['quantity'] = single['quantity'] if single else None
+            type_totals.append(entry)
+        type_totals.sort(key=lambda item: item['materials_count'], reverse=True)
 
         # «Склад якуний (бугун)»: сколько сегодня пришло и сколько ушло.
         # Возврат считаем приходом склада, но он остаётся отдельным типом
@@ -494,6 +558,10 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
 
         data = {
             'unit_totals': unit_totals,
+            # «Турлари 28 / Материаллар 156» из шапки макета.
+            'types_count': counters['types_count'],
+            'materials_count': counters['materials_count'],
+            'type_totals': type_totals,
             'total_quantity': (
                 unit_totals[0]['quantity'] if len(unit_totals) == 1 else None
             ),
@@ -635,18 +703,98 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = StockMovement.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
     permission_classes = [IsCompanyMember, IsOwnerOrAdminOrManager]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['movement_type', 'material', 'product', 'created_by']
-    search_fields = ['reason']
+    # Вкладки «Ҳаммаси / Келган / Ишлатилган / Қайтарилган» из макета — это
+    # фильтр по movement_type НА СЕРВЕРЕ, а не отбор загруженной страницы:
+    # иначе на второй странице вкладка показывала бы неполные данные.
+    filterset_fields = [
+        'movement_type', 'material', 'product', 'created_by', 'purpose', 'receipt',
+    ]
+    search_fields = ['reason', 'document_number']
     ordering_fields = ['created_at']
+
+    CATEGORY_TYPES = {
+        'incoming': (StockMovement.MovementType.INCOMING,),
+        'outgoing': (
+            StockMovement.MovementType.OUTGOING,
+            StockMovement.MovementType.PRODUCTION_OUT,
+            StockMovement.MovementType.LOSS,
+        ),
+        'returned': (StockMovement.MovementType.RETURN,),
+        'production': (
+            StockMovement.MovementType.PRODUCTION_IN,
+            StockMovement.MovementType.PRODUCTION_OUT,
+        ),
+    }
+
+    def _apply_history_filters(self, queryset):
+        """
+        Фильтры вкладок и периода поверх стандартных filterset-полей.
+
+        Неизвестное значение категории НЕ игнорируется молча (иначе вкладка
+        показала бы всю историю и выглядела бы рабочей) — отдаём пустой
+        результат, а тест это фиксирует.
+        """
+        params = self.request.query_params
+
+        category = params.get('category')
+        if category:
+            types = self.CATEGORY_TYPES.get(category)
+            queryset = queryset.filter(movement_type__in=types) if types else queryset.none()
+
+        date_from = params.get('date_from')
+        if date_from:
+            queryset = queryset.filter(
+                created_at__date__gte=parse_date_param(date_from, 'date_from'),
+            )
+        date_to = params.get('date_to')
+        if date_to:
+            queryset = queryset.filter(
+                created_at__date__lte=parse_date_param(date_to, 'date_to'),
+            )
+
+        order_id = params.get('order')
+        if order_id:
+            queryset = queryset.filter(
+                related_order_id=parse_int_param(order_id, 'order'),
+            )
+        return queryset
+
+    @action(detail=False, methods=['get'])
+    def totals(self, request):
+        """
+        Итоги под таблицей истории (макет: «Жами келган / Жами ишлатилган»).
+
+        Считает сервер по ВСЕЙ выборке с учётом фильтров, а не по видимой
+        странице: иначе итог менялся бы при листании.
+        """
+        queryset = self._apply_history_filters(self.filter_queryset(self.get_queryset()))
+        incoming = queryset.filter(
+            movement_type__in=self.CATEGORY_TYPES['incoming'],
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+        returned = queryset.filter(
+            movement_type__in=self.CATEGORY_TYPES['returned'],
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+        outgoing = queryset.filter(
+            movement_type__in=self.CATEGORY_TYPES['outgoing'],
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+        return Response({
+            'incoming': incoming,
+            'returned': returned,
+            'outgoing': outgoing,
+            # Итог склада за период: приход и возврат пополняют, расход убавляет.
+            'net': incoming + returned - outgoing,
+            'movements_count': queryset.count(),
+        })
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return StockMovement.objects.none()
         # created_by_name дергал created_by.full_name на КАЖДУЮ запись (N+1).
         # select_related сводит к константе; material/product — на будущее.
-        return StockMovement.objects.filter(
+        queryset = StockMovement.objects.filter(
             company=self.request.user.company_id,
         ).select_related('created_by', 'material', 'product')
+        return self._apply_history_filters(queryset)
 
     def get_serializer_class(self):
         if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:

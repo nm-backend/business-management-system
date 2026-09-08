@@ -236,7 +236,16 @@
         "outgoing_order": "Буюртма",
         "receipt_document": "Материални қабул қилиш",
         "add_material_line": "Яна материал қўшиш",
-        "receipt_lines": "Материаллар"
+        "receipt_lines": "Материаллар",
+        "types_count": "Турлари",
+        "materials_count": "Материаллар",
+        "history_all": "Ҳаммаси",
+        "history_incoming": "Келган",
+        "history_outgoing": "Ишлатилган",
+        "history_returned": "Қайтарилган",
+        "total_incoming": "Жами келган",
+        "total_outgoing": "Жами ишлатилган",
+        "total_net": "Жами қолган"
     },
     "units": {
         "sht": "шт",
@@ -760,7 +769,13 @@
         "access_key_code": "Кириш коди",
         "access_key_for": "Ходим учун кириш коди:",
         "access_key_hint": "Бу кодни ходимга беринг. Аввалги код автоматик равишда бекор қилинади.",
-        "copy_key": "📋 Нусхалаш"
+        "copy_key": "📋 Нусхалаш",
+        "sessions": "Сеансларни бошқариш",
+        "sessions_hint": "Актив сеансларни кўриш ва тугатиш",
+        "session_current": "Жорий қурилма",
+        "session_revoke": "Тугатиш",
+        "session_revoke_others": "Бошқа барча сеансларни тугатиш",
+        "session_unknown_device": "Номаълум қурилма"
     },
     "export": {
         "title": "Ҳисоботни экспорт қилиш",

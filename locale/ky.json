@@ -236,7 +236,16 @@
         "outgoing_order": "Буйрутма",
         "receipt_document": "Материалды кабыл алуу",
         "add_material_line": "Дагы материал кошуу",
-        "receipt_lines": "Материалдар"
+        "receipt_lines": "Материалдар",
+        "types_count": "Түрлөрү",
+        "materials_count": "Материалдар",
+        "history_all": "Баары",
+        "history_incoming": "Кирим",
+        "history_outgoing": "Колдонулган",
+        "history_returned": "Кайтарылган",
+        "total_incoming": "Бардыгы келди",
+        "total_outgoing": "Бардыгы колдонулду",
+        "total_net": "Жыйынтык калдык"
     },
     "units": {
         "sht": "даана",
@@ -760,7 +769,13 @@
         "access_key_code": "Кирүү коду",
         "access_key_for": "Кызматкер үчүн кирүү коду:",
         "access_key_hint": "Бул кодду кызматкерге бериңиз. Мурунку код автоматтык түрдө жокко чыгарылат.",
-        "copy_key": "📋 Көчүрүү"
+        "copy_key": "📋 Көчүрүү",
+        "sessions": "Сеанстарды башкаруу",
+        "sessions_hint": "Активдүү сеанстарды көрүү жана токтотуу",
+        "session_current": "Учурдагы түзмөк",
+        "session_revoke": "Токтотуу",
+        "session_revoke_others": "Башка бардык сеанстарды токтотуу",
+        "session_unknown_device": "Белгисиз түзмөк"
     },
     "export": {
         "title": "Отчетту экспорттоо",

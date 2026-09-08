@@ -122,6 +122,11 @@ class SettingsComponent {
                 <div class="list-row" id="change-password-row" role="button" tabindex="0">
                     <span>🔑 <span data-i18n="auth.change_password"></span></span><span>›</span>
                 </div>
+                <!-- «Сеансларни бошқариш» из макета: где я вошёл и как закрыть
+                     лишнее устройство. Управление только СВОИМИ сессиями. -->
+                <div class="list-row" id="sessions-row" role="button" tabindex="0">
+                    <span>💻 <span data-i18n="settings.sessions"></span></span><span>›</span>
+                </div>
                 <div class="list-row" id="about-row" role="button" tabindex="0">
                     <span>ℹ️ <span data-i18n="about.title"></span></span><span>›</span>
                 </div>
@@ -130,6 +135,8 @@ class SettingsComponent {
                 </div>
             </div>
         `;
+
+        container.querySelector('#sessions-row').addEventListener('click', () => this.openSessions());
 
         // Dark mode toggle
         const darkToggle = container.querySelector('#dark-mode-toggle');
@@ -547,6 +554,81 @@ class SettingsComponent {
             });
         });
     }
+
+    /**
+     * Активные сессии: список устройств и завершение лишних.
+     *
+     * Работает поверх штатного JWT: сервер отдаёт выданные refresh-токены и
+     * отзывает их через blacklist. Текущее устройство помечено и не
+     * закрывается кнопкой «завершить остальные».
+     */
+    async openSessions() {
+        const modal = window.ui.modal('settings.sessions', `<div id="sessions-body"></div>`);
+        const body = modal.querySelector('#sessions-body');
+
+        const load = async () => {
+            window.listStates.loading(body, window.ui.t('common.loading'));
+            try {
+                const data = await window.api.request('/accounts/me/sessions/');
+                const rows = data.results || [];
+                body.innerHTML = `
+                    <p class="text-sm text-muted" style="margin-bottom:10px;"
+                       data-i18n="settings.sessions_hint"></p>
+                    <div class="list-group">
+                        ${rows.map((row) => `
+                            <div class="list-row" style="cursor:default;">
+                                <div style="min-width:0;">
+                                    <div class="text-sm font-bold">
+                                        ${window.ui.escape(row.user_agent || window.ui.t('settings.session_unknown_device'))}
+                                    </div>
+                                    <div class="text-sm text-muted">
+                                        ${window.ui.escape(row.ip_address || '')}
+                                        ${row.created_at ? ` · ${window.ui.datetime(row.created_at)}` : ''}
+                                    </div>
+                                </div>
+                                ${row.is_current
+                                    ? `<span class="badge badge-ready" data-i18n="settings.session_current"></span>`
+                                    : `<button class="btn btn-danger btn-sm" data-revoke="${window.ui.escape(row.jti)}"
+                                               data-i18n="settings.session_revoke"></button>`}
+                            </div>`).join('')}
+                    </div>
+                    ${rows.length > 1 ? `
+                        <button class="btn btn-secondary btn-block" id="revoke-others" style="margin-top:10px;"
+                                data-i18n="settings.session_revoke_others"></button>` : ''}`;
+
+                body.querySelectorAll('[data-revoke]').forEach((btn) => {
+                    btn.addEventListener('click', async () => {
+                        try {
+                            await window.api.request('/accounts/me/sessions/', {
+                                method: 'POST',
+                                body: JSON.stringify({ jti: btn.dataset.revoke }),
+                            });
+                            window.toast.success(window.ui.t('common.success'));
+                            await load();
+                        } catch (error) {
+                            window.toast.error(window.ui.errorText(error));
+                        }
+                    });
+                });
+                body.querySelector('#revoke-others')?.addEventListener('click', async () => {
+                    try {
+                        await window.api.request('/accounts/me/sessions/revoke-others/', {
+                            method: 'POST', body: JSON.stringify({}),
+                        });
+                        window.toast.success(window.ui.t('common.success'));
+                        await load();
+                    } catch (error) {
+                        window.toast.error(window.ui.errorText(error));
+                    }
+                });
+                window.i18n.applyTranslations();
+            } catch (e) {
+                window.listStates.error(body, window.ui.t('common.error'), () => load());
+            }
+        };
+        await load();
+    }
+
 }
 
 window.SettingsComponent = new SettingsComponent();

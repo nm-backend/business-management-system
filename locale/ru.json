@@ -236,7 +236,16 @@
         "outgoing_order": "Заказ",
         "receipt_document": "Приём материала",
         "add_material_line": "Добавить ещё материал",
-        "receipt_lines": "Материалы"
+        "receipt_lines": "Материалы",
+        "types_count": "Видов",
+        "materials_count": "Материалов",
+        "history_all": "Все",
+        "history_incoming": "Поступления",
+        "history_outgoing": "Использовано",
+        "history_returned": "Возвраты",
+        "total_incoming": "Всего поступило",
+        "total_outgoing": "Всего использовано",
+        "total_net": "Итого остаток"
     },
     "units": {
         "sht": "шт",
@@ -760,7 +769,13 @@
         "access_key_code": "Код доступа",
         "access_key_for": "Код доступа для сотрудника:",
         "access_key_hint": "Передайте этот код сотруднику. Предыдущий код автоматически аннулируется.",
-        "copy_key": "📋 Копировать"
+        "copy_key": "📋 Копировать",
+        "sessions": "Управление сессиями",
+        "sessions_hint": "Просмотр и завершение активных сессий",
+        "session_current": "Текущее устройство",
+        "session_revoke": "Завершить",
+        "session_revoke_others": "Завершить все другие сессии",
+        "session_unknown_device": "Неизвестное устройство"
     },
     "export": {
         "title": "Экспорт отчётов",
