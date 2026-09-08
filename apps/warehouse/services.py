@@ -154,6 +154,8 @@ def record_outgoing(
     user: Any | None = None,
     reason: str = '',
     ignore_required: bool = False,
+    purpose: str = '',
+    order_id: int | None = None,
 ) -> RawMaterial | FinishedProduct:
     """
     Расход/списание сырья со склада с записью движения.
@@ -213,5 +215,10 @@ def record_outgoing(
         document_number=document_number or '',
         reason=reason_text,
         created_by=user,
+        # Назначение и заказ (макет «Қайси мақсадда» + «Буюртма №1256»):
+        # поле related_order_id в модели было, но ручной расход его не
+        # заполнял — в истории нельзя было понять, на какой заказ ушло сырьё.
+        purpose=purpose or '',
+        related_order_id=order_id,
     )
     return locked

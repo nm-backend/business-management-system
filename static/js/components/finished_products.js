@@ -310,11 +310,24 @@ class FinishedProductsComponent {
                 </div>`;
         }).join('');
 
+        // Параметры изделия из макета: код, габариты, толщина и выход партии.
+        // Без них норма расхода не привязана ни к каким размерам — по карточке
+        // нельзя понять, на какое изделие рассчитаны 2.2 м² мрамора.
+        const facts = [];
+        if (r.code) facts.push(window.ui.escape(r.code));
+        if (r.size) facts.push(window.ui.escape(r.size));
+        if (r.thickness) facts.push(`${window.ui.qty(r.thickness)} ${window.ui.t('units.mm')}`);
+
         return `
             <div class="card" style="margin-bottom:10px;">
                 <div class="card-title" style="margin-bottom:4px;">
                     <span>${window.ui.escape(r.name || r.product_name || '-')}</span>
                     ${r.is_active ? `<span class="badge badge-ready" data-i18n="common.active"></span>` : ''}
+                </div>
+                ${facts.length ? `<div class="text-sm text-muted">${facts.join(' · ')}</div>` : ''}
+                <div class="text-sm text-muted" style="margin-bottom:6px;">
+                    <span data-i18n="warehouse.recipe_output"></span>:
+                    ${window.ui.qty(r.output_quantity ?? 1)}
                 </div>
                 ${items ? `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">${items}</div>` : ''}
                 <div style="display:flex;gap:10px;margin-top:10px;">
@@ -344,6 +357,20 @@ class FinishedProductsComponent {
             <form id="recipe-form">
                 <div class="form-group"><label data-i18n="warehouse.recipe_name"></label>
                     <input name="name" class="form-control" required value="${window.ui.escape(recipe?.name || '')}"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="form-group"><label data-i18n="warehouse.recipe_code"></label>
+                        <input name="code" class="form-control" maxlength="30" placeholder="RCP-001"
+                               value="${window.ui.escape(recipe?.code || '')}"></div>
+                    <div class="form-group"><label data-i18n="warehouse.size"></label>
+                        <input name="size" class="form-control" maxlength="100" placeholder="2000x600"
+                               value="${window.ui.escape(recipe?.size || '')}"></div>
+                    <div class="form-group"><label data-i18n="warehouse.thickness"></label>
+                        <input name="thickness" type="number" step="0.01" min="0.01" class="form-control"
+                               value="${recipe?.thickness ?? ''}"></div>
+                    <div class="form-group"><label data-i18n="warehouse.recipe_output"></label>
+                        <input name="output_quantity" type="number" step="0.001" min="0.001" class="form-control"
+                               value="${recipe?.output_quantity ?? 1}"></div>
+                </div>
                 <div class="form-group">
                     <label style="display:flex;align-items:center;gap:8px;">
                         <input type="checkbox" name="is_active" ${recipe?.is_active ? 'checked' : ''}>
@@ -376,16 +403,25 @@ class FinishedProductsComponent {
             const form = e.target;
             const name = form.querySelector('[name=name]').value.trim();
             const isActive = form.querySelector('[name=is_active]').checked;
+            // Параметры изделия: пустые не отправляем — сервер ждёт число или
+            // отсутствие поля, пустая строка даст 400.
+            const params = {};
+            ['code', 'size', 'thickness', 'output_quantity'].forEach((field) => {
+                const value = (form.querySelector(`[name=${field}]`)?.value || '').trim();
+                if (value) params[field] = value;
+            });
             await window.ui.submitGuard(form.querySelector('button[type=submit]'), async () => {
                 try {
                     let savedRecipe = recipe;
                     if (recipe) {
                         await window.api.request(`/warehouse/recipes/${recipe.id}/`, {
-                            method: 'PATCH', body: JSON.stringify({ name, is_active: isActive }),
+                            method: 'PATCH',
+                            body: JSON.stringify({ name, is_active: isActive, ...params }),
                         });
                     } else {
                         const created = await window.api.request('/warehouse/recipes/', {
-                            method: 'POST', body: JSON.stringify({ product: p.id, name, is_active: isActive }),
+                            method: 'POST',
+                            body: JSON.stringify({ product: p.id, name, is_active: isActive, ...params }),
                         });
                         savedRecipe = created;
                     }

@@ -6,6 +6,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.core.validators import validate_not_future
+from apps.orders.models import Order
 from .models import (
     FinishedProduct, RawMaterial, Recipe, RecipeItem, StockMovement,
     Warehouse, WarehouseCell,
@@ -64,6 +65,22 @@ class OutgoingSerializer(serializers.Serializer):
         default=StockMovement.MovementType.OUTGOING,
         required=False,
     )
+    # «Қайси мақсадда» и «Буюртма» из макета. Оба поля необязательные:
+    # существующие интеграции и старые формы шлют расход без них.
+    purpose = serializers.ChoiceField(
+        choices=StockMovement.OutgoingPurpose.choices, required=False, allow_blank=True,
+    )
+    order = serializers.PrimaryKeyRelatedField(
+        queryset=Order.objects.all(), required=False, allow_null=True,
+    )
+
+    def validate_order(self, order):
+        """Заказ обязан быть своей компании: иначе расход уедет в чужую историю."""
+        request = self.context.get('request')
+        company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        if order is not None and company_id is not None and order.company_id != company_id:
+            raise serializers.ValidationError('Заказ другой компании.')
+        return order
 
 class ReturnSerializer(serializers.Serializer):
     """
@@ -347,7 +364,13 @@ class RecipeItemSerializer(serializers.ModelSerializer):
         return attrs
 
 class RecipeSerializer(serializers.ModelSerializer):
-    """Сериализатор рецепта с вложенными компонентами."""
+    """
+    Сериализатор рецепта с вложенными компонентами.
+
+    Помимо состава отдаёт параметры изделия из макета «Рецепт»: код, размер,
+    толщину и выход партии — без них норма расхода не привязана ни к каким
+    габаритам.
+    """
     items = RecipeItemSerializer(many=True, read_only=True)
 
     class Meta:

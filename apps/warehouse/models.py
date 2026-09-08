@@ -563,8 +563,27 @@ class StockMovement(TimestampedModel):
         LOSS = 'loss', 'Потеря/Брак'
         RETURN = 'return', 'Возврат'
 
+    class OutgoingPurpose(models.TextChoices):
+        """
+        Назначение ручного расхода (макет «Материални ишлатиш» → «Қайси мақсадда»).
+
+        Тип движения отвечает на вопрос «что произошло» (расход, потеря,
+        корректировка), а назначение — «зачем»: в производство по заказу, на
+        образец, на внутренние нужды. Раньше это писали свободным текстом в
+        причину, и сгруппировать расход по назначению было невозможно.
+        """
+        PRODUCTION = 'production', 'Производство'
+        SAMPLE = 'sample', 'Образец'
+        INTERNAL = 'internal', 'Внутренние нужды'
+        WRITE_OFF = 'write_off', 'Списание'
+        OTHER = 'other', 'Другое'
+
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='stock_movements', null=True, verbose_name='Компания')
     movement_type = models.CharField(max_length=20, choices=MovementType.choices, db_index=True, verbose_name='Тип движения')
+    purpose = models.CharField(
+        max_length=20, choices=OutgoingPurpose.choices, blank=True, default='',
+        verbose_name='Назначение расхода',
+    )
     material = models.ForeignKey(RawMaterial, on_delete=models.CASCADE, null=True, blank=True, related_name='movements', verbose_name='Материал')
     product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, null=True, blank=True, related_name='movements', verbose_name='Товар')
     quantity = models.DecimalField(max_digits=15, decimal_places=3, verbose_name='Количество')
@@ -626,6 +645,28 @@ class Recipe(TimestampedModel):
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='recipes', null=True, verbose_name='Компания')
     product = models.ForeignKey(FinishedProduct, on_delete=models.CASCADE, related_name='recipes', verbose_name='Товар')
     name = models.CharField(max_length=255, verbose_name='Название')
+    # Артикул рецепта из макета («RCP-001»): по нему рецепт называют в цеху и
+    # в задании, названия товара для этого мало — у одного товара бывает
+    # несколько рецептов под разные габариты.
+    code = models.CharField(max_length=30, blank=True, default='', verbose_name='Код рецепта')
+    # Габариты изделия, на которое рассчитана норма (макет: «Ўлчам 2000 × 600
+    # мм», «Қалинлик 20 мм»). Раньше норма висела в воздухе: 2.2 м² мрамора —
+    # на какое изделие, из карточки было не понять.
+    size = models.CharField(max_length=100, blank=True, default='', verbose_name='Размер изделия')
+    thickness = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Толщина, мм',
+    )
+    # Сколько готовых изделий даёт ОДНА закладка по этому рецепту
+    # (макет: «Ҳосил бўладиган маҳсулот 1 дона»). До этого выход всегда
+    # подразумевался равным единице: норма умножалась на количество изделий
+    # напрямую. Рецепт «из одной плиты выходит 4 подоконника» описать было
+    # нечем — приходилось делить норму вручную и ошибаться.
+    output_quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, default=Decimal('1'),
+        validators=[MinValueValidator(Decimal('0.001'))],
+        verbose_name='Выход готовой продукции',
+    )
     description = models.TextField(blank=True, verbose_name='Описание')
     is_active = models.BooleanField(default=True, verbose_name='Активен')
 

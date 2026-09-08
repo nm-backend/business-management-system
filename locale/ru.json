@@ -229,7 +229,12 @@
         "today_outgoing": "Использовано",
         "returned": "Возврат",
         "return_material": "Возврат материала",
-        "condition": "Состояние"
+        "condition": "Состояние",
+        "recipe_code": "Код рецепта",
+        "recipe_output": "Выход готовой продукции",
+        "recipe_per_batch": "на одну закладку",
+        "outgoing_purpose": "С какой целью",
+        "outgoing_order": "Заказ"
     },
     "units": {
         "sht": "шт",
@@ -238,7 +243,8 @@
         "izdelie": "изделие",
         "dona": "шт",
         "kg": "кг",
-        "m3": "м³"
+        "m3": "м³",
+        "mm": "мм"
     },
     "orders": {
         "title": "Заказы",
@@ -944,5 +950,12 @@
         "adjustment": "Корректировка",
         "loss": "Потеря/Брак",
         "return": "Возврат"
+    },
+    "outgoing_purposes": {
+        "production": "Производство",
+        "sample": "Образец",
+        "internal": "Внутренние нужды",
+        "write_off": "Списание",
+        "other": "Другое"
     }
 }

@@ -229,7 +229,12 @@
         "today_outgoing": "Колдонулду",
         "returned": "Кайтарылган",
         "return_material": "Материалды кайтаруу",
-        "condition": "Абалы"
+        "condition": "Абалы",
+        "recipe_code": "Рецепт коду",
+        "recipe_output": "Даяр продукциянын чыгышы",
+        "recipe_per_batch": "бир салымга",
+        "outgoing_purpose": "Кайсы максатта",
+        "outgoing_order": "Буйрутма"
     },
     "units": {
         "sht": "даана",
@@ -238,7 +243,8 @@
         "izdelie": "буюм",
         "dona": "даана",
         "kg": "кг",
-        "m3": "м³"
+        "m3": "м³",
+        "mm": "мм"
     },
     "orders": {
         "title": "Буйрутмалар",
@@ -944,5 +950,12 @@
         "adjustment": "Тууралоо",
         "loss": "Жоготуу/Брак",
         "return": "Кайтарылган"
+    },
+    "outgoing_purposes": {
+        "production": "Өндүрүш",
+        "sample": "Үлгү",
+        "internal": "Ички муктаждык",
+        "write_off": "Эсептен чыгаруу",
+        "other": "Башка"
     }
 }

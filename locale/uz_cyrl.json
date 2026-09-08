@@ -229,7 +229,12 @@
         "today_outgoing": "Ишлатилди",
         "returned": "Қайтарилган",
         "return_material": "Материални қайтариш",
-        "condition": "Ҳолати"
+        "condition": "Ҳолати",
+        "recipe_code": "Рецепт коди",
+        "recipe_output": "Ҳосил бўладиган маҳсулот",
+        "recipe_per_batch": "бир закладкага",
+        "outgoing_purpose": "Қайси мақсадда",
+        "outgoing_order": "Буюртма"
     },
     "units": {
         "sht": "шт",
@@ -238,7 +243,8 @@
         "izdelie": "изделие",
         "dona": "дона",
         "kg": "кг",
-        "m3": "м³"
+        "m3": "м³",
+        "mm": "мм"
     },
     "orders": {
         "title": "Буюртмалар",
@@ -944,5 +950,12 @@
         "adjustment": "Тузатиш",
         "loss": "Йўқотиш/Брак",
         "return": "Қайтарилган"
+    },
+    "outgoing_purposes": {
+        "production": "Ишлаб чиқариш",
+        "sample": "Намуна",
+        "internal": "Ички эҳтиёж",
+        "write_off": "Ҳисобдан чиқариш",
+        "other": "Бошқа"
     }
 }

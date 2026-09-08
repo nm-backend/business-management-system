@@ -81,10 +81,11 @@ class StockOperationsMixin:
         Списывается только доступное количество (остаток минус резерв).
         """
         target = self.get_object()
-        serializer = OutgoingSerializer(data=request.data)
+        serializer = OutgoingSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        order = data.get('order')
         updated = record_outgoing(
             target=target,
             quantity=data['quantity'],
@@ -93,6 +94,8 @@ class StockOperationsMixin:
             document_number=data.get('document_number', ''),
             user=request.user,
             reason=data.get('reason', ''),
+            purpose=data.get('purpose', ''),
+            order_id=order.id if order else None,
         )
         write_audit_log(
             action=AuditLog.Action.UPDATE,

@@ -913,6 +913,18 @@ class WarehouseComponent {
                         <option value="loss" data-i18n="warehouse.movement_loss"></option>
                         <option value="adjustment" data-i18n="warehouse.movement_adjustment"></option>
                     </select></div>
+                <!-- «Қайси мақсадда» и «Буюртма» из макета «Материални ишлатиш»:
+                     без них списание анонимно — в истории не видно, на какой
+                     заказ ушло сырьё. -->
+                <div class="form-group"><label data-i18n="warehouse.outgoing_purpose"></label>
+                    <select name="purpose" class="form-control">
+                        <option value=""></option>
+                        ${['production', 'sample', 'internal', 'write_off', 'other'].map((v) =>
+                            `<option value="${v}" data-i18n="outgoing_purposes.${v}"></option>`).join('')}
+                    </select></div>
+                <div class="form-group" id="outgoing-order-group" style="display:none;">
+                    <label data-i18n="warehouse.outgoing_order"></label>
+                    <select name="order" class="form-control"><option value=""></option></select></div>
                 <div class="form-group"><label data-i18n="warehouse.document_number"></label>
                     <input name="document_number" class="form-control"></div>
                 <div class="form-group"><label data-i18n="warehouse.outgoing_date"></label>
@@ -922,6 +934,28 @@ class WarehouseComponent {
                 <button type="submit" class="btn btn-danger btn-block" data-i18n="warehouse.outgoing"></button>
             </form>
         `);
+        // Список заказов подгружаем только когда цель — производство:
+        // для образца или внутренних нужд заказа нет.
+        const purposeSelect = modal.querySelector('[name=purpose]');
+        const orderGroup = modal.querySelector('#outgoing-order-group');
+        const orderSelect = modal.querySelector('[name=order]');
+        let ordersLoaded = false;
+        purposeSelect?.addEventListener('change', async () => {
+            const needsOrder = purposeSelect.value === 'production';
+            orderGroup.style.display = needsOrder ? '' : 'none';
+            if (!needsOrder || ordersLoaded) return;
+            try {
+                const resp = await window.api.request('/orders/orders/?is_archived=false&page_size=100');
+                const orders = resp.results || resp;
+                orderSelect.innerHTML = '<option value=""></option>' + orders.map((o) =>
+                    `<option value="${o.id}">#${o.id} ${window.ui.escape(o.product_name || o.custom_product_name || '')}</option>`
+                ).join('');
+                ordersLoaded = true;
+            } catch (error) {
+                orderGroup.style.display = 'none';
+            }
+        });
+
         modal.querySelector('#outgoing-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const data = Object.fromEntries(new FormData(e.target));
