@@ -122,7 +122,6 @@
         "submitted_today": "Бугун ишга топширилган",
         "worker_feedback": "Ишчилар мулоҳазалари",
         "worker_greeting": "Ассалому алайкум!",
-        "hours_today": "Бугунги соат",
         "active_employees": "Фаол ходимлар",
         "overdue_percentage": "Муддати ўтган буюртмалар",
         "low_stock_count": "Кам запасли товарлар",
@@ -234,7 +233,10 @@
         "recipe_output": "Ҳосил бўладиган маҳсулот",
         "recipe_per_batch": "бир закладкага",
         "outgoing_purpose": "Қайси мақсадда",
-        "outgoing_order": "Буюртма"
+        "outgoing_order": "Буюртма",
+        "receipt_document": "Материални қабул қилиш",
+        "add_material_line": "Яна материал қўшиш",
+        "receipt_lines": "Материаллар"
     },
     "units": {
         "sht": "шт",
@@ -368,7 +370,9 @@
         "task_thickness": "Қалинлик, мм",
         "task_attachment": "Чизма (файл)",
         "overdue": "Муддати ўтган",
-        "details": "Вазифа тафсилоти"
+        "details": "Вазифа тафсилоти",
+        "planned_quantity": "Режалаштирилган миқдор",
+        "done_of_plan": "режадан бажарилди"
     },
     "clients": {
         "title": "Мижозлар",

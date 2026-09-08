@@ -55,7 +55,8 @@ class ClientViewSet(CompanyScopedViewSet):
     # SearchFilter убираем: поиск по имени должен понимать транслит
     # («Gulnora» -> «Гулнора»). Для этого строим OR-фильтр по вариантам
     # запроса сами (apps/core/translit.py).
-    filterset_fields = ['is_archived']
+    # Тип и ответственный — рабочие фильтры карточки клиента из макета.
+    filterset_fields = ['is_archived', 'client_type', 'responsible_employee']
     ordering_fields = ['name', 'created_at', 'debt', 'total_orders_amount']
 
     def get_queryset(self):

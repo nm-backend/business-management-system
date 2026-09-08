@@ -130,6 +130,12 @@ class ProductionComponent {
             rows.push(`<div class="text-sm" style="margin-top:6px;">${window.ui.escape(t.description)}</div>`);
         }
         const facts = [];
+        if (t.planned_quantity) {
+            // План против факта, как в макете «Ишни бажариш».
+            facts.push(`<span data-i18n="production.planned_quantity"></span>: `
+                + `${window.ui.qty(t.planned_quantity)}`
+                + (t.planned_unit ? ` <span data-i18n="units.${t.planned_unit}"></span>` : ''));
+        }
         if (t.deadline) {
             facts.push(`<span data-i18n="production.task_deadline"></span>: ${window.ui.datetime(t.deadline)}`);
         }

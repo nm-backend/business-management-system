@@ -43,11 +43,31 @@ class ClientAdminSerializer(serializers.ModelSerializer):
     # свойства has_active_orders, которое делало .exists() на каждого клиента (N+1).
     # Формат ответа не меняется: ключ в JSON остаётся has_active_orders.
     has_active_orders = serializers.SerializerMethodField()
+    # Тип и ответственный — операционные данные, не финансовые: их видит и
+    # администратор (сумм в карточке у него по-прежнему нет).
+    client_type_display = serializers.CharField(source='get_client_type_display', read_only=True)
+    responsible_employee_name = serializers.SerializerMethodField()
+
+    def get_responsible_employee_name(self, obj):
+        employee = obj.responsible_employee
+        if not employee:
+            return ''
+        return employee.full_name or employee.username
+
+    def validate_responsible_employee(self, employee):
+        """Ответственный обязан быть сотрудником этой же компании."""
+        request = self.context.get('request')
+        company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        if employee is not None and company_id is not None and employee.company_id != company_id:
+            raise serializers.ValidationError('Сотрудник другой компании.')
+        return employee
 
     class Meta:
         model = Client
         fields = [
             'id', 'name', 'phone', 'address', 'comment', 'is_archived',
+            'client_type', 'client_type_display',
+            'responsible_employee', 'responsible_employee_name',
             'has_debt', 'has_active_orders', 'created_at', 'updated_at',
         ]
         # Архивацию делают действия archive/restore: они зовут методы модели и

@@ -490,6 +490,9 @@ class OrdersComponent {
                            value="${o.deadline ? window.ui.escape(String(o.deadline).slice(0, 16)) : ''}"></div>
                 <div class="form-group"><label data-i18n="production.workshop"></label>
                     <input name="workshop" class="form-control" maxlength="100"></div>
+                <div class="form-group"><label data-i18n="production.planned_quantity"></label>
+                    <input name="planned_quantity" type="number" step="0.001" min="0.001" class="form-control"
+                           value="${o.quantity ?? ''}"></div>
                 <div class="form-group"><label data-i18n="production.task_size"></label>
                     <input name="size" class="form-control" maxlength="100" placeholder="2000x600"></div>
                 <div class="form-group"><label data-i18n="production.task_thickness"></label>
@@ -512,7 +515,8 @@ class OrdersComponent {
                     const payload = new FormData();
                     payload.append('order', o.id);
                     payload.append('worker', form.get('worker'));
-                    ['title', 'description', 'workshop', 'size', 'deadline', 'thickness'].forEach((name) => {
+                    ['title', 'description', 'workshop', 'size', 'deadline', 'thickness',
+                     'planned_quantity'].forEach((name) => {
                         const value = (form.get(name) || '').toString().trim();
                         if (value) payload.append(name, value);
                     });

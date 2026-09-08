@@ -8,8 +8,8 @@ from rest_framework import serializers
 from apps.core.validators import validate_not_future
 from apps.orders.models import Order
 from .models import (
-    FinishedProduct, RawMaterial, Recipe, RecipeItem, StockMovement,
-    Warehouse, WarehouseCell,
+    FinishedProduct, GoodsReceipt, GoodsReceiptLine, RawMaterial, Recipe,
+    RecipeItem, StockMovement, Warehouse, WarehouseCell,
 )
 
 
@@ -320,6 +320,115 @@ class StockMovementLimitedSerializer(StockMovementSerializer):
     class Meta:
         model = StockMovement
         exclude = ['price_per_unit']
+
+
+
+class GoodsReceiptLineSerializer(serializers.ModelSerializer):
+    """Позиция документа прихода. Цену видит только владелец (см. вьюсет)."""
+    material_name = serializers.CharField(source='material.name', read_only=True)
+    unit = serializers.CharField(source='material.unit', read_only=True)
+
+    class Meta:
+        model = GoodsReceiptLine
+        fields = ['id', 'material', 'material_name', 'unit', 'quantity', 'price_per_unit']
+
+
+class GoodsReceiptLineNoMoneySerializer(GoodsReceiptLineSerializer):
+    """Позиция без цены — для администратора: закупочные цены ему закрыты."""
+
+    class Meta(GoodsReceiptLineSerializer.Meta):
+        fields = [f for f in GoodsReceiptLineSerializer.Meta.fields if f != 'price_per_unit']
+
+
+class GoodsReceiptSerializer(serializers.ModelSerializer):
+    """Документ прихода на чтение: реквизиты, позиции и итоги."""
+    lines = GoodsReceiptLineSerializer(many=True, read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True, default='')
+    total_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, read_only=True)
+    total_amount = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = GoodsReceipt
+        fields = [
+            'id', 'supplier', 'document_number', 'receipt_date', 'comment',
+            'created_by', 'created_by_name', 'lines',
+            'total_quantity', 'total_amount', 'created_at', 'updated_at',
+        ]
+
+
+class GoodsReceiptNoMoneySerializer(GoodsReceiptSerializer):
+    """
+    Документ без сумм — для администратора.
+
+    Приход по количеству администратору разрешён (ТЗ), закупочные цены — нет.
+    Убираем и цены позиций, и итог документа.
+    """
+    lines = GoodsReceiptLineNoMoneySerializer(many=True, read_only=True)
+
+    class Meta(GoodsReceiptSerializer.Meta):
+        fields = [f for f in GoodsReceiptSerializer.Meta.fields if f != 'total_amount']
+
+
+class GoodsReceiptCreateSerializer(serializers.Serializer):
+    """
+    Вход проведения документа: общие реквизиты + список позиций.
+
+    Отдельный Serializer (не ModelSerializer): документ не просто создаётся, он
+    ПРОВОДИТСЯ — меняет остатки. Логика проведения живёт в сервисе, здесь
+    только валидация входа.
+    """
+    supplier = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    document_number = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    receipt_date = serializers.DateField(required=False, validators=[validate_not_future])
+    comment = serializers.CharField(required=False, allow_blank=True)
+    lines = serializers.ListField(child=serializers.DictField(), allow_empty=False)
+
+    def validate_lines(self, raw_lines):
+        """
+        Проверяем позиции ДО проведения: материал свой, количество больше нуля.
+
+        Так ошибка приходит как 400 с указанием строки, а не откатом уже
+        начатой транзакции.
+        """
+        request = self.context.get('request')
+        company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        is_owner = getattr(getattr(request, 'user', None), 'is_owner', False)
+
+        materials = {
+            m.id: m for m in RawMaterial.objects.filter(company_id=company_id, is_archived=False)
+        }
+        cleaned = []
+        for index, line in enumerate(raw_lines):
+            try:
+                material_id = int(line.get('material'))
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f'Позиция {index + 1}: не указан материал.')
+            material = materials.get(material_id)
+            if material is None:
+                raise serializers.ValidationError(
+                    f'Позиция {index + 1}: материал недоступен в вашей компании.'
+                )
+            try:
+                quantity = Decimal(str(line.get('quantity')))
+            except (TypeError, ValueError, ArithmeticError):
+                raise serializers.ValidationError(f'Позиция {index + 1}: неверное количество.')
+            if quantity <= 0:
+                raise serializers.ValidationError(
+                    f'Позиция {index + 1}: количество должно быть больше нуля.'
+                )
+
+            price = None
+            if is_owner and line.get('price_per_unit') not in (None, ''):
+                try:
+                    price = Decimal(str(line['price_per_unit']))
+                except (TypeError, ValueError, ArithmeticError):
+                    raise serializers.ValidationError(f'Позиция {index + 1}: неверная цена.')
+                if price < 0:
+                    raise serializers.ValidationError(
+                        f'Позиция {index + 1}: цена не может быть отрицательной.'
+                    )
+            cleaned.append({'material': material, 'quantity': quantity, 'price_per_unit': price})
+        return cleaned
 
 
 class RecipeItemSerializer(serializers.ModelSerializer):

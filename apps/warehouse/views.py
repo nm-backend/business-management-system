@@ -1,7 +1,7 @@
 import datetime
 from decimal import Decimal
 
-from rest_framework import viewsets, filters
+from rest_framework import mixins, viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, PermissionDenied
 from rest_framework.response import Response
@@ -14,7 +14,7 @@ from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
 from core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrManager
 from .models import (
-    FinishedProduct, RawMaterial, Recipe, RecipeItem, StockMovement,
+    FinishedProduct, GoodsReceipt, RawMaterial, Recipe, RecipeItem, StockMovement,
     Warehouse, WarehouseCell,
 )
 from .serializers import (
@@ -23,8 +23,11 @@ from .serializers import (
     FinishedProductSerializer, FinishedProductOwnerSerializer,
     StockMovementSerializer, StockMovementLimitedSerializer, RecipeSerializer, RecipeItemSerializer,
     WarehouseSerializer, WarehouseCellSerializer, ReturnSerializer,
+    GoodsReceiptSerializer, GoodsReceiptNoMoneySerializer, GoodsReceiptCreateSerializer,
 )
-from .services import record_incoming, record_outgoing, record_return
+from .services import (
+    create_goods_receipt, record_incoming, record_outgoing, record_return,
+)
 from apps.core.views import CompanyScopedViewSet
 
 
@@ -327,6 +330,75 @@ class WarehouseCellViewSet(CompanyScopedViewSet):
             action=AuditLog.Action.ARCHIVE, actor=self.request.user,
             target=instance, request=self.request,
         )
+
+
+
+class GoodsReceiptViewSet(mixins.CreateModelMixin, mixins.ListModelMixin,
+                          mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """
+    Документы прихода: одна поставка — несколько материалов.
+
+    Только создание и чтение. Правка и удаление проведённого документа
+    запрещены намеренно: остатки уже изменены, а «редактирование задним
+    числом» разошлось бы с историей склада (ТЗ: удаления нет, только архив,
+    все изменения склада историзированы). Ошибочную поставку исправляют
+    расходом или возвратом — обе операции остаются в истории.
+    """
+    queryset = GoodsReceipt.objects.all()  # для интроспекции схемы; фильтрация ниже
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['supplier', 'document_number']
+    filterset_fields = ['supplier']
+    ordering_fields = ['created_at', 'receipt_date']
+
+    def get_permissions(self):
+        # Приход по количеству — право администратора (ТЗ). Цены он не увидит:
+        # их убирает сериализатор без денег.
+        return [IsCompanyMember(), IsOwnerOrAdmin()]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return GoodsReceipt.objects.none()
+        return (
+            GoodsReceipt.objects
+            .filter(company_id=self.request.user.company_id)
+            .prefetch_related('lines__material')
+            .select_related('created_by')
+        )
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return GoodsReceiptCreateSerializer
+        if getattr(self, 'swagger_fake_view', False) or self.request.user.is_owner:
+            return GoodsReceiptSerializer
+        return GoodsReceiptNoMoneySerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        receipt = create_goods_receipt(
+            company=request.user.company,
+            lines=data['lines'],
+            supplier=data.get('supplier', ''),
+            document_number=data.get('document_number', ''),
+            receipt_date=data.get('receipt_date'),
+            comment=data.get('comment', ''),
+            user=request.user,
+            # Цену принимает только владелец — как в приходе одного материала.
+            allow_prices=request.user.is_owner,
+        )
+        write_audit_log(
+            action=AuditLog.Action.CREATE,
+            actor=request.user,
+            target=receipt,
+            metadata={'lines': len(data['lines'])},
+            request=request,
+        )
+        read_serializer = (
+            GoodsReceiptSerializer if request.user.is_owner else GoodsReceiptNoMoneySerializer
+        )
+        return Response(read_serializer(receipt).data, status=201)
 
 
 class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):

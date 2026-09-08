@@ -109,6 +109,22 @@ class Task(TimestampedModel):
     workshop = models.CharField(max_length=100, blank=True, default='', verbose_name='Цех')
     # Размер и толщина изделия: в макете стоят прямо в карточке задачи,
     # потому что у одного товара бывают разные габариты под заказ.
+    # Плановый объём задачи (макет «Ишни бажариш»: «Режалаштирилган миқдор
+    # 5 дона» против «Бажарилган миқдор 3»). Раньше плановый объём знал только
+    # заказ, а самостоятельная задача не знала его вовсе: сравнить план с
+    # фактом при сдаче было не с чем.
+    #
+    # В расчётах не участвует: начисление считается по фактически сданному
+    # количеству (ТЗ: «Начислено = количество работы × цена труда»).
+    planned_quantity = models.DecimalField(
+        max_digits=15, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.001'))],
+        verbose_name='Плановое количество',
+    )
+    planned_unit = models.CharField(
+        max_length=20, choices=UnitChoices.choices, blank=True, default='',
+        verbose_name='Единица планового количества',
+    )
     size = models.CharField(max_length=100, blank=True, default='', verbose_name='Размер изделия')
     thickness = models.DecimalField(
         max_digits=6, decimal_places=2, null=True, blank=True,

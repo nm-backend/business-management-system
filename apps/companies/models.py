@@ -36,6 +36,7 @@ Celery (apps.companies.tasks.auto_freeze_expired_subscriptions) переводи
 from datetime import timedelta
 from decimal import Decimal
 
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -119,6 +120,16 @@ class Company(TimestampedModel):
         CANCELLED = 'cancelled', 'Отменена'
 
     name = models.CharField(max_length=255, unique=True, verbose_name='Название')
+    # Сколько снимков обязан приложить работник при сдаче работы.
+    #
+    # Макеты требуют «камида 1 та сурат» и «камида 2 та сурат», но текст ТЗ
+    # минимума не задаёт, а жёсткое правило блокирует сдачу работы в цеху без
+    # камеры или связи. Поэтому это НАСТРОЙКА компании: по умолчанию 0
+    # (поведение прежнее), владелец включает требование сам.
+    min_work_photos = models.PositiveSmallIntegerField(
+        default=0, validators=[MaxValueValidator(10)],
+        verbose_name='Минимум фото при сдаче работы',
+    )
     is_active = models.BooleanField(default=True, db_index=True, verbose_name='Активен')
     logo = models.ImageField(
         upload_to='company_logos/', blank=True, default='',

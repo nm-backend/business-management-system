@@ -50,6 +50,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'id', 'order', 'order_id', 'order_product', 'worker', 'worker_name',
             'assigned_by', 'assigned_by_name', 'status',
             'title', 'description', 'deadline', 'workshop', 'size', 'thickness',
+            'planned_quantity', 'planned_unit',
             'attachment', 'attachment_name', 'is_overdue',
             'refusal_reason', 'refusal_comment',
             'assigned_at', 'accepted_at', 'completed_at',
@@ -78,6 +79,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         fields = [
             'order', 'worker', 'is_self_assigned',
             'title', 'description', 'deadline', 'workshop', 'size', 'thickness',
+            'planned_quantity', 'planned_unit',
             'attachment',
         ]
 
@@ -221,6 +223,32 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
             'photo', 'uploaded_photos', 'comment'
         ]
         extra_kwargs = {'worker': {'required': False}}
+
+    def validate(self, attrs):
+        """
+        Минимум снимков — НАСТРОЙКА компании (Company.min_work_photos).
+
+        Макеты требуют «камида 1/2 та сурат», но текст ТЗ минимума не задаёт, а
+        жёсткое правило заблокировало бы сдачу работы в цеху без камеры или
+        связи. По умолчанию настройка равна нулю — поведение прежнее; владелец
+        включает требование осознанно.
+        """
+        attrs = super().validate(attrs) if hasattr(super(), 'validate') else attrs
+        request = self.context.get('request')
+        company = getattr(getattr(request, 'user', None), 'company', None)
+        minimum = getattr(company, 'min_work_photos', 0) or 0
+        if minimum:
+            uploaded = attrs.get('uploaded_photos') or []
+            single = attrs.get('photo')
+            total = len(uploaded) + (1 if single and not uploaded else 0)
+            if total < minimum:
+                raise serializers.ValidationError({
+                    'uploaded_photos': (
+                        f'Приложите минимум {minimum} фото готовой продукции '
+                        f'(сейчас {total}).'
+                    ),
+                })
+        return attrs
 
     def create(self, validated_data):
         photos = validated_data.pop('uploaded_photos', [])

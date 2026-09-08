@@ -122,7 +122,6 @@
         "submitted_today": "Сдано сегодня",
         "worker_feedback": "Отзывы работников",
         "worker_greeting": "Здравствуйте!",
-        "hours_today": "Часы сегодня",
         "active_employees": "Активные сотрудники",
         "overdue_percentage": "Просроченные заказы",
         "low_stock_count": "Товары с низким остатком",
@@ -234,7 +233,10 @@
         "recipe_output": "Выход готовой продукции",
         "recipe_per_batch": "на одну закладку",
         "outgoing_purpose": "С какой целью",
-        "outgoing_order": "Заказ"
+        "outgoing_order": "Заказ",
+        "receipt_document": "Приём материала",
+        "add_material_line": "Добавить ещё материал",
+        "receipt_lines": "Материалы"
     },
     "units": {
         "sht": "шт",
@@ -368,7 +370,9 @@
         "task_thickness": "Толщина, мм",
         "task_attachment": "Чертёж (файл)",
         "overdue": "Просрочено",
-        "details": "Детали задачи"
+        "details": "Детали задачи",
+        "planned_quantity": "Плановое количество",
+        "done_of_plan": "выполнено из плана"
     },
     "clients": {
         "title": "Клиенты",

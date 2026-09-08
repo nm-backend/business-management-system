@@ -125,8 +125,16 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
                                    is_self_assigned=True, status=TaskStatus.ACCEPTED,
                                    attachment_name=_attachment_name(serializer))
         else:
+            # План не указали, но задача под заказ — берём объём заказа:
+            # иначе работник видит «Режалаштирилган миқдор» пустым, хотя
+            # плановое количество очевидно из самого заказа.
+            extra = {}
+            if order and not serializer.validated_data.get('planned_quantity'):
+                extra['planned_quantity'] = order.quantity
+                extra['planned_unit'] = order.unit
             task = serializer.save(company=user.company, assigned_by=user,
-                                   attachment_name=_attachment_name(serializer))
+                                   attachment_name=_attachment_name(serializer),
+                                   **extra)
             if task.order:
                 task.order.worker = task.worker
                 task.order.status = task.order.Status.SENT_TO_WORKER

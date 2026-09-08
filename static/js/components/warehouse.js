@@ -59,6 +59,7 @@ class WarehouseComponent {
                         style="padding:8px 12px;font-size:18px;">📷</button>
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;margin-top:10px;" data-i18n="warehouse.add_material"></button>` : ''}
+            ${canEdit ? `<button class="btn btn-success btn-block" id="receipt-doc-btn" style="margin-bottom:12px;" data-i18n="warehouse.receipt_document"></button>` : ''}
             <div class="list-group" id="materials-list"></div>
         `;
 
@@ -118,6 +119,7 @@ class WarehouseComponent {
 
         if (canEdit) {
             container.querySelector('#add-material-btn').addEventListener('click', () => this.openForm());
+            container.querySelector('#receipt-doc-btn').addEventListener('click', () => this.openReceiptForm());
         }
 
         const scanBtn = container.querySelector('#scan-barcode-btn');
@@ -965,6 +967,107 @@ class WarehouseComponent {
                     await window.api.request(`/warehouse/raw-materials/${m.id}/outgoing/`, {
                         method: 'POST',
                         body: JSON.stringify(data),
+                    });
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('common.success'));
+                    await this.loadMaterials();
+                    this.loadSummary();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    /**
+     * Документ прихода: одна поставка — несколько материалов.
+     *
+     * Макет «Материални қабул қилиш» задаёт поставщика, номер и дату один раз,
+     * а позиции добавляются кнопкой «Яна материал қўшиш». Раньше приход
+     * оформлялся по одному материалу, и общие реквизиты приходилось вводить
+     * заново на каждую позицию.
+     */
+    async openReceiptForm() {
+        const isOwner = window.currentUser.is_owner;
+        const today = new Date().toISOString().slice(0, 10);
+        const resp = await window.api.request('/warehouse/raw-materials/?is_archived=false&page_size=200');
+        const materials = resp.results || resp;
+
+        const lineRow = () => `
+            <div class="receipt-line" style="display:grid;grid-template-columns:1fr 90px ${isOwner ? '110px' : ''} auto;gap:8px;margin-bottom:8px;">
+                <select name="material" class="form-control">
+                    <option value=""></option>
+                    ${materials.map((m) => `<option value="${m.id}">${window.ui.escape(m.name)}</option>`).join('')}
+                </select>
+                <input name="quantity" type="number" step="0.001" min="0.001" class="form-control"
+                       placeholder="${window.ui.t('warehouse.quantity')}">
+                ${isOwner ? `<input name="price_per_unit" type="number" step="0.01" min="0" class="form-control"
+                       placeholder="${window.ui.t('warehouse.purchase_price')}">` : ''}
+                <button type="button" class="icon-btn receipt-line-remove" aria-label="${window.ui.t('common.delete')}">🗑️</button>
+            </div>`;
+
+        const modal = window.ui.modal('warehouse.receipt_document', `
+            <form id="receipt-form">
+                <div class="form-group"><label data-i18n="warehouse.supplier"></label>
+                    <input name="supplier" class="form-control" maxlength="255"></div>
+                <div class="form-group"><label data-i18n="warehouse.document_number"></label>
+                    <input name="document_number" class="form-control" maxlength="100" placeholder="K-1258"></div>
+                <div class="form-group"><label data-i18n="warehouse.arrival_date"></label>
+                    <input name="receipt_date" type="date" class="form-control" value="${today}" max="${today}"></div>
+                <div class="form-group"><label data-i18n="warehouse.receipt_lines"></label>
+                    <div id="receipt-lines">${lineRow()}</div>
+                    <button type="button" class="btn btn-secondary btn-sm btn-block" id="add-line"
+                            style="margin-top:6px;" data-i18n="warehouse.add_material_line"></button>
+                </div>
+                <div class="form-group"><label data-i18n="warehouse.comment"></label>
+                    <input name="comment" class="form-control"></div>
+                <button type="submit" class="btn btn-success btn-block" data-i18n="warehouse.incoming"></button>
+            </form>
+        `);
+
+        const bindRemove = () => {
+            modal.querySelectorAll('.receipt-line-remove').forEach((btn) => {
+                btn.onclick = () => {
+                    const rows = modal.querySelectorAll('.receipt-line');
+                    if (rows.length > 1) btn.closest('.receipt-line').remove();
+                };
+            });
+        };
+        bindRemove();
+        modal.querySelector('#add-line').addEventListener('click', () => {
+            modal.querySelector('#receipt-lines').insertAdjacentHTML('beforeend', lineRow());
+            bindRemove();
+        });
+        window.i18n.applyTranslations();
+
+        modal.querySelector('#receipt-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const lines = [...form.querySelectorAll('.receipt-line')].map((row) => {
+                const material = row.querySelector('[name=material]').value;
+                const quantity = row.querySelector('[name=quantity]').value;
+                const price = row.querySelector('[name=price_per_unit]')?.value;
+                if (!material || !quantity) return null;
+                const line = { material, quantity };
+                if (price) line.price_per_unit = price;
+                return line;
+            }).filter(Boolean);
+
+            if (!lines.length) {
+                window.toast.error(window.ui.t('common.error'));
+                return;
+            }
+            const payload = {
+                supplier: form.querySelector('[name=supplier]').value.trim(),
+                document_number: form.querySelector('[name=document_number]').value.trim(),
+                receipt_date: form.querySelector('[name=receipt_date]').value,
+                comment: form.querySelector('[name=comment]').value.trim(),
+                lines,
+            };
+            await window.ui.submitGuard(form.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request('/warehouse/goods-receipts/', {
+                        method: 'POST', body: JSON.stringify(payload),
                     });
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));

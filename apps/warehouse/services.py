@@ -16,10 +16,12 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from .models import FinishedProduct, RawMaterial, StockMovement
+from .models import (
+    FinishedProduct, GoodsReceipt, GoodsReceiptLine, RawMaterial, StockMovement,
+)
 
 
 @transaction.atomic
@@ -222,3 +224,110 @@ def record_outgoing(
         related_order_id=order_id,
     )
     return locked
+
+
+@transaction.atomic
+def create_goods_receipt(
+    *,
+    company,
+    lines: list[dict[str, Any]],
+    supplier: str = '',
+    document_number: str = '',
+    receipt_date: Any | None = None,
+    comment: str = '',
+    user: Any | None = None,
+    allow_prices: bool = False,
+) -> GoodsReceipt:
+    """
+    Проводит документ прихода: несколько материалов одной операцией.
+
+    Гарантии (всё внутри одной транзакции):
+
+    * атомарность — ошибка в любой позиции откатывает документ целиком,
+      частично оприходованной поставки не бывает;
+    * остатки меняет тот же record_incoming, что и одиночный приход, то есть
+      средневзвешенная себестоимость считается по одному правилу;
+    * каждое движение склада ссылается на документ (StockMovement.receipt) —
+      историю можно свернуть до операции, а не собирать по номеру строкой;
+    * материал каждой позиции проверяется на принадлежность компании
+      документа: чужой материал в свой приход не попадёт;
+    * цену принимает только владелец (allow_prices) — как в операции прихода
+      одного материала.
+
+    lines: [{'material': RawMaterial, 'quantity': Decimal, 'price_per_unit': Decimal|None}]
+    """
+    from rest_framework.exceptions import PermissionDenied, ValidationError
+
+    if not lines:
+        raise ValidationError({'lines': 'Документ прихода без позиций не проводится.'})
+
+    company_id = getattr(company, 'id', company)
+
+    # Идемпотентность документа: повтор той же формы (двойной клик, ретрай
+    # мобильной сети) не должен приходовать поставку второй раз.
+    #
+    # Проверка в два слоя. Первый — обычный SELECT: даёт понятную ошибку 400.
+    # Второй — перехват IntegrityError на уникальном индексе: под гонкой оба
+    # запроса проходят SELECT одновременно, и без перехвата проигравший
+    # возвращал бы 500 вместо бизнес-ошибки.
+    duplicate_message = {
+        'document_number': (
+            f'Документ №{document_number} от «{supplier}» уже проведён. '
+            'Повторный приход по тому же документу не создаётся.'
+        ),
+    }
+    if document_number and GoodsReceipt.objects.filter(
+        company_id=company_id, supplier=supplier or '', document_number=document_number,
+    ).exists():
+        raise ValidationError(duplicate_message)
+
+    try:
+        # Вложенный atomic = точка сохранения: ошибка вставки не рвёт всю
+        # транзакцию, и мы успеваем превратить её в 400.
+        with transaction.atomic():
+            receipt = GoodsReceipt.objects.create(
+                company_id=company_id,
+                supplier=supplier or '',
+                document_number=document_number or '',
+                receipt_date=receipt_date,
+                comment=comment or '',
+                created_by=user,
+            )
+    except IntegrityError:
+        raise ValidationError(duplicate_message)
+
+    for line in lines:
+        material = line['material']
+        if material.company_id != company_id:
+            # Не ValidationError: это попытка тронуть чужой tenant.
+            raise PermissionDenied('Материал другой компании.')
+
+        price = line.get('price_per_unit') if allow_prices else None
+        GoodsReceiptLine.objects.create(
+            receipt=receipt,
+            material=material,
+            quantity=line['quantity'],
+            price_per_unit=price or Decimal('0'),
+        )
+        updated = record_incoming(
+            target=material,
+            quantity=line['quantity'],
+            price_per_unit=price,
+            arrival_date=receipt_date,
+            document_number=document_number,
+            user=user,
+            reason=comment,
+        )
+        # Привязываем созданное движение к документу: record_incoming пишет
+        # ровно одно движение INCOMING, берём последнее по id.
+        last_movement_id = (
+            StockMovement.objects
+            .filter(material=updated, movement_type=StockMovement.MovementType.INCOMING)
+            .order_by('-id')
+            .values_list('pk', flat=True)
+            .first()
+        )
+        if last_movement_id:
+            StockMovement.objects.filter(pk=last_movement_id).update(receipt=receipt)
+
+    return receipt

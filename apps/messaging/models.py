@@ -263,6 +263,11 @@ class Notification(TimestampedModel):
     params = models.JSONField(default=dict, blank=True, verbose_name='Параметры текста')
     is_read = models.BooleanField(default=False, verbose_name='Прочитано')
     read_at = models.DateTimeField(null=True, blank=True, verbose_name='Когда прочитано')
+    # Архив уведомлений (макет «Билдиришномалар» → вкладка «Архив»).
+    # Уведомления НЕ удаляются (ТЗ: только архивирование): прочитанное
+    # остаётся в истории, архивное уходит из основной ленты, но доступно.
+    is_archived = models.BooleanField(default=False, db_index=True, verbose_name='В архиве')
+    archived_at = models.DateTimeField(null=True, blank=True, verbose_name='Когда архивировано')
     related_order = models.ForeignKey('orders.Order', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications', verbose_name='Связанный заказ')
     related_task = models.ForeignKey('production.Task', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications', verbose_name='Связанная задача')
 
@@ -292,6 +297,60 @@ class Notification(TimestampedModel):
         Возвращает тип и заголовок.
         """
         return f"{self.get_type_display()} - {self.title}"
+
+    # Группы для экрана уведомлений (макет: «Янги буюртмалар», «Материал
+    # камчилиги», «Тасдиқлар», «Ўқилмаган хабарлар», «Система хабарлари»).
+    # Категорию НЕ храним в БД: она однозначно выводится из типа, а лишнее
+    # поле пришлось бы синхронизировать при каждом новом типе.
+    CATEGORY_BY_TYPE = {
+        'new_order': 'orders',
+        'unpaid_client': 'orders',
+        'overdue_debt': 'orders',
+        'material_shortage': 'shortage',
+        'work_awaiting': 'confirmations',
+        'work_confirmed': 'confirmations',
+        'work_rejected': 'confirmations',
+        'task_assigned': 'tasks',
+        'task_changed': 'tasks',
+        'task_cancelled': 'tasks',
+        'worker_refused': 'tasks',
+        'work_accrued': 'tasks',
+        'new_message': 'messages',
+        'new_expense': 'finance',
+        'cash_change': 'finance',
+        'report_ready': 'system',
+    }
+
+    @property
+    def category(self):
+        """Группа уведомления для экрана; подписки/биллинг — «система»."""
+        return self.CATEGORY_BY_TYPE.get(self.type, 'system')
+
+    @classmethod
+    def types_for_category(cls, category):
+        """
+        Типы, попадающие в группу. Источник истины один — CATEGORY_BY_TYPE.
+
+        «Система» — это ещё и всё, чего в карте нет (подписки, биллинг):
+        иначе фильтр по вкладке молча терял такие уведомления.
+        """
+        known = [key for key, value in cls.CATEGORY_BY_TYPE.items() if value == category]
+        if category != 'system':
+            return known
+        unmapped = [
+            value for value, _ in cls.NotificationType.choices
+            if value not in cls.CATEGORY_BY_TYPE
+        ]
+        return known + unmapped
+
+    def archive(self):
+        """Убирает уведомление из основной ленты, не удаляя его."""
+        from django.utils import timezone
+        if self.is_archived:
+            return
+        self.is_archived = True
+        self.archived_at = timezone.now()
+        self.save(update_fields=['is_archived', 'archived_at', 'updated_at'])
 
     def localized_title(self, lang_code):
         """Заголовок на языке получателя (или снимок, если ключа нет)."""

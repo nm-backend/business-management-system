@@ -228,12 +228,14 @@ class NotificationSerializer(serializers.ModelSerializer):
     # настройках — переведётся и лента уведомлений, а не только новые записи.
     title = serializers.SerializerMethodField()
     message = serializers.SerializerMethodField()
+    # Группа для экрана уведомлений; выводится из типа, в БД не хранится.
+    category = serializers.CharField(read_only=True)
 
     class Meta:
         model = Notification
         fields = [
             'id', 'user', 'company', 'type', 'type_display', 'title', 'message',
-            'is_read', 'read_at', 'is_unread',
+            'category', 'is_read', 'read_at', 'is_unread', 'is_archived', 'archived_at',
             'related_order', 'related_task', 'related_client',
             'created_at', 'updated_at'
         ]

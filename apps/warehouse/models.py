@@ -593,6 +593,13 @@ class StockMovement(TimestampedModel):
     # Номер документа прихода/расхода (макет: «Хужжат раками» №К-1258).
     document_number = models.CharField(max_length=100, blank=True, default='',
                                        verbose_name='Номер документа')
+    # Документ прихода, породивший движение (макет «Материални қабул қилиш»:
+    # один документ — несколько позиций). Раньше связь была только через
+    # текстовый номер документа: собрать движения одной операции было нечем.
+    receipt = models.ForeignKey(
+        'warehouse.GoodsReceipt', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='movements', verbose_name='Документ прихода',
+    )
     related_order_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного заказа')
     related_production_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного производства')
 
@@ -623,6 +630,98 @@ class StockMovement(TimestampedModel):
             raise ValidationError("Movement must be associated with either material or product, not both.")
         if not self.material and not self.product:
             raise ValidationError("Movement must be associated with a material or a product.")
+
+class GoodsReceipt(TimestampedModel):
+    """
+    Документ прихода: одна поставка — несколько материалов.
+
+    Макет «Материални қабул қилиш» задаёт поставщика, номер документа и дату
+    ОДИН раз, а ниже перечисляет позиции («Яна материал қўшиш»). Раньше приход
+    оформлялся по одному материалу за операцию, а общие реквизиты дублировались
+    строкой в каждом движении: нельзя было ни открыть поставку целиком, ни
+    понять, какие позиции пришли вместе.
+
+    Проведение документа атомарно: либо приходуются все позиции, либо ни одна
+    (см. services.create_goods_receipt).
+    """
+    company = models.ForeignKey(
+        'companies.Company', on_delete=models.CASCADE, related_name='goods_receipts',
+        null=True, verbose_name='Компания',
+    )
+    supplier = models.CharField(max_length=255, blank=True, default='', verbose_name='Поставщик')
+    document_number = models.CharField(max_length=100, blank=True, default='', verbose_name='Номер документа')
+    receipt_date = models.DateField(
+        null=True, blank=True, validators=[validate_not_future], verbose_name='Дата прихода',
+    )
+    comment = models.TextField(blank=True, default='', verbose_name='Комментарий')
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True,
+        related_name='goods_receipts', verbose_name='Кем создан',
+    )
+
+    class Meta:
+        verbose_name = 'Документ прихода'
+        verbose_name_plural = 'Документы прихода'
+        ordering = ['-created_at']
+        constraints = [
+            # Идемпотентность: повторная отправка той же формы (двойной клик,
+            # ретрай мобильной сети) не создаст вторую поставку с тем же
+            # номером у того же поставщика. Пустой номер не ограничивается —
+            # такие документы бывают у поставок без бумаг.
+            models.UniqueConstraint(
+                fields=['company', 'supplier', 'document_number'],
+                condition=~models.Q(document_number=''),
+                name='goods_receipt_unique_document',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.document_number or "—"} ({self.supplier or "—"})'
+
+    @property
+    def total_quantity(self):
+        return sum((line.quantity for line in self.lines.all()), Decimal('0'))
+
+    @property
+    def total_amount(self):
+        """Сумма документа — ФИНАНСОВОЕ значение, отдаётся только владельцу."""
+        return sum(
+            (line.quantity * (line.price_per_unit or Decimal('0')) for line in self.lines.all()),
+            Decimal('0'),
+        )
+
+
+class GoodsReceiptLine(models.Model):
+    """
+    Позиция документа прихода: материал, количество и цена.
+
+    Цена — финансовое поле: её задаёт и видит только владелец (как в операции
+    прихода одного материала).
+    """
+    receipt = models.ForeignKey(
+        GoodsReceipt, on_delete=models.CASCADE, related_name='lines', verbose_name='Документ',
+    )
+    material = models.ForeignKey(
+        RawMaterial, on_delete=models.RESTRICT, related_name='receipt_lines',
+        verbose_name='Материал',
+    )
+    quantity = models.DecimalField(
+        max_digits=15, decimal_places=3,
+        validators=[MinValueValidator(Decimal('0.001'))], verbose_name='Количество',
+    )
+    price_per_unit = models.DecimalField(
+        max_digits=15, decimal_places=2, default=0,
+        validators=[MinValueValidator(Decimal('0'))], verbose_name='Цена за единицу',
+    )
+
+    class Meta:
+        verbose_name = 'Позиция прихода'
+        verbose_name_plural = 'Позиции прихода'
+        ordering = ['id']
+
+    def __str__(self):
+        return f'{self.material_id}: {self.quantity}'
+
 
 class Recipe(TimestampedModel):
     """

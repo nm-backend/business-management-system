@@ -5,6 +5,7 @@ from . import views
 router = DefaultRouter()
 router.register(r'warehouses', views.WarehouseViewSet, basename='warehouse')
 router.register(r'cells', views.WarehouseCellViewSet, basename='warehouse-cell')
+router.register(r'goods-receipts', views.GoodsReceiptViewSet, basename='goods-receipt')
 router.register(r'raw-materials', views.RawMaterialViewSet, basename='raw-material')
 router.register(r'finished-products', views.FinishedProductViewSet, basename='finished-product')
 router.register(r'stock-movements', views.StockMovementViewSet, basename='stock-movement')

@@ -317,6 +317,19 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         if is_read is not None:
             queryset = queryset.filter(is_read=is_read.lower() == 'true')
 
+        # Вкладка «Архив» из макета: по умолчанию основная лента архивные не
+        # показывает, но они никуда не деваются — ?is_archived=true открывает
+        # историю (ТЗ: важные записи не удаляются).
+        is_archived = self.request.query_params.get('is_archived')
+        queryset = queryset.filter(
+            is_archived=(is_archived is not None and is_archived.lower() == 'true')
+        )
+
+        category = self.request.query_params.get('category')
+        if category:
+            types = Notification.types_for_category(category)
+            queryset = queryset.filter(type__in=types) if types else queryset.none()
+
         # Пагинация требует детерминированного порядка: без order_by Django
         # предупреждает UnorderedObjectListWarning, а страницы «плавают».
         return queryset.order_by('-created_at')
@@ -333,6 +346,22 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         notification.is_read = True
         notification.read_at = timezone.now()
         notification.save()
+        return Response(self.get_serializer(notification).data)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        """
+        Убирает уведомление в архив (макет «Билдиришномалар» → «Архив»).
+
+        Именно архивирование, а не удаление: история уведомлений сохраняется.
+        """
+        notification = self.get_object()
+        if notification.user != request.user:
+            return Response(
+                {'detail': 'Можно архивировать только свои уведомления.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        notification.archive()
         return Response(self.get_serializer(notification).data)
 
     @action(detail=False, methods=['post'])

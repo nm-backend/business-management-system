@@ -122,7 +122,6 @@
         "submitted_today": "Бүгүн тапшырылган",
         "worker_feedback": "Жумушчулар пикирлери",
         "worker_greeting": "Ассаламу алейкум!",
-        "hours_today": "Бүгүнкү саат",
         "active_employees": "Активдүү кызматкерлер",
         "overdue_percentage": "Мөөнөтү өткөн буйрутмалар",
         "low_stock_count": "Аз запастагы товарлар",
@@ -234,7 +233,10 @@
         "recipe_output": "Даяр продукциянын чыгышы",
         "recipe_per_batch": "бир салымга",
         "outgoing_purpose": "Кайсы максатта",
-        "outgoing_order": "Буйрутма"
+        "outgoing_order": "Буйрутма",
+        "receipt_document": "Материалды кабыл алуу",
+        "add_material_line": "Дагы материал кошуу",
+        "receipt_lines": "Материалдар"
     },
     "units": {
         "sht": "даана",
@@ -368,7 +370,9 @@
         "task_thickness": "Калыңдыгы, мм",
         "task_attachment": "Чийме (файл)",
         "overdue": "Мөөнөтү өткөн",
-        "details": "Тапшырманын чоо-жайы"
+        "details": "Тапшырманын чоо-жайы",
+        "planned_quantity": "Пландалган саны",
+        "done_of_plan": "пландан аткарылды"
     },
     "clients": {
         "title": "Кардарлар",
