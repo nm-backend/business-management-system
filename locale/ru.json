@@ -784,7 +784,9 @@
         "session_revoke": "Завершить",
         "session_revoke_others": "Завершить все другие сессии",
         "session_unknown_device": "Неизвестное устройство",
-        "people_count": "чел."
+        "people_count": "чел.",
+        "export_company_data": "Выгрузить данные компании",
+        "export_company_hint": "Только данные вашей компании (Excel)"
     },
     "export": {
         "title": "Экспорт отчётов",

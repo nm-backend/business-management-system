@@ -127,6 +127,12 @@ class SettingsComponent {
                 <div class="list-row" id="sessions-row" role="button" tabindex="0">
                     <span>💻 <span data-i18n="settings.sessions"></span></span><span>›</span>
                 </div>
+                <!-- Выгрузка данных СВОЕЙ компании (не платформенный backup:
+                     тот делает дамп всей базы и остаётся у супер-админа). -->
+                ${user.is_owner ? `
+                <div class="list-row" id="export-company-row" role="button" tabindex="0">
+                    <span>📦 <span data-i18n="settings.export_company_data"></span></span><span>›</span>
+                </div>` : ''}
                 <div class="list-row" id="about-row" role="button" tabindex="0">
                     <span>ℹ️ <span data-i18n="about.title"></span></span><span>›</span>
                 </div>
@@ -137,6 +143,11 @@ class SettingsComponent {
         `;
 
         container.querySelector('#sessions-row').addEventListener('click', () => this.openSessions());
+        container.querySelector('#export-company-row')?.addEventListener('click', () => {
+            // Переиспользуем существующий download() этого же компонента: он
+            // уже отправляет заголовок авторизации и корректно отдаёт blob.
+            this.download('/reports/export/company-data/', 'company-data.xlsx');
+        });
 
         // Dark mode toggle
         const darkToggle = container.querySelector('#dark-mode-toggle');

@@ -784,7 +784,9 @@
         "session_revoke": "Тугатиш",
         "session_revoke_others": "Бошқа барча сеансларни тугатиш",
         "session_unknown_device": "Номаълум қурилма",
-        "people_count": "киши"
+        "people_count": "киши",
+        "export_company_data": "Компания маълумотларини юклаб олиш",
+        "export_company_hint": "Фақат ўз компаниянгиз маълумотлари (Excel)"
     },
     "export": {
         "title": "Ҳисоботни экспорт қилиш",

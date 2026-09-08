@@ -14,6 +14,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.audit.models import AuditLog
+from apps.audit.services import write_audit_log
 from apps.clients.models import Payment
 from apps.core.permissions import IsCompanyMember
 from apps.finance.models import ExpenseCategory
@@ -304,6 +306,35 @@ def pdf_response(title, rows, filename):
     return response
 
 
+
+def multi_sheet_xlsx_response(sheets, filename):
+    """
+    Книга Excel из нескольких листов: [{'title', 'header', 'rows'}, ...].
+
+    Существующий xlsx_response делает один лист и остаётся как есть — выгрузка
+    компании просто требует нескольких разделов.
+    """
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for item in sheets:
+        # Excel не принимает имена длиннее 31 символа и некоторые знаки.
+        title = (item['title'] or 'Sheet')[:31].replace('/', '-').replace('\\', '-')
+        sheet = workbook.create_sheet(title=title)
+        sheet.append([_sanitize_xlsx_cell(cell) for cell in item['header']])
+        for row in item['rows']:
+            sheet.append([_sanitize_xlsx_cell(cell) for cell in row])
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
 class OwnerFinanceExportView(APIView):
     """GET /api/v1/reports/export/finance/?format=xlsx|pdf - полный финансовый отчёт."""
     permission_classes = [IsCompanyMember, IsOwner]
@@ -340,6 +371,117 @@ class OwnerFinanceExportView(APIView):
         if request.query_params.get('format') == 'csv':
             return csv_response(rows, 'finance-report.csv')
         return xlsx_response(rows, 'finance-report.xlsx', 'Finance')
+
+
+
+class CompanyDataExportView(APIView):
+    """
+    GET /api/v1/reports/export/company-data/ — выгрузка данных СВОЕЙ компании.
+
+    Это НЕ платформенный backup. Тот делает pg_dump всей базы (данные всех
+    арендаторов) и остаётся исключительно у супер-администратора —
+    apps/backup не тронут. Здесь владелец забирает только собственные записи.
+
+    Границы намеренно жёсткие:
+      * компания берётся ИСКЛЮЧИТЕЛЬНО из request.user.company_id; параметры
+        company/company_id/tenant в запросе игнорируются — подменить чужой
+        tenant нечем;
+      * доступ только владельцу: выгрузка содержит суммы, а администратору
+        финансовые данные запрещены по ТЗ (для него есть складские и
+        операционные экспорты без цен);
+      * каждая выгрузка пишется в журнал аудита — это вынос всей базы клиента,
+        след обязателен.
+    """
+    permission_classes = [IsCompanyMember, IsOwner]
+
+    def get(self, request):
+        from apps.clients.models import Client, Payment
+        from apps.finance.models import Expense
+        from apps.warehouse.models import FinishedProduct, RawMaterial, StockMovement
+
+        company_id = request.user.company_id
+        lang = _lang(request)
+        t = lambda key: translate(key, lang)  # noqa: E731
+
+        def sheet(title_key, header_keys, rows):
+            return {'title': t(title_key), 'header': [t(k) for k in header_keys], 'rows': rows}
+
+        clients = [
+            [c.name, c.phone, c.address, c.get_client_type_display(),
+             c.total_orders_amount, c.total_paid, c.debt]
+            for c in Client.objects.filter(company_id=company_id).order_by('name')
+        ]
+        orders = [
+            [o.id, o.client.name, o.product.name if o.product else o.custom_product_name,
+             o.quantity, t(f'units.{o.unit}'), t(f'statuses.{o.status}'),
+             o.total_amount, o.paid_amount,
+             o.deadline.date().isoformat() if o.deadline else '']
+            for o in Order.objects.filter(company_id=company_id)
+            .select_related('client', 'product').order_by('id')
+        ]
+        payments = [
+            [p.payment_date.date().isoformat() if p.payment_date else '',
+             p.client.name, p.order_id or '', p.amount, p.get_payment_method_display()]
+            for p in Payment.objects.filter(company_id=company_id)
+            .select_related('client').order_by('payment_date')
+        ]
+        materials = [
+            [m.name, m.stone_type, t(f'units.{m.unit}'), m.quantity, m.min_stock,
+             m.purchase_price, m.avg_cost_price]
+            for m in RawMaterial.objects.filter(company_id=company_id).order_by('name')
+        ]
+        products = [
+            [p.name, p.category, t(f'units.{p.unit}'), p.quantity, p.cost_price, p.sale_price]
+            for p in FinishedProduct.objects.filter(company_id=company_id).order_by('name')
+        ]
+        movements = [
+            [m.created_at.date().isoformat(),
+             t(f'movement_types.{m.movement_type}'),
+             (m.material.name if m.material else (m.product.name if m.product else '')),
+             m.quantity, m.document_number, m.reason]
+            for m in StockMovement.objects.filter(company_id=company_id)
+            .select_related('material', 'product').order_by('created_at')
+        ]
+        expenses = [
+            [e.date.isoformat() if e.date else '', e.get_category_display(),
+             e.amount, e.comment]
+            for e in Expense.objects.filter(company_id=company_id).order_by('date')
+        ]
+
+        sheets = [
+            sheet('clients.title', ['clients.name', 'clients.phone', 'clients.address',
+                                    'clients.client_type', 'clients.total_amount',
+                                    'clients.paid', 'clients.debt'], clients),
+            sheet('orders.title', ['export.col_number', 'export.col_client', 'export.col_product',
+                                   'export.col_quantity', 'export.col_unit', 'export.col_status',
+                                   'finance.revenue', 'clients.paid', 'export.col_deadline'], orders),
+            sheet('clients.payment_history', ['export.col_period', 'export.col_client',
+                                              'export.col_number', 'common.amount',
+                                              'finance.payment_type'], payments),
+            sheet('warehouse.title', ['export.col_name', 'export.col_type', 'export.col_unit',
+                                      'export.col_quantity', 'export.col_min_stock',
+                                      'warehouse.purchase_price', 'warehouse.avg_cost'], materials),
+            sheet('warehouse.finished_title', ['export.col_name', 'export.col_type',
+                                               'export.col_unit', 'export.col_quantity',
+                                               'warehouse.cost_price', 'warehouse.sale_price'],
+                  products),
+            sheet('warehouse.stock_movement', ['export.col_period', 'export.col_type',
+                                               'export.col_name', 'export.col_quantity',
+                                               'warehouse.document_number', 'warehouse.comment'],
+                  movements),
+            sheet('finance.expenses', ['export.col_period', 'finance.category',
+                                       'common.amount', 'warehouse.comment'], expenses),
+        ]
+
+        write_audit_log(
+            action=AuditLog.Action.EXPORT,
+            actor=request.user,
+            target=request.user.company,
+            metadata={'export': 'company_data',
+                      'rows': sum(len(item['rows']) for item in sheets)},
+            request=request,
+        )
+        return multi_sheet_xlsx_response(sheets, 'company-data.xlsx')
 
 
 class AdminStockExportView(APIView):

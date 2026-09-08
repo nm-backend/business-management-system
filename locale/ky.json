@@ -784,7 +784,9 @@
         "session_revoke": "Токтотуу",
         "session_revoke_others": "Башка бардык сеанстарды токтотуу",
         "session_unknown_device": "Белгисиз түзмөк",
-        "people_count": "адам"
+        "people_count": "адам",
+        "export_company_data": "Компаниянын маалыматын жүктөө",
+        "export_company_hint": "Бир гана өз компанияңыздын маалыматы (Excel)"
     },
     "export": {
         "title": "Отчетту экспорттоо",
