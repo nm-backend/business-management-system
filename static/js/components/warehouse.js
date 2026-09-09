@@ -869,7 +869,7 @@ class WarehouseComponent {
                             · ${window.ui.datetime(r.created_at)}
                             ${r.created_by_name ? ` · ${window.ui.escape(r.created_by_name)}` : ''}
                             ${r.document_number ? ` · ${window.ui.escape(r.document_number)}` : ''}
-                            ${r.related_order_id ? ` · ${window.ui.escape(window.ui.t('warehouse.outgoing_order'))} #${r.related_order_id}` : ''}
+                            ${r.related_order ? ` · ${window.ui.escape(window.ui.t('warehouse.outgoing_order'))} #${r.related_order}` : ''}
                         </div>
                     </div>
                     <div class="u-text-right u-shrink-0">

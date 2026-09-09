@@ -3,11 +3,12 @@
 
 В макете расход обязательно объясняется: «Қайси мақсадда — Ишлаб чиқариш» и
 «Буюртма №1256 - Ошхона столешницаси», а в истории движения видно, на какой
-заказ ушло сырьё. Поле related_order_id в модели существовало, но ручной
+заказ ушло сырьё. Поле related_order в модели существовало, но ручной
 расход его не заполнял: списание было анонимным.
 """
 from decimal import Decimal
 
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -66,7 +67,7 @@ class OutgoingPurposeTests(TestCase):
         rows = rows['results'] if 'results' in rows else rows
         row = rows[0]
         self.assertEqual(row['purpose'], 'sample')
-        self.assertEqual(row['related_order_id'], self.order.id)
+        self.assertEqual(row['related_order'], self.order.id)
 
     def test_foreign_order_rejected(self):
         """Заказ чужой компании нельзя привязать к своему расходу."""
@@ -115,3 +116,52 @@ class OutgoingPurposeTests(TestCase):
         }, format='json')
         self.order.refresh_from_db()
         self.assertEqual(self.order.cost_price, cost_before)
+
+
+class RelatedOrderFKTests(TestCase):
+    """related_order — честный FK: целостность, SET_NULL, обратный доступ."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.company = Company.objects.create(name='FKCo')
+        cls.owner = User.objects.create_user(
+            username='fk_owner', password='pw', role=User.Role.OWNER, company=cls.company,
+        )
+        cls.material = RawMaterial.objects.create(
+            company=cls.company, name='Мрамор', unit='m2', quantity=Decimal('50'),
+        )
+        cls.client_obj = Client.objects.create(company=cls.company, name='Хакимов')
+        cls.order = Order.objects.create(
+            company=cls.company, client=cls.client_obj, custom_product_name='Подоконник',
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('500.00'),
+            deadline=timezone.now() + timezone.timedelta(days=2),
+        )
+
+    def _move(self, **kw):
+        args = dict(
+            company=self.company, material=self.material,
+            movement_type=StockMovement.MovementType.OUTGOING,
+            quantity=Decimal('3'), purpose='production',
+        )
+        args.update(kw)
+        return StockMovement.objects.create(**args)
+
+    def test_bogus_order_id_rejected_by_database(self):
+        # PG бросает сразу на INSERT, SQLite откладывает проверку FK до
+        # коммита — дёргаем check_constraints явно; внутренняя atomic-блок
+        # откатывает битую строку сейвпоинтом, teardown остаётся чистым.
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                self._move(related_order_id=999999)
+                connection.check_constraints()
+
+    def test_order_delete_keeps_movement_with_null_link(self):
+        movement = self._move(related_order=self.order)
+        self.order.delete()
+        movement.refresh_from_db()
+        self.assertIsNone(movement.related_order_id)
+
+    def test_filter_and_reverse_accessor(self):
+        movement = self._move(related_order=self.order)
+        self.assertIn(movement, StockMovement.objects.filter(related_order_id=self.order.id))
+        self.assertIn(movement, self.order.stock_movements.all())

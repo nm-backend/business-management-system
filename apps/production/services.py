@@ -229,7 +229,6 @@ def confirm_work(
             quantity=required,
             reason=f'Work #{work.id} confirmed',
             created_by=confirmed_by,
-            related_production_id=work.id,
             related_order_id=work.task.order_id if work.task else None,
         )
 
@@ -265,7 +264,6 @@ def confirm_work(
             quantity=work.quantity,
             reason=f'Work #{work.id} confirmed',
             created_by=confirmed_by,
-            related_production_id=work.id,
             related_order_id=work.task.order_id if work.task else None,
         )
 
