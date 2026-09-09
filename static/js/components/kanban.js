@@ -14,7 +14,7 @@ class KanbanComponent {
         // на kanban висел «Молиявий таҳлил» вместо «Kanban»).
         const title = document.getElementById('page-title');
         title.removeAttribute('data-i18n');
-        title.textContent = '🔄 ' + window.ui.t('orders.view_kanban');
+        title.innerHTML = window.icon('refresh-cw', 18) + ' ' + window.ui.t('orders.view_kanban');
         this.container = container;
         await this.loadOrders();
     }
@@ -22,14 +22,14 @@ class KanbanComponent {
     /** Статусы для колонок Kanban (только активные, не финальные). */
     get columns() {
         return [
-            { status: 'new', labelKey: 'statuses.new', icon: '📋' },
-            { status: 'awaiting_material', labelKey: 'statuses.awaiting_material', icon: '📦' },
-            { status: 'sent_to_worker', labelKey: 'statuses.sent_to_worker', icon: '📨' },
-            { status: 'accepted', labelKey: 'statuses.accepted', icon: '✅' },
-            { status: 'in_progress', labelKey: 'statuses.in_progress', icon: '🛠️' },
-            { status: 'awaiting_confirmation', labelKey: 'statuses.awaiting_confirmation', icon: '⏳' },
-            { status: 'ready', labelKey: 'statuses.ready', icon: '🎯' },
-            { status: 'delivered', labelKey: 'statuses.delivered', icon: '✓' },
+            { status: 'new', labelKey: 'statuses.new', icon: 'clipboard-list' },
+            { status: 'awaiting_material', labelKey: 'statuses.awaiting_material', icon: 'package' },
+            { status: 'sent_to_worker', labelKey: 'statuses.sent_to_worker', icon: 'send' },
+            { status: 'accepted', labelKey: 'statuses.accepted', icon: 'check-circle' },
+            { status: 'in_progress', labelKey: 'statuses.in_progress', icon: 'wrench' },
+            { status: 'awaiting_confirmation', labelKey: 'statuses.awaiting_confirmation', icon: 'hourglass' },
+            { status: 'ready', labelKey: 'statuses.ready', icon: 'flag' },
+            { status: 'delivered', labelKey: 'statuses.delivered', icon: 'check' },
         ];
     }
 
@@ -51,7 +51,7 @@ class KanbanComponent {
         this.container.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                 <div class="tabs" style="margin-bottom:0;" role="tablist" aria-label="Orders view switch">
-                    <a class="tab-btn" href="#/orders" style="text-decoration:none;" role="tab" aria-selected="false" data-i18n="orders.view_list"></a>
+                    <a class="tab-btn u-no-deco" href="#/orders" role="tab" aria-selected="false" data-i18n="orders.view_list"></a>
                     <span class="tab-btn active" role="tab" aria-selected="true" data-i18n="orders.view_kanban"></span>
                 </div>
                 <button class="btn btn-sm btn-primary" id="kanban-refresh" style="width:auto;padding:8px 14px;" data-i18n="common.retry">🔄</button>
@@ -79,7 +79,7 @@ class KanbanComponent {
         const header = document.createElement('div');
         header.className = 'kanban-header';
         header.innerHTML = `
-            <span>${icon} ${window.ui.escape(label)}</span>
+            <span>${window.icon(icon, 16)} ${window.ui.escape(label)}</span>
             <span class="kanban-count">${orders.length}</span>
         `;
         col.appendChild(header);
@@ -160,9 +160,9 @@ class KanbanComponent {
 
         // Content
         const warnings = [];
-        if (o.has_material_shortage) warnings.push(`⚠️ ${window.ui.t('orders.material_shortage')}`);
-        if (o.payment_status === 'unpaid') warnings.push(`💰 ${window.ui.t('payment_statuses.unpaid')}`);
-        if (o.is_overdue) warnings.push(`⏰ ${window.ui.t('dashboard.deadline_passed')}`);
+        if (o.has_material_shortage) warnings.push(`${window.icon('alert-triangle', 14)} ${window.ui.t('orders.material_shortage')}`);
+        if (o.payment_status === 'unpaid') warnings.push(`${window.icon('coins', 14)} ${window.ui.t('payment_statuses.unpaid')}`);
+        if (o.is_overdue) warnings.push(`${window.icon('clock', 14)} ${window.ui.t('dashboard.deadline_passed')}`);
 
         card.innerHTML = `
             <div class="kanban-card-id">#${o.id}</div>

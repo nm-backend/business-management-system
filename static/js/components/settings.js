@@ -17,9 +17,9 @@ class SettingsComponent {
 
         container.innerHTML = `
             <div class="card" style="display:flex;align-items:center;gap:12px;">
-                <div class="thumb" style="width:52px;height:52px;border-radius:50%;">👤</div>
+                <div class="thumb" style="width:52px;height:52px;border-radius:50%;">${window.icon('user', 28)}</div>
                 <div>
-                    <div style="font-weight:600;font-size:16px;">${window.ui.escape(user.full_name || user.username)}</div>
+                    <div class="u-title-lg">${window.ui.escape(user.full_name || user.username)}</div>
                     <div class="text-sm text-muted" data-i18n="roles.${user.role}"></div>
                 </div>
             </div>
@@ -27,8 +27,8 @@ class SettingsComponent {
             ${user.is_owner ? `
             <div class="section-title" data-i18n="subscription.title"></div>
             <div class="list-group">
-                <div class="list-row" id="subscription-row" role="button" tabindex="0" style="cursor:pointer;">
-                    <span>💳 <span data-i18n="subscription.my"></span></span>
+                <div class="list-row u-cursor-pointer" id="subscription-row" role="button" tabindex="0">
+                    <span>${window.icon('credit-card', 18)} <span data-i18n="subscription.my"></span></span>
                     <span class="badge badge-progress" id="subscription-badge">…</span>
                 </div>
             </div>` : ''}
@@ -36,23 +36,23 @@ class SettingsComponent {
             ${!user.is_superadmin ? `
             <div class="section-title" data-i18n="nav.menu"></div>
             <div class="list-group">
-                <a class="list-row" href="#/messages" style="text-decoration:none;color:inherit;">
-                    <span>✉️ <span data-i18n="messages_section.title"></span></span><span>›</span>
+                <a class="list-row u-plain-link" href="#/messages">
+                    <span>${window.icon('mail', 18)} <span data-i18n="messages_section.title"></span></span><span>›</span>
                 </a>
                 ${!user.is_worker ? `
-                    <a class="list-row" href="#/finished-products" style="text-decoration:none;color:inherit;">
-                        <span>🪟 <span data-i18n="warehouse.finished_title"></span></span><span>›</span>
+                    <a class="list-row u-plain-link" href="#/finished-products">
+                        <span>${window.icon('package', 18)} <span data-i18n="warehouse.finished_title"></span></span><span>›</span>
                     </a>
-                    <a class="list-row" href="#/production" style="text-decoration:none;color:inherit;">
-                        <span>🛠️ <span data-i18n="production.title"></span></span><span>›</span>
+                    <a class="list-row u-plain-link" href="#/production">
+                        <span>${window.icon('wrench', 18)} <span data-i18n="production.title"></span></span><span>›</span>
                     </a>` : ''}
                 ${user.is_owner ? `
-                    <a class="list-row" href="#/finance" style="text-decoration:none;color:inherit;">
-                        <span>💰 <span data-i18n="finance.title"></span></span><span>›</span>
+                    <a class="list-row u-plain-link" href="#/finance">
+                        <span>${window.icon('wallet', 18)} <span data-i18n="finance.title"></span></span><span>›</span>
                     </a>` : ''}
                 ${(user.is_owner || user.is_admin) ? `
-                    <a class="list-row" href="#/subscription" style="text-decoration:none;color:inherit;">
-                        <span>📄 <span data-i18n="subscription.page_title"></span></span><span>›</span>
+                    <a class="list-row u-plain-link" href="#/subscription">
+                        <span>${window.icon('file-text', 18)} <span data-i18n="subscription.page_title"></span></span><span>›</span>
                     </a>` : ''}
             </div>
             ` : ''}
@@ -61,22 +61,22 @@ class SettingsComponent {
             <div class="list-group">
                 <div class="list-row lang-option" data-lang="uz_cyrl">
                     <span>Ўзбекча</span>
-                    <span class="text-success font-bold" style="${currentLang === 'uz_cyrl' ? '' : 'visibility:hidden;'}">✓</span>
+                    <span class="text-success font-bold" style="${currentLang === 'uz_cyrl' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
                 </div>
                 <div class="list-row lang-option" data-lang="ru">
                     <span>Русский</span>
-                    <span class="text-success font-bold" style="${currentLang === 'ru' ? '' : 'visibility:hidden;'}">✓</span>
+                    <span class="text-success font-bold" style="${currentLang === 'ru' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
                 </div>
                 <div class="list-row lang-option" data-lang="ky">
                     <span>Кыргызча</span>
-                    <span class="text-success font-bold" style="${currentLang === 'ky' ? '' : 'visibility:hidden;'}">✓</span>
+                    <span class="text-success font-bold" style="${currentLang === 'ky' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
                 </div>
             </div>
 
             <div class="section-title" data-i18n="settings.appearance"></div>
             <div class="list-group">
-                <div class="list-row" style="cursor:pointer;">
-                    <span>🌙 <span data-i18n="settings.dark_mode"></span></span>
+                <div class="list-row u-cursor-pointer">
+                    <span>${window.icon('moon', 18)} <span data-i18n="settings.dark_mode"></span></span>
                     <label class="toggle-switch">
                         <input type="checkbox" id="dark-mode-toggle" ${document.body.classList.contains('theme-dark') ? 'checked' : ''}>
                         <span class="toggle-slider"></span>
@@ -86,8 +86,8 @@ class SettingsComponent {
 
             <div class="section-title" data-i18n="settings.notifications"></div>
             <div class="list-group">
-                <div class="list-row" id="notif-permission-row" role="button" tabindex="0" style="cursor:pointer;">
-                    <span>🔔 <span data-i18n="settings.push_notifications"></span></span>
+                <div class="list-row u-cursor-pointer" id="notif-permission-row" role="button" tabindex="0">
+                    <span>${window.icon('bell', 18)} <span data-i18n="settings.push_notifications"></span></span>
                     <span class="badge ${notifStatus === 'granted' ? 'badge-ready' : notifStatus === 'denied' ? 'badge-cancel' : 'badge-progress'}" id="notif-status-badge">${notifLabel}</span>
                 </div>
             </div>
@@ -97,7 +97,7 @@ class SettingsComponent {
                 <div class="list-group" id="users-list">
                     <div class="list-state list-state-loading"><span class="spinner"></span></div>
                 </div>
-                <button class="btn btn-primary btn-block" id="add-user-btn" style="margin-bottom:16px;" data-i18n="settings.add_account"></button>` : ''}
+                <button class="btn btn-primary btn-block u-mb-6" id="add-user-btn" data-i18n="settings.add_account"></button>` : ''}
 
             ${user.is_owner || user.is_admin ? `
                 <div class="section-title" data-i18n="settings.export"></div>
@@ -106,57 +106,57 @@ class SettingsComponent {
                      формулы показателей, детализация — сами операции.
                      Права они не расширяют: у администратора детализация
                      остаётся без сумм. -->
-                <div class="list-group" style="margin-bottom:8px;">
-                    <label class="list-row" style="cursor:pointer;">
+                <div class="list-group u-mb-3">
+                    <label class="list-row u-cursor-pointer">
                         <span class="text-sm" data-i18n="export.include_charts"></span>
                         <input type="checkbox" id="export-charts">
                     </label>
-                    <label class="list-row" style="cursor:pointer;">
+                    <label class="list-row u-cursor-pointer">
                         <span class="text-sm" data-i18n="export.include_notes"></span>
                         <input type="checkbox" id="export-notes">
                     </label>
-                    <label class="list-row" style="cursor:pointer;">
+                    <label class="list-row u-cursor-pointer">
                         <span class="text-sm" data-i18n="export.include_details"></span>
                         <input type="checkbox" id="export-details">
                     </label>
                 </div>
                 <div class="list-group">
                     <div class="list-row" data-export="/reports/export/stock/" data-file="stock-report.xlsx" role="button" tabindex="0">
-                        <span>📦 <span data-i18n="export.stock"></span></span><span>Excel</span>
+                        <span>${window.icon('package', 18)} <span data-i18n="export.stock"></span></span><span>Excel</span>
                     </div>
                     <div class="list-row" data-export="/reports/export/orders/" data-file="orders-report.xlsx" role="button" tabindex="0">
-                        <span>📋 <span data-i18n="export.orders"></span></span><span>Excel</span>
+                        <span>${window.icon('clipboard-list', 18)} <span data-i18n="export.orders"></span></span><span>Excel</span>
                     </div>
                     <div class="list-row" data-export="/reports/export/work/" data-file="work-report.xlsx" role="button" tabindex="0">
-                        <span>🛠️ <span data-i18n="export.work"></span></span><span>Excel</span>
+                        <span>${window.icon('wrench', 18)} <span data-i18n="export.work"></span></span><span>Excel</span>
                     </div>
                     ${user.is_owner ? `
                         <div class="list-row" data-export="/reports/export/finance/" data-file="finance-report.xlsx" role="button" tabindex="0">
-                            <span>💰 <span data-i18n="export.finance"></span></span><span>Excel</span>
+                            <span>${window.icon('wallet', 18)} <span data-i18n="export.finance"></span></span><span>Excel</span>
                         </div>` : ''}
                 </div>` : ''}
 
             <div class="section-title" data-i18n="settings.security"></div>
             <div class="list-group">
                 <div class="list-row" id="change-password-row" role="button" tabindex="0">
-                    <span>🔑 <span data-i18n="auth.change_password"></span></span><span>›</span>
+                    <span>${window.icon('key', 18)} <span data-i18n="auth.change_password"></span></span><span>›</span>
                 </div>
                 <!-- «Сеансларни бошқариш» из макета: где я вошёл и как закрыть
                      лишнее устройство. Управление только СВОИМИ сессиями. -->
                 <div class="list-row" id="sessions-row" role="button" tabindex="0">
-                    <span>💻 <span data-i18n="settings.sessions"></span></span><span>›</span>
+                    <span>${window.icon('monitor', 18)} <span data-i18n="settings.sessions"></span></span><span>›</span>
                 </div>
                 <!-- Выгрузка данных СВОЕЙ компании (не платформенный backup:
                      тот делает дамп всей базы и остаётся у супер-админа). -->
                 ${user.is_owner ? `
                 <div class="list-row" id="export-company-row" role="button" tabindex="0">
-                    <span>📦 <span data-i18n="settings.export_company_data"></span></span><span>›</span>
+                    <span>${window.icon('download', 18)} <span data-i18n="settings.export_company_data"></span></span><span>›</span>
                 </div>` : ''}
                 <div class="list-row" id="about-row" role="button" tabindex="0">
                     <span>ℹ️ <span data-i18n="about.title"></span></span><span>›</span>
                 </div>
                 <div class="list-row" id="logout-row" role="button" tabindex="0">
-                    <span class="text-danger">🚪 <span data-i18n="auth.logout"></span></span>
+                    <span class="text-danger">${window.icon('log-out', 16)} <span data-i18n="auth.logout"></span></span>
                 </div>
             </div>
         `;
@@ -191,7 +191,7 @@ class SettingsComponent {
                 if (result === 'granted') {
                     badge.textContent = window.ui.t('common.enabled');
                     badge.className = 'badge badge-ready';
-                    window.toast.success('🔔 ' + window.ui.t('settings.notifications_on'));
+                    window.toast.success(window.ui.t('settings.notifications_on'));
                 } else if (result === 'denied') {
                     badge.textContent = window.ui.t('common.disabled');
                     badge.className = 'badge badge-cancel';
@@ -335,36 +335,36 @@ class SettingsComponent {
         const user = window.currentUser;
         const t = (k) => window.ui.t(k);
         const row = (labelKey, valueHtml) => `
-            <div class="list-row" style="cursor:default;">
+            <div class="list-row u-cursor-default">
                 <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
-                <span class="text-sm font-bold" style="text-align:right;">${valueHtml}</span>
+                <span class="text-sm font-bold u-text-right">${valueHtml}</span>
             </div>`;
         const modal = window.ui.modal('about.title', `
             <div style="text-align:center;padding:6px 0 14px;">
-                <div class="stat-icon blue" style="margin:0 auto 10px;width:52px;height:52px;font-size:26px;">🧊</div>
+                <div class="stat-icon blue" style="margin:0 auto 10px;width:52px;height:52px;font-size:26px;">${window.icon('snowflake', 28)}</div>
                 <div style="font-weight:800;font-size:18px;">SkladPro.Nod</div>
                 <div class="text-sm text-muted" data-i18n="app.tagline"></div>
             </div>
             <div class="section-title" data-i18n="about.system"></div>
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">
+            <div class="list-group u-card-flat-alt">
                 ${row('about.version', '1.0.0')}
                 ${row('about.app_name', 'SkladPro.Nod')}
                 ${user.company_name ? row('about.company_label', window.ui.escape(user.company_name)) : ''}
                 ${row('roles.' + user.role, window.ui.escape(user.full_name || user.username))}
             </div>
             <div class="section-title" data-i18n="about.developers"></div>
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">
-                <div class="list-row" style="cursor:default;">
+            <div class="list-group u-card-flat-alt">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm font-bold">Nurullo Musajanov</span>
                     <span class="text-sm text-muted">Full-stack Developer</span>
                 </div>
             </div>
             <div class="section-title" data-i18n="about.contacts"></div>
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">
+            <div class="list-group u-card-flat-alt">
                 ${row('about.license', 'MIT License')}
-                <a class="list-row" href="https://github.com/nm-backend" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;">
+                <a class="list-row u-plain-link" href="https://github.com/nm-backend" target="_blank" rel="noopener noreferrer">
                     <span class="text-sm text-muted">GitHub</span>
-                    <span class="text-sm font-bold" style="color:var(--primary);">github.com/nm-backend ›</span>
+                    <span class="text-sm font-bold u-primary-text">github.com/nm-backend ›</span>
                 </a>
             </div>
         `);
@@ -385,9 +385,9 @@ class SettingsComponent {
             this.users = response.results || response;
 
             const rolesBlock = counts ? `
-                <div class="list-group" style="margin-bottom:12px;">
+                <div class="list-group u-mb-5">
                     ${['owner', 'admin', 'worker'].map((role) => `
-                        <div class="list-row" style="cursor:default;">
+                        <div class="list-row u-cursor-default">
                             <span class="text-sm" data-i18n="roles.${role}"></span>
                             <span class="text-sm font-bold">${counts[role] ?? 0}
                                 <span data-i18n="settings.people_count"></span></span>
@@ -397,7 +397,7 @@ class SettingsComponent {
             listEl.innerHTML = rolesBlock + this.users.map((u) => `
                 <div class="list-row" data-user="${u.id}">
                     <div>
-                        <div style="font-weight:600;font-size:14px;">
+                        <div class="u-title-sm">
                             ${window.ui.escape(u.full_name || u.username)}
                             ${u.is_active === false ? `<span class="badge badge-cancel" data-i18n="settings.blocked"></span>` : ''}
                         </div>
@@ -429,22 +429,22 @@ class SettingsComponent {
             </div>
             ${isOwner && (u.role === 'admin' || u.role === 'worker') ? `
                 <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:14px;">
-                    <label class="list-row" style="cursor:pointer;">
+                    <label class="list-row u-cursor-pointer">
                         <span class="text-sm" data-i18n="settings.can_write_to_owner"></span>
                         <input type="checkbox" id="perm-write-owner" ${u.can_write_to_owner ? 'checked' : ''}>
                     </label>
                     ${u.role === 'admin' ? `
-                        <label class="list-row" style="cursor:pointer;">
+                        <label class="list-row u-cursor-pointer">
                             <span class="text-sm" data-i18n="settings.can_create_workers"></span>
                             <input type="checkbox" id="perm-create-workers" ${u.can_create_workers ? 'checked' : ''}>
                         </label>
-                        <label class="list-row" style="cursor:pointer;">
+                        <label class="list-row u-cursor-pointer">
                             <span class="text-sm" data-i18n="settings.can_see_other_workers"></span>
                             <input type="checkbox" id="perm-see-workers" ${u.can_see_other_workers ? 'checked' : ''}>
                         </label>` : ''}
                 </div>` : ''}
             ${isOwner ? `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="u-grid-2">
                 <button class="btn ${u.is_active === false ? 'btn-success' : 'btn-danger'} btn-sm" id="toggle-active"
                     data-i18n="${u.is_active === false ? 'settings.unblock' : 'settings.block'}"></button>
                 <button class="btn btn-secondary btn-sm" id="reset-password" data-i18n="settings.reset_password"></button>
@@ -509,25 +509,25 @@ class SettingsComponent {
 
     showAccessKey(key, name) {
         const modal = window.ui.modal('settings.access_key_code', `
-            <p style="margin-bottom:12px;"><span data-i18n="settings.access_key_for"></span> <strong>${window.ui.escape(name)}</strong></p>
+            <p class="u-mb-5"><span data-i18n="settings.access_key_for"></span> <strong>${window.ui.escape(name)}</strong></p>
             <div class="form-group">
                 <input type="text" class="form-control" value="${window.ui.escape(key)}" readonly
                        style="font-family:monospace;font-size:18px;text-align:center;font-weight:bold;letter-spacing:2px;"
                        id="access-key-value">
             </div>
-            <p class="text-sm text-muted" style="text-align:center;" data-i18n="settings.access_key_hint"></p>
+            <p class="text-sm text-muted u-text-center" data-i18n="settings.access_key_hint"></p>
             <button class="btn btn-primary btn-block" id="copy-access-key"><span data-i18n="settings.copy_key"></span></button>
         `);
         modal.querySelector('#copy-access-key').addEventListener('click', async () => {
             const input = modal.querySelector('#access-key-value');
             try {
                 await navigator.clipboard.writeText(input.value);
-                window.toast.success('✅ ' + window.ui.t('common.copied'));
+                window.toast.success(window.ui.t('common.copied'));
                 window.ui.closeModal(modal);
             } catch (e) {
                 input.select();
                 document.execCommand('copy');
-                window.toast.success('✅ ' + window.ui.t('common.copied'));
+                window.toast.success(window.ui.t('common.copied'));
                 window.ui.closeModal(modal);
             }
         });
@@ -535,7 +535,7 @@ class SettingsComponent {
 
     openResetPassword(u) {
         const modal = window.ui.modal('settings.reset_password', `
-            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(u.full_name || u.username)}</p>
+            <p class="u-mb-5 u-strong">${window.ui.escape(u.full_name || u.username)}</p>
             <form id="reset-form">
                 <div class="form-group"><label data-i18n="auth.new_password"></label>
                     <input name="new_password" type="password" class="form-control" required minlength="8"></div>
@@ -639,12 +639,12 @@ class SettingsComponent {
                 const data = await window.api.request('/accounts/me/sessions/');
                 const rows = data.results || [];
                 body.innerHTML = `
-                    <p class="text-sm text-muted" style="margin-bottom:10px;"
+                    <p class="text-sm text-muted u-mb-4"
                        data-i18n="settings.sessions_hint"></p>
                     <div class="list-group">
                         ${rows.map((row) => `
-                            <div class="list-row" style="cursor:default;">
-                                <div style="min-width:0;">
+                            <div class="list-row u-cursor-default">
+                                <div class="u-minw-0">
                                     <div class="text-sm font-bold">
                                         ${window.ui.escape(row.user_agent || window.ui.t('settings.session_unknown_device'))}
                                     </div>
@@ -660,7 +660,7 @@ class SettingsComponent {
                             </div>`).join('')}
                     </div>
                     ${rows.length > 1 ? `
-                        <button class="btn btn-secondary btn-block" id="revoke-others" style="margin-top:10px;"
+                        <button class="btn btn-secondary btn-block u-mt-4" id="revoke-others"
                                 data-i18n="settings.session_revoke_others"></button>` : ''}`;
 
                 body.querySelectorAll('[data-revoke]').forEach((btn) => {

@@ -215,8 +215,8 @@ class MessagesComponent {
     emptyMainHtml() {
         return `
             <div class="chat-empty">
-                <div class="chat-empty-icon">💬</div>
-                <div style="font-weight:600;" data-i18n="chat.select_chat"></div>
+                <div class="chat-empty-icon">${window.icon('message', 40)}</div>
+                <div class="u-strong" data-i18n="chat.select_chat"></div>
                 <div class="text-sm" data-i18n="chat.select_chat_hint"></div>
             </div>`;
     }
@@ -248,7 +248,7 @@ class MessagesComponent {
         // Пользователь мог уйти со страницы, пока шёл отложенный поиск/рендер.
         if (window.listStates.gone(listEl)) return;
         if (!this.conversations.length) {
-            listEl.innerHTML = `<div class="chat-empty" style="min-height:120px;"><span data-i18n="chat.no_conversations"></span></div>`;
+            listEl.innerHTML = `<div class="chat-empty u-minh-120"><span data-i18n="chat.no_conversations"></span></div>`;
             window.i18n.applyTranslations();
             return;
         }
@@ -296,7 +296,7 @@ class MessagesComponent {
             const resp = await window.api.request(`/messaging/employees/?search=${encodeURIComponent(query)}`);
             const employees = resp.results || resp;
             if (!employees.length) {
-                listEl.innerHTML = `<div class="chat-empty" style="min-height:120px;"><span data-i18n="chat.no_employees"></span></div>`;
+                listEl.innerHTML = `<div class="chat-empty u-minh-120"><span data-i18n="chat.no_employees"></span></div>`;
                 window.i18n.applyTranslations();
                 return;
             }
@@ -353,21 +353,21 @@ class MessagesComponent {
                      ${conv && conv.kind === 'general' ? '' : `style="background:${this.avatarColor(title || '')}"`}>
                     ${conv && conv.kind === 'general' ? '#' : this.initials(title || '?')}
                 </div>
-                <div style="min-width:0;">
+                <div class="u-minw-0">
                     <div class="chat-main-title">${window.ui.escape(title || '')}</div>
                     <div class="chat-main-sub">${window.ui.escape(sub || '')}</div>
                 </div>
             </div>
             <div class="chat-messages" id="chat-messages" aria-live="polite"></div>
             <div id="chat-file-preview" style="display:none;padding:8px 12px;background:var(--bg-secondary);border-top:1px solid var(--border);">
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span id="chat-file-icon">📎</span>
+                <div class="u-row-sm">
+                    <span id="chat-file-icon">${window.icon('paperclip', 20)}</span>
                     <span id="chat-file-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;"></span>
-                    <button id="chat-file-remove" style="background:none;border:none;cursor:pointer;font-size:16px;">✕</button>
+                    <button id="chat-file-remove" style="background:none;border:none;cursor:pointer;font-size:16px;">${window.icon('x', 16)}</button>
                 </div>
             </div>
             <div class="chat-input">
-                <button class="chat-attach" id="chat-attach" data-i18n-attr="title,aria-label" data-i18n="chat.attach_file" style="background:none;border:none;cursor:pointer;padding:6px;font-size:18px;">📎</button>
+                <button class="chat-attach" id="chat-attach" data-i18n-attr="title,aria-label" data-i18n="chat.attach_file" style="background:none;border:none;cursor:pointer;padding:6px;font-size:18px;">${window.icon('paperclip', 18)}</button>
                 <input type="file" id="chat-file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" style="display:none;">
                 <textarea id="chat-textarea" rows="1" data-i18n-attr="placeholder" data-i18n="chat.type_message"></textarea>
                 <button class="chat-send" id="chat-send" data-i18n-attr="aria-label" data-i18n="chat.send">
@@ -412,9 +412,9 @@ class MessagesComponent {
             filePreview.style.display = 'block';
             fileName.textContent = file.name;
             // Иконка по типу
-            if (file.type.startsWith('image/')) fileIcon.textContent = '🖼️';
-            else if (file.type === 'application/pdf') fileIcon.textContent = '📄';
-            else fileIcon.textContent = '📎';
+            if (file.type.startsWith('image/')) fileIcon.innerHTML = window.icon('image', 20);
+            else if (file.type === 'application/pdf') fileIcon.innerHTML = window.icon('file-text', 20);
+            else fileIcon.innerHTML = window.icon('paperclip', 20);
         });
         fileRemove.addEventListener('click', () => {
             this.selectedFile = null;
@@ -428,12 +428,12 @@ class MessagesComponent {
 
     async loadMessages(id) {
         const box = this.bodyEl.querySelector('#chat-messages');
-        box.innerHTML = `<div class="list-state list-state-loading" style="margin:auto;"><span class="spinner"></span></div>`;
+        box.innerHTML = `<div class="list-state list-state-loading u-m-auto"><span class="spinner"></span></div>`;
         try {
             const messages = await window.api.request(`/messaging/conversations/${id}/messages/`);
             this.seen = new Set(messages.map((m) => m.id));
             if (!messages.length) {
-                box.innerHTML = `<div class="chat-empty" style="margin:auto;"><span data-i18n="chat.no_messages"></span></div>`;
+                box.innerHTML = `<div class="chat-empty u-m-auto"><span data-i18n="chat.no_messages"></span></div>`;
                 window.i18n.applyTranslations();
             } else {
                 box.innerHTML = messages.map((m) => this.messageHtml(m)).join('');
@@ -442,7 +442,7 @@ class MessagesComponent {
             // Отмечаем прочитанным + обнуляем счётчик в списке.
             this.markRead(id);
         } catch (e) {
-            box.innerHTML = `<div class="chat-empty" style="margin:auto;"><span data-i18n="chat.error"></span></div>`;
+            box.innerHTML = `<div class="chat-empty u-m-auto"><span data-i18n="chat.error"></span></div>`;
             window.i18n.applyTranslations();
         }
     }
@@ -464,9 +464,9 @@ class MessagesComponent {
             const ext = (m.attachment_name || m.attachment.split('.').pop() || '').toLowerCase();
             const isImage = /^jpg|jpeg|png|gif|webp|svg$/.test(ext);
             if (isImage) {
-                attachmentHtml = `<div class="msg-attachment" style="margin-top:6px;"><img src="${window.ui.escape(m.attachment)}" alt="" style="max-width:200px;border-radius:8px;cursor:pointer;" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')"></div>`;
+                attachmentHtml = `<div class="msg-attachment u-mt-2"><img src="${window.ui.escape(m.attachment)}" alt="" style="max-width:200px;border-radius:8px;cursor:pointer;" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')"></div>`;
             } else {
-                attachmentHtml = `<div class="msg-attachment" style="margin-top:6px;"><a href="${window.ui.escape(m.attachment)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.15);border-radius:6px;text-decoration:none;color:inherit;font-size:13px;">📎 ${window.ui.escape(m.attachment_name || window.ui.t('chat.file'))}</a></div>`;
+                attachmentHtml = `<div class="msg-attachment u-mt-2"><a href="${window.ui.escape(m.attachment)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.15);border-radius:6px;text-decoration:none;color:inherit;font-size:13px;">${window.icon('paperclip', 14)} ${window.ui.escape(m.attachment_name || window.ui.t('chat.file'))}</a></div>`;
             }
         }
         return `
@@ -619,20 +619,20 @@ class MessagesComponent {
 
     notificationStyle(type) {
         const map = {
-            new_order: ['🆕', 'blue'], new_expense: ['🧾', 'orange'],
-            unpaid_client: ['⚠️', 'red'], overdue_debt: ['⏰', 'red'],
-            worker_refused: ['✕', 'red'], work_awaiting: ['📋', 'orange'],
-            cash_change: ['💰', 'green'], report_ready: ['📊', 'blue'],
-            task_assigned: ['🛠️', 'blue'], task_changed: ['✏️', 'purple'],
-            task_cancelled: ['🚫', 'red'], work_confirmed: ['✅', 'green'],
-            work_rejected: ['✕', 'red'], new_message: ['✉️', 'blue'],
-            work_accrued: ['💵', 'green'], material_shortage: ['⚠️', 'orange'],
-            subscription_expiring_soon: ['📅', 'orange'],
-            subscription_expiring: ['⏳', 'red'],
-            subscription_renewal_request: ['🔄', 'blue'],
-            subscription_extended: ['✅', 'green'],
+            new_order: ['sparkles', 'blue'], new_expense: ['receipt', 'orange'],
+            unpaid_client: ['alert-triangle', 'red'], overdue_debt: ['clock', 'red'],
+            worker_refused: ['x', 'red'], work_awaiting: ['clipboard-list', 'orange'],
+            cash_change: ['coins', 'green'], report_ready: ['trending-up', 'blue'],
+            task_assigned: ['wrench', 'blue'], task_changed: ['edit', 'purple'],
+            task_cancelled: ['x-circle', 'red'], work_confirmed: ['check-circle', 'green'],
+            work_rejected: ['x', 'red'], new_message: ['mail', 'blue'],
+            work_accrued: ['banknote', 'green'], material_shortage: ['alert-triangle', 'orange'],
+            subscription_expiring_soon: ['calendar', 'orange'],
+            subscription_expiring: ['hourglass', 'red'],
+            subscription_renewal_request: ['refresh-cw', 'blue'],
+            subscription_extended: ['check-circle', 'green'],
         };
-        return map[type] || ['🔔', 'blue'];
+        return map[type] || ['bell', 'blue'];
     }
 
     /**
@@ -706,13 +706,13 @@ class MessagesComponent {
         return `
             <div class="list-row" ${route ? `data-notif-id="${n.id}" role="button" tabindex="0"` : ''}
                  style="${clickable}${n.is_read ? '' : 'background:var(--primary-soft);'}">
-                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-                    <div class="stat-icon ${color}" style="width:36px;height:36px;font-size:16px;border-radius:10px;">${icon}</div>
+                <div class="u-row">
+                    <div class="stat-icon ${color}" style="width:36px;height:36px;font-size:16px;border-radius:10px;">${window.icon(icon, 18)}</div>
                     <div style="min-width:0;flex:1;">
-                        <div style="font-weight:600;font-size:14px;" data-i18n="notifications.${n.type}"></div>
+                        <div class="u-title-sm" data-i18n="notifications.${n.type}"></div>
                         <div class="text-sm text-muted" style="overflow:hidden;text-overflow:ellipsis;">${window.ui.escape(n.message)}</div>
                         ${showHandle ? `
-                            <button class="btn btn-primary btn-sm" data-handle-notif="${n.id}" style="margin-top:8px;"
+                            <button class="btn btn-primary btn-sm u-mt-3" data-handle-notif="${n.id}"
                                     data-i18n="companies.extend_30"></button>` : ''}
                     </div>
                 </div>
@@ -722,7 +722,7 @@ class MessagesComponent {
                     ${n.is_archived ? '' : `
                         <button class="icon-btn" data-archive-notif="${n.id}"
                                 title="${window.ui.t('notifications.archive_action')}"
-                                aria-label="${window.ui.t('notifications.archive_action')}">🗄️</button>`}
+                                aria-label="${window.ui.t('notifications.archive_action')}">${window.icon('archive', 16)}</button>`}
                 </div>
             </div>`;
     }
@@ -808,7 +808,7 @@ class MessagesComponent {
 
             el.innerHTML = `
                 ${filterTabs}
-                ${unread && !archived ? `<button class="btn btn-secondary btn-sm btn-block" id="mark-all-read" style="margin-bottom:12px;" data-i18n="messages_section.mark_all_read"></button>` : ''}
+                ${unread && !archived ? `<button class="btn btn-secondary btn-sm btn-block u-mb-5" id="mark-all-read" data-i18n="messages_section.mark_all_read"></button>` : ''}
                 ${[...byCategory.entries()].map(([category, items]) => `
                     <div class="section-title">
                         <span data-i18n="notification_categories.${category}"></span> (${items.length})

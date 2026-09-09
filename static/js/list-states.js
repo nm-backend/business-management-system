@@ -33,8 +33,8 @@ window.listStates = {
         const action = actionHtml || (element.dataset?.emptyAction || '');
         element.innerHTML = `<div class="list-state list-state-empty" role="status">
             <span class="list-state-icon" aria-hidden="true" style="font-size:28px;opacity:.5;display:block;margin-bottom:4px;">—</span>
-            <span style="font-weight:500;">${msg}</span>
-            ${action ? `<div style="margin-top:12px;">${action}</div>` : ''}
+            <span class="u-medium">${msg}</span>
+            ${action ? `<div class="u-mt-5">${action}</div>` : ''}
         </div>`;
     },
     /** Ошибка загрузки: показываем кнопку повтора всегда. */
@@ -45,7 +45,7 @@ window.listStates = {
             ? `<button type="button" class="btn btn-secondary btn-sm list-state-retry" style="margin-top:8px;width:auto;min-width:120px;">${window.ui.t('common.retry')}</button>`
             : '';
         element.innerHTML = `<div class="list-state list-state-error" role="alert">
-            <span style="font-weight:500;">${msg}</span>
+            <span class="u-medium">${msg}</span>
             ${retryBtn}
         </div>`;
         if (retry) {

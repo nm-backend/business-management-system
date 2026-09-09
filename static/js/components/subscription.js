@@ -29,14 +29,14 @@ class SubscriptionUI {
             : '<span class="badge badge-ready" data-i18n="subscription.active"></span>';
 
         const historyRows = (data.history || []).map((ev) => `
-            <div class="list-row" style="cursor:default;">
+            <div class="list-row u-cursor-default">
                 <span class="text-sm">${window.ui.escape(this.eventLabel(ev))}</span>
                 <span class="text-xs text-muted">${window.ui.escape((ev.created_at || '').slice(0, 10))}</span>
             </div>`).join('')
             || '<div class="list-state list-state-empty" data-i18n="common.no_data"></div>';
 
         const planOptions = (data.plans || []).map((p) => `
-            <label class="list-row" style="cursor:pointer;">
+            <label class="list-row u-cursor-pointer">
                 <span>
                     <span class="font-bold">${window.ui.escape(p.label)}</span>
                     ${p.note ? `<span class="text-sm text-muted"> · ${window.ui.escape(p.note)}</span>` : ''}
@@ -48,15 +48,15 @@ class SubscriptionUI {
 
         body.innerHTML = `
             <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:14px;">
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="subscription.plan"></span>
                     <span class="text-sm font-bold">${window.ui.escape(data.plan)} ${statusBadge}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="subscription.expires"></span>
                     <span class="text-sm font-bold">${window.ui.escape((data.expires_at || '').slice(0, 10)) || '—'}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="subscription.days_left_label"></span>
                     <span class="text-sm font-bold">${t('subscription.days_left', { days: data.days_left })}</span>
                 </div>
@@ -64,10 +64,10 @@ class SubscriptionUI {
             ${data.is_blocked ? '<p class="text-sm text-danger" data-i18n="subscription.frozen_hint"></p>' : ''}
             ${pendingInvoice ? `<p class="text-sm" data-i18n="subscription.invoice_pending"></p>` : ''}
             <div class="section-title" data-i18n="subscription.choose_plan"></div>
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">${planOptions}</div>
-            <button class="btn btn-primary btn-block" id="subscription-renew" style="margin-top:14px;" data-i18n="subscription.renew"></button>
+            <div class="list-group u-card-flat-alt">${planOptions}</div>
+            <button class="btn btn-primary btn-block u-mt-14" id="subscription-renew" data-i18n="subscription.renew"></button>
             <div class="section-title" data-i18n="subscription.history"></div>
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);">${historyRows}</div>
+            <div class="list-group u-card-flat-alt">${historyRows}</div>
         `;
         window.i18n.applyTranslations();
 

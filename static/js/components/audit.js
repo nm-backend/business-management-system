@@ -82,17 +82,17 @@ class AuditComponent {
             }
 
             const actionIcons = {
-                login: '🔓', logout: '🔒', create: '➕', update: '✏️',
-                archive: '📦', activate: '✅', deactivate: '⛔',
-                access_key_issued: '🔑', reset_password: '🔄', change_password: '🔐',
-                delete: '🗑️', token_theft_detected: '🚨', access_key_redeemed: '🔓',
+                login: 'lock-open', logout: 'lock', create: 'plus', update: 'edit',
+                archive: 'archive', activate: 'check-circle', deactivate: 'x-circle',
+                access_key_issued: 'key', reset_password: 'refresh-cw', change_password: 'lock',
+                delete: 'trash', token_theft_detected: 'alert-triangle', access_key_redeemed: 'lock-open',
             };
 
             tbody.innerHTML = rows.map((r) => `
                 <tr>
-                    <td style="white-space:nowrap;font-size:11px;">${window.ui.datetime(r.created_at)}</td>
-                    <td><span style="font-size:16px;">${actionIcons[r.action] || '📝'}</span></td>
-                    <td style="font-weight:500;">${window.ui.escape(r.actor_username || 'system')}</td>
+                    <td class="u-tiny-nowrap">${window.ui.datetime(r.created_at)}</td>
+                    <td>${window.icon(actionIcons[r.action] || 'file-text', 16)}</td>
+                    <td class="u-medium">${window.ui.escape(r.actor_username || 'system')}</td>
                     <td><span class="badge badge-new">${window.ui.t('roles.' + r.actor_role) || r.actor_role}</span></td>
                     <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${window.ui.escape(r.object_repr || r.object_type)}</td>
                     <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text-muted);">
@@ -109,7 +109,7 @@ class AuditComponent {
                 pagination.style.display = 'flex';
                 pagination.innerHTML = `
                     <button class="btn btn-sm btn-secondary" ${this.page <= 1 ? 'disabled' : ''} id="audit-prev">← ${window.ui.t('common.previous')}</button>
-                    <span style="padding:8px 12px;font-weight:600;">${this.page} / ${totalPages}</span>
+                    <span class="u-page-ind">${this.page} / ${totalPages}</span>
                     <button class="btn btn-sm btn-secondary" ${this.page >= totalPages ? 'disabled' : ''} id="audit-next">${window.ui.t('common.next')} →</button>
                 `;
                 pagination.querySelector('#audit-prev')?.addEventListener('click', () => { this.page--; this.load(); });

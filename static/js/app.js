@@ -201,16 +201,16 @@ function showSubscriptionBlockedScreen(user) {
     const appElement = document.getElementById('app-content');
     appElement.innerHTML = `
         <div class="card subscription-blocked" style="max-width:520px;margin:24px auto;padding:24px;">
-            <div style="text-align:center;font-size:44px;margin-bottom:8px;">${frozen ? '❄️' : '⏳'}</div>
-            <h2 style="text-align:center;" data-i18n="${titleKey}"></h2>
+            <div style="text-align:center;font-size:44px;margin-bottom:8px;">${frozen ? window.icon('snowflake', 44) : window.icon('hourglass', 44)}</div>
+            <h2 class="u-text-center" data-i18n="${titleKey}"></h2>
             <p class="text-muted" data-i18n="${textKey}"></p>
 
             <div class="list-group" style="box-shadow:none;border:1px solid var(--border);margin:16px 0;">
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="subscription.current_status"></span>
                     <span class="badge ${frozen ? 'badge-progress' : 'badge-cancel'}">${window.ui.escape(user.subscription_status_display || user.subscription_status || '')}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="subscription.end_date"></span>
                     <span class="text-sm font-bold">${window.ui.datetime(user.subscription_end)}</span>
                 </div>
@@ -219,8 +219,8 @@ function showSubscriptionBlockedScreen(user) {
             <div class="section-title" data-i18n="subscription.what_to_do"></div>
             <p class="text-muted" data-i18n="subscription.renew_instructions"></p>
 
-            <button class="btn btn-primary btn-block" id="sub-blocked-request" style="margin-top:16px;" data-i18n="subscription.request_renewal"></button>
-            <button class="btn btn-secondary btn-block" id="sub-blocked-logout" style="margin-top:8px;" data-i18n="auth.logout"></button>
+            <button class="btn btn-primary btn-block u-mt-6" id="sub-blocked-request" data-i18n="subscription.request_renewal"></button>
+            <button class="btn btn-secondary btn-block u-mt-3" id="sub-blocked-logout" data-i18n="auth.logout"></button>
         </div>
     `;
 
@@ -269,10 +269,10 @@ function showGraceBanner(user) {
         : '';
     banner.innerHTML = `
         <span style="display:inline-flex;align-items:center;gap:8px;">
-            ⏳ <strong data-i18n="subscription.grace_title"></strong>
+            ${window.icon('hourglass', 18)} <strong data-i18n="subscription.grace_title"></strong>
             <span class="text-sm text-muted">${deadline ? ' · ' + window.ui.escape(window.ui.t('subscription.grace_deadline')) + ': ' + deadline : ''}</span>
         </span>
-        <button class="btn btn-primary btn-sm" id="grace-banner-go" style="width:auto;">
+        <button class="btn btn-primary btn-sm u-w-auto" id="grace-banner-go">
             <span data-i18n="subscription.request_renewal"></span>
         </button>
     `;
@@ -296,7 +296,7 @@ function onRealtimeMessage(msg) {
     refreshNotificationBadge();
     playNotificationSound();
     sendSWNotification({
-        title: `✉️ ${msg.sender_name || window.ui?.t('notifications.message_default')}`,
+        title: `${msg.sender_name || window.ui?.t('notifications.message_default')}`,
         body: (msg.content || '').slice(0, 120),
         tag: 'chat_message',
         data: { url: '#/messages' },
@@ -305,7 +305,7 @@ function onRealtimeMessage(msg) {
     // сообщение уже вставлено в ленту, тост продублировал бы его.
     const mine = window.currentUser && msg.sender === window.currentUser.id;
     if (!mine && !window.chatSocket.handler) {
-        window.toast.info(`✉️ ${msg.sender_name}: ${(msg.content || '').slice(0, 60)}`);
+        window.toast.info(`${msg.sender_name}: ${(msg.content || '').slice(0, 60)}`);
     }
 }
 
@@ -536,14 +536,14 @@ async function showFrozenScreen(user) {
     const app = document.getElementById('app-content');
     app.innerHTML = `
         <div class="card" id="frozen-screen" style="max-width:420px;margin:6vh auto;text-align:center;padding:28px 24px;">
-            <div style="font-size:44px;line-height:1;">🧊</div>
+            <div style="font-size:44px;line-height:1;">${window.icon('snowflake', 44)}</div>
             <h2 style="margin:12px 0 6px;" data-i18n="subscription.frozen_title"></h2>
             <p class="text-sm text-muted" style="margin-bottom:18px;" data-i18n="subscription.frozen_text"></p>
             ${user.is_owner ? `
                 <button class="btn btn-primary btn-block" id="frozen-renew" data-i18n="subscription.renew"></button>
-                <p class="text-xs text-muted" style="margin-top:10px;" data-i18n="subscription.frozen_hint"></p>` : `
+                <p class="text-xs text-muted u-mt-4" data-i18n="subscription.frozen_hint"></p>` : `
                 <p class="text-sm" data-i18n="subscription.contact_owner"></p>`}
-            <button class="btn btn-secondary btn-block" id="frozen-logout" style="margin-top:14px;" data-i18n="auth.logout"></button>
+            <button class="btn btn-secondary btn-block u-mt-14" id="frozen-logout" data-i18n="auth.logout"></button>
         </div>`;
     window.i18n.applyTranslations();
 

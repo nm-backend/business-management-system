@@ -54,27 +54,27 @@ class WarehouseComponent {
                 <label class="text-sm text-muted" data-i18n="warehouse.warehouse"></label>
                 <select id="warehouse-select" class="form-control"></select>
             </div>
-            <div id="warehouse-cells" style="margin-bottom:10px;"></div>
+            <div id="warehouse-cells" class="u-mb-4"></div>
             <div id="stone-type-tabs" class="tabs" role="tablist" aria-label="Stone type filters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
             <div class="search-box search-box--with-action">
                 <div class="search-field">
-                    <span class="search-icon" aria-hidden="true">🔍</span>
+                    <span class="search-icon" aria-hidden="true">${window.icon('search', 18)}</span>
                     <input type="text" id="material-search" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="warehouse.search">
                 </div>
                 <button class="btn btn-secondary" id="scan-barcode-btn" type="button" data-i18n-attr="aria-label" data-i18n="warehouse.scan_barcode"
-                        style="padding:8px 12px;font-size:18px;">📷</button>
+                        style="padding:8px 12px;font-size:18px;">${window.icon('camera', 20)}</button>
                 <button class="btn btn-secondary" id="warehouse-filter-toggle" type="button" data-i18n="warehouse.filter"></button>
             </div>
             <div class="card" id="warehouse-filter-panel" style="display:none;margin:0 0 10px;">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                    <div class="form-group" style="margin:0;">
+                    <div class="form-group u-m-0">
                         <label class="text-sm text-muted" data-i18n="warehouse.unit"></label>
                         <select id="filter-unit" class="form-control">
                             <option value="" data-i18n="common.all"></option>
                             ${window.ui.unitOptions('')}
                         </select>
                     </div>
-                    <div class="form-group" style="margin:0;">
+                    <div class="form-group u-m-0">
                         <label class="text-sm text-muted" data-i18n="warehouse.condition"></label>
                         <select id="filter-condition" class="form-control">
                             <option value="" data-i18n="common.all"></option>
@@ -82,15 +82,15 @@ class WarehouseComponent {
                                 `<option value="${c}" data-i18n="material_conditions.${c}"></option>`).join('')}
                         </select>
                     </div>
-                    <div class="form-group" style="margin:0;">
+                    <div class="form-group u-m-0">
                         <label class="text-sm text-muted" data-i18n="warehouse.color"></label>
                         <input id="filter-color" class="form-control" data-i18n-attr="placeholder" data-i18n="warehouse.color">
                     </div>
-                    <div class="form-group" style="margin:0;">
+                    <div class="form-group u-m-0">
                         <label class="text-sm text-muted" data-i18n="warehouse.size"></label>
                         <input id="filter-size" class="form-control" data-i18n-attr="placeholder" data-i18n="warehouse.size">
                     </div>
-                    <div class="form-group" style="margin:0;">
+                    <div class="form-group u-m-0">
                         <label class="text-sm text-muted" data-i18n="warehouse.storage_zone"></label>
                         <select id="filter-zone" class="form-control">
                             <option value="" data-i18n="common.all"></option>
@@ -101,11 +101,11 @@ class WarehouseComponent {
                         </select>
                     </div>
                 </div>
-                <button class="btn btn-secondary btn-sm btn-block" id="warehouse-filter-clear"
-                        type="button" style="margin-top:8px;" data-i18n="common.clear_filter"></button>
+                <button class="btn btn-secondary btn-sm btn-block u-mt-3" id="warehouse-filter-clear"
+                        type="button" data-i18n="common.clear_filter"></button>
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;margin-top:10px;" data-i18n="warehouse.add_material"></button>` : ''}
-            ${canEdit ? `<button class="btn btn-success btn-block" id="receipt-doc-btn" style="margin-bottom:12px;" data-i18n="warehouse.receipt_document"></button>` : ''}
+            ${canEdit ? `<button class="btn btn-success btn-block u-mb-5" id="receipt-doc-btn" data-i18n="warehouse.receipt_document"></button>` : ''}
             <div class="list-group" id="materials-list"></div>
         `;
 
@@ -282,7 +282,7 @@ class WarehouseComponent {
                 <div class="text-sm text-muted" data-i18n="${labelKey}"></div>
             </button>`;
         box.innerHTML = `
-            <div class="card-title" style="margin-bottom:6px;"><span data-i18n="warehouse.quick_stats"></span></div>
+            <div class="card-title u-mb-2"><span data-i18n="warehouse.quick_stats"></span></div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
                 ${chip('warehouse.types_count', data.types_count ?? 0)}
                 ${chip('warehouse.materials_count', data.materials_count ?? 0)}
@@ -294,7 +294,7 @@ class WarehouseComponent {
                 ${chip('warehouse.in_reserve', stats?.reserved_count ?? 0)}
             </div>
             ${today ? `
-                <div class="text-sm text-muted" style="margin-top:8px;">
+                <div class="text-sm text-muted u-mt-3">
                     <span data-i18n="warehouse.today_summary"></span>:
                     <span class="text-success">+${window.ui.qty(today.incoming)}</span>
                     <span data-i18n="warehouse.today_incoming"></span> ·
@@ -349,13 +349,13 @@ class WarehouseComponent {
                 <div class="scanner-box" id="scanner-box" style="position:relative;width:100%;max-width:280px;height:200px;margin:0 auto 15px;background:#0f172a;border-radius:12px;overflow:hidden;display:flex;align-items:center;justify-content:center;border:2px solid var(--primary);">
                     <video id="scanner-video" playsinline muted style="display:none;"></video>
                     <div style="position:absolute;top:0;left:0;right:0;bottom:0;border:2px dashed rgba(255,255,255,0.4);margin:20px;border-radius:8px;pointer-events:none;"></div>
-                    <span id="scanner-placeholder" style="font-size:32px;">📷</span>
+                    <span id="scanner-placeholder" style="font-size:32px;">${window.icon('camera', 32)}</span>
                 </div>
                 <p class="text-sm text-muted" data-i18n="warehouse.scan_hint"></p>
                 <p class="text-sm scanner-status" id="scanner-status"></p>
                 <div style="display:flex;gap:10px;justify-content:center;margin-top:15px;">
-                    <button class="btn btn-secondary btn-sm" type="button" id="scanner-torch">🔦 <span data-i18n="warehouse.flashlight"></span></button>
-                    <button class="btn btn-secondary btn-sm" type="button" id="scanner-gallery">🖼️ <span data-i18n="warehouse.gallery"></span></button>
+                    <button class="btn btn-secondary btn-sm" type="button" id="scanner-torch">${window.icon('zap', 16)} <span data-i18n="warehouse.flashlight"></span></button>
+                    <button class="btn btn-secondary btn-sm" type="button" id="scanner-gallery">${window.icon('image', 16)} <span data-i18n="warehouse.gallery"></span></button>
                 </div>
                 <input type="file" id="scanner-file" accept="image/*" style="display:none;">
                 <form id="scanner-manual" style="display:flex;gap:8px;margin-top:14px;">
@@ -564,11 +564,11 @@ class WarehouseComponent {
             const data = await window.api.request(`/warehouse/warehouses/${warehouseId}/occupancy/`);
             if (!data.cells || !data.cells.length) { wrap.innerHTML = ''; return; }
             wrap.innerHTML = `
-                <div class="card" style="margin:0;">
-                    <div class="card-title" style="margin-bottom:6px;">
+                <div class="card u-m-0">
+                    <div class="card-title u-mb-2">
                         <span data-i18n="warehouse.cells_map"></span>
                     </div>
-                    <div class="text-sm text-muted" style="margin-bottom:8px;">
+                    <div class="text-sm text-muted u-mb-3">
                         <span data-i18n="warehouse.total_area"></span>: ${window.ui.qty(data.total_area)} m²
                         · <span data-i18n="warehouse.occupied"></span>: ${data.occupancy_percent}%
                         · <span data-i18n="warehouse.free"></span>: ${data.free_percent}%
@@ -646,15 +646,15 @@ class WarehouseComponent {
     renderRow(m) {
         return `
             <div class="list-row" role="button" tabindex="0" data-id="${m.id}">
-                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-                    <div class="thumb">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML='🪨'">` : '🪨'}</div>
-                    <div style="min-width:0;">
-                        <div style="font-size:14px;font-weight:600;">${window.ui.escape(m.name)}</div>
+                <div class="u-row">
+                    <div class="thumb">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML=window.icon('layers', 36)">` : window.icon('layers', 36)}</div>
+                    <div class="u-minw-0">
+                        <div class="u-title-sm">${window.ui.escape(m.name)}</div>
                         <div class="text-sm text-muted">${window.ui.escape([m.stone_type, m.size].filter(Boolean).join(' · ') || '-')}</div>
                     </div>
                 </div>
-                <div style="text-align:right;flex-shrink:0;">
-                    <div style="font-size:15px;font-weight:600;" class="${m.is_low_stock ? 'text-danger' : ''}">
+                <div class="u-text-right u-shrink-0">
+                    <div class="${m.is_low_stock ? 'text-danger' : ''} u-title-md">
                         ${window.ui.qty(m.quantity)} <span data-i18n="units.${m.unit}"></span>
                     </div>
                     ${this.severityLabel(m)}
@@ -695,12 +695,12 @@ class WarehouseComponent {
         
         const modal = window.ui.modal('warehouse.title', `
             ${m.photo ? `<div style="margin:-20px -20px 14px;border-radius:12px;overflow:hidden;height:180px;background:var(--bg-secondary);">
-                <img src="${window.ui.escape(m.photo)}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;font-size:48px;\'>🪨</div>'">
+                <img src="${window.ui.escape(m.photo)}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;font-size:48px;\'>' + window.icon('layers', 48) + '</div>'">
             </div>` : ''}
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-                <div class="thumb" style="width:56px;height:56px;">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML='🪨'">` : '🪨'}</div>
+            <div class="u-row u-mb-14">
+                <div class="thumb u-thumb-lg">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML=window.icon('layers', 36)">` : window.icon('layers', 36)}</div>
                 <div style="flex:1;min-width:0;">
-                    <div style="font-weight:600;font-size:16px;">${window.ui.escape(m.name)}</div>
+                    <div class="u-title-lg">${window.ui.escape(m.name)}</div>
                     <div class="text-sm text-muted">${window.ui.escape(m.stone_type || '')} · ${window.ui.escape(m.color || '')}</div>
                 </div>
                 ${statusBadge}
@@ -711,21 +711,21 @@ class WarehouseComponent {
                     <div class="text-sm text-muted" data-i18n="warehouse.total_stock"></div>
                     <div style="font-weight:700;font-size:18px;${lowStock ? 'color:var(--danger-color);' : ''}">${window.ui.qty(totalQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
-                <div class="card" style="margin:0;padding:10px;">
+                <div class="card u-card-compact">
                     <div class="text-sm text-muted" data-i18n="warehouse.min_stock"></div>
                     <div style="font-weight:700;font-size:18px;">${window.ui.qty(minStock)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
-                <div class="card" style="margin:0;padding:10px;">
+                <div class="card u-card-compact">
                     <div class="text-sm text-muted" data-i18n="warehouse.reserved"></div>
                     <div style="font-weight:700;font-size:18px;">${window.ui.qty(reservedQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
-                <div class="card" style="margin:0;padding:10px;">
+                <div class="card u-card-compact">
                     <div class="text-sm text-muted" data-i18n="warehouse.available"></div>
                     <div style="font-weight:700;font-size:18px;color:var(--success-color);">${window.ui.qty(availableQty)} <span data-i18n="units.${m.unit}"></span></div>
                 </div>
             </div>
             <!-- Характеристики -->
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+            <div class="list-group u-card-flat">
                 ${this.detailRow('warehouse.barcode', m.barcode)}
                 ${this.detailRow('warehouse.size', m.size)}
                 ${this.detailRow('warehouse.thickness', m.thickness)}
@@ -754,9 +754,9 @@ class WarehouseComponent {
                 <!-- Возврат («Қайтарилган») отдельной кнопкой: раньше его
                      проводили обычным приходом и в истории он был неотличим
                      от новой поставки. -->
-                <button class="btn btn-secondary btn-sm btn-block" id="return-material"
-                        style="margin-top:8px;" data-i18n="warehouse.return_material"></button>
-                <button class="btn btn-secondary btn-sm btn-block" id="archive-material" style="margin-top:8px;" data-i18n="common.archive"></button>` 
+                <button class="btn btn-secondary btn-sm btn-block u-mt-3" id="return-material"
+                        data-i18n="warehouse.return_material"></button>
+                <button class="btn btn-secondary btn-sm btn-block u-mt-3" id="archive-material" data-i18n="common.archive"></button>` 
                 : (canEdit ? `
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
                     <button class="btn btn-secondary btn-sm" id="edit-material" data-i18n="common.edit"></button>
@@ -820,7 +820,7 @@ class WarehouseComponent {
             const rows = response.results || response;
 
             const tabs = `
-                <div class="tabs" style="margin-bottom:10px;">
+                <div class="tabs u-mb-4">
                     ${[['', 'warehouse.history_all'],
                        ['incoming', 'warehouse.history_incoming'],
                        ['outgoing', 'warehouse.history_outgoing'],
@@ -829,7 +829,7 @@ class WarehouseComponent {
                                 data-history-tab="${value}" data-i18n="${key}"></button>`).join('')}
                 </div>`;
             const totalsBlock = totals ? `
-                <div class="card" style="margin-top:10px;">
+                <div class="card u-mt-4">
                     <div class="text-sm">
                         <span data-i18n="warehouse.total_incoming"></span>:
                         <span class="text-success">+${window.ui.qty(totals.incoming)}</span>
@@ -859,9 +859,9 @@ class WarehouseComponent {
             const sign = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? '−' : '+');
             const colour = (type) => (['outgoing', 'production_out', 'loss'].includes(type) ? 'text-danger' : 'text-success');
             listEl.innerHTML = tabs + rows.map((r) => `
-                <div class="list-row" style="cursor:default;">
-                    <div style="min-width:0;">
-                        <div style="font-size:14px;font-weight:600;">
+                <div class="list-row u-cursor-default">
+                    <div class="u-minw-0">
+                        <div class="u-title-sm">
                             ${window.ui.escape(r.material_name || r.product_name || '-')}
                         </div>
                         <div class="text-sm text-muted">
@@ -872,8 +872,8 @@ class WarehouseComponent {
                             ${r.related_order_id ? ` · ${window.ui.escape(window.ui.t('warehouse.outgoing_order'))} #${r.related_order_id}` : ''}
                         </div>
                     </div>
-                    <div style="text-align:right;flex-shrink:0;">
-                        <div style="font-size:15px;font-weight:600;" class="${colour(r.movement_type)}">
+                    <div class="u-text-right u-shrink-0">
+                        <div class="${colour(r.movement_type)} u-title-md">
                             ${sign(r.movement_type)}${window.ui.qty(r.quantity)}
                             ${r.unit ? `<span data-i18n="units.${r.unit}"></span>` : ''}
                         </div>
@@ -889,9 +889,9 @@ class WarehouseComponent {
     detailRow(labelKey, value, danger = false) {
         if (!value) return '';
         return `
-            <div class="list-row" style="cursor:default;">
+            <div class="list-row u-cursor-default">
                 <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
-                <span class="text-sm font-bold ${danger ? 'text-danger' : ''}" style="text-align:right;">${window.ui.escape(String(value))}</span>
+                <span class="text-sm font-bold ${danger ? 'text-danger' : ''} u-text-right">${window.ui.escape(String(value))}</span>
             </div>`;
     }
 
@@ -904,7 +904,7 @@ class WarehouseComponent {
                     <input name="name" class="form-control" required value="${window.ui.escape(m?.name || '')}"></div>
                 <div class="form-group"><label data-i18n="warehouse.stone_type"></label>
                     <input name="stone_type" class="form-control" value="${window.ui.escape(m?.stone_type || '')}"></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="warehouse.color"></label>
                         <input name="color" class="form-control" value="${window.ui.escape(m?.color || '')}"></div>
                     <div class="form-group"><label data-i18n="warehouse.size"></label>
@@ -920,7 +920,7 @@ class WarehouseComponent {
                     <div class="form-group"><label data-i18n="warehouse.min_stock"></label>
                         <input name="min_stock" type="number" step="0.001" min="0" class="form-control" value="${m?.min_stock ?? 0}"></div>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="warehouse.barcode"></label>
                         <input name="barcode" class="form-control" value="${window.ui.escape(m?.barcode || '')}"></div>
                     <div class="form-group"><label data-i18n="warehouse.storage_zone"></label>
@@ -937,7 +937,7 @@ class WarehouseComponent {
                 <!-- Размещение и состояние партии (макеты «Асосий омбор» и
                      «Хом ашё омбори»): раньше место было только текстом, а
                      треснувшая плита выглядела как обычный остаток. -->
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="warehouse.warehouse"></label>
                         <select name="warehouse" class="form-control" id="material-warehouse">
                             <option value="" data-i18n="common.select"></option>
@@ -1050,7 +1050,7 @@ class WarehouseComponent {
         const isOwner = window.currentUser.is_owner;
         const today = new Date().toISOString().slice(0, 10);
         const modal = window.ui.modal('warehouse.incoming', `
-            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(m.name)}</p>
+            <p class="u-mb-5 u-strong">${window.ui.escape(m.name)}</p>
             <form id="income-form">
                 <div class="form-group"><label data-i18n="warehouse.quantity"></label>
                     <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
@@ -1097,7 +1097,7 @@ class WarehouseComponent {
     openOutgoingForm(m) {
         const today = new Date().toISOString().slice(0, 10);
         const modal = window.ui.modal('warehouse.outgoing', `
-            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(m.name)}</p>
+            <p class="u-mb-5 u-strong">${window.ui.escape(m.name)}</p>
             <form id="outgoing-form">
                 <div class="form-group"><label data-i18n="warehouse.quantity"></label>
                     <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required
@@ -1196,7 +1196,7 @@ class WarehouseComponent {
                        placeholder="${window.ui.t('warehouse.quantity')}">
                 ${isOwner ? `<input name="price_per_unit" type="number" step="0.01" min="0" class="form-control"
                        placeholder="${window.ui.t('warehouse.purchase_price')}">` : ''}
-                <button type="button" class="icon-btn receipt-line-remove" aria-label="${window.ui.t('common.delete')}">🗑️</button>
+                <button type="button" class="icon-btn receipt-line-remove" aria-label="${window.ui.t('common.delete')}">${window.icon('trash', 16)}</button>
             </div>`;
 
         const modal = window.ui.modal('warehouse.receipt_document', `
@@ -1209,8 +1209,8 @@ class WarehouseComponent {
                     <input name="receipt_date" type="date" class="form-control" value="${today}" max="${today}"></div>
                 <div class="form-group"><label data-i18n="warehouse.receipt_lines"></label>
                     <div id="receipt-lines">${lineRow()}</div>
-                    <button type="button" class="btn btn-secondary btn-sm btn-block" id="add-line"
-                            style="margin-top:6px;" data-i18n="warehouse.add_material_line"></button>
+                    <button type="button" class="btn btn-secondary btn-sm btn-block u-mt-2" id="add-line"
+                            data-i18n="warehouse.add_material_line"></button>
                 </div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
                     <input name="comment" class="form-control"></div>
@@ -1277,7 +1277,7 @@ class WarehouseComponent {
     openReturnForm(m) {
         const today = new Date().toISOString().slice(0, 10);
         const modal = window.ui.modal('warehouse.return_material', `
-            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(m.name)}</p>
+            <p class="u-mb-5 u-strong">${window.ui.escape(m.name)}</p>
             <form id="return-form">
                 <div class="form-group"><label data-i18n="warehouse.quantity"></label>
                     <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
