@@ -508,7 +508,14 @@
         "month": "Ай",
         "quarter": "Чейрек",
         "year": "Жыл",
-        "custom": "Өз мезгили"
+        "custom": "Өз мезгили",
+        "date_from": "Башталыш күнү",
+        "date_to": "Аяктоо күнү",
+        "apply": "Колдонуу",
+        "custom_both_required": "Эки күндү тең тандаңыз",
+        "custom_invalid": "Күн форматы туура эмес",
+        "custom_order": "Башталыш күнү аяктоо күнүнөн кийин болбошу керек",
+        "selected_range": "Тандалган мезгил"
     },
     "messages_section": {
         "title": "Кабарлар",

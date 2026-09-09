@@ -83,9 +83,38 @@ class DashboardComponent {
         `;
     }
 
+    analyticsQuery() {
+        return window.ui.reportPeriodQuery({
+            period: this.period || 'month',
+            dateFrom: this.dateFrom,
+            dateTo: this.dateTo,
+        });
+    }
+
     async renderOwner(container) {
         const period = this.period || 'month';
-        const data = await window.api.request(`/reports/analytics/owner/?period=${period}`);
+        const built = this.analyticsQuery();
+        let data = null;
+        if (!(period === 'custom' && built.error)) {
+            data = await window.api.request(`/reports/analytics/owner/?${built.query}`);
+        }
+
+        const rangeText = data
+            ? window.ui.reportPeriodRangeText(data.date_from, data.date_to)
+            : '';
+        const empty = {
+            revenue: 0,
+            net_profit: 0,
+            cash: 0,
+            low_stock_count: 0,
+            client_debts: 0,
+            deltas: {},
+            stock: { low_stock_materials: 0 },
+            top_products: [],
+            most_active_worker: null,
+            expenses_by_category: {},
+        };
+        const view = data || empty;
 
         container.innerHTML = `
             <div class="page-hero">
@@ -94,54 +123,56 @@ class DashboardComponent {
                     <h2 data-i18n="dashboard.owner_overview"></h2>
                 </div>
                 <div class="tabs" role="tablist" aria-label="Dashboard period">
-                    ${['today', 'week', 'month', 'quarter', 'year'].map((p) => `<button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>`).join('')}
+                    ${['today', 'week', 'month', 'quarter', 'year', 'custom'].map((p) => `<button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>`).join('')}
                 </div>
             </div>
+            ${window.ui.customPeriodPanelHtml(this.dateFrom, this.dateTo, period === 'custom')}
 
             <div class="stat-grid">
-                ${window.ui.statCard({ icon: window.icon('trending-up', 18), color: 'green', titleKey: 'dashboard.revenue', value: window.ui.money(data.revenue), delta: data.deltas?.revenue })}
-                ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'purple', titleKey: 'dashboard.net_profit', value: window.ui.money(data.net_profit), delta: data.deltas?.net_profit, valueClass: data.net_profit < 0 ? 'text-danger' : '' })}
-                ${window.ui.statCard({ icon: window.icon('wallet', 18), color: 'blue', titleKey: 'dashboard.cash_balance', value: window.ui.money(data.cash), id: 'cash-card' })}
-                ${window.ui.statCard({ icon: window.icon('alert-triangle', 18), color: 'orange', titleKey: 'dashboard.low_stock_count', value: data.low_stock_count || 0 })}
-                ${window.ui.statCard({ icon: window.icon('users', 18), color: 'red', titleKey: 'finance.client_debts', value: window.ui.money(data.client_debts), valueClass: data.client_debts > 0 ? 'text-danger' : '', id: 'client-debts-card' })}
+                ${window.ui.statCard({ icon: window.icon('trending-up', 18), color: 'green', titleKey: 'dashboard.revenue', value: window.ui.money(view.revenue), delta: view.deltas?.revenue })}
+                ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'purple', titleKey: 'dashboard.net_profit', value: window.ui.money(view.net_profit), delta: view.deltas?.net_profit, valueClass: view.net_profit < 0 ? 'text-danger' : '' })}
+                ${window.ui.statCard({ icon: window.icon('wallet', 18), color: 'blue', titleKey: 'dashboard.cash_balance', value: window.ui.money(view.cash), id: 'cash-card' })}
+                ${window.ui.statCard({ icon: window.icon('alert-triangle', 18), color: 'orange', titleKey: 'dashboard.low_stock_count', value: view.low_stock_count || 0 })}
+                ${window.ui.statCard({ icon: window.icon('users', 18), color: 'red', titleKey: 'finance.client_debts', value: window.ui.money(view.client_debts), valueClass: view.client_debts > 0 ? 'text-danger' : '', id: 'client-debts-card' })}
             </div>
 
-            ${data.stock.low_stock_materials > 0 ? `
+            ${view.stock.low_stock_materials > 0 ? `
                 <a class="alert-box alert-box-warning" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
-                    <span>${window.icon('alert-triangle', 16)} <span data-i18n="warehouse.low_stock_warning"></span> (${data.stock.low_stock_materials})</span>
+                    <span>${window.icon('alert-triangle', 16)} <span data-i18n="warehouse.low_stock_warning"></span> (${view.stock.low_stock_materials})</span>
                     <span>›</span>
                 </a>` : ''}
 
             <div class="card-grid">
                 <div class="card card-minimal">
                     <div class="card-title" data-i18n="finance.expenses"></div>
-                    ${window.ui.donutChart(this.expenseSegments(data), { centerLabel: window.ui.t('finance.expenses') })}
+                    ${window.ui.donutChart(this.expenseSegments(view), { centerLabel: window.ui.t('finance.expenses') })}
                 </div>
                 <div class="card card-minimal">
                     <div class="card-title" data-i18n="finance.top_selling"></div>
-                    ${data.top_products.length ? `
+                    ${view.top_products.length ? `
                         <div class="list-group list-group-compact">
-                            ${data.top_products.slice(0, 3).map((p) => `
+                            ${view.top_products.slice(0, 3).map((p) => `
                                 <div class="list-row" style="cursor:default;">
                                     <span>${window.ui.escape(p.name)}</span>
                                     <span class="font-bold">${window.ui.qty(p.total_quantity)}</span>
                                 </div>`).join('')}
                         </div>` : `<div class="list-state list-state-empty" data-i18n="common.no_data"></div>`}
-                    ${data.most_active_worker ? `
+                    ${view.most_active_worker ? `
                         <div class="section-title" data-i18n="finance.most_active_worker"></div>
                         <div class="list-row" style="cursor:default; justify-content: space-between;">
-                            <span>${window.ui.escape(data.most_active_worker.name || data.most_active_worker.username)}</span>
-                            ${this.workerOutput(data.most_active_worker)}
+                            <span>${window.ui.escape(view.most_active_worker.name || view.most_active_worker.username)}</span>
+                            ${this.workerOutput(view.most_active_worker)}
                         </div>` : ''}
                 </div>
             </div>
         `;
 
-        container.querySelectorAll('[data-period]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                this.period = btn.dataset.period;
-                this.renderOwner(container).then(() => window.i18n.applyTranslations());
-            });
+        const labelEl = container.querySelector('#period-range-label');
+        if (labelEl && rangeText) {
+            labelEl.textContent = `${window.ui.t('periods.selected_range')}: ${rangeText}`;
+        }
+        window.ui.bindReportPeriodControls(container, this, () => {
+            this.renderOwner(container).then(() => window.i18n.applyTranslations());
         });
         const cashCard = container.querySelector('#cash-card');
         if (cashCard) cashCard.addEventListener('click', () => window.router.navigate('/finance'));
@@ -150,7 +181,7 @@ class DashboardComponent {
 
         // Лента операций кассы
         this.renderCashFeed(container);
-        this.renderRevenueChart(container, data);
+        if (data) this.renderRevenueChart(container, data);
     }
 
     /** Лента операций кассы (для владельца) */

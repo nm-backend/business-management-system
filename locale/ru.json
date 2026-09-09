@@ -508,7 +508,14 @@
         "month": "Месяц",
         "quarter": "Квартал",
         "year": "Год",
-        "custom": "Свой период"
+        "custom": "Свой период",
+        "date_from": "Дата начала",
+        "date_to": "Дата окончания",
+        "apply": "Применить",
+        "custom_both_required": "Укажите обе даты",
+        "custom_invalid": "Некорректный формат даты",
+        "custom_order": "Дата начала не может быть позже даты окончания",
+        "selected_range": "Выбранный период"
     },
     "messages_section": {
         "title": "Сообщения",
