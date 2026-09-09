@@ -279,6 +279,23 @@ STORAGES = {
 MEDIA_URL = config('MEDIA_URL', default='/media/')  # URL для медиа файлов
 MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директория для медиа файлов
 
+# ── Защищённая раздача /media/ (см. apps/core/media_views.py) ──
+# /media/ отдаётся ТОЛЬКО через serve_protected_media — после аутентификации
+# и проверки принадлежности файла компании пользователя. Прямая раздача
+# каталога веб-сервером запрещена: это вернёт дыру (чужие чеки/аттачменты
+# по прямой ссылке). Правильная схема за reverse-proxy:
+#   location /media/           { proxy_pass http://django; }  # проверки — здесь
+#   location /protected-media/ { internal; alias /app/media/; }  # только байты
+# и PROTECTED_MEDIA_ACCEL_LOCATION=/protected-media/ — тогда Django отвечает
+# пустым 200 с X-Accel-Redirect, а байты отдаёт nginx, не Python.
+PROTECTED_MEDIA_ACCEL_LOCATION = config(
+    'PROTECTED_MEDIA_ACCEL_LOCATION', default='',
+)
+# Apache + mod_xsendfile: отдать байты через заголовок X-Sendfile.
+PROTECTED_MEDIA_SENDFILE = config(
+    'PROTECTED_MEDIA_SENDFILE', default=False, cast=bool,
+)
+
 # Максимальный размер загружаемого файла: 10 МБ
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB

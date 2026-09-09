@@ -65,6 +65,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.classList.add('authenticated');
     setupSidebar(user);
 
+    // Защищённые /media/: <img>/<a> заголовок Authorization не ставят,
+    // поэтому secureMedia подменяет их на blob-URL, загруженные с JWT.
+    if (window.secureMedia) window.secureMedia.init();
+
     // Платформенный супер-администратор управляет платформой (компании, подписки, аудит).
     // Бизнес-данные (заказы, склад, производство, клиенты, финансы) ему недоступны.
     if (user.is_superadmin) {

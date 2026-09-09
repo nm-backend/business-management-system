@@ -1,12 +1,24 @@
 # SkladPro — демо Android APK (WebView)
 
+> **Какой проект основной.** В `mobile/` два Android-проекта:
+> - **`mobile/app` (Java) — основной.** Именно он включён в корневую сборку
+>   (`mobile/settings.gradle` → `include ':app'`); команды ниже относятся к нему.
+> - **`mobile/android-demo/` (Kotlin) — отдельный standalone-проект** со своим
+>   `settings.gradle`, в корневую сборку НЕ входит. Это параллельный вариант
+>   той же WebView-обёртки (другие имя строкового ресурса — `site_url`, язык
+>   строк и детали); собирается только из своей папки. Если сомневаетесь,
+>   работайте с `mobile/app`.
+
 Минимальная нативная обёртка: WebView открывает сайт SkladPro. Обрабатывает
 Back, offline/ошибки сети (экран с «Повторить»), splash-экран, иконку, загрузку
 файлов (аватар), переживает поворот экрана.
 
 ## Почему WebView (а не Capacitor / TWA)
-- **TWA** требует, чтобы сайт был PWA (manifest + service worker + HTTPS-домен +
-  Digital Asset Links). Сейчас сайт — серверный SPA без PWA и без HTTPS-домена → блокер.
+- **TWA** требует полноценного PWA (manifest + service worker + HTTPS-домен +
+  Digital Asset Links + installability-критерии). У сайта PWA-заготовка ЕСТЬ:
+  `static/manifest.json` и `static/sw.js` (кэш + уведомления, scope `/`),
+  но нет HTTPS-домена и Digital Asset Links, а installability-критерии
+  (маскируемые PNG-иконки 192/512, push-обработчик) не закрыты → блокер.
 - **Capacitor** тянет Node-цепочку и всё равно грузит удалённый URL (backend live).
 - **WebView** — ноль внешних зависимостей (даже без androidx), полный контроль над
   Back/offline/ошибками. Оптимально для «демо, открывающего мой сайт».
@@ -18,7 +30,11 @@ Back, offline/ошибки сети (экран с «Повторить»), spla
 
 ## Сборка (одна команда)
 Нужны: JDK 17 и Android SDK (platform android-36, build-tools 36.0.0).
-`local.properties` уже указывает на SDK.
+Создайте `mobile/local.properties` с путём к SDK (файл локальный, в репозитории
+его нет):
+```properties
+sdk.dir=/path/to/Android/Sdk
+```
 
 ```bash
 # из папки mobile/

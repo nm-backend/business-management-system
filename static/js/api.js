@@ -250,6 +250,11 @@ class APIClient {
             clearInterval(window.notificationBadgeTimer);
             window.notificationBadgeTimer = null;
         }
+        // Сбрасываем кэш защищённых медиа: blob-URL прошлого пользователя
+        // не должны пережить выход (следующий вход — scan() заново).
+        if (window.secureMedia && typeof window.secureMedia.reset === 'function') {
+            window.secureMedia.reset();
+        }
         window.location.href = '/accounts/login/';
     }
 
