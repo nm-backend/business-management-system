@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Склад сырья: список с поиском, низкие остатки красным,
  * добавление/редактирование (owner/admin), закупочные цены видит только owner.
  */
@@ -6,6 +6,11 @@ class WarehouseComponent {
     async render(container) {
         document.getElementById('page-title').setAttribute('data-i18n', 'warehouse.title');
         this.search = '';
+        this.filters = {
+            unit: '', condition: '', color: '', size: '', storage_zone: '', stock_severity: '',
+        };
+        this.stoneTypeFilter = '';
+        this.warehouseFilter = '';
         const user = window.currentUser;
         const canEdit = user.is_owner || user.is_admin;
 
@@ -25,6 +30,7 @@ class WarehouseComponent {
             </div>
             <div class="tabs" id="warehouse-subtabs" role="tablist" aria-label="Warehouse filters">
                 <button class="tab-btn active" role="tab" aria-selected="true" data-wtab="active" data-i18n="common.active"></button>
+                <button class="tab-btn" role="tab" aria-selected="false" data-wtab="low" data-i18n="warehouse.min_leftovers"></button>
                 ${user.is_owner ? `<button class="tab-btn" role="tab" aria-selected="false" data-wtab="archive" data-i18n="common.archive"></button>` : ''}
                 ${canEdit ? `<button class="tab-btn" role="tab" aria-selected="false" data-wtab="history" data-i18n="warehouse.stock_movement"></button>` : ''}
             </div>
@@ -57,6 +63,46 @@ class WarehouseComponent {
                 </div>
                 <button class="btn btn-secondary" id="scan-barcode-btn" type="button" data-i18n-attr="aria-label" data-i18n="warehouse.scan_barcode"
                         style="padding:8px 12px;font-size:18px;">📷</button>
+                <button class="btn btn-secondary" id="warehouse-filter-toggle" type="button" data-i18n="warehouse.filter"></button>
+            </div>
+            <div class="card" id="warehouse-filter-panel" style="display:none;margin:0 0 10px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <div class="form-group" style="margin:0;">
+                        <label class="text-sm text-muted" data-i18n="warehouse.unit"></label>
+                        <select id="filter-unit" class="form-control">
+                            <option value="" data-i18n="common.all"></option>
+                            ${window.ui.unitOptions('')}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="text-sm text-muted" data-i18n="warehouse.condition"></label>
+                        <select id="filter-condition" class="form-control">
+                            <option value="" data-i18n="common.all"></option>
+                            ${['excellent', 'good', 'poor', 'critical'].map((c) =>
+                                `<option value="${c}" data-i18n="material_conditions.${c}"></option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="text-sm text-muted" data-i18n="warehouse.color"></label>
+                        <input id="filter-color" class="form-control" data-i18n-attr="placeholder" data-i18n="warehouse.color">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="text-sm text-muted" data-i18n="warehouse.size"></label>
+                        <input id="filter-size" class="form-control" data-i18n-attr="placeholder" data-i18n="warehouse.size">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="text-sm text-muted" data-i18n="warehouse.storage_zone"></label>
+                        <select id="filter-zone" class="form-control">
+                            <option value="" data-i18n="common.all"></option>
+                            <option value="a" data-i18n="warehouse.zone_a"></option>
+                            <option value="b" data-i18n="warehouse.zone_b"></option>
+                            <option value="c" data-i18n="warehouse.zone_c"></option>
+                            <option value="other" data-i18n="warehouse.zone_other"></option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-sm btn-block" id="warehouse-filter-clear"
+                        type="button" style="margin-top:8px;" data-i18n="common.clear_filter"></button>
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;margin-top:10px;" data-i18n="warehouse.add_material"></button>` : ''}
             ${canEdit ? `<button class="btn btn-success btn-block" id="receipt-doc-btn" style="margin-bottom:12px;" data-i18n="warehouse.receipt_document"></button>` : ''}
@@ -85,9 +131,8 @@ class WarehouseComponent {
             container.querySelector('#tab-materials')?.setAttribute('aria-selected', 'true');
             container.querySelector('#tab-products')?.setAttribute('aria-selected', 'false');
             this.tab = 'active';
-            container.querySelector('.search-box').style.display = '';
-            const addBtn = container.querySelector('#add-material-btn');
-            if (addBtn) addBtn.style.display = '';
+            this.filters.stock_severity = '';
+            this.setListChrome(container);
             this.loadMaterials();
         };
         container.querySelector('#tab-materials').addEventListener('click', () => showMaterials());
@@ -100,13 +145,10 @@ class WarehouseComponent {
                     b.setAttribute('aria-selected', active ? 'true' : 'false');
                 });
                 this.tab = btn.dataset.wtab;
-                setMaterialsTabActive(this.tab === 'active');
-                // Поиск и «добавить» относятся к списку материалов, в истории они лишние.
-                const isHistory = this.tab === 'history';
-                container.querySelector('.search-box').style.display = isHistory ? 'none' : '';
-                const addBtn = container.querySelector('#add-material-btn');
-                if (addBtn) addBtn.style.display = isHistory || this.tab === 'archive' ? 'none' : '';
-                if (isHistory) this.loadHistory();
+                if (this.tab === 'active' || this.tab === 'low') this.filters.stock_severity = '';
+                setMaterialsTabActive(this.tab === 'active' || this.tab === 'low');
+                this.setListChrome(container);
+                if (this.tab === 'history') this.loadHistory();
                 else this.loadMaterials();
             });
         });
@@ -116,6 +158,36 @@ class WarehouseComponent {
             this.search = searchInput.value;
             this.loadMaterials();
         }, 300));
+
+        const filterToggle = container.querySelector('#warehouse-filter-toggle');
+        const filterPanel = container.querySelector('#warehouse-filter-panel');
+        if (filterToggle && filterPanel) {
+            filterToggle.addEventListener('click', () => {
+                filterPanel.style.display = filterPanel.style.display === 'none' ? '' : 'none';
+            });
+        }
+        const applyFilters = () => {
+            this.filters.unit = container.querySelector('#filter-unit')?.value || '';
+            this.filters.condition = container.querySelector('#filter-condition')?.value || '';
+            this.filters.color = (container.querySelector('#filter-color')?.value || '').trim();
+            this.filters.size = (container.querySelector('#filter-size')?.value || '').trim();
+            this.filters.storage_zone = container.querySelector('#filter-zone')?.value || '';
+            this.loadMaterials();
+        };
+        ['#filter-unit', '#filter-condition', '#filter-zone'].forEach((sel) => {
+            container.querySelector(sel)?.addEventListener('change', applyFilters);
+        });
+        ['#filter-color', '#filter-size'].forEach((sel) => {
+            container.querySelector(sel)?.addEventListener('input', window.ui.debounce(applyFilters, 300));
+        });
+        container.querySelector('#warehouse-filter-clear')?.addEventListener('click', () => {
+            this.filters = {
+                unit: '', condition: '', color: '', size: '', storage_zone: '', stock_severity: '',
+            };
+            ['#filter-unit', '#filter-condition', '#filter-zone', '#filter-color', '#filter-size']
+                .forEach((sel) => { const el = container.querySelector(sel); if (el) el.value = ''; });
+            this.loadMaterials();
+        });
 
         if (canEdit) {
             container.querySelector('#add-material-btn').addEventListener('click', () => this.openForm());
@@ -127,13 +199,31 @@ class WarehouseComponent {
             scanBtn.addEventListener('click', () => this.openBarcodeScanner());
         }
 
-        this.stoneTypeFilter = '';
-        this.warehouseFilter = '';
         window.i18n.applyTranslations();
         await this.loadWarehouses();
         await this.loadStoneTypes();
         await this.loadMaterials();
         this.loadSummary();
+    }
+
+    /**
+     * Поиск и фильтр относятся к списку материалов; в истории движений они лишние.
+     */
+    setListChrome(container) {
+        const isHistory = this.tab === 'history';
+        const isArchive = this.tab === 'archive';
+        const search = container.querySelector('.search-box');
+        if (search) search.style.display = isHistory ? 'none' : '';
+        const filterToggle = container.querySelector('#warehouse-filter-toggle');
+        if (filterToggle) filterToggle.style.display = isHistory ? 'none' : '';
+        const filterPanel = container.querySelector('#warehouse-filter-panel');
+        if (filterPanel && isHistory) filterPanel.style.display = 'none';
+        const addBtn = container.querySelector('#add-material-btn');
+        if (addBtn) addBtn.style.display = (isHistory || isArchive) ? 'none' : '';
+        const receiptBtn = container.querySelector('#receipt-doc-btn');
+        if (receiptBtn) receiptBtn.style.display = (isHistory || isArchive) ? 'none' : '';
+        const stoneTabs = container.querySelector('#stone-type-tabs');
+        if (stoneTabs) stoneTabs.style.display = isHistory ? 'none' : 'flex';
     }
 
     /** Итоговые показатели склада: остатки по единицам и стоимость (для owner). */
@@ -184,11 +274,13 @@ class WarehouseComponent {
         const stats = data.quick_stats;
         const today = data.today;
         if (!stats && !today) { box.style.display = 'none'; return; }
-        const chip = (labelKey, value, cls = '') => `
-            <div style="flex:1 1 100px;text-align:center;">
+        const chip = (labelKey, value, cls = '', severity = '') => `
+            <button type="button" data-severity-filter="${severity}"
+                    style="flex:1 1 100px;text-align:center;border:none;background:none;padding:0;
+                           cursor:${severity ? 'pointer' : 'default'};">
                 <div class="font-bold ${cls}">${window.ui.escape(String(value))}</div>
                 <div class="text-sm text-muted" data-i18n="${labelKey}"></div>
-            </div>`;
+            </button>`;
         box.innerHTML = `
             <div class="card-title" style="margin-bottom:6px;"><span data-i18n="warehouse.quick_stats"></span></div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
@@ -196,8 +288,8 @@ class WarehouseComponent {
                 ${chip('warehouse.materials_count', data.materials_count ?? 0)}
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                ${chip('warehouse.at_minimum', stats?.low_stock_count ?? 0, 'text-warning')}
-                ${chip('warehouse.critical_low', stats?.critical_count ?? 0, 'text-danger')}
+                ${chip('warehouse.at_minimum', stats?.low_stock_count ?? 0, 'text-warning', 'low')}
+                ${chip('warehouse.critical_low', stats?.critical_count ?? 0, 'text-danger', 'critical')}
                 ${chip('warehouse.recent_arrivals', stats?.recent_arrivals_count ?? 0)}
                 ${chip('warehouse.in_reserve', stats?.reserved_count ?? 0)}
             </div>
@@ -210,7 +302,32 @@ class WarehouseComponent {
                     <span data-i18n="warehouse.today_outgoing"></span>
                 </div>` : ''}`;
         box.style.display = '';
+        box.querySelectorAll('[data-severity-filter]').forEach((el) => {
+            const severity = el.dataset.severityFilter;
+            if (!severity) return;
+            el.addEventListener('click', () => this.applySeverityFilter(severity));
+        });
         window.i18n.applyTranslations();
+    }
+
+    /**
+     * Чипы «на минимуме» / «критично» открывают список с той же градацией,
+     * что считает шапка (stock_severity).
+     */
+    applySeverityFilter(severity) {
+        this.tab = 'active';
+        this.filters.stock_severity = severity;
+        const root = document.getElementById('app-content')
+            || document.getElementById('materials-list')?.parentElement;
+        if (root) {
+            root.querySelectorAll('[data-wtab]').forEach((b) => {
+                const active = b.dataset.wtab === 'active';
+                b.classList.toggle('active', active);
+                b.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            this.setListChrome(root);
+        }
+        this.loadMaterials();
     }
 
     /**
@@ -484,11 +601,19 @@ class WarehouseComponent {
             if (this.search) query += `&search=${encodeURIComponent(this.search)}`;
             // Фильтр «Қайси омбор» из макета.
             if (this.warehouseFilter) query += `&warehouse=${encodeURIComponent(this.warehouseFilter)}`;
-            const response = await window.api.request(`/warehouse/raw-materials/${query}`);
-            let materials = response.results || [];
-            if (this.stoneTypeFilter) {
-                materials = materials.filter(m => m.stone_type === this.stoneTypeFilter);
+            // Вид камня — серверный фильтр: отбор текущей страницы врал бы
+            // начиная со второй (тот же класс, что у вкладок истории).
+            if (this.stoneTypeFilter) query += `&stone_type=${encodeURIComponent(this.stoneTypeFilter)}`;
+            if (this.tab === 'low') query += '&stock_severity=below_min';
+            else if (this.filters && this.filters.stock_severity) {
+                query += `&stock_severity=${encodeURIComponent(this.filters.stock_severity)}`;
             }
+            const filters = this.filters || {};
+            ['unit', 'condition', 'color', 'size', 'storage_zone'].forEach((key) => {
+                if (filters[key]) query += `&${key}=${encodeURIComponent(filters[key])}`;
+            });
+            const response = await window.api.request(`/warehouse/raw-materials/${query}`);
+            const materials = response.results || [];
 
             if (!materials.length) {
                 const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
@@ -607,10 +732,16 @@ class WarehouseComponent {
                 ${this.detailRow('warehouse.color', m.color)}
                 ${this.detailRow('warehouse.storage_zone', m.storage_zone_display)}
                 ${this.detailRow('warehouse.storage_location', m.storage_location)}
+                ${this.detailRow('warehouse.warehouse', m.warehouse_name)}
+                ${this.detailRow('warehouse.cell', m.cell_code)}
+                ${this.detailRow('warehouse.condition', m.condition ? window.ui.t('material_conditions.' + m.condition) : '')}
                 ${this.detailRow('warehouse.supplier', m.supplier)}
                 ${this.detailRow('warehouse.arrival_date', m.arrival_date ? window.ui.date(m.arrival_date) : '')}
                 ${user.is_owner ? this.detailRow('warehouse.purchase_price', window.ui.money(m.purchase_price)) : ''}
                 ${user.is_owner ? this.detailRow('warehouse.avg_cost', window.ui.money(m.avg_cost_price)) : ''}
+                ${user.is_owner && m.avg_cost_price != null && m.avg_cost_price !== ''
+                    ? this.detailRow('warehouse.summary_value', window.ui.money(Number(m.quantity || 0) * Number(m.avg_cost_price || 0)))
+                    : ''}
                 ${this.detailRow('warehouse.comment', m.comment)}
             </div>
             <!-- Кнопки действий по макету -->
@@ -737,6 +868,8 @@ class WarehouseComponent {
                             ${window.ui.escape(window.ui.t('movement_types.' + r.movement_type))}
                             · ${window.ui.datetime(r.created_at)}
                             ${r.created_by_name ? ` · ${window.ui.escape(r.created_by_name)}` : ''}
+                            ${r.document_number ? ` · ${window.ui.escape(r.document_number)}` : ''}
+                            ${r.related_order_id ? ` · ${window.ui.escape(window.ui.t('warehouse.outgoing_order'))} #${r.related_order_id}` : ''}
                         </div>
                     </div>
                     <div style="text-align:right;flex-shrink:0;">

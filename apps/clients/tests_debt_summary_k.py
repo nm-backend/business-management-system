@@ -94,3 +94,14 @@ class ClientDebtSummaryTests(TestCase):
 
     def test_anonymous_unauthorized(self):
         self.assertEqual(APIClient().get(URL).status_code, 401)
+
+    def test_overdue_buckets_present(self):
+        """Панель «Қарз назорати» рисует бакеты из этого payload."""
+        response = self.client.get(URL)
+        self.assertEqual(response.status_code, 200)
+        buckets = response.data['buckets']
+        for name in ('not_due', 'overdue_1_7', 'overdue_8_14', 'overdue_15_plus'):
+            self.assertIn(name, buckets)
+            self.assertIn('count', buckets[name])
+            self.assertIn('total', buckets[name])
+            self.assertIn('orders', buckets[name])

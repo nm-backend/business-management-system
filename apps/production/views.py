@@ -487,10 +487,35 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         )
         total = confirmed.aggregate(total=Sum('labor_cost'))['total'] or 0
         from apps.finance.models import WorkerPayment
+        from django.utils import timezone
         paid = WorkerPayment.objects.filter(worker=request.user).aggregate(total=Sum('amount'))['total'] or 0
+        # Разрез «этот / прошлый месяц» и свои выплаты — макет «Менинг иш ҳақим».
+        # Список /finance/worker-payments/ работнику закрыт (только владелец),
+        # поэтому выплаты отдаём здесь, строго по request.user.
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+        if month_start.month == 1:
+            last_start = month_start.replace(year=month_start.year - 1, month=12)
+        else:
+            last_start = month_start.replace(month=month_start.month - 1)
+        this_month = confirmed.filter(
+            confirmed_at__date__gte=month_start,
+        ).aggregate(total=Sum('labor_cost'))['total'] or 0
+        last_month = confirmed.filter(
+            confirmed_at__date__gte=last_start,
+            confirmed_at__date__lt=month_start,
+        ).aggregate(total=Sum('labor_cost'))['total'] or 0
+        payments = list(
+            WorkerPayment.objects.filter(worker=request.user)
+            .order_by('-payment_date', '-id')
+            .values('id', 'amount', 'payment_type', 'payment_date')[:20]
+        )
         return Response({
             'total_earned': total,
             'paid_out': paid,
             'remaining': total - paid,
             'confirmed_count': confirmed.count(),
+            'this_month': this_month,
+            'last_month': last_month,
+            'payments': payments,
         })

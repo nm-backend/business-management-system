@@ -180,6 +180,112 @@ window.ui = {
         return `<span class="badge ${map[status] || 'badge-new'}" data-i18n="work_statuses.${status}"></span>`;
     },
 
+    /**
+     * Произвольный период отчёта (ТЗ §18, макет «хусусий»).
+     *
+     * Фронт НЕ считает границы today/week/month: только собирает query.
+     * Источник истины — backend `date_from` / `date_to` / `period`.
+     * period=custom на сервер не отправляем: неизвестный пресет там
+     * молча становится «месяц».
+     */
+    isIsoDate(value) {
+        if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const [year, month, day] = value.split('-').map(Number);
+        const utc = new Date(Date.UTC(year, month - 1, day));
+        return utc.getUTCFullYear() === year
+            && utc.getUTCMonth() === month - 1
+            && utc.getUTCDate() === day;
+    },
+
+    reportPeriodError(dateFrom, dateTo) {
+        const from = String(dateFrom || '').trim();
+        const to = String(dateTo || '').trim();
+        if (!from || !to) return 'periods.custom_both_required';
+        if (!this.isIsoDate(from) || !this.isIsoDate(to)) return 'periods.custom_invalid';
+        if (from > to) return 'periods.custom_order';
+        return null;
+    },
+
+    reportPeriodQuery(state) {
+        const period = (state && state.period) || 'month';
+        if (period === 'custom') {
+            const dateFrom = String((state && state.dateFrom) || '').trim();
+            const dateTo = String((state && state.dateTo) || '').trim();
+            const error = this.reportPeriodError(dateFrom, dateTo);
+            if (error) return { query: '', error };
+            return {
+                query: `date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`,
+                error: null,
+            };
+        }
+        const allowed = ['today', 'yesterday', 'week', 'month', 'quarter', 'year'];
+        const safe = allowed.includes(period) ? period : 'month';
+        return { query: `period=${encodeURIComponent(safe)}`, error: null };
+    },
+
+    /** Календарная дата без сдвига timezone (YYYY-MM-DD → ДД.ММ.ГГГГ). */
+    formatIsoDate(value) {
+        const raw = String(value || '').slice(0, 10);
+        if (!this.isIsoDate(raw)) return '';
+        return `${raw.slice(8, 10)}.${raw.slice(5, 7)}.${raw.slice(0, 4)}`;
+    },
+
+    reportPeriodRangeText(dateFrom, dateTo) {
+        const from = this.formatIsoDate(dateFrom);
+        const to = this.formatIsoDate(dateTo);
+        if (!from || !to) return '';
+        return `${from} – ${to}`;
+    },
+
+    bindReportPeriodControls(root, component, reload) {
+        if (!root || !component) return;
+        root.querySelectorAll('[data-period]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const next = btn.dataset.period;
+                component.period = next;
+                if (next !== 'custom') {
+                    component.dateFrom = '';
+                    component.dateTo = '';
+                }
+                reload();
+            });
+        });
+        const apply = root.querySelector('#period-apply');
+        if (!apply) return;
+        apply.addEventListener('click', () => {
+            component.dateFrom = (root.querySelector('#period-date-from') || {}).value || '';
+            component.dateTo = (root.querySelector('#period-date-to') || {}).value || '';
+            const built = this.reportPeriodQuery(component);
+            if (built.error) {
+                window.toast.error(this.t(built.error));
+                return;
+            }
+            reload();
+        });
+    },
+
+    customPeriodPanelHtml(dateFrom, dateTo, visible) {
+        const display = visible ? '' : 'none';
+        return `
+            <div id="custom-period-panel" style="display:${display};margin:8px 0 10px;">
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;">
+                    <div class="form-group" style="margin:0;min-width:140px;flex:1;">
+                        <label class="text-sm text-muted" data-i18n="periods.date_from"></label>
+                        <input type="date" id="period-date-from" class="form-control"
+                               value="${this.escape(dateFrom || '')}">
+                    </div>
+                    <div class="form-group" style="margin:0;min-width:140px;flex:1;">
+                        <label class="text-sm text-muted" data-i18n="periods.date_to"></label>
+                        <input type="date" id="period-date-to" class="form-control"
+                               value="${this.escape(dateTo || '')}">
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" id="period-apply"
+                            data-i18n="periods.apply"></button>
+                </div>
+            </div>
+            <div id="period-range-label" class="text-sm text-muted" style="margin-bottom:10px;"></div>`;
+    },
+
     /** Человекочитаемый текст первой ошибки из ответа DRF. */
     errorText(error) {
         const data = error?.data || {};

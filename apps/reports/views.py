@@ -56,6 +56,9 @@ def _parse_period(request):
     """
     Parse report period from query params.
     Priority: quarter → date_from/date_to → period preset.
+
+    Custom range (ТЗ §18 / макет «хусусий»): оба параметра обязательны.
+    Границы считает только сервер; фронт не подставляет today/week сам.
     """
     from django.utils import timezone
     today = timezone.localdate()
@@ -69,7 +72,14 @@ def _parse_period(request):
             year = parse_int_param(request.query_params['year'], 'year')
         return _quarter_bounds(year, quarter)
 
-    from django.utils import timezone
+    raw_from = request.query_params.get('date_from')
+    raw_to = request.query_params.get('date_to')
+    # Пара пришла неполной: один конец без другого — не подставляем
+    # «текущий месяц» молча, иначе custom-фильтр врёт.
+    if bool(raw_from) ^ bool(raw_to):
+        missing = 'date_to' if raw_from else 'date_from'
+        raise ValidationError({missing: 'Both date_from and date_to are required.'})
+
     current_quarter = (today.month - 1) // 3 + 1
     quarter_start, _ = _quarter_bounds(today.year, current_quarter)
     presets = {
@@ -82,10 +92,10 @@ def _parse_period(request):
     }
     period = request.query_params.get('period', 'month')
     date_from, date_to = presets.get(period, presets['month'])
-    if request.query_params.get('date_from'):
-        date_from = parse_date_param(request.query_params['date_from'], 'date_from')
-    if request.query_params.get('date_to'):
-        date_to = parse_date_param(request.query_params['date_to'], 'date_to')
+    if raw_from:
+        date_from = parse_date_param(raw_from, 'date_from')
+    if raw_to:
+        date_to = parse_date_param(raw_to, 'date_to')
     if date_from > date_to:
         raise ValidationError({
             'date_from': 'Start date is after end date.',

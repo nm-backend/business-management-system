@@ -32,7 +32,13 @@
         "access_key_admin_hint": "Кириш кодини администратор ёки раҳбарингиздан олинг",
         "trust_secure": "Маълумотларингиз ҳимояланган",
         "trust_support": "Киришда муаммо бўлса, администраторга мурожаат қилинг",
-        "login_with_key": "Кириш калити билан кириш"
+        "login_with_key": "Кириш калити билан кириш",
+        "show_password": "Паролни кўрсатиш",
+        "hide_password": "Паролни яшириш",
+        "signing_in": "Кирилмоқда…",
+        "or_divider": "ёки",
+        "language": "Тил",
+        "set_password_hint": "Камида 8 та белги"
     },
     "setup": {
         "title": "Тизимни созлаш",
@@ -120,6 +126,7 @@
         "admin_greeting": "Хуш келибсиз, Админ!",
         "today_indicators": "Бугунги кўрсаткичлар",
         "submitted_today": "Бугун ишга топширилган",
+        "worker_unread": "Ишчилар мулоқазалари",
         "worker_feedback": "Ишчилар мулоҳазалари",
         "worker_greeting": "Ассалому алайкум!",
         "active_employees": "Фаол ходимлар",
@@ -170,6 +177,7 @@
         "stock_movement": "Омбор ҳаракати",
         "low_stock_warning": "Материал етарли эмас",
         "filter": "Фильтр",
+        "min_leftovers": "Минимум қолдиқлар",
         "search": "Қидириш",
         "scan_no_camera": "Камера мавжуд эмас — рухсат беринг ёки кодни қўлда киритинг",
         "scan_no_detector": "Бу браузер кодларни танимайди — кодни қўлда киритинг",
@@ -410,7 +418,13 @@
         "added_date": "Қўшилган сана",
         "active_orders": "Фаол заказлар",
         "open_all_orders": "Барча буюртмалар",
-        "has_debt": "Қарзи бор"
+        "has_debt": "Қарзи бор",
+        "new": "Янги",
+        "overdue_control": "Қарз назорати",
+        "overdue_1_7": "1–7 кун",
+        "overdue_8_14": "8–14 кун",
+        "overdue_15_plus": "15+ кун",
+        "not_due": "Муддати бор"
     },
     "finance": {
         "title": "Молиявий таҳлил",
@@ -451,7 +465,8 @@
         "open_finance": "Финансларга ўтиш",
         "quarterly": "Чорак",
         "quarter_label": "{quarter}-чорак {year}",
-        "profitability": "Рентабеллик"
+        "profitability": "Рентабеллик",
+        "client_payment": "Мижоз тўлови"
     },
     "payment_types": {
         "salary": "Иш ҳақи",
@@ -493,7 +508,14 @@
         "month": "Ой",
         "quarter": "Чорак",
         "year": "Йил",
-        "custom": "Мустақил давр"
+        "custom": "Мустақил давр",
+        "date_from": "Бошланиш санаси",
+        "date_to": "Тугаш санаси",
+        "apply": "Қўллаш",
+        "custom_both_required": "Иккала санани ҳам танланг",
+        "custom_invalid": "Сана формати нотўғри",
+        "custom_order": "Бошланиш санаси тугаш санасидан кейин бўлмаслиги керак",
+        "selected_range": "Танланган давр"
     },
     "messages_section": {
         "title": "Хабарлар",
@@ -936,7 +958,9 @@
         "paid_out": "Тўланган",
         "remaining": "Қолган",
         "payment_history": "Тўловлар тарихи",
-        "material_check": "Материал қолдиқлари"
+        "material_check": "Материал қолдиқлари",
+        "this_month": "Бу ой",
+        "last_month": "Ўтган ой"
     },
     "chat": {
         "title": "Чат",

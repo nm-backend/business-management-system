@@ -34,6 +34,32 @@ from .services import (
 from apps.core.views import CompanyScopedViewSet
 
 
+def _available_expression():
+    """Доступный остаток: quantity − required_for_orders (как у RawMaterial)."""
+    return ExpressionWrapper(
+        F('quantity') - F('required_for_orders'),
+        output_field=DecimalField(max_digits=15, decimal_places=3),
+    )
+
+
+def _half_min_expression():
+    """Половина минимума — порог «критично» у RawMaterial.stock_severity."""
+    return ExpressionWrapper(
+        F('min_stock') / Value(Decimal('2')),
+        output_field=DecimalField(max_digits=15, decimal_places=3),
+    )
+
+
+def _critical_q():
+    """Те же правила, что у RawMaterial.stock_severity == 'critical'."""
+    return Q(_available__lte=0) | (Q(min_stock__gt=0) & Q(_available__lt=F('_half_min')))
+
+
+def _low_band_q():
+    """stock_severity == 'low': не выше минимума, но ещё не critical."""
+    return Q(_available__lte=F('min_stock')) & ~_critical_q()
+
+
 class StockOperationsMixin:
     """
     Приход и архивация — общие операции склада сырья и готовой продукции.
@@ -419,7 +445,12 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'stone_type', 'color', 'supplier', 'barcode']
     # Фильтр «Қайси омбор» из макета: остатки конкретного склада и ячейки.
-    filterset_fields = ['is_archived', 'unit', 'storage_zone', 'warehouse', 'cell']
+    # Тур / ҳолат / бирлик — точные поля панели фильтра; цвет и размер —
+    # icontains в get_queryset (иначе «бел» не находил «Белый»).
+    filterset_fields = [
+        'is_archived', 'unit', 'storage_zone', 'warehouse', 'cell',
+        'stone_type', 'condition',
+    ]
     ordering_fields = ['name', 'quantity', 'created_at']
 
     def get_permissions(self):
@@ -586,6 +617,37 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
         # Работать с архивной записью (в т.ч. вернуть её) тоже может владелец.
         if not self.request.user.is_owner:
             qs = qs.filter(is_archived=False)
+
+        params = self.request.query_params
+        color = params.get('color')
+        if color:
+            qs = qs.filter(color__icontains=color)
+        size = params.get('size')
+        if size:
+            qs = qs.filter(size__icontains=size)
+
+        # Панель фильтра и экран «Минимум қолдиқлар»: градация считается
+        # тем же SQL, что и summary.quick_stats / RawMaterial.stock_severity.
+        # Неизвестное значение не игнорируем — иначе вкладка выглядела бы
+        # рабочей, а показывала бы весь склад.
+        severity = params.get('stock_severity')
+        if severity:
+            known = {'critical', 'low', 'below_min', 'ok'}
+            if severity not in known:
+                return qs.none()
+            qs = qs.annotate(
+                _available=_available_expression(),
+                _half_min=_half_min_expression(),
+            )
+            if severity == 'critical':
+                qs = qs.filter(_critical_q())
+            elif severity == 'low':
+                qs = qs.filter(_low_band_q())
+            elif severity == 'below_min':
+                # is_low_stock: всё, что не выше минимума, включая критичное.
+                qs = qs.filter(Q(_available__lte=F('min_stock')))
+            else:
+                qs = qs.exclude(Q(_available__lte=F('min_stock')))
         return qs
 
     def get_serializer_class(self):

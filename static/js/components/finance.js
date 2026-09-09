@@ -138,33 +138,62 @@ class FinanceComponent {
         return this.container ? this.container.querySelector('#finance-content') : null;
     }
 
-    async loadAnalytics() {
-        const el = this.contentEl;
-        if (!el) return;
-        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
-        // больше нет, рисовать некуда.
-        if (window.listStates.gone(el)) return;
-        window.listStates.loading(el, window.ui.t('common.loading'));
+    analyticsQuery() {
+        return window.ui.reportPeriodQuery({
+            period: this.period || 'month',
+            dateFrom: this.dateFrom,
+            dateTo: this.dateTo,
+        });
+    }
+
+    bindPeriodControls(root) {
+        window.ui.bindReportPeriodControls(root, this, () => this.loadAnalytics());
+    }
+
+    bindExportButtons(root) {
+        const startDownload = (format) => {
+            const built = this.analyticsQuery();
+            if (built.error) {
+                window.toast.error(window.ui.t(built.error));
+                return;
+            }
+            const extra = format === 'pdf' ? '&format=pdf' : '';
+            const name = format === 'pdf' ? 'finance-report.pdf' : 'finance-report.xlsx';
+            this.download(`/reports/export/finance/?${built.query}${extra}`, name);
+        };
+        const xlsx = root.querySelector('#export-xlsx');
+        const pdf = root.querySelector('#export-pdf');
+        if (xlsx) {
+            xlsx.addEventListener('click', (e) => {
+                e.preventDefault();
+                startDownload('xlsx');
+            });
+        }
+        if (pdf) {
+            pdf.addEventListener('click', (e) => {
+                e.preventDefault();
+                startDownload('pdf');
+            });
+        }
+    }
+
+    paintAnalytics(el, data) {
         const period = this.period || 'month';
-        try {
-            const data = await window.api.request(`/reports/analytics/owner/?period=${period}`);
-            const periods = ['today', 'yesterday', 'week', 'month', 'quarter', 'year'];
-            const row = (labelKey, value, cls = '') => `
+        const periods = ['today', 'yesterday', 'week', 'month', 'quarter', 'year', 'custom'];
+        const rangeText = data
+            ? window.ui.reportPeriodRangeText(data.date_from, data.date_to)
+            : '';
+        const row = (labelKey, value, cls = '') => `
                 <div class="list-row" style="cursor:default;">
                     <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
                     <span class="text-sm font-bold ${cls}">${window.ui.money(value)}</span>
                 </div>`;
-
-            const metricCard = (labelKey, value, color = 'blue') => `
+        const metricCard = (labelKey, value, color = 'blue') => `
                 <div class="metric-card ${color}">
                     <div class="metric-title" data-i18n="${labelKey}"></div>
                     <div class="metric-value">${window.ui.money(value)}</div>
                 </div>`;
-
-            el.innerHTML = `
-                <div class="tabs" role="tablist" aria-label="Finance analytics period">
-                    ${periods.map((p) => `<button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>`).join('')}
-                </div>
+        const body = data ? `
                 <div class="metrics-grid">
                     ${metricCard('finance.revenue', data.revenue, 'blue')}
                     ${metricCard('finance.cost_of_goods', data.cost_of_goods, 'yellow')}
@@ -187,28 +216,45 @@ class FinanceComponent {
                         ${row('finance.client_debts', data.client_debts, data.client_debts > 0 ? 'text-danger' : '')}
                         ${row('finance.worker_debts', data.worker_debts)}
                     </div>
+                </div>` : `<div class="card list-state" data-i18n="periods.custom_both_required"></div>`;
+
+        el.innerHTML = `
+                <div class="tabs" role="tablist" aria-label="Finance analytics period">
+                    ${periods.map((p) => `<button class="tab-btn ${p === period ? 'active' : ''}" data-period="${p}" data-i18n="periods.${p}"></button>`).join('')}
                 </div>
+                ${window.ui.customPeriodPanelHtml(this.dateFrom, this.dateTo, period === 'custom')}
+                ${body}
                 <div class="section-title" data-i18n="settings.export"></div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <a class="btn btn-secondary btn-sm" href="#" id="export-xlsx">📊 Excel</a>
                     <a class="btn btn-secondary btn-sm" href="#" id="export-pdf">📄 PDF</a>
                 </div>`;
+        const labelEl = el.querySelector('#period-range-label');
+        if (labelEl && rangeText) {
+            labelEl.textContent = `${window.ui.t('periods.selected_range')}: ${rangeText}`;
+        }
+        this.bindPeriodControls(el);
+        this.bindExportButtons(el);
+        window.i18n.applyTranslations();
+    }
 
-            el.querySelectorAll('[data-period]').forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    this.period = btn.dataset.period;
-                    this.loadAnalytics();
-                });
-            });
-            el.querySelector('#export-xlsx').addEventListener('click', (e) => {
-                e.preventDefault();
-                this.download(`/reports/export/finance/?period=${period}`, 'finance-report.xlsx');
-            });
-            el.querySelector('#export-pdf').addEventListener('click', (e) => {
-                e.preventDefault();
-                this.download(`/reports/export/finance/?period=${period}&format=pdf`, 'finance-report.pdf');
-            });
-            window.i18n.applyTranslations();
+    async loadAnalytics() {
+        const el = this.contentEl;
+        if (!el) return;
+        // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
+        // больше нет, рисовать некуда.
+        if (window.listStates.gone(el)) return;
+        const period = this.period || 'month';
+        const built = this.analyticsQuery();
+        if (period === 'custom' && built.error) {
+            this.paintAnalytics(el, null);
+            return;
+        }
+        window.listStates.loading(el, window.ui.t('common.loading'));
+        try {
+            const data = await window.api.request(`/reports/analytics/owner/?${built.query}`);
+            if (window.listStates.gone(el)) return;
+            this.paintAnalytics(el, data);
         } catch (e) {
             window.listStates.error(el, window.ui.t('common.error'), () => this.loadAnalytics());
         }

@@ -32,7 +32,13 @@
         "access_key_admin_hint": "Получите код доступа у администратора или руководителя",
         "trust_secure": "Ваши данные защищены",
         "trust_support": "Проблемы со входом? Обратитесь к администратору",
-        "login_with_key": "Войти по ключу доступа"
+        "login_with_key": "Войти по ключу доступа",
+        "show_password": "Показать пароль",
+        "hide_password": "Скрыть пароль",
+        "signing_in": "Входим…",
+        "or_divider": "или",
+        "language": "Язык",
+        "set_password_hint": "Не менее 8 символов"
     },
     "setup": {
         "title": "Настройка системы",
@@ -120,6 +126,7 @@
         "admin_greeting": "Добро пожаловать, Админ!",
         "today_indicators": "Показатели за сегодня",
         "submitted_today": "Сдано сегодня",
+        "worker_unread": "Сообщения работников",
         "worker_feedback": "Отзывы работников",
         "worker_greeting": "Здравствуйте!",
         "active_employees": "Активные сотрудники",
@@ -170,6 +177,7 @@
         "stock_movement": "Движение склада",
         "low_stock_warning": "Материала недостаточно",
         "filter": "Фильтр",
+        "min_leftovers": "Минимальные остатки",
         "search": "Поиск",
         "scan_no_camera": "Камера недоступна — разрешите доступ или введите код вручную",
         "scan_no_detector": "Этот браузер не распознаёт коды — введите код вручную",
@@ -410,7 +418,13 @@
         "added_date": "Дата добавления",
         "active_orders": "Активные заказы",
         "open_all_orders": "Все заказы",
-        "has_debt": "С долгом"
+        "has_debt": "С долгом",
+        "new": "Новые",
+        "overdue_control": "Контроль долгов",
+        "overdue_1_7": "1–7 дней",
+        "overdue_8_14": "8–14 дней",
+        "overdue_15_plus": "15+ дней",
+        "not_due": "Срок не вышел"
     },
     "finance": {
         "title": "Финансовая аналитика",
@@ -451,7 +465,8 @@
         "open_finance": "Перейти в финансы",
         "quarterly": "Квартал",
         "quarter_label": "{quarter} квартал {year}",
-        "profitability": "Рентабельность"
+        "profitability": "Рентабельность",
+        "client_payment": "Оплата клиента"
     },
     "payment_types": {
         "salary": "Зарплата",
@@ -493,7 +508,14 @@
         "month": "Месяц",
         "quarter": "Квартал",
         "year": "Год",
-        "custom": "Свой период"
+        "custom": "Свой период",
+        "date_from": "Дата начала",
+        "date_to": "Дата окончания",
+        "apply": "Применить",
+        "custom_both_required": "Укажите обе даты",
+        "custom_invalid": "Некорректный формат даты",
+        "custom_order": "Дата начала не может быть позже даты окончания",
+        "selected_range": "Выбранный период"
     },
     "messages_section": {
         "title": "Сообщения",
@@ -936,7 +958,9 @@
         "paid_out": "Выплачено",
         "remaining": "Остаток",
         "payment_history": "История выплат",
-        "material_check": "Остатки материалов"
+        "material_check": "Остатки материалов",
+        "this_month": "Этот месяц",
+        "last_month": "Прошлый месяц"
     },
     "chat": {
         "title": "Чат",

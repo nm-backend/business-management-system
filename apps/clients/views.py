@@ -4,10 +4,12 @@ Views for clients API.
 Клиенты доступны владельцу и администратору (работник клиентов не видит).
 Оплаты - только владельцу; создание оплаты обновляет заказ и долг клиента.
 """
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import (DecimalField, Exists, ExpressionWrapper, F, Q,
                               OuterRef, Subquery, Sum, Value)
+from django.utils import timezone
 from django.db.models.functions import Coalesce
 from django.db import transaction
 from rest_framework import filters
@@ -127,6 +129,15 @@ class ClientViewSet(CompanyScopedViewSet):
                 queryset.filter(condition)
                 if is_active_client.lower() == 'true'
                 else queryset.exclude(condition)
+            )
+
+        # Вкладка «Янги» из макета «Мижозлар»: клиенты, заведённые за
+        # последние 7 дней. Критерий на сервере — иначе вторая страница
+        # списка «новых» содержала бы кого попало.
+        is_new = self.request.query_params.get('is_new')
+        if is_new is not None and is_new.lower() == 'true':
+            queryset = queryset.filter(
+                created_at__gte=timezone.now() - timedelta(days=7),
             )
 
         search = self.request.query_params.get('search')

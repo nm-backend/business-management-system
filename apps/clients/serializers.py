@@ -21,11 +21,14 @@ from .models import Client, Payment
 class PaymentSerializer(serializers.ModelSerializer):
     """Сериализатор оплаты клиента."""
     received_by_name = serializers.CharField(source='received_by.username', read_only=True)
+    # Имя клиента нужно ленте кассы владельца: список /payments/ иначе
+    # показывал бы только id, и операцию нельзя было бы узнать без второго запроса.
+    client_name = serializers.CharField(source='client.name', read_only=True)
 
     class Meta:
         model = Payment
         fields = [
-            'id', 'client', 'order', 'amount', 'payment_method',
+            'id', 'client', 'client_name', 'order', 'amount', 'payment_method',
             'comment', 'received_by', 'received_by_name', 'payment_date',
             'created_at',
         ]
