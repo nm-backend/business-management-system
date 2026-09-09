@@ -49,7 +49,6 @@ class SuperAdminIsolationTests(TestCase):
             '/api/v1/companies/',
             '/api/v1/companies/stats/',
             '/api/v1/companies/plans/',
-            '/api/v1/billing/subscriptions/',
             '/api/v1/accounts/me/',
         ):
             resp = self.api.get(url)

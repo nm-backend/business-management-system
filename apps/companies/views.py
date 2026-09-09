@@ -74,7 +74,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         )
         queryset = (
             Company.objects.all()
-            .select_related('plan', 'subscription')
+            .select_related('plan')
             .annotate(
                 users_count=Count('users', distinct=True),
                 clients_count=Count('clients', distinct=True),

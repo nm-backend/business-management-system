@@ -17,7 +17,7 @@ from django.utils.html import format_html, format_html_join
 from apps.accounts.access_keys import issue_access_key
 from apps.accounts.models import AccessKey, Skill, User
 from apps.core.admin_utils import badge, choice_badge
-from .models import Company
+from .models import Company, SubscriptionChange, SubscriptionPlan
 from .subscriptions import activate_for_new_company
 
 KEY_STATUS_COLORS = {'active': 'green', 'used': 'gray', 'revoked': 'red', 'expired': 'amber'}
@@ -366,3 +366,32 @@ class CompanyAdmin(admin.ModelAdmin):
     @admin.action(description='Разблокировать компании (и их пользователей)')
     def unblock_companies(self, request, queryset):
         self._set_active(request, queryset, True)
+
+
+@admin.register(SubscriptionPlan)
+class SubscriptionPlanAdmin(admin.ModelAdmin):
+    """Каталог тарифов: название, длительность, цена, лимиты."""
+
+    list_display = ('name', 'code', 'duration_days', 'price', 'is_active', 'is_default', 'sort_order')
+    list_filter = ('is_active', 'is_default')
+    search_fields = ('name', 'code')
+    ordering = ('sort_order', 'name')
+
+
+@admin.register(SubscriptionChange)
+class SubscriptionChangeAdmin(admin.ModelAdmin):
+    """История подписок (только чтение): пишет её серверный код."""
+
+    list_display = ('company', 'action', 'old_status', 'new_status', 'new_end', 'actor', 'created_at')
+    list_filter = ('action',)
+    search_fields = ('company__name',)
+    date_hierarchy = 'created_at'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

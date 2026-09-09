@@ -10,7 +10,6 @@ WHITELIST_PREFIXES = (
     '/api/v1/accounts/access-key/',
     '/api/v1/accounts/push/',
     '/api/v1/companies/my-subscription',
-    '/api/v1/billing/',
     '/api/v1/core/',
     '/api/v1/schema/',
     '/api/v1/swagger/',
@@ -35,14 +34,7 @@ def _is_blocked(company):
     Он уже учитывает льготный период (GRACE): active со сроком в прошлом
     отдаёт grace (пока grace не вышел) или expired (когда вышел) — то есть
     «серая зона» между истечением срока и прогоном Celery обрабатывается
-    корректно и без отдельного billing-запроса.
-
-    Прежний fallback по billing.Subscription.is_blocked блокировал компанию в
-    ЛЬГОТНОМ ПЕРИОДЕ: у billing-модели нет понятия grace, и is_blocked =
-    `status != active or now >= expires_at` давал True на любой просроченной
-    подписке, даже когда grace ещё идёт. Воспроизведено: компания в GRACE
-    получала 403 subscription_expired от middleware, хотя бизнес обязан
-    продолжать работать до конца льготного периода.
+    корректно: grace даёт доступ, пока льготный период не вышел.
     """
     if company is None:
         return False, None, None

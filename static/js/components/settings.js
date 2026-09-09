@@ -264,10 +264,14 @@ class SettingsComponent {
         const badge = this.container.querySelector('#subscription-badge');
         if (!badge) return;
         try {
-            const data = await window.api.request('/billing/subscription/');
-            if (data.is_blocked) {
+            const data = await window.api.request('/companies/my-subscription/');
+            const blocked = ['expired', 'frozen', 'cancelled'].includes(data.subscription_status);
+            if (blocked) {
                 badge.textContent = window.ui.t('subscription.frozen');
                 badge.className = 'badge badge-cancel';
+            } else if (data.subscription_status === 'grace') {
+                badge.textContent = window.ui.t('subscription.grace_title');
+                badge.className = 'badge badge-progress';
             } else {
                 badge.textContent = window.ui.t('subscription.days_left', { days: data.days_left });
                 badge.className = data.days_left <= 3 ? 'badge badge-progress' : 'badge badge-ready';

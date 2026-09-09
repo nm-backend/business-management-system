@@ -50,7 +50,7 @@ from apps.production.models import Task, WorkPhoto, WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
 
 #: Код ответа, когда компания заморожена — тот же, что у API-gate
-#: (apps/billing/gate.py), чтобы фронтенд показывал экран «Подписка истекла».
+#: (apps/companies/gate.py), чтобы фронтенд показывал экран «Подписка истекла».
 SUBSCRIPTION_EXPIRED_CODE = 'subscription_expired'
 
 
