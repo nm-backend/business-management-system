@@ -80,7 +80,7 @@ class _ConcurrencyBase(TransactionTestCase):
 
 def _is_postgresql():
     from django.db import connection
-    return hasattr(connection.ops, 'postgresql_version')
+    return connection.vendor == 'postgresql'
 
 
 class ConfirmWorkMaterialDeductionTests(_ConcurrencyBase):
