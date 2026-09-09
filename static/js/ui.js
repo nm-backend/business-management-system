@@ -8,6 +8,18 @@ window.ui = {
         return window.i18n.translate(key, params);
     },
 
+    /**
+     * Перевод enum-значения с бэкенда: te('units', 'sht') -> 'шт'.
+     * Если ключа нет в словарях (неожиданное/устаревшее значение в БД),
+     * показывает само значение, а не технический ключ вида 'units.sht'.
+     */
+    te(prefix, value) {
+        if (value === null || value === undefined || value === '') return '';
+        const key = `${prefix}.${value}`;
+        const hit = window.i18n.translate(key);
+        return hit === key ? String(value) : hit;
+    },
+
     /** Формат денег: 1250000 -> "1 250 000 сўм". */
     money(value) {
         const num = Number(value || 0);

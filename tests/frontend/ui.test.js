@@ -14,6 +14,13 @@ const ui = {
         return window.i18n.translate(key, params);
     },
 
+    te(prefix, value) {
+        if (value === null || value === undefined || value === '') return '';
+        const key = `${prefix}.${value}`;
+        const hit = window.i18n.translate(key);
+        return hit === key ? String(value) : hit;
+    },
+
     money(value) {
         const num = Number(value || 0);
         return `${num.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ${this.t('common.currency')}`;
@@ -235,5 +242,28 @@ describe('ui.errorText', () => {
     it('returns i18n error key when no data', () => {
         expect(ui.errorText({})).toBe('common.error');
         expect(ui.errorText(null)).toBe('common.error');
+    });
+});
+
+describe('ui.te', () => {
+    beforeEach(() => {
+        const dict = { 'units.sht': 'шт', 'units.dona': 'дона' };
+        window.i18n = { translate: (key) => dict[key] ?? key, applyTranslations: () => {} };
+    });
+
+    it('returns translation for known backend values', () => {
+        expect(ui.te('units', 'sht')).toBe('шт');
+        expect(ui.te('units', 'dona')).toBe('дона');
+    });
+
+    it('falls back to raw value instead of technical key', () => {
+        expect(ui.te('units', 'legacy_box')).toBe('legacy_box');
+        expect(ui.te('expense_categories', 'mystery')).toBe('mystery');
+    });
+
+    it('returns empty string for nullish values', () => {
+        expect(ui.te('units', null)).toBe('');
+        expect(ui.te('units', undefined)).toBe('');
+        expect(ui.te('units', '')).toBe('');
     });
 });

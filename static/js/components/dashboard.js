@@ -22,7 +22,7 @@ class DashboardComponent {
     expenseSegments(data) {
         const byCat = data.expenses_by_category || {};
         return Object.keys(byCat)
-            .map((cat) => ({ label: window.ui.t('expense_categories.' + cat), value: Number(byCat[cat]) }))
+            .map((cat) => ({ label: window.ui.te('expense_categories', cat), value: Number(byCat[cat]) }))
             .filter((s) => s.value > 0)
             .sort((a, b) => b.value - a.value);
     }
@@ -198,8 +198,8 @@ class DashboardComponent {
             // Объединяем и сортируем по дате. Приходы клиентов — плюс, расходы
             // и выплаты работникам — минус (макет ленты кассы).
             const operations = []
-                .concat(expenses.map(e => ({ type: 'expense', date: e.date, amount: -e.amount, desc: window.ui.t('expense_categories.' + e.category) })))
-                .concat(payments.map(p => ({ type: 'payment', date: p.payment_date, amount: -p.amount, desc: window.ui.t('payment_types.' + p.payment_type) + ': ' + (p.worker_name || '') })))
+                .concat(expenses.map(e => ({ type: 'expense', date: e.date, amount: -e.amount, desc: window.ui.te('expense_categories', e.category) })))
+                .concat(payments.map(p => ({ type: 'payment', date: p.payment_date, amount: -p.amount, desc: window.ui.te('payment_types', p.payment_type) + ': ' + (p.worker_name || '') })))
                 .concat(incoming.map(p => ({
                     type: 'in',
                     date: p.payment_date,
@@ -240,10 +240,10 @@ class DashboardComponent {
         const totals = worker.unit_totals || [];
         if (!totals.length) return `<span class="font-bold">${window.ui.qty(0)}</span>`;
         if (totals.length === 1) {
-            return `<span class="font-bold">${window.ui.qty(totals[0].total_quantity)} ${window.ui.escape(window.ui.t('units.' + totals[0].unit))}</span>`;
+            return `<span class="font-bold">${window.ui.qty(totals[0].total_quantity)} ${window.ui.escape(window.ui.te('units', totals[0].unit))}</span>`;
         }
         return `<span class="font-bold">${totals.map((t) =>
-            `${window.ui.qty(t.total_quantity)} ${window.ui.escape(window.ui.t('units.' + t.unit))}`
+            `${window.ui.qty(t.total_quantity)} ${window.ui.escape(window.ui.te('units', t.unit))}`
         ).join('<br>')}</span>`;
     }
 
