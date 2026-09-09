@@ -30,13 +30,14 @@ class ClientsComponent {
         container.innerHTML = `
             ${debtDashboard}
             <!-- Вкладки списка из макета «Мижозлар»: все / активные /
-                 с долгом / архив. Фильтрует сервер (?is_active_client=,
-                 ?has_debt=, ?is_archived=) — отбор загруженной страницы
+                 с долгом / новые / архив. Фильтрует сервер (?is_active_client=,
+                 ?has_debt=, ?is_new=, ?is_archived=) — отбор загруженной страницы
                  показывал бы неверные списки при пагинации. -->
             <div class="tabs">
                 <button class="tab-btn" data-tab="all" data-i18n="common.all"></button>
                 <button class="tab-btn active" data-tab="active" data-i18n="clients.active"></button>
                 <button class="tab-btn" data-tab="debt" data-i18n="clients.has_debt"></button>
+                <button class="tab-btn" data-tab="new" data-i18n="clients.new"></button>
                 <button class="tab-btn" data-tab="archive" data-i18n="clients.archive"></button>
             </div>
             <div class="search-box">
@@ -44,6 +45,7 @@ class ClientsComponent {
                 <input type="text" id="client-search" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="clients.search_hint">
             </div>
             ${canEdit ? `<button class="btn btn-primary btn-block" id="add-client-btn" style="margin-bottom:12px;" data-i18n="clients.add_client"></button>` : ''}
+            <div class="text-sm text-muted" id="clients-listed-count" style="margin:0 0 8px;"></div>
             <div id="clients-list" class="card-grid"></div>
         `;
 
@@ -150,9 +152,15 @@ class ClientsComponent {
             let query = `?is_archived=${tab === 'archive'}`;
             if (tab === 'active') query += '&is_active_client=true';
             if (tab === 'debt') query += '&has_debt=true';
+            if (tab === 'new') query += '&is_new=true';
             if (search) query += `&search=${encodeURIComponent(search)}`;
             const response = await window.api.request(`/clients/clients/${query}`);
             this.clients = response.results || response;
+            const total = response.count ?? this.clients.length;
+            const countEl = document.getElementById('clients-listed-count');
+            if (countEl) {
+                countEl.textContent = `${window.ui.t('common.total')}: ${total} ${window.ui.t('common.pcs_short')}`;
+            }
 
             if (!this.clients.length) {
                 const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
@@ -395,6 +403,13 @@ class ClientsComponent {
                     <textarea name="address" class="form-control" rows="2">${window.ui.escape(c?.address || '')}</textarea></div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
                     <textarea name="comment" class="form-control" rows="2">${window.ui.escape(c?.comment || '')}</textarea></div>
+                <div class="form-group"><label data-i18n="clients.client_type"></label>
+                    <select name="client_type" class="form-control">${typeOptions}</select></div>
+                <div class="form-group"><label data-i18n="clients.responsible"></label>
+                    <select name="responsible_employee" class="form-control">
+                        <option value="" data-i18n="common.select"></option>
+                        ${userOptions}
+                    </select></div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
             </form>
         `);

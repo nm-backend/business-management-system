@@ -73,6 +73,7 @@ class AdminAnalyticsData(TypedDict):
     orders_ready: int
     orders_overdue: int
     awaiting_confirmation: int
+    submitted_today: int
     low_stock_materials: list[dict[str, Any]]
     worker_performance: list[dict[str, Any]]
     unpaid_clients: list[dict[str, Any]]
@@ -483,6 +484,13 @@ def get_admin_operational_analytics(company_id: int) -> AdminAnalyticsData:
         'awaiting_confirmation': WorkRecord.objects.filter(
             company_id=company_id,
             status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION,
+        ).count(),
+        # «Бугун топширилган» на панели администратора: сколько работ
+        # сдано сегодня. Это дата создания записи, не подтверждения —
+        # подтверждение считает awaiting_confirmation.
+        'submitted_today': WorkRecord.objects.filter(
+            company_id=company_id,
+            created_at__date=timezone.localdate(),
         ).count(),
         'low_stock_materials': low_stock,
         'worker_performance': worker_performance,

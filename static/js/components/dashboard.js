@@ -320,9 +320,10 @@ class DashboardComponent {
     async renderAdmin(container) {
         // Квартальный операционный отчёт по ТЗ есть и у администратора —
         // без единой денежной цифры (сервер отдаёт вариант kind=operational).
-        const [data, quarter] = await Promise.all([
+        const [data, quarter, unread] = await Promise.all([
             window.api.request('/reports/analytics/admin/'),
             window.api.request('/reports/analytics/quarterly/').catch(() => null),
+            window.api.request('/messaging/conversations/unread_summary/').catch(() => null),
         ]);
         const user = window.currentUser;
 
@@ -336,11 +337,13 @@ class DashboardComponent {
             </div>
 
             <div class="stat-grid">
-                ${window.ui.statCard({ icon: window.icon('inbox', 18), color: 'green', titleKey: 'dashboard.new_orders', value: data.orders_new })}
-                ${window.ui.statCard({ icon: window.icon('clock', 18), color: 'orange', titleKey: 'dashboard.in_progress', value: data.orders_in_progress })}
-                ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'blue', titleKey: 'statuses.ready', value: data.orders_ready })}
-                ${window.ui.statCard({ icon: window.icon('alert-triangle', 18), color: 'red', titleKey: 'dashboard.overdue_orders', value: data.orders_overdue })}
-                ${window.ui.statCard({ icon: window.icon('layers', 18), color: 'purple', titleKey: 'dashboard.pending_confirmations', value: data.awaiting_confirmation || 0, id: 'awaiting-confirm-card' })}
+                ${window.ui.statCard({ icon: window.icon('inbox', 18), color: 'green', titleKey: 'dashboard.new_orders', value: data.orders_new, href: '#/orders' })}
+                ${window.ui.statCard({ icon: window.icon('clock', 18), color: 'orange', titleKey: 'dashboard.in_progress', value: data.orders_in_progress, href: '#/orders' })}
+                ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'blue', titleKey: 'statuses.ready', value: data.orders_ready, href: '#/orders' })}
+                ${window.ui.statCard({ icon: window.icon('alert-triangle', 18), color: 'red', titleKey: 'dashboard.overdue_orders', value: data.orders_overdue, href: '#/orders' })}
+                ${window.ui.statCard({ icon: window.icon('layers', 18), color: 'purple', titleKey: 'dashboard.pending_confirmations', value: data.awaiting_confirmation || 0, href: '#/production' })}
+                ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'teal', titleKey: 'dashboard.submitted_today', value: data.submitted_today || 0, href: '#/production' })}
+                ${window.ui.statCard({ icon: window.icon('message', 18), color: 'blue', titleKey: 'dashboard.worker_unread', value: (unread && unread.from_workers) || 0, href: '#/messages' })}
             </div>
 
             ${data.low_stock_materials.length ? `

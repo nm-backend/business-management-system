@@ -124,6 +124,31 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
             self.get_serializer(conversation).data, status=status.HTTP_200_OK,
         )
 
+    @action(detail=False, methods=['get'])
+    def unread_summary(self, request):
+        """
+        GET /api/v1/messaging/conversations/unread_summary/
+
+        Счётчик непрочитанных текущего пользователя. «Ишчилар мулоқазалари»
+        на панели администратора — сумма непрочитанных в личных диалогах
+        с работниками; общий чат туда не входит.
+        """
+        user = request.user
+        total = 0
+        from_workers = 0
+        for conv in self.get_queryset():
+            unread = conv.unread_total or 0
+            total += unread
+            if conv.kind != Conversation.Kind.DIRECT or not unread:
+                continue
+            other = next(
+                (p.user for p in conv.participants.all() if p.user_id != user.id),
+                None,
+            )
+            if other is not None and other.role == User.Role.WORKER:
+                from_workers += unread
+        return Response({'total': total, 'from_workers': from_workers})
+
     @extend_schema(responses=ChatMessageSerializer(many=True))
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
