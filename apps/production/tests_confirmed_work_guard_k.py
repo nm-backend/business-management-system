@@ -29,7 +29,7 @@ class ConfirmedWorkGuardTests(TestCase):
         self.material = RawMaterial.objects.create(
             company=self.company, name='Мрамор', quantity=Decimal('100'), unit='m2')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='sht')
         recipe = Recipe.objects.create(company=self.company, product=self.product,
                                        name='Основной', is_active=True)
         RecipeItem.objects.create(recipe=recipe, material=self.material,
@@ -47,7 +47,7 @@ class ConfirmedWorkGuardTests(TestCase):
     def _work(self, quantity='3', defect='0', status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION):
         return WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal(quantity), defect_quantity=Decimal(defect), unit='dona',
+            quantity=Decimal(quantity), defect_quantity=Decimal(defect), unit='sht',
             status=status)
 
     def _patch(self, work, data):

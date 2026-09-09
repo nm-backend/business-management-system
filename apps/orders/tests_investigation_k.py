@@ -49,7 +49,7 @@ class _Base(TestCase):
     def _order(self, product, quantity, total=None):
         resp = self.api.post(ORDERS, {
             'client': self.client.id, 'product': product.id, 'quantity': str(quantity),
-            'unit': 'dona', 'total_amount': str(total or quantity * 1000),
+            'unit': 'sht', 'total_amount': str(total or quantity * 1000),
             'deadline': self.deadline(),
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
@@ -65,7 +65,7 @@ class _Base(TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         resp = self.worker_api.post('/api/v1/production/works/', {
             'task': task_id, 'product': product.id, 'operation': 'cutting',
-            'quantity': str(quantity), 'unit': 'dona',
+            'quantity': str(quantity), 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         resp = self.api.post(f'/api/v1/production/works/{resp.json()["id"]}/confirm/', {}, format='json')
@@ -81,7 +81,7 @@ class ParallelReservationTests(_Base):
             company=self.company, name='Стекло', stone_type='стекло', unit='m2',
             quantity=Decimal('100'))
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Окно', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Окно', quantity=Decimal('0'), unit='sht')
         resp = self.api.post('/api/v1/warehouse/recipes/', {
             'product': self.product.id, 'name': 'R', 'is_active': True,
         }, format='json')
@@ -93,7 +93,7 @@ class ParallelReservationTests(_Base):
         self.assertEqual(resp.status_code, 201, resp.data)
         resp = self.api.post('/api/v1/finance/labor-rates/', {
             'product': self.product.id, 'operation': 'cutting',
-            'rate_per_unit': '1000', 'unit': 'dona',
+            'rate_per_unit': '1000', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
 
@@ -128,7 +128,7 @@ class ParallelReservationTests(_Base):
 class DeliveredOrderEditTests(_Base):
     def test_patch_delivered_order_rejected(self):
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Дверь', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Дверь', quantity=Decimal('10'), unit='sht')
         order_id = self._order(self.product, 2)
         resp = self.api.post(f'{ORDERS}{order_id}/deliver/', {}, format='json')
         self.assertEqual(resp.status_code, 200, resp.data)
@@ -143,7 +143,7 @@ class AdvancePaymentNotificationTests(_Base):
     def test_no_unpaid_notification_when_fully_prepaid_by_advance(self):
         """Аванс без привязки к заказу: долг 0 — уведомления быть не должно."""
         product = FinishedProduct.objects.create(
-            company=self.company, name='Дверь', quantity=Decimal('5'), unit='dona')
+            company=self.company, name='Дверь', quantity=Decimal('5'), unit='sht')
         order_id = self._order(product, 1, 100000)
         resp = self.api.post('/api/v1/clients/payments/', {
             'client': self.client.id, 'amount': '100000',
@@ -162,7 +162,7 @@ class AdvancePaymentNotificationTests(_Base):
 
     def test_unpaid_notification_still_created_when_debt_exists(self):
         product = FinishedProduct.objects.create(
-            company=self.company, name='Дверь', quantity=Decimal('5'), unit='dona')
+            company=self.company, name='Дверь', quantity=Decimal('5'), unit='sht')
         order_id = self._order(product, 1, 100000)
         resp = self.api.post(f'{ORDERS}{order_id}/deliver/', {}, format='json')
         self.assertEqual(resp.status_code, 200, resp.data)
@@ -176,7 +176,7 @@ class OrderClientChangeTests(_Base):
     def test_change_client_with_payments_rejected(self):
         other_client = Client.objects.create(company=self.company, name='Другой клиент')
         product = FinishedProduct.objects.create(
-            company=self.company, name='Дверь', quantity=Decimal('5'), unit='dona')
+            company=self.company, name='Дверь', quantity=Decimal('5'), unit='sht')
         order_id = self._order(product, 1, 100000)
         resp = self.api.post('/api/v1/clients/payments/', {
             'client': self.client.id, 'order': order_id, 'amount': '50000',
@@ -191,7 +191,7 @@ class OrderClientChangeTests(_Base):
     def test_change_client_without_payments_allowed(self):
         other_client = Client.objects.create(company=self.company, name='Другой клиент')
         product = FinishedProduct.objects.create(
-            company=self.company, name='Дверь', quantity=Decimal('5'), unit='dona')
+            company=self.company, name='Дверь', quantity=Decimal('5'), unit='sht')
         order_id = self._order(product, 1, 100000)
         resp = self.api.patch(f'{ORDERS}{order_id}/', {'client': other_client.id}, format='json')
         self.assertEqual(resp.status_code, 200, resp.data)

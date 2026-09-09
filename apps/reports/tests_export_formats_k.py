@@ -34,11 +34,11 @@ class ExportFormatsTests(TestCase):
         cli = Client.objects.create(company=self.company, name='Клиент Кириллица')
         product = FinishedProduct.objects.create(
             company=self.company, name='Столешница', quantity=Decimal('3'),
-            unit='dona', cost_price=Decimal('1000'))
+            unit='sht', cost_price=Decimal('1000'))
         RawMaterial.objects.create(company=self.company, name='Гранит', quantity=Decimal('10'),
                                    unit='m2')
         Order.objects.create(company=self.company, client=cli, product=product,
-                             quantity=Decimal('1'), unit='dona', total_amount=Decimal('5000'),
+                             quantity=Decimal('1'), unit='sht', total_amount=Decimal('5000'),
                              deadline=timezone.now() + datetime.timedelta(days=5))
         Payment.objects.create(company=self.company, client=cli, amount=Decimal('1000'),
                                payment_method='cash', payment_date=timezone.now())

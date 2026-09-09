@@ -70,7 +70,7 @@ class LaborRateUpdateIDORTests(_FinanceTwoCompanies):
         lr = LaborRate.objects.create(
             company=self.a, product=self.product_a,
             operation=LaborRate.OperationType.CUTTING,
-            rate_per_unit=Decimal('5'), unit='dona')
+            rate_per_unit=Decimal('5'), unit='sht')
         resp = self.api(self.owner_a).patch(
             f'/api/v1/finance/labor-rates/{lr.id}/',
             {'product': self.product_b.id}, format='json')

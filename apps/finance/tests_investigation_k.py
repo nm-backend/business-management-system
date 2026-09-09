@@ -35,10 +35,10 @@ class WorkerPaymentUpdateTests(TestCase):
 
     def _accrue(self, worker, cost):
         product = FinishedProduct.objects.create(
-            company=self.company, name='Плита', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Плита', quantity=Decimal('0'), unit='sht')
         WorkRecord.objects.create(
             company=self.company, worker=worker, product=product,
-            quantity=Decimal('1'), unit='dona', labor_cost=Decimal(cost),
+            quantity=Decimal('1'), unit='sht', labor_cost=Decimal(cost),
             status=WorkRecord.WorkStatus.CONFIRMED)
 
     def test_change_worker_after_payment_rejected(self):

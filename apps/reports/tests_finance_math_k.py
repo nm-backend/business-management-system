@@ -45,13 +45,13 @@ class OwnerFinanceMathTests(TestCase):
         client = Client.objects.create(company=self.company, name='Клиент')
         product = FinishedProduct.objects.create(
             company=self.company, name='Плита', quantity=Decimal('10'),
-            unit='dona', cost_price=Decimal('10000'))
+            unit='sht', cost_price=Decimal('10000'))
 
         Payment.objects.create(company=self.company, client=client, amount=Decimal('120000'),
                                payment_method='cash', payment_date=timezone.now())
         order = Order.objects.create(
             company=self.company, client=client, product=product,
-            quantity=Decimal('3'), unit='dona', total_amount=Decimal('150000'),
+            quantity=Decimal('3'), unit='sht', total_amount=Decimal('150000'),
             deadline=timezone.now() + datetime.timedelta(days=3))
         order.status = Order.Status.DELIVERED
         # save-хук сам проставляет delivered_at и снимок себестоимости:

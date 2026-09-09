@@ -247,13 +247,13 @@ describe('ui.errorText', () => {
 
 describe('ui.te', () => {
     beforeEach(() => {
-        const dict = { 'units.sht': 'шт', 'units.dona': 'дона' };
+        const dict = { 'units.sht': 'шт', 'units.kg': 'кг' };
         window.i18n = { translate: (key) => dict[key] ?? key, applyTranslations: () => {} };
     });
 
     it('returns translation for known backend values', () => {
         expect(ui.te('units', 'sht')).toBe('шт');
-        expect(ui.te('units', 'dona')).toBe('дона');
+        expect(ui.te('units', 'kg')).toBe('кг');
     });
 
     it('falls back to raw value instead of technical key', () => {

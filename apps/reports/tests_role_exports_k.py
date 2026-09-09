@@ -48,10 +48,10 @@ class RoleAwareWorkExportTests(TestCase):
                                                role=User.Role.WORKER, company=self.company,
                                                full_name='Али')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('10'), unit='sht')
         WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal('4'), unit='dona', status=WorkRecord.WorkStatus.CONFIRMED,
+            quantity=Decimal('4'), unit='sht', status=WorkRecord.WorkStatus.CONFIRMED,
             labor_cost=Decimal('600'), confirmed_at=timezone.now())
         self.api = APIClient()
 
@@ -82,10 +82,10 @@ class DebtColumnInOrdersExportTests(TestCase):
                                               role=User.Role.ADMIN, company=self.company)
         self.cli = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('10'), unit='sht')
         self.order = Order.objects.create(
             company=self.company, client=self.cli, product=self.product,
-            quantity=Decimal('1'), unit='dona', total_amount=Decimal('5000'),
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('5000'),
             deadline=timezone.now() + datetime.timedelta(days=5))
         Payment.objects.create(company=self.company, client=self.cli, order=self.order,
                                amount=Decimal('2000'), payment_method='cash',
@@ -112,7 +112,7 @@ class DebtColumnInOrdersExportTests(TestCase):
     def test_custom_product_order_is_exported_with_debt(self):
         Order.objects.create(
             company=self.company, client=self.cli, custom_product_name='По эскизу',
-            quantity=Decimal('2'), unit='dona', total_amount=Decimal('1000'),
+            quantity=Decimal('2'), unit='sht', total_amount=Decimal('1000'),
             deadline=timezone.now() + datetime.timedelta(days=5))
         self.api.force_authenticate(self.owner)
         rows = read_xlsx(self.api.get(ORDERS_URL).content)

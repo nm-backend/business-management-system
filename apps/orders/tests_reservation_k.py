@@ -31,9 +31,9 @@ class OrderReservationAPITests(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         self.cli = Client.objects.create(company=self.company, name='РезКлиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Стул', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Стул', quantity=Decimal('10'), unit='sht')
         self.other = FinishedProduct.objects.create(
-            company=self.company, name='Стол', quantity=Decimal('20'), unit='dona')
+            company=self.company, name='Стол', quantity=Decimal('20'), unit='sht')
 
     def api(self, user=None):
         c = APIClient()
@@ -45,7 +45,7 @@ class OrderReservationAPITests(TestCase):
             'client': self.cli.id,
             'product': product.id,
             'quantity': str(quantity),
-            'unit': 'dona',
+            'unit': 'sht',
             **kwargs,
         }, format='json')
         self.assertIn(resp.status_code, (200, 201), resp.content[:300])
@@ -67,7 +67,7 @@ class OrderReservationAPITests(TestCase):
             'client': self.cli.id,
             'custom_product_name': 'Изделие на заказ',
             'quantity': '2',
-            'unit': 'dona',
+            'unit': 'sht',
         }, format='json')
         self.assertIn(resp.status_code, (200, 201), resp.content[:300])
         self.product.refresh_from_db()
@@ -193,7 +193,7 @@ class OrderReservationAPITests(TestCase):
                                           role=User.Role.WORKER, company=self.company)
         resp = self.api(worker).post('/api/v1/orders/orders/', {
             'client': self.cli.id, 'product': self.product.id,
-            'quantity': '1', 'unit': 'dona',
+            'quantity': '1', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 403)
 
@@ -205,10 +205,10 @@ class OrderReservationModelTests(TestCase):
         self.company = Company.objects.create(name='ModelCo', is_active=True)
         self.cli = Client.objects.create(company=self.company, name='М')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Модель', quantity=Decimal('8'), unit='dona')
+            company=self.company, name='Модель', quantity=Decimal('8'), unit='sht')
         self.order = Order.objects.create(
             company=self.company, client=self.cli, product=self.product,
-            quantity=Decimal('3'), unit='dona',
+            quantity=Decimal('3'), unit='sht',
             deadline=datetime.datetime(2026, 12, 1, tzinfo=datetime.timezone.utc))
 
     def test_release_never_goes_below_zero(self):

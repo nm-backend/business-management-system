@@ -28,10 +28,10 @@ class ClientArchiveWithDebtTests(TestCase):
     def _client_with_debt(self):
         client = Client.objects.create(company=self.company, name='Должник')
         product = FinishedProduct.objects.create(
-            company=self.company, name='Дверь', quantity=Decimal('5'), unit='dona')
+            company=self.company, name='Дверь', quantity=Decimal('5'), unit='sht')
         resp = self.api.post('/api/v1/orders/orders/', {
             'client': client.id, 'product': product.id, 'quantity': '1',
-            'unit': 'dona', 'total_amount': '200000',
+            'unit': 'sht', 'total_amount': '200000',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         client.refresh_from_db()

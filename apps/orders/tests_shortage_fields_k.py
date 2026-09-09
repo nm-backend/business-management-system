@@ -35,14 +35,14 @@ class ProductShortageFieldTests(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         self.client_obj = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('10'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 
     def create_order(self, quantity='3'):
         resp = self.api.post(ORDERS, {
             'client': self.client_obj.id, 'product': self.product.id,
-            'quantity': quantity, 'unit': 'dona',
+            'quantity': quantity, 'unit': 'sht',
             'deadline': (timezone.now() + datetime.timedelta(days=5)).isoformat(),
             'total_amount': '1000',
         }, format='json')
@@ -64,7 +64,7 @@ class ProductShortageFieldTests(TestCase):
         self.assertTrue(o['has_product_shortage'])
         self.assertEqual(o['product_shortage']['required'], Decimal('15'))
         self.assertEqual(o['product_shortage']['available'], Decimal('10'))
-        self.assertEqual(o['product_shortage']['unit'], 'dona')
+        self.assertEqual(o['product_shortage']['unit'], 'sht')
 
     def test_order_equals_stock_is_not_flagged(self):
         o = self.get_order(self.create_order('10')['id'])
@@ -89,7 +89,7 @@ class ProductShortageFieldTests(TestCase):
     def test_custom_product_order_has_no_product_shortage(self):
         resp = self.api.post(ORDERS, {
             'client': self.client_obj.id, 'custom_product_name': 'По эскизу',
-            'quantity': '3', 'unit': 'dona',
+            'quantity': '3', 'unit': 'sht',
             'deadline': (timezone.now() + datetime.timedelta(days=5)).isoformat(),
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:300])

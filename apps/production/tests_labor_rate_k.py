@@ -33,14 +33,14 @@ class ConfirmRequiresLaborRateTests(TestCase):
         self.worker = User.objects.create_user(username='rate_worker', password='p',
                                                role=User.Role.WORKER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='РЎС‚РѕР»РµС€РЅРёС†Р°', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='РЎС‚РѕР»РµС€РЅРёС†Р°', quantity=Decimal('0'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 
     def _work(self):
         return WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal('5'), unit='dona',
+            quantity=Decimal('5'), unit='sht',
             status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION)
 
     def test_confirm_without_rate_is_refused(self):
@@ -64,7 +64,7 @@ class ConfirmRequiresLaborRateTests(TestCase):
     def test_confirm_with_rate_accrues_and_stocks(self):
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.OTHER,
-                                 rate_per_unit=Decimal('1500'), unit='dona')
+                                 rate_per_unit=Decimal('1500'), unit='sht')
         work = self._work()
         resp = self.api.post(f'{WORKS}{work.id}/confirm/')
         self.assertEqual(resp.status_code, 200, resp.content[:200])
@@ -88,7 +88,7 @@ class ConfirmRequiresLaborRateTests(TestCase):
         """РќР°С‡РёСЃР»РµРЅРЅРѕРµ РѕР±СЏР·Р°РЅРѕ РґРѕР№С‚Рё РґРѕ СЂР°СЃС‡С‘С‚РѕРІ СЃ СЂР°Р±РѕС‚РЅРёРєР°РјРё Рё РґРѕ РґР°С€Р±РѕСЂРґР°."""
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.OTHER,
-                                 rate_per_unit=Decimal('1000'), unit='dona')
+                                 rate_per_unit=Decimal('1000'), unit='sht')
         work = self._work()
         self.api.post(f'{WORKS}{work.id}/confirm/')
 
@@ -118,7 +118,7 @@ class LaborRateOperationTests(TestCase):
         self.worker = User.objects.create_user(username='op_worker', password='p',
                                                role=User.Role.WORKER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='РЎС‚РѕР»РµС€РЅРёС†Р°', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='РЎС‚РѕР»РµС€РЅРёС†Р°', quantity=Decimal('0'), unit='sht')
         self.material = RawMaterial.objects.create(
             company=self.company, name='Р“СЂР°РЅРёС‚', quantity=Decimal('100'), unit='m2')
         self.recipe = Recipe.objects.create(company=self.company, product=self.product, name='R')
@@ -130,7 +130,7 @@ class LaborRateOperationTests(TestCase):
     def _work(self, **kwargs):
         defaults = dict(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal('5'), unit='dona',
+            quantity=Decimal('5'), unit='sht',
             status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION)
         defaults.update(kwargs)
         return WorkRecord.objects.create(**defaults)
@@ -138,10 +138,10 @@ class LaborRateOperationTests(TestCase):
     def _rates(self):
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.CUTTING,
-                                 rate_per_unit=Decimal('50'), unit='dona')
+                                 rate_per_unit=Decimal('50'), unit='sht')
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.POLISHING,
-                                 rate_per_unit=Decimal('70'), unit='dona')
+                                 rate_per_unit=Decimal('70'), unit='sht')
 
     def test_work_uses_rate_of_its_operation(self):
         """РџРѕР»РёСЂРѕРІРєР° РґРѕР»Р¶РЅР° РЅР°С‡РёСЃР»РёС‚СЊ РїРѕ СЃС‚Р°РІРєРµ РїРѕР»РёСЂРѕРІРєРё, Р° РЅРµ РїРѕ В«Р°Р»С„Р°РІРёС‚РЅРѕР№В» СЂРµР·РєРµ."""
@@ -163,7 +163,7 @@ class LaborRateOperationTests(TestCase):
         """РћРґРЅР° СЃС‚Р°РІРєР° РЅР° С‚РѕРІР°СЂ Рё СЂР°Р±РѕС‚Р° Р±РµР· РѕРїРµСЂР°С†РёРё вЂ” РєР°Рє СЂР°РЅСЊС€Рµ."""
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.OTHER,
-                                 rate_per_unit=Decimal('1500'), unit='dona')
+                                 rate_per_unit=Decimal('1500'), unit='sht')
         work = self._work()
         resp = self.api.post(f'{WORKS}{work.id}/confirm/')
         self.assertEqual(resp.status_code, 200, resp.content[:200])
@@ -183,7 +183,7 @@ class LaborRateOperationTests(TestCase):
     def test_operation_saved_on_work_create(self):
         resp = self.api.post(WORKS, {
             'worker': self.worker.id, 'product': self.product.id,
-            'operation': 'polishing', 'quantity': '2', 'unit': 'dona',
+            'operation': 'polishing', 'quantity': '2', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:200])
         work = WorkRecord.objects.get(pk=resp.json()['id'])
@@ -208,7 +208,7 @@ class LaborRateOnProductCardTests(TestCase):
 
     def test_rate_can_be_set_on_create(self):
         resp = self.api.post(PRODUCTS, {
-            'name': 'РџРѕРґРѕРєРѕРЅРЅРёРє', 'quantity': '0', 'unit': 'dona', 'labor_rate': '900',
+            'name': 'РџРѕРґРѕРєРѕРЅРЅРёРє', 'quantity': '0', 'unit': 'sht', 'labor_rate': '900',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:200])
         product = FinishedProduct.objects.get(pk=resp.json()['id'])
@@ -218,7 +218,7 @@ class LaborRateOnProductCardTests(TestCase):
 
     def test_rate_is_updated_not_duplicated(self):
         pid = self.api.post(PRODUCTS, {'name': 'РЎС‚СѓРїРµРЅСЊ', 'quantity': '0',
-                                       'unit': 'dona', 'labor_rate': '500'},
+                                       'unit': 'sht', 'labor_rate': '500'},
                             format='json').json()['id']
         self.api.patch(f'{PRODUCTS}{pid}/', {'labor_rate': '750'}, format='json')
         product = FinishedProduct.objects.get(pk=pid)
@@ -227,7 +227,7 @@ class LaborRateOnProductCardTests(TestCase):
 
     def test_saving_card_without_rate_keeps_it(self):
         pid = self.api.post(PRODUCTS, {'name': 'РџР»РёС‚Р°', 'quantity': '0',
-                                       'unit': 'dona', 'labor_rate': '400'},
+                                       'unit': 'sht', 'labor_rate': '400'},
                             format='json').json()['id']
         self.api.patch(f'{PRODUCTS}{pid}/', {'name': 'РџР»РёС‚Р° 2'}, format='json')
         product = FinishedProduct.objects.get(pk=pid)
@@ -235,7 +235,7 @@ class LaborRateOnProductCardTests(TestCase):
 
     def test_worker_does_not_see_the_rate(self):
         pid = self.api.post(PRODUCTS, {'name': 'РџР»РёС‚Р°', 'quantity': '0',
-                                       'unit': 'dona', 'labor_rate': '400'},
+                                       'unit': 'sht', 'labor_rate': '400'},
                             format='json').json()['id']
         worker = User.objects.create_user(username='card_worker', password='p',
                                           role=User.Role.WORKER, company=self.company)
@@ -244,7 +244,7 @@ class LaborRateOnProductCardTests(TestCase):
         self.assertNotIn('labor_rate', api.get(f'{PRODUCTS}{pid}/').json())
 
     def _product_with_rates(self, name, rates):
-        pid = self.api.post(PRODUCTS, {'name': name, 'quantity': '0', 'unit': 'dona'},
+        pid = self.api.post(PRODUCTS, {'name': name, 'quantity': '0', 'unit': 'sht'},
                             format='json').json()['id']
         product = FinishedProduct.objects.get(pk=pid)
         for operation, amount in rates.items():

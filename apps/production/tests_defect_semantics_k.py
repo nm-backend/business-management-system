@@ -30,7 +30,7 @@ class DefectSemanticsTests(TestCase):
         self.material = RawMaterial.objects.create(
             company=self.company, name='Мрамор', quantity=Decimal('100'), unit='m2')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='sht')
         recipe = Recipe.objects.create(company=self.company, product=self.product,
                                        name='Основной', is_active=True)
         # 2 м² сырья на 1 единицу продукции
@@ -38,12 +38,12 @@ class DefectSemanticsTests(TestCase):
                                   quantity_required=Decimal('2'), unit='m2')
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.OTHER,
-                                 rate_per_unit=Decimal('1000'), unit='dona')
+                                 rate_per_unit=Decimal('1000'), unit='sht')
 
     def _confirm(self, good, defect):
         work = WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal(good), defect_quantity=Decimal(defect), unit='dona',
+            quantity=Decimal(good), defect_quantity=Decimal(defect), unit='sht',
             status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION)
         confirm_work(work, self.owner)
         work.refresh_from_db()

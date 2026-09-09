@@ -38,7 +38,7 @@ class OverdueDebtCommandTests(TestCase):
     def _order(self, deadline, total, paid, status=Order.Status.DELIVERED):
         return Order.objects.create(
             company=self.company, client=self.cli, product=self.product,
-            quantity=Decimal('1'), unit='dona', deadline=deadline,
+            quantity=Decimal('1'), unit='sht', deadline=deadline,
             total_amount=Decimal(total), paid_amount=Decimal(paid), status=status)
 
     def _run(self, *args):

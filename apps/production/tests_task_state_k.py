@@ -41,7 +41,7 @@ class _Base(TestCase):
         self.material = RawMaterial.objects.create(company=self.company, name='Мрамор',
                                                    stone_type='мрамор', unit='m2', quantity=100)
         self.product = FinishedProduct.objects.create(company=self.company, name='Столешница',
-                                                      unit='dona', quantity=10)
+                                                      unit='sht', quantity=10)
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
         resp = self.api.post('/api/v1/warehouse/recipes/', {
@@ -55,7 +55,7 @@ class _Base(TestCase):
         self.assertEqual(resp.status_code, 201, resp.data)
         resp = self.api.post('/api/v1/finance/labor-rates/', {
             'product': self.product.id, 'operation': 'cutting',
-            'rate_per_unit': '1000', 'unit': 'dona',
+            'rate_per_unit': '1000', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         self.worker_api = APIClient()
@@ -66,7 +66,7 @@ class _Base(TestCase):
         client = Client.objects.create(company=self.company, name='Клиент')
         resp = self.api.post(ORDERS, {
             'client': client.id, 'product': self.product.id,
-            'quantity': str(quantity), 'unit': 'dona', 'total_amount': '100000',
+            'quantity': str(quantity), 'unit': 'sht', 'total_amount': '100000',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         return resp.json()['id']
@@ -81,7 +81,7 @@ class _Base(TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         resp = self.worker_api.post(WORKS, {
             'task': task_id, 'product': self.product.id, 'operation': 'cutting',
-            'quantity': '1', 'unit': 'dona',
+            'quantity': '1', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         return resp.json()['id']

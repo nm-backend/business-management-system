@@ -36,7 +36,7 @@ class WorkerSettlementsTests(TestCase):
         self.pyotr = User.objects.create_user(username='set_pyotr', password='p', full_name='Пётр',
                                               role=User.Role.WORKER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Плита', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Плита', quantity=Decimal('0'), unit='sht')
 
         # Иван: начислено 50 000, выплачено 20 000 -> должны 30 000
         self._work(self.ivan, '30000')
@@ -54,7 +54,7 @@ class WorkerSettlementsTests(TestCase):
     def _work(self, worker, cost, status=WorkRecord.WorkStatus.CONFIRMED):
         return WorkRecord.objects.create(
             company=self.company, worker=worker, product=self.product,
-            quantity=Decimal('1'), unit='dona', labor_cost=Decimal(cost), status=status)
+            quantity=Decimal('1'), unit='sht', labor_cost=Decimal(cost), status=status)
 
     def rows(self):
         resp = self.api.get(SETTLEMENTS)
@@ -92,7 +92,7 @@ class WorkerSettlementsTests(TestCase):
         stranger = User.objects.create_user(username='set_stranger', password='p',
                                             role=User.Role.WORKER, company=other)
         WorkRecord.objects.create(company=other, worker=stranger, product=self.product,
-                                  quantity=Decimal('1'), unit='dona',
+                                  quantity=Decimal('1'), unit='sht',
                                   labor_cost=Decimal('777777'),
                                   status=WorkRecord.WorkStatus.CONFIRMED)
         names = [row['worker_name'] for row in self.rows()['results']]

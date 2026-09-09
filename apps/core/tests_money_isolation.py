@@ -103,13 +103,13 @@ class MoneyLeakTests(TestCase):
             company=self.company,
             product=FinishedProduct.objects.get(name='P'),
             operation=LaborRate.OperationType.OTHER,
-            defaults={'rate_per_unit': Decimal('500'), 'unit': 'dona'})
+            defaults={'rate_per_unit': Decimal('500'), 'unit': 'sht'})
         for user in (self.admin, self.worker):
             api = self._api(user)
             self.assertEqual(api.get('/api/v1/finance/labor-rates/').status_code, 200)
             self.assertEqual(api.post('/api/v1/finance/labor-rates/', {
                 'product': FinishedProduct.objects.get(name='P').id,
-                'operation': 'cutting', 'rate_per_unit': '999', 'unit': 'dona',
+                'operation': 'cutting', 'rate_per_unit': '999', 'unit': 'sht',
             }, format='json').status_code, 403)
 
     def test_worker_cannot_see_other_workers_earnings(self):

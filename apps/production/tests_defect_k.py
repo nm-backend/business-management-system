@@ -29,7 +29,7 @@ class DefectConsumptionTests(TestCase):
         self.material = RawMaterial.objects.create(
             company=self.company, name='Мрамор', quantity=Decimal('100'), unit='m2')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='sht')
         recipe = Recipe.objects.create(company=self.company, product=self.product,
                                        name='Основной', is_active=True)
         # на одну единицу продукции — 2 м² мрамора
@@ -47,7 +47,7 @@ class DefectConsumptionTests(TestCase):
     def _work(self, quantity, defect):
         return WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal(quantity), defect_quantity=Decimal(defect), unit='dona',
+            quantity=Decimal(quantity), defect_quantity=Decimal(defect), unit='sht',
             status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION)
 
     def test_defect_consumes_material_too(self):
@@ -89,6 +89,6 @@ class DefectConsumptionTests(TestCase):
         api.force_authenticate(self.worker)
         resp = api.post('/api/v1/production/works/', {
             'product': self.product.id, 'quantity': '1',
-            'defect_quantity': '-3', 'unit': 'dona',
+            'defect_quantity': '-3', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 400)

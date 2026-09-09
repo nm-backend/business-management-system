@@ -30,7 +30,7 @@ class QuantityGuardTests(TestCase):
         self.material = RawMaterial.objects.create(
             company=self.company, name='Мрамор', quantity=Decimal('10'), unit='m2')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('10'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 

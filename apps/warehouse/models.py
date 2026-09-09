@@ -188,13 +188,11 @@ class UnitChoices(models.TextChoices):
         M: метр (м)
         M2: квадратный метр (м²)
         IZDELIE: изделие (изд)
-        DONA: штука на узбекском (дона)
     """
     SHT = 'sht', 'Штук'
     M = 'm', 'Метр'
     M2 = 'm2', 'Квадратный метр'
     IZDELIE = 'izdelie', 'Изделие'
-    DONA = 'dona', 'Дона'
     KG = 'kg', 'Килограмм'
     M3 = 'm3', 'Кубический метр'
 

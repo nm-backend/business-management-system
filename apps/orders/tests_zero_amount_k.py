@@ -28,7 +28,7 @@ class ZeroAmountOrderTests(TestCase):
         self.owner = User.objects.create_user(username='zero_owner', password='p',
                                               role=User.Role.OWNER, company=self.company)
         self.product = FinishedProduct.objects.create(company=self.company, name='Столешница',
-                                                      unit='dona', quantity=10)
+                                                      unit='sht', quantity=10)
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
         from apps.clients.models import Client
@@ -37,7 +37,7 @@ class ZeroAmountOrderTests(TestCase):
     def _order(self, total_amount):
         resp = self.api.post(ORDERS, {
             'client': self.client_model.id, 'product': self.product.id,
-            'quantity': '1', 'unit': 'dona', 'total_amount': total_amount,
+            'quantity': '1', 'unit': 'sht', 'total_amount': total_amount,
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         return Order.objects.get(pk=resp.json()['id'])

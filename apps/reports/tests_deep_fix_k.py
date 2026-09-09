@@ -41,7 +41,7 @@ class CsvFormulaInjectionTests(TestCase):
         evil_client = Client.objects.create(company=self.company, name=evil)
         Order.objects.create(company=self.company, client=evil_client,
                              custom_product_name='Изделие', quantity=1,
-                             unit='dona', total_amount=Decimal('100'))
+                             unit='sht', total_amount=Decimal('100'))
         rows = self._parsed('/api/v1/reports/export/orders/?format=csv')
         flattened = [cell for row in rows for cell in row]
         self.assertIn("'=HYPERLINK(\"http://evil\",\"x\")", flattened,
@@ -59,7 +59,7 @@ class ShortageExportTests(TestCase):
     def test_shortage_uses_available_not_physical_quantity(self):
         material = RawMaterial.objects.create(
             company=self.company, name='Мрамор', quantity=Decimal('10'),
-            min_stock=Decimal('10'), unit='dona')
+            min_stock=Decimal('10'), unit='sht')
         material.required_for_orders = Decimal('9')
         material.save(update_fields=['required_for_orders'])
         resp = self.api.get(SHORTAGE)
@@ -73,7 +73,7 @@ class ShortageExportTests(TestCase):
     def test_shortage_empty_when_available_above_min(self):
         material = RawMaterial.objects.create(
             company=self.company, name='Гранит', quantity=Decimal('12'),
-            min_stock=Decimal('10'), unit='dona')
+            min_stock=Decimal('10'), unit='sht')
         material.required_for_orders = Decimal('2')
         material.save(update_fields=['required_for_orders'])
         resp = self.api.get(SHORTAGE)
@@ -91,14 +91,14 @@ class TopProductsGroupingTests(TestCase):
         self.api.force_authenticate(self.owner)
         self.client = Client.objects.create(company=self.company, name='ТопКлиент')
         self.p1 = FinishedProduct.objects.create(company=self.company, name='Дубликат',
-                                                 quantity=Decimal('10'), unit='dona')
+                                                 quantity=Decimal('10'), unit='sht')
         self.p2 = FinishedProduct.objects.create(company=self.company, name='Дубликат',
-                                                 quantity=Decimal('10'), unit='dona')
+                                                 quantity=Decimal('10'), unit='sht')
 
     def _deliver_order(self, product, quantity):
         order = Order.objects.create(
             company=self.company, client=self.client, product=product,
-            quantity=quantity, unit='dona', total_amount=Decimal(quantity * 100),
+            quantity=quantity, unit='sht', total_amount=Decimal(quantity * 100),
             status=Order.Status.DELIVERED)
         return order
 
@@ -178,26 +178,26 @@ class WorkerAggregatesUnitTests(TestCase):
 
     def test_single_unit_worker_has_plain_total(self):
         for q in (2, 3, 5):
-            self._work(self.worker_a, q, 'dona')
+            self._work(self.worker_a, q, 'sht')
         # Неподтверждённая работа не влияет на агрегаты.
-        self._work(self.worker_a, 999, 'dona', confirmed=False)
+        self._work(self.worker_a, 999, 'sht', confirmed=False)
         data = self.api.get(OWNER).json()
         w = data['most_active_worker']
         self.assertIsNotNone(w)
         self.assertEqual(w['name'], 'Работник А')
         self.assertEqual(Decimal(str(w['total_quantity'])), Decimal('10'))
-        self.assertEqual(w['unit_totals'], [{'unit': 'dona', 'total_quantity': 10}])
+        self.assertEqual(w['unit_totals'], [{'unit': 'sht', 'total_quantity': 10}])
         self.assertEqual(w['works'], 3)
 
     def test_mixed_units_never_summed(self):
-        self._work(self.worker_a, 2, 'dona')
+        self._work(self.worker_a, 2, 'sht')
         self._work(self.worker_a, 3, 'm')
         data = self.api.get(OWNER).json()
         w = data['most_active_worker']
         self.assertIsNone(w['total_quantity'], 'разные единицы — общего количества нет')
         self.assertEqual(w['unit_totals'], [
             {'unit': 'm', 'total_quantity': 3},
-            {'unit': 'dona', 'total_quantity': 2},
+            {'unit': 'sht', 'total_quantity': 2},
         ])
         self.assertEqual(w['works'], 2)
 
@@ -205,24 +205,24 @@ class WorkerAggregatesUnitTests(TestCase):
         # А: 10 шт в 2 работах; Б: 20 м в 1 работе. Сумма по количеству дала бы
         # победителем Б (20 > 10), но 10 шт и 20 м несравнимы — побеждает тот,
         # у кого больше подтверждённых работ.
-        self._work(self.worker_a, 10, 'dona')
-        self._work(self.worker_a, 4, 'dona')
+        self._work(self.worker_a, 10, 'sht')
+        self._work(self.worker_a, 4, 'sht')
         self._work(self.worker_b, 20, 'm')
         data = self.api.get(OWNER).json()
         self.assertEqual(data['most_active_worker']['worker_id'], self.worker_a.id)
 
     def test_ranking_by_quantity_when_single_unit(self):
-        self._work(self.worker_a, 5, 'dona')
-        self._work(self.worker_b, 10, 'dona')
+        self._work(self.worker_a, 5, 'sht')
+        self._work(self.worker_b, 10, 'sht')
         data = self.api.get(OWNER).json()
         w = data['most_active_worker']
         self.assertEqual(w['worker_id'], self.worker_b.id)
         self.assertEqual(Decimal(str(w['total_quantity'])), Decimal('10'))
 
     def test_admin_worker_performance_per_unit(self):
-        self._work(self.worker_a, 2, 'dona')
+        self._work(self.worker_a, 2, 'sht')
         self._work(self.worker_a, 3, 'm')
-        self._work(self.worker_b, 7, 'dona')
+        self._work(self.worker_b, 7, 'sht')
         data = self.api.get(self.ADMIN).json()
         rows = {r['worker_id']: r for r in data['worker_performance']}
         self.assertIn(self.worker_a.id, rows)
@@ -231,8 +231,8 @@ class WorkerAggregatesUnitTests(TestCase):
         self.assertIsNone(a['total_quantity'])
         self.assertEqual(a['unit_totals'], [
             {'unit': 'm', 'total_quantity': 3},
-            {'unit': 'dona', 'total_quantity': 2},
+            {'unit': 'sht', 'total_quantity': 2},
         ])
         b = rows[self.worker_b.id]
         self.assertEqual(Decimal(str(b['total_quantity'])), Decimal('7'))
-        self.assertEqual(b['unit_totals'], [{'unit': 'dona', 'total_quantity': 7}])
+        self.assertEqual(b['unit_totals'], [{'unit': 'sht', 'total_quantity': 7}])
