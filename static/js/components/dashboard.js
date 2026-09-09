@@ -320,11 +320,21 @@ class DashboardComponent {
     async renderAdmin(container) {
         // Квартальный операционный отчёт по ТЗ есть и у администратора —
         // без единой денежной цифры (сервер отдаёт вариант kind=operational).
-        const [data, quarter, unread] = await Promise.all([
+        const [data, quarter, conversations] = await Promise.all([
             window.api.request('/reports/analytics/admin/'),
             window.api.request('/reports/analytics/quarterly/').catch(() => null),
-            window.api.request('/messaging/conversations/unread_summary/').catch(() => null),
+            // Непрочитанные от работников — из уже существующего списка
+            // бесед (kind + other_user.role + unread_count), без нового API.
+            window.api.request('/messaging/conversations/?page_size=100').catch(() => null),
         ]);
+        const convRows = (conversations && conversations.results) || conversations || [];
+        const workerUnread = (Array.isArray(convRows) ? convRows : []).reduce((sum, conv) => {
+            const other = conv.other_user || {};
+            if (conv.kind === 'direct' && other.role === 'worker') {
+                return sum + (conv.unread_count || 0);
+            }
+            return sum;
+        }, 0);
         const user = window.currentUser;
 
         container.innerHTML = `
@@ -343,7 +353,7 @@ class DashboardComponent {
                 ${window.ui.statCard({ icon: window.icon('alert-triangle', 18), color: 'red', titleKey: 'dashboard.overdue_orders', value: data.orders_overdue, href: '#/orders' })}
                 ${window.ui.statCard({ icon: window.icon('layers', 18), color: 'purple', titleKey: 'dashboard.pending_confirmations', value: data.awaiting_confirmation || 0, href: '#/production' })}
                 ${window.ui.statCard({ icon: window.icon('check-circle', 18), color: 'teal', titleKey: 'dashboard.submitted_today', value: data.submitted_today || 0, href: '#/production' })}
-                ${window.ui.statCard({ icon: window.icon('message', 18), color: 'blue', titleKey: 'dashboard.worker_unread', value: (unread && unread.from_workers) || 0, href: '#/messages' })}
+                ${window.ui.statCard({ icon: window.icon('message', 18), color: 'blue', titleKey: 'dashboard.worker_unread', value: workerUnread, href: '#/messages' })}
             </div>
 
             ${data.low_stock_materials.length ? `
