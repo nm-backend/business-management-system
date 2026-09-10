@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.router.addRoute('/messages', window.MessagesComponent);
         window.router.addRoute('/settings', window.SettingsComponent);
         // Блокируем прямой доступ к бизнес-маршрутам
-        ['/orders', '/warehouse', '/finished-products', '/production', '/clients', '/finance', '/subscription', '/audit', '/backup'].forEach(function(path) {
+        ['/orders', '/warehouse', '/finished-products', '/production', '/clients', '/sales', '/finance', '/subscription', '/audit', '/backup'].forEach(function(path) {
             window.router.addRoute(path, function(container) {
                 container.innerHTML = '<div class="card route-error"><p class="eyebrow">403</p><h1 data-i18n="common.forbidden"></h1><p data-i18n="superadmin.no_business_access"></p><a class="btn btn-primary btn-sm" href="#/" data-i18n="nav.dashboard"></a></div>';
                 window.i18n.applyTranslations();
@@ -146,6 +146,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addGuardedRoute('/orders', window.OrdersComponent, null);
     addGuardedRoute('/orders/kanban', window.KanbanComponent, ['owner', 'admin', 'manager']);
     addGuardedRoute('/production', window.ProductionComponent, null);
+    addGuardedRoute('/sales', window.SalesComponent, ['owner']);
     addGuardedRoute('/finance', window.FinanceComponent, ['owner']);
     addGuardedRoute('/messages', window.MessagesComponent, null);
     addGuardedRoute('/subscription', window.SubscriptionComponent, ['owner', 'admin']);

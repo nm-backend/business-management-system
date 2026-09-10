@@ -140,6 +140,13 @@
         "worker_overview": "Сиздин тапшырмаларыңыз жана кирешеңиз",
         "cash_operations": "Касса операциялары"
     },
+    "sales": {
+        "title": "Сатуулар",
+        "subtitle": "Клиентке берилген заказдар",
+        "total_amount": "Сатуулар суммасы",
+        "count": "Сатуулардын саны",
+        "empty": "Бул мөөнөттө сатуу жок"
+    },
     "warehouse": {
         "title": "Чийки зат кампасы",
         "finished_title": "Даяр продукция",
@@ -198,6 +205,7 @@
         "zone_a": "А зона",
         "zone_b": "Б зона",
         "zone_c": "В зона",
+        "zone_d": "Г зона",
         "zone_other": "Башка",
         "document_number": "Документ номери",
         "summary_total": "Жалпы калдык",
@@ -283,6 +291,7 @@
         "payment_status": "Төлөм абалы",
         "order_details": "Буйрутма деталдары",
         "required_materials": "Талап кылынган материалдар",
+        "required_materials_title": "Талап кылынган материалдар",
         "send_to_worker": "Жумушчуга жөнөтүү",
         "material_shortage": "Материал жетишсиз",
         "product_shortage": "Складда продукция жетишсиз",
@@ -347,6 +356,7 @@
         "confirm": "Тастыктоо",
         "reject": "Четке кагуу",
         "rejection_reason": "Четке кагуу себеби",
+        "attachment_optional": "Тиркеме (кааласаңыз)",
         "work_confirmed": "Иш тастыкталды",
         "work_rejected": "Иш четке кагылды",
         "attach_photo": "Сүрөт тиркөө",
@@ -578,6 +588,9 @@
         "msg_task_cancelled": "Тапшырма #{id} жокко чыгарылды",
         "msg_work_awaiting": "{worker}: {product} x {qty}",
         "msg_work_confirmed": "Иш #{id} ырасталды: {product} x {qty}",
+        "msg_work_accrued": "{product} үчүн {amount} сум иш акысы эсептелди",
+        "msg_material_shortage": "Иш #{id}: материал жетишсиз ({names})",
+        "msg_report_ready": "{quarter}-чейректик ({year}) отчету даяр",
         "msg_work_rejected": "Иш #{id} четке кагылды",
         "msg_subscription_extended": "{company} — {end} чейин",
         "msg_subscription_grace": "{company} — жеңилдик мезгили {end} чейин",

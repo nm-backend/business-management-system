@@ -140,6 +140,13 @@
         "worker_overview": "Ваши задачи и заработок",
         "cash_operations": "Операции кассы"
     },
+    "sales": {
+        "title": "Продажи",
+        "subtitle": "Заказы, выданные клиенту",
+        "total_amount": "Сумма продаж",
+        "count": "Количество продаж",
+        "empty": "За этот период продаж нет"
+    },
     "warehouse": {
         "title": "Склад сырья",
         "finished_title": "Готовая продукция",
@@ -198,6 +205,7 @@
         "zone_a": "Зона А",
         "zone_b": "Зона Б",
         "zone_c": "Зона В",
+        "zone_d": "Зона Г",
         "zone_other": "Другое",
         "document_number": "Номер документа",
         "summary_total": "Всего остаток",
@@ -283,6 +291,7 @@
         "payment_status": "Статус оплаты",
         "order_details": "Детали заказа",
         "required_materials": "Необходимые материалы",
+        "required_materials_title": "Требуемые материалы",
         "send_to_worker": "Отправить работнику",
         "material_shortage": "Материала недостаточно",
         "product_shortage": "Товара на складе недостаточно",
@@ -347,6 +356,7 @@
         "confirm": "Подтвердить",
         "reject": "Отклонить",
         "rejection_reason": "Причина отклонения",
+        "attachment_optional": "Вложение (по желанию)",
         "work_confirmed": "Работа подтверждена",
         "work_rejected": "Работа отклонена",
         "attach_photo": "Прикрепить фото",
@@ -578,6 +588,9 @@
         "msg_task_cancelled": "Задача #{id} отменена",
         "msg_work_awaiting": "{worker}: {product} x {qty}",
         "msg_work_confirmed": "Работа #{id} подтверждена: {product} x {qty}",
+        "msg_work_accrued": "Начислено {amount} сум за {product}",
+        "msg_material_shortage": "Работа #{id}: материала недостаточно ({names})",
+        "msg_report_ready": "Квартальный отчёт за {quarter}-й квартал {year} готов",
         "msg_work_rejected": "Работа #{id} отклонена",
         "msg_subscription_extended": "{company} — до {end}",
         "msg_subscription_grace": "{company} — льготный период до {end}",

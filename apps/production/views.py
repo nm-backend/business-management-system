@@ -8,7 +8,9 @@ Views for production API.
 """
 from decimal import Decimal, InvalidOperation
 
-from django.db.models import Sum
+from django.db import models
+from django.db.models import Q, Sum
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -92,6 +94,23 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         status_filter = self.request.query_params.get('status')
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        # Экран «Бугунги вазифаларим» (ТЗ): незавершённые задачи, которые
+        # актуальны именно сегодня — дедлайн сегодня, просрочен или дедлайна
+        # нет вовсе (такую задачу нельзя «спрятать» от работника: она всё
+        # ещё должна быть сделана). Завершённые/подтверждённые/отказанные
+        # в «сегодняшние» не попадают — для них есть общий список.
+        if self.request.query_params.get('scope') == 'today':
+            active_statuses = (
+                TaskStatus.PENDING, TaskStatus.ACCEPTED,
+                TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED,
+            )
+            queryset = queryset.filter(
+                status__in=active_statuses,
+            ).filter(
+                Q(deadline__isnull=True)
+                | Q(deadline__date=timezone.localdate())
+                | Q(deadline__lt=timezone.now()),
+            )
         return queryset
 
     def perform_create(self, serializer):
@@ -178,7 +197,13 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
 
     @action(detail=True, methods=['post'])
     def refuse(self, request, pk=None):
-        """Работник отказывается: {"reason": "no_time", "comment": "..."}."""
+        """Работник отказывается: {"reason": "no_time", "comment": "..."}.
+
+        Принимает и multipart/form-data с необязательным фото-доводом
+        «attachment» (макет «Вазифани рад этиш» → «Илова (ихтиёрий)»):
+        снимок бракованного материала и т.п. Размер/расширение проверяют
+        те же валидаторы, что у чертежа задачи.
+        """
         task = self.get_object()
         if task.worker != request.user:
             return Response({'detail': 'Вы можете отклонять только свои задачи'},
@@ -197,7 +222,28 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         if task.status != TaskStatus.PENDING:
             return Response({'detail': 'Задача не в статусе «ожидает»'},
                             status=status.HTTP_400_BAD_REQUEST)
+        # Фото-довод (необязательно). Поле refusal_attachment не редактируется
+        # сериализаторами — валидируем и присваиваем здесь, как refuse —
+        # единственный путь его записи. Task.refuse() пишет только статус и
+        # причину (update_fields), поэтому файл сохраняем отдельным вызовом.
+        # Валидаторы Django бросают core-ValidationError: превращаем её в
+        # честный 400, а не 500.
+        attachment = request.FILES.get('attachment')
+        if attachment is not None:
+            from django.core.exceptions import ValidationError as CoreValidationError
+
+            from apps.core.validators import validate_attachment_extension, validate_file_size
+            try:
+                validate_file_size(attachment)
+                validate_attachment_extension(attachment)
+            except CoreValidationError as error:
+                return Response({'detail': '; '.join(error.messages)},
+                                status=status.HTTP_400_BAD_REQUEST)
+            task.refusal_attachment = attachment
+            task.refusal_attachment_name = attachment.name or ''
         task.refuse(reason, request.data.get('comment', ''))
+        if attachment is not None:
+            task.save(update_fields=['refusal_attachment', 'refusal_attachment_name', 'updated_at'])
         notify_staff(
             task.company_id,
             Notification.NotificationType.WORKER_REFUSED,
@@ -371,6 +417,27 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
             },
             task=work.task,
         )
+        # «Не хватает материала» админам и владельцу (ТЗ: уведомление админа).
+        # Проверяем ПО СДАННОМУ объёму (годное + брак) — столько сырья уйдёт
+        # при подтверждении. Один раз на сдачу, не спамим на каждый чих.
+        if work.product:
+            shortages = services.check_material_shortages(
+                work.product,
+                (work.quantity or 0) + (work.defect_quantity or 0),
+            )
+            if shortages:
+                notify_staff(
+                    work.company_id,
+                    Notification.NotificationType.MATERIAL_SHORTAGE,
+                    title_key='notifications.material_shortage',
+                    message_key='notifications.msg_material_shortage',
+                    params={
+                        'id': work.id,
+                        'names': ', '.join(s['material_name'] for s in shortages),
+                    },
+                    order=work.task.order if work.task else None,
+                    task=work.task,
+                )
         if work.task and work.task.worker_id == work.worker_id:
             work.task.complete()
 

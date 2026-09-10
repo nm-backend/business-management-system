@@ -53,6 +53,9 @@ class TaskSerializer(serializers.ModelSerializer):
             'planned_quantity', 'planned_unit',
             'attachment', 'attachment_name', 'is_overdue',
             'refusal_reason', 'refusal_comment',
+            # Фото-довод к отказу (макет «Илова»): read-only, файл принимает
+            # только действие refuse — прямым PATCH его не подложить.
+            'refusal_attachment', 'refusal_attachment_name',
             'assigned_at', 'accepted_at', 'completed_at',
             'confirmed_at', 'confirmed_by', 'confirmed_by_name',
             'rejection_comment', 'is_self_assigned'
@@ -62,6 +65,9 @@ class TaskSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'status', 'worker', 'order', 'assigned_by', 'confirmed_by',
             'is_self_assigned', 'attachment_name',
+            # Вложение отказа ставит только действие refuse (multipart) —
+            # прямым PATCH его не заменить и не стереть.
+            'refusal_attachment', 'refusal_attachment_name',
             'assigned_at', 'accepted_at', 'completed_at', 'confirmed_at',
         ]
 

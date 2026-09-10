@@ -10,7 +10,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.production.services import check_material_shortages
+from apps.production.services import check_material_shortages, get_recipe_requirements
 from .models import Order
 
 
@@ -18,6 +18,10 @@ class OrderSerializer(serializers.ModelSerializer):
     """Сериализатор заказа — admin/worker видит статусы без сумм."""
     has_material_shortage = serializers.SerializerMethodField()
     material_shortages = serializers.SerializerMethodField()
+    # Полный список требуемого сырья со статусом достаточности — макет
+    # «Буюртма тафсилоти»: каждая позиция («Керак: X · Мавжуд: Y») с бейджем
+    # «Етарли / Етарли эмас», а не только нехватки.
+    material_requirements = serializers.SerializerMethodField()
     has_product_shortage = serializers.SerializerMethodField()
     product_shortage = serializers.SerializerMethodField()
     is_overdue = serializers.BooleanField(read_only=True)
@@ -69,6 +73,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'quantity', 'unit', 'deadline', 'payment_due_date',
             'worker', 'worker_name', 'comment', 'photo',
             'status', 'payment_status', 'has_material_shortage', 'material_shortages',
+            'material_requirements',
             'has_product_shortage', 'product_shortage',
             'is_overdue', 'created_at', 'updated_at',
         ]
@@ -93,6 +98,31 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_has_material_shortage(self, obj):
         return bool(self.get_material_shortages(obj))
+
+    def get_material_requirements(self, obj):
+        """
+        Всё сырьё по активному рецепту (не только нехватки): имя, сколько
+        требуется, сколько на складе, единица и флаг достаточности.
+
+        Только количества — никаких цен: поле попадает и в сериализатор
+        admin/worker (макет показывает список всем, кто видит заказ).
+        """
+        if not hasattr(obj, '_material_requirements'):
+            requirements = []
+            if obj.product and obj.status not in (
+                    Order.Status.DELIVERED, Order.Status.CANCELLED):
+                for material, required in get_recipe_requirements(obj.product, obj.quantity):
+                    available = material.quantity or 0
+                    requirements.append({
+                        'material_id': material.id,
+                        'material_name': material.name,
+                        'required': required,
+                        'available': available,
+                        'unit': material.unit,
+                        'is_sufficient': available >= required,
+                    })
+            obj._material_requirements = requirements
+        return obj._material_requirements
 
     def get_product_shortage(self, obj):
         """

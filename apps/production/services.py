@@ -289,6 +289,20 @@ def confirm_work(
         },
         task=work.task,
     )
+    # «Начислена личная работа» (ТЗ: отдельное уведомление работника):
+    # вместе с фактом подтверждения работник сразу видит сумму начисления
+    # по своей ставке. labor_cost уже рассчитан и записан выше.
+    notify(
+        work.worker,
+        Notification.NotificationType.WORK_ACCRUED,
+        title_key='notifications.work_accrued',
+        message_key='notifications.msg_work_accrued',
+        params={
+            'product': (product.name if product else ''),
+            'amount': str(labor_cost),
+        },
+        task=work.task,
+    )
     write_audit_log(
         action=AuditLog.Action.UPDATE,
         actor=confirmed_by,

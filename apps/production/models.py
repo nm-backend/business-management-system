@@ -143,6 +143,21 @@ class Task(TimestampedModel):
     status = models.CharField(max_length=20, choices=TaskStatus.choices, default=TaskStatus.PENDING, db_index=True, verbose_name='Статус')
     refusal_reason = models.CharField(max_length=30, choices=RefusalReason.choices, blank=True, default='', verbose_name='Причина отказа')
     refusal_comment = models.TextField(blank=True, default='', verbose_name='Комментарий к отказу')
+    # Фото-довод к отказу (макет «Вазифани рад этиш» → «Илова (ихтиёрий)»):
+    # работник может приложить снимок (например, бракованного материала).
+    # Пишем в тот же префикс 'tasks/attachments/', что и чертёж задачи, —
+    # защищённая раздача /media/ уже умеет проверять права по нему
+    # (apps/core/media_views.py::_can_view_task_attachment).
+    refusal_attachment = models.FileField(
+        upload_to='tasks/attachments/%Y/%m/', blank=True, null=True,
+        validators=[validate_file_size, validate_attachment_extension],
+        verbose_name='Илова к отказу (фото)',
+    )
+    # Исходное имя файла: путь в media обезличен, а админу нужно показать
+    # « IMG_2024.jpg», а не «tasks/attachments/2026/09/IMG_x7Fk2.jpg».
+    refusal_attachment_name = models.CharField(
+        max_length=255, blank=True, default='', verbose_name='Имя файла отказа',
+    )
     assigned_at = models.DateTimeField(auto_now_add=True, verbose_name='Назначено')
     accepted_at = models.DateTimeField(null=True, blank=True, verbose_name='Принято в работу')
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name='Завершено')

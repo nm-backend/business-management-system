@@ -140,6 +140,13 @@
         "worker_overview": "Сизнинг вазифаларингиз ва даромадингиз",
         "cash_operations": "Касса операциялари"
     },
+    "sales": {
+        "title": "Сотувлар",
+        "subtitle": "Мижозга берилган буюртмалар",
+        "total_amount": "Сотувлар суммаси",
+        "count": "Сотувлар сони",
+        "empty": "Бу даврда сотувлар йўқ"
+    },
     "warehouse": {
         "title": "Хом ашё омбори",
         "finished_title": "Тайёр маҳсулот",
@@ -198,6 +205,7 @@
         "zone_a": "А зона",
         "zone_b": "Б зона",
         "zone_c": "В зона",
+        "zone_d": "Г зона",
         "zone_other": "Бошқа",
         "document_number": "Ҳужжат рақами",
         "summary_total": "Жами қолдиқ",
@@ -283,6 +291,7 @@
         "payment_status": "Тўлов ҳолати",
         "order_details": "Буюртма тафсилоти",
         "required_materials": "Талаб қилинган материаллар",
+        "required_materials_title": "Талаб қилинадиган материаллар",
         "send_to_worker": "Ишчига юбориш",
         "material_shortage": "Материал етарли эмас",
         "product_shortage": "Товар омборда етарли эмас",
@@ -347,6 +356,7 @@
         "confirm": "Тасдиқлаш",
         "reject": "Рад этиш",
         "rejection_reason": "Рад этиш сабаби",
+        "attachment_optional": "Илова (ихтиёрий)",
         "work_confirmed": "Иш тасдиқланди",
         "work_rejected": "Иш рад этилди",
         "attach_photo": "Расм бириктириш",
@@ -578,6 +588,9 @@
         "msg_task_cancelled": "Вазифа #{id} бекор қилинди",
         "msg_work_awaiting": "{worker}: {product} x {qty}",
         "msg_work_confirmed": "Иш #{id} тасдиқланди: {product} x {qty}",
+        "msg_work_accrued": "{product} учун {amount} сўм иш ҳақи ҳисобланди",
+        "msg_material_shortage": "Иш #{id}: материал етарли эмас ({names})",
+        "msg_report_ready": "{quarter}-чораклик ({year}) ҳисоботи тайёр",
         "msg_work_rejected": "Иш #{id} рад этилди",
         "msg_subscription_extended": "{company} — {end} гача",
         "msg_subscription_grace": "{company} — имтиёзли давр {end} гача",
