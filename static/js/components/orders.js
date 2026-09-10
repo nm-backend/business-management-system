@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Заказы: список с фильтром по статусу, красные карточки при нехватке
  * материала или неоплате, создание (owner/admin), карточка заказа с
  * действиями: отправить работнику, выдать, отменить, принять оплату (owner).
@@ -190,6 +190,25 @@ class OrdersComponent {
                 <span data-i18n="orders.required_materials"></span> ${window.ui.qty(s.required)},
                 <span data-i18n="warehouse.quantity"></span> ${window.ui.qty(s.available)}
             </div>`).join('');
+        // Полный список требуемого сырья (макет «Буюртма тафсилоти»): каждая
+        // позиция с количеством и бейджем «Етарли / Етарли эмас», а не только
+        // нехватки. Цена не показывается никому — её нет и в API.
+        const requirementRows = (o.material_requirements || []).map((r) => `
+            <div class="list-row u-cursor-default">
+                <span class="text-sm">
+                    ${r.is_sufficient
+                        ? `<span style="color:var(--success-color);">${window.icon('check-circle', 13)}</span>`
+                        : `<span class="text-danger">${window.icon('alert-triangle', 13)}</span>`}
+                    ${window.ui.escape(r.material_name)}
+                </span>
+                <span class="text-sm u-text-right">
+                    <span class="text-muted"><span data-i18n="orders.required_materials"></span> ${window.ui.qty(r.required)}</span>
+                    · <span class="${r.is_sufficient ? '' : 'text-danger'}"><span data-i18n="warehouse.available"></span> ${window.ui.qty(r.available)} <span data-i18n="units.${r.unit}"></span></span>
+                </span>
+            </div>`).join('');
+        const requirementsBlock = requirementRows ? `
+            <div class="text-sm font-bold" style="margin:6px 0 6px;" data-i18n="orders.required_materials_title"></div>
+            <div class="list-group u-card-flat u-mb-3">${requirementRows}</div>` : '';
         const productShortage = o.product_shortage ? `
             <div class="alert-box u-mb-3">
                 ${window.icon('alert-triangle', 14)} <span data-i18n="orders.product_shortage_detail"></span>:
@@ -205,6 +224,7 @@ class OrdersComponent {
             </div>
             ${shortages}
             ${productShortage}
+            ${requirementsBlock}
             <div class="list-group u-card-flat">
                 ${row('orders.product', window.ui.escape(o.product_name || o.custom_product_name || '-'))}
                 ${row('orders.quantity', `${window.ui.qty(o.quantity)} <span data-i18n="units.${o.unit}"></span>`)}

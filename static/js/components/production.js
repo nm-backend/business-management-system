@@ -71,6 +71,17 @@ class ProductionComponent {
         });
     }
 
+    /** Переключатель «Бугун / Ҳаммаси» в списке задач работника. */
+    bindScopeToggle(contentEl) {
+        contentEl.querySelectorAll('[data-scope]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                this.taskScope = btn.dataset.scope;
+                this.taskFilter = '';
+                this.loadTasks();
+            });
+        });
+    }
+
     async loadTasks() {
         const contentEl = this.container.querySelector('#production-content');
         // Пользователь мог уйти со страницы, пока шёл запрос: контейнера
@@ -78,7 +89,13 @@ class ProductionComponent {
         if (window.listStates.gone(contentEl)) return;
         window.listStates.loading(contentEl, window.ui.t('common.loading'));
         try {
-            const response = await window.api.request('/production/tasks/?page_size=100');
+            // Экран «Бугунги вазифаларим» (ТЗ): по умолчанию у работника —
+            // только актуальные на сегодня задачи (дедлайн сегодня/просрочен/
+            // без дедлайна). Переключатель «Бугун / Ҳаммаси» покажет весь список.
+            const user0 = window.currentUser;
+            const scope = user0.is_worker ? (this.taskScope || 'today') : '';
+            const scopeQuery = scope ? `&scope=${scope}` : '';
+            const response = await window.api.request(`/production/tasks/?page_size=100${scopeQuery}`);
             const all = response.results || response;
             const filter = this.taskFilter || '';
             const counts = {
@@ -97,14 +114,22 @@ class ProductionComponent {
                 ['accepted', 'work_statuses.accepted', counts.accepted],
                 ['refused', 'work_statuses.refused', counts.refused],
             ]);
+            // Переключатель «Бугун / Ҳаммаси» — только у работника: фильтр
+            // серверный (scope=today), счётчики считаются по загруженной выборке.
+            const scopeToggle = user0.is_worker ? `
+                <div class="tabs u-mb-4">
+                    <button class="tab-btn ${scope === 'today' ? 'active' : ''}" data-scope="today" data-i18n="periods.today"></button>
+                    <button class="tab-btn ${scope === '' ? 'active' : ''}" data-scope="" data-i18n="common.all"></button>
+                </div>` : '';
             if (!tasks.length) {
-                contentEl.innerHTML = tabs + `<div class="card list-state" data-i18n="common.no_data"></div>`;
+                contentEl.innerHTML = scopeToggle + tabs + `<div class="card list-state" data-i18n="common.no_data"></div>`;
                 this.bindStatusTabs(contentEl, 'task');
+                this.bindScopeToggle(contentEl);
                 window.i18n.applyTranslations();
                 return;
             }
             const user = window.currentUser;
-            contentEl.innerHTML = tabs + tasks.map((t) => `
+            contentEl.innerHTML = scopeToggle + tabs + tasks.map((t) => `
                 <div class="card">
                     <div class="card-title u-mb-1">
                         <span>#${t.id} ${window.ui.escape(t.title || t.order_product || '')}</span>
@@ -116,6 +141,7 @@ class ProductionComponent {
                     </div>
                     ${this.taskDetails(t)}
                     ${t.refusal_reason ? `<div class="text-sm text-danger u-mt-2">${window.icon('x', 14)} <span data-i18n="refusal_reasons.${t.refusal_reason}"></span> ${window.ui.escape(t.refusal_comment || '')}</div>` : ''}
+                    ${t.refusal_attachment ? `<div class="text-sm u-mt-2">${window.icon('file-text', 14)} <a href="${window.ui.escape(t.refusal_attachment)}" target="_blank" rel="noopener">${window.ui.escape(t.refusal_attachment_name || window.ui.t('production.attachment_optional'))}</a></div>` : ''}
                     ${user.is_worker && t.status === 'pending' ? `
                         <div style="display:flex;gap:10px;margin-top:12px;">
                             <button class="btn btn-success btn-sm u-grow" data-accept="${t.id}" data-i18n="worker_section.accept"></button>
@@ -128,6 +154,7 @@ class ProductionComponent {
                 </div>`).join('');
 
             this.bindStatusTabs(contentEl, 'task');
+            this.bindScopeToggle(contentEl);
             contentEl.querySelectorAll('[data-accept]').forEach((b) => b.addEventListener('click', () => this.acceptTask(b.dataset.accept)));
             contentEl.querySelectorAll('[data-refuse]').forEach((b) => b.addEventListener('click', () => this.refuseTask(b.dataset.refuse)));
             contentEl.querySelectorAll('[data-cancel-task]').forEach((b) => b.addEventListener('click', () => this.cancelTask(b.dataset.cancelTask)));
@@ -348,15 +375,31 @@ class ProductionComponent {
                     </select></div>
                 <div class="form-group"><label data-i18n="warehouse.comment"></label>
                     <textarea name="comment" class="form-control" rows="2"></textarea></div>
+                <!-- Фото-довод (макет «Илова (ихтиёрий)»): необязательный снимок,
+                     например бракованного материала. -->
+                <div class="form-group"><label data-i18n="production.attachment_optional"></label>
+                    <input type="file" name="attachment" class="form-control" accept="image/*,.pdf"></div>
                 <button type="submit" class="btn btn-danger btn-block" data-i18n="worker_section.refuse"></button>
             </form>
         `);
         modal.querySelector('#refuse-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const data = Object.fromEntries(new FormData(e.target));
-            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+            const form = e.target;
+            // Есть файл → multipart/form-data (сервер принимает оба варианта);
+            // нет файла → прежний JSON, чтобы не менять поведение без причины.
+            const fileInput = form.querySelector('input[name=attachment]');
+            const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+            let body;
+            if (hasFile) {
+                body = new FormData(form);
+            } else {
+                const data = Object.fromEntries(new FormData(form));
+                delete data.attachment; // файл не выбран — уходим JSON-ом
+                body = JSON.stringify(data);
+            }
+            await window.ui.submitGuard(form.querySelector('button[type=submit]'), async () => {
                 try {
-                    await window.api.request(`/production/tasks/${id}/refuse/`, { method: 'POST', body: JSON.stringify(data) });
+                    await window.api.request(`/production/tasks/${id}/refuse/`, { method: 'POST', body });
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadTasks();

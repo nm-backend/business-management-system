@@ -70,6 +70,7 @@ class Router {
         if (path.startsWith('/warehouse')) navKey = 'warehouse';
         if (path.startsWith('/finished-products')) navKey = 'warehouse';
         if (path.startsWith('/clients')) navKey = 'clients';
+        if (path.startsWith('/sales')) navKey = 'sales';
         if (path.startsWith('/production')) navKey = 'production';
         if (path.startsWith('/finance')) navKey = 'finance';
         if (path.startsWith('/messages')) navKey = 'messages';

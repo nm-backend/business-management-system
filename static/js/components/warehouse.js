@@ -97,6 +97,7 @@ class WarehouseComponent {
                             <option value="a" data-i18n="warehouse.zone_a"></option>
                             <option value="b" data-i18n="warehouse.zone_b"></option>
                             <option value="c" data-i18n="warehouse.zone_c"></option>
+                            <option value="d" data-i18n="warehouse.zone_d"></option>
                             <option value="other" data-i18n="warehouse.zone_other"></option>
                         </select>
                     </div>
@@ -929,6 +930,7 @@ class WarehouseComponent {
                             <option value="a" ${m?.storage_zone === 'a' ? 'selected' : ''} data-i18n="warehouse.zone_a"></option>
                             <option value="b" ${m?.storage_zone === 'b' ? 'selected' : ''} data-i18n="warehouse.zone_b"></option>
                             <option value="c" ${m?.storage_zone === 'c' ? 'selected' : ''} data-i18n="warehouse.zone_c"></option>
+                            <option value="d" ${m?.storage_zone === 'd' ? 'selected' : ''} data-i18n="warehouse.zone_d"></option>
                             <option value="other" ${m?.storage_zone === 'other' ? 'selected' : ''} data-i18n="warehouse.zone_other"></option>
                         </select></div>
                 </div>

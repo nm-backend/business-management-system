@@ -28,6 +28,8 @@ class StorageZoneChoices(models.TextChoices):
     A = 'a', 'А зона'
     B = 'b', 'Б зона'
     C = 'c', 'В зона'
+    # Г зона — из макета «Омбордаги жойлашув»: сетка зон А/Б/В/Г.
+    D = 'd', 'Г зона'
     OTHER = 'other', 'Бошқа'
 
 

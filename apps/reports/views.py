@@ -121,6 +121,64 @@ class RevenueTimelineView(APIView):
         return Response(get_revenue_timeline_data(request.user.company_id, _lang(request)))
 
 
+class SalesHistoryView(APIView):
+    """
+    GET /api/v1/reports/analytics/sales/?period=month|today|...|&date_from&date_to
+
+    Экран «Продажи» (ТЗ: список главных экранов хозяина): выданные клиенту
+    заказы за период с деньгами — только владелец (IsOwner, как и вся
+    финансовая аналитика). Показатели:
+      * count       — количество продаж (выдач) за период;
+      * total_amount— сумма продаж (Σ total_amount выданных заказов);
+      * paid        — оплачено по ним (Σ paid_amount);
+      * debt        — остаток долга (Σ max(total − paid, 0));
+    плюс сам список выдач в хронологическом порядке.
+    Периоды считает только сервер (_parse_period): today/yesterday/week/
+    month/quarter/year + custom date_from/date_to.
+    """
+    permission_classes = [IsCompanyMember, IsOwner]
+
+    def get(self, request):
+        date_from, date_to = _parse_period(request)
+        orders = (
+            Order.objects.filter(
+                company_id=request.user.company_id,
+                status=Order.Status.DELIVERED,
+                is_archived=False,
+                delivered_at__date__gte=date_from,
+                delivered_at__date__lte=date_to,
+            )
+            .select_related('client', 'product')
+            .order_by('-delivered_at', '-id')
+        )
+        total_amount = sum((o.total_amount or 0) for o in orders)
+        paid = sum((o.paid_amount or 0) for o in orders)
+        return Response({
+            'date_from': date_from,
+            'date_to': date_to,
+            'count': orders.count(),
+            'total_amount': total_amount,
+            'paid': paid,
+            'debt': max(total_amount - paid, 0),
+            'orders': [
+                {
+                    'id': o.id,
+                    'client': o.client_id,
+                    'delivered_at': o.delivered_at,
+                    'client_name': o.client.name,
+                    'product_name': (o.product.name if o.product else o.custom_product_name),
+                    'quantity': o.quantity,
+                    'unit': o.unit,
+                    'total_amount': o.total_amount,
+                    'paid_amount': o.paid_amount,
+                    'debt': max((o.total_amount or 0) - (o.paid_amount or 0), 0),
+                    'payment_status': o.payment_status,
+                }
+                for o in orders
+            ],
+        })
+
+
 class QuarterlyReportView(APIView):
     """
     GET /api/v1/reports/analytics/quarterly/?year=2026&quarter=3
@@ -150,12 +208,38 @@ class QuarterlyReportView(APIView):
         if request.user.is_owner:
             data = get_quarterly_report_data(company_id, year, quarter)
             data['kind'] = 'financial'
+            # «Отчёт готов» (ТЗ: уведомление владельца). Создаём один раз на
+            # пару год/квартал — повторные открытия отчёта не спамят ленту.
+            self._notify_report_ready(request, year, quarter)
             return Response(data)
 
         # Администратор и менеджер: только операционные показатели.
         data = get_quarterly_operational_report(company_id, year, quarter)
         data['kind'] = 'operational'
         return Response(data)
+
+    @staticmethod
+    def _notify_report_ready(request, year, quarter):
+        """Уведомление владельцу «Отчёт готов» (один раз на квартал)."""
+        from apps.messaging.models import Notification
+        from apps.messaging.services import notify
+        already_sent = Notification.objects.filter(
+            user=request.user,
+            type=Notification.NotificationType.REPORT_READY,
+            company_id=request.user.company_id,
+            params__year=year,
+            params__quarter=quarter,
+        ).exists()
+        if already_sent:
+            return
+        notify(
+            request.user,
+            Notification.NotificationType.REPORT_READY,
+            title_key='notifications.report_ready',
+            message_key='notifications.msg_report_ready',
+            params={'year': year, 'quarter': quarter},
+            company=request.user.company,
+        )
 
 
 class AdminAnalyticsView(APIView):

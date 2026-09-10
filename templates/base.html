@@ -56,6 +56,10 @@
           <a href="#/orders" class="sidebar-link" data-nav="orders">
             <span class="nav-icon">📋</span><span data-i18n="nav.orders">Буюртмалар</span>
           </a>
+          <!-- Продажи: только владелец (деньги; API тоже IsOwner). -->
+          <a href="#/sales" class="sidebar-link" data-nav="sales" data-role="owner">
+            <span class="nav-icon">🛒</span><span data-i18n="nav.sales">Сотувлар</span>
+          </a>
           <a href="#/warehouse" class="sidebar-link" data-nav="warehouse">
             <span class="nav-icon">📦</span><span data-i18n="nav.warehouse">Омбор</span>
           </a>
@@ -176,6 +180,7 @@
     <script src="{% static 'js/components/kanban.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/clients.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/production.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/components/sales.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/finance.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/messages.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/components/settings.js' %}?v={{ ASSET_VERSION }}"></script>
