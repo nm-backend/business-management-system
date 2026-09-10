@@ -72,10 +72,10 @@ class FinanceCreateAPITests(TestCase):
         from apps.production.models import WorkRecord
         from apps.warehouse.models import FinishedProduct
         product = FinishedProduct.objects.create(
-            company=self.company, name='Плита', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Плита', quantity=Decimal('0'), unit='sht')
         WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=product,
-            quantity=Decimal('1'), unit='dona', labor_cost=Decimal('400000'),
+            quantity=Decimal('1'), unit='sht', labor_cost=Decimal('400000'),
             status=WorkRecord.WorkStatus.CONFIRMED,
         )
         resp = self.api.post('/api/v1/finance/worker-payments/', {

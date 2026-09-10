@@ -35,7 +35,7 @@ class _OrderMoneyBase(TestCase):
             company=self.company, name='Товар', quantity=Decimal('10'))
         self.order = Order.objects.create(
             company=self.company, client=self.cli, product=self.product,
-            quantity=Decimal('1'), unit='dona', total_amount=Decimal('1000'),
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('1000'),
             deadline=datetime.datetime(2026, 12, 1, tzinfo=datetime.timezone.utc))
 
     def api(self):

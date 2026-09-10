@@ -164,11 +164,9 @@ class ProductionConfirmRaceTests(ConcurrencyScenarioMixin, TransactionTestCase):
         # Движений склада тоже ровно по одному на сторону — дубликатов нет.
         self.assertEqual(StockMovement.objects.filter(
             movement_type=StockMovement.MovementType.PRODUCTION_OUT,
-            related_production_id=work.id,
         ).count(), 1)
         self.assertEqual(StockMovement.objects.filter(
             movement_type=StockMovement.MovementType.PRODUCTION_IN,
-            related_production_id=work.id,
         ).count(), 1)
 
     def test_confirm_and_reject_race_resolves_to_one_outcome(self):

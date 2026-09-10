@@ -43,7 +43,7 @@ class ClientProfitTests(TestCase):
         self.client = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
             company=self.company, name='Столешница', quantity=Decimal('100'),
-            unit='dona', cost_price=Decimal('40'))
+            unit='sht', cost_price=Decimal('40'))
         self.owner_api = self._api(self.owner)
         self.admin_api = self._api(self.admin)
 
@@ -65,7 +65,7 @@ class ClientProfitTests(TestCase):
             company=self.company, client=self.client,
             product=product,
             custom_product_name='' if product else 'Изделие на заказ',
-            quantity=Decimal(quantity), unit='dona',
+            quantity=Decimal(quantity), unit='sht',
             total_amount=Decimal(total_amount), status=status,
         )
 

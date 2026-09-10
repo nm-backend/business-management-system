@@ -43,12 +43,12 @@ class WorkPhotoGalleryTests(TestCase):
         self.worker = User.objects.create_user(username='ph_worker', password='p',
                                                role=User.Role.WORKER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.worker)
 
     def submit(self, photos=(), **extra):
-        data = {'product': self.product.id, 'quantity': '2', 'unit': 'dona'}
+        data = {'product': self.product.id, 'quantity': '2', 'unit': 'sht'}
         data.update(extra)
         if photos:
             data['uploaded_photos'] = list(photos)
@@ -86,7 +86,7 @@ class WorkPhotoGalleryTests(TestCase):
     def test_single_legacy_photo_lands_in_gallery(self):
         """Старое одиночное поле не должно оставаться невидимым."""
         resp = self.api.post(WORKS, {
-            'product': self.product.id, 'quantity': '1', 'unit': 'dona',
+            'product': self.product.id, 'quantity': '1', 'unit': 'sht',
             'photo': png('legacy.png'),
         }, format='multipart')
         self.assertEqual(resp.status_code, 201, resp.content[:300])

@@ -60,7 +60,6 @@ INSTALLED_APPS = [
     'apps.reports',  # Аналитика и экспорт отчетов
     'apps.audit',  # Система аудита действий
     'apps.backup',  # Резервное копирование (Celery Beat)
-    'apps.billing',  # Подписки (SaaS billing)
     
     'drf_spectacular',  # Автоматическая генерация OpenAPI схемы
     'django_celery_beat',  # Celery Beat scheduler
@@ -85,7 +84,7 @@ MIDDLEWARE = [
     'apps.core.middleware.SecurityHeadersMiddleware',  # CSP + Permissions-Policy
     # Единый subscription gate: 403 subscription_expired для бизнес-запросов
     # компаний с замороженной/истёкшей подпиской (whitelist — в самом модуле).
-    'apps.billing.gate.SubscriptionGateMiddleware',
+    'apps.companies.gate.SubscriptionGateMiddleware',
 ]
 
 ROOT_URLCONF = 'skladpro.urls'
@@ -279,6 +278,23 @@ STORAGES = {
 MEDIA_URL = config('MEDIA_URL', default='/media/')  # URL для медиа файлов
 MEDIA_ROOT = BASE_DIR / config('MEDIA_ROOT', default='media/')  # Директория для медиа файлов
 
+# ── Защищённая раздача /media/ (см. apps/core/media_views.py) ──
+# /media/ отдаётся ТОЛЬКО через serve_protected_media — после аутентификации
+# и проверки принадлежности файла компании пользователя. Прямая раздача
+# каталога веб-сервером запрещена: это вернёт дыру (чужие чеки/аттачменты
+# по прямой ссылке). Правильная схема за reverse-proxy:
+#   location /media/           { proxy_pass http://django; }  # проверки — здесь
+#   location /protected-media/ { internal; alias /app/media/; }  # только байты
+# и PROTECTED_MEDIA_ACCEL_LOCATION=/protected-media/ — тогда Django отвечает
+# пустым 200 с X-Accel-Redirect, а байты отдаёт nginx, не Python.
+PROTECTED_MEDIA_ACCEL_LOCATION = config(
+    'PROTECTED_MEDIA_ACCEL_LOCATION', default='',
+)
+# Apache + mod_xsendfile: отдать байты через заголовок X-Sendfile.
+PROTECTED_MEDIA_SENDFILE = config(
+    'PROTECTED_MEDIA_SENDFILE', default=False, cast=bool,
+)
+
 # Максимальный размер загружаемого файла: 10 МБ
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -344,22 +360,6 @@ CELERY_RESULT_SERIALIZER = 'json'
 # Часовой пояс для Beat
 CELERY_TIMEZONE = 'Asia/Bishkek'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
-
-# ── Подписки (SaaS billing) ──
-# Длительность периода подписки в днях: 30 дней с момента создания компании.
-SUBSCRIPTION_DAYS = 30
-# За сколько дней до окончания отправляем напоминание владельцу.
-SUBSCRIPTION_GRACE_NOTIFY_DAYS = 3
-# Валюта счетов.
-SUBSCRIPTION_CURRENCY = 'UZS'
-# Платёжный провайдер: 'manual' (подтверждение супер-админом) — сейчас;
-# позже 'payme' / 'click' (см. apps.billing.payments).
-SUBSCRIPTION_PAYMENT_PROVIDER = config('SUBSCRIPTION_PAYMENT_PROVIDER', default='manual')
-# Каталог тарифов. price пока 0 — реальная оплата подключается вместе с провайдером.
-SUBSCRIPTION_PLANS = [
-    {'key': 'free', 'label': 'Free', 'price': 0, 'note': ''},
-    {'key': 'pro', 'label': 'Pro', 'price': 0, 'note': 'Полный доступ к аналитике и отчётам'},
-]
 
 # Логирование: пишем в stdout (12-factor: удобно для Docker/облака, где логи
 # собираются из потока вывода). Уровень настраивается через LOG_LEVEL.

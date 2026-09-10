@@ -35,6 +35,7 @@
     <link rel="stylesheet" href="{% static 'css/chat.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/enhance.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/mobile.css' %}?v={{ ASSET_VERSION }}" />
+    <link rel="stylesheet" href="{% static 'css/apple.css' %}?v={{ ASSET_VERSION }}" />
     {% block extra_css %}{% endblock %}
     {% block chart_css %}{% endblock %}
   </head>
@@ -164,6 +165,7 @@
     <script src="{% static 'js/icons.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/list-states.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/ui.js' %}?v={{ ASSET_VERSION }}"></script>
+    <script src="{% static 'js/media.js' %}?v={{ ASSET_VERSION }}"></script>
 
     {% block extra_js %}
     <script src="{% static 'js/router.js' %}?v={{ ASSET_VERSION }}"></script>

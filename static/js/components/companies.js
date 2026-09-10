@@ -22,11 +22,11 @@ class CompaniesComponent {
         this.totalCount = 0;
 
         container.innerHTML = `
-            <button class="btn btn-primary btn-block" id="add-company-btn" style="margin-bottom:12px;" data-i18n="companies.add"></button>
+            <button class="btn btn-primary btn-block u-mb-5" id="add-company-btn" data-i18n="companies.add"></button>
 
             <div id="companies-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px;"></div>
 
-            <div class="form-group" style="margin-bottom:8px;">
+            <div class="form-group u-mb-3">
                 <input type="search" id="companies-search" class="form-control"
                     data-i18n-attr="placeholder" data-i18n="companies.search" autocomplete="off">
             </div>
@@ -58,20 +58,20 @@ class CompaniesComponent {
             <div class="list-group">
                 <div class="list-row lang-option" data-lang="uz_cyrl">
                     <span>Ўзбекча</span>
-                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'uz_cyrl' ? '' : 'visibility:hidden;'}">✓</span>
+                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'uz_cyrl' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
                 </div>
                 <div class="list-row lang-option" data-lang="ru">
                     <span>Русский</span>
-                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'ru' ? '' : 'visibility:hidden;'}">✓</span>
+                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'ru' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
                 </div>
                 <div class="list-row lang-option" data-lang="ky">
                     <span>Кыргызча</span>
-                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'ky' ? '' : 'visibility:hidden;'}">✓</span>
+                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'ky' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
                 </div>
             </div>
-            <div class="list-group" style="margin-top:16px;">
+            <div class="list-group u-mt-6">
                 <div class="list-row" id="logout-row">
-                    <span class="text-danger">🚪 <span data-i18n="auth.logout"></span></span>
+                    <span class="text-danger">${window.icon('log-out', 16)} <span data-i18n="auth.logout"></span></span>
                 </div>
             </div>
         `;
@@ -126,7 +126,7 @@ class CompaniesComponent {
             statsEl.innerHTML = cards.map((c) => `
                 <div class="stat-card" style="padding:10px 12px;">
                     <div class="stat-title" data-i18n="companies.${c.key}"></div>
-                    <div class="stat-value" style="font-size:20px;">${c.value}</div>
+                    <div class="stat-value u-fs-20">${c.value}</div>
                 </div>`).join('');
             window.i18n.applyTranslations();
         } catch (e) {
@@ -181,7 +181,7 @@ class CompaniesComponent {
                 <tr class="company-row" data-id="${c.id}" tabindex="0" role="button"
                     aria-label="${window.ui.escape(c.name)}">
                     <td>
-                        <div style="display:flex;align-items:center;gap:8px;">
+                        <div class="u-row-sm">
                             ${c.logo_url ? `<img src="${window.ui.escape(c.logo_url)}" alt="" style="width:28px;height:28px;border-radius:6px;object-fit:cover;">` : ''}
                             <div>
                                 <div style="font-weight:600;font-size:13px;">
@@ -194,16 +194,16 @@ class CompaniesComponent {
                             </div>
                         </div>
                     </td>
-                    <td style="white-space:nowrap;">${window.ui.escape(c.owner_full_name || c.owner_username || '-')}</td>
+                    <td class="u-nowrap">${window.ui.escape(c.owner_full_name || c.owner_username || '-')}</td>
                     <td>${c.users_count}</td>
                     <td>${c.clients_count}</td>
                     <td>${c.orders_count}</td>
-                    <td style="white-space:nowrap;">${window.ui.escape(c.plan_name || '-')}</td>
-                    <td style="white-space:nowrap;">
+                    <td class="u-nowrap">${window.ui.escape(c.plan_name || '-')}</td>
+                    <td class="u-nowrap">
                         ${c.subscription_end ? window.ui.date(c.subscription_end) : '-'}
                         ${(c.subscription_status === 'active' && c.subscription_end) ? `<div class="text-sm text-muted">${this.daysLeft(c.subscription_end)} ${window.ui.t('companies.days_left')}</div>` : ''}
                     </td>
-                    <td style="white-space:nowrap;font-size:11px;">${window.ui.datetime(c.subscription_end)}</td>
+                    <td class="u-tiny-nowrap">${window.ui.datetime(c.subscription_end)}</td>
                     <td style="white-space:nowrap;font-size:11px;color:var(--text-muted);">${window.ui.datetime(c.last_activity)}</td>
                 </tr>`).join('');
 
@@ -235,7 +235,7 @@ class CompaniesComponent {
             pagination.style.display = 'flex';
             pagination.innerHTML = `
                 <button class="btn btn-sm btn-secondary" ${this.page <= 1 ? 'disabled' : ''} id="companies-prev">← ${window.ui.t('common.previous')}</button>
-                <span style="padding:8px 12px;font-weight:600;">${this.page} / ${totalPages}</span>
+                <span class="u-page-ind">${this.page} / ${totalPages}</span>
                 <button class="btn btn-sm btn-secondary" ${this.page >= totalPages ? 'disabled' : ''} id="companies-next">${window.ui.t('common.next')} →</button>
             `;
             pagination.querySelector('#companies-prev')?.addEventListener('click', () => { this.page--; this.loadCompanies(); });
@@ -258,56 +258,56 @@ class CompaniesComponent {
             ${c.has_renewal_request ? `
                 <div class="alert-box" style="margin-bottom:14px;">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-                        <span style="display:inline-flex;align-items:center;gap:6px;">🔄 <span data-i18n="companies.renewal_request_text"></span></span>
-                        <button class="btn btn-primary btn-sm" id="sub-handle-request" style="width:auto;"
+                        <span style="display:inline-flex;align-items:center;gap:6px;">${window.icon('refresh-cw', 16)} <span data-i18n="companies.renewal_request_text"></span></span>
+                        <button class="btn btn-primary btn-sm u-w-auto" id="sub-handle-request"
                                 data-i18n="companies.extend_30"></button>
                     </div>
                 </div>` : ''}
 
             <div class="section-title" data-i18n="companies.owner"></div>
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);margin-bottom:14px;">
-                <div class="list-row" style="cursor:default;">
+            <div class="list-group u-card-flat u-mb-14">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.owner"></span>
                     <span class="text-sm font-bold">${window.ui.escape(c.owner_full_name || c.owner_username || '-')}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.employees"></span>
                     <span class="text-sm font-bold">${c.users_count}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.clients"></span>
                     <span class="text-sm font-bold">${c.clients_count}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.orders"></span>
                     <span class="text-sm font-bold">${c.orders_count}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.created"></span>
                     <span class="text-sm font-bold">${window.ui.date(c.created_at)}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.last_activity"></span>
                     <span class="text-sm font-bold">${window.ui.datetime(c.last_activity)}</span>
                 </div>
             </div>
 
             <div class="section-title" data-i18n="companies.subscription"></div>
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);margin-bottom:14px;">
-                <div class="list-row" style="cursor:default;">
+            <div class="list-group u-card-flat u-mb-14">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.plan"></span>
                     <span class="text-sm font-bold">${window.ui.escape(c.plan_name || '-')} ${this.trialBadge(c.is_trial)}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.subscription_start"></span>
                     <span class="text-sm font-bold">${window.ui.datetime(c.subscription_start)}</span>
                 </div>
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="companies.subscription_end"></span>
                     <span class="text-sm font-bold">${window.ui.datetime(c.subscription_end)}</span>
                 </div>
                 ${c.days_left !== null && c.days_left !== undefined && c.subscription_status === 'active' ? `
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="subscription.days_left_label"></span>
                     <span class="text-sm font-bold">${c.days_left} ${window.ui.t('companies.days_left')}</span>
                 </div>` : ''}
@@ -327,13 +327,9 @@ class CompaniesComponent {
             </div>
 
             <div class="section-title" data-i18n="companies.history"></div>
-            <div id="sub-history" style="margin-bottom:8px;">
+            <div id="sub-history" class="u-mb-3">
                 <div class="list-state list-state-loading"><span class="spinner"></span></div>
             </div>
-            <div class="section-title" data-i18n="subscription.title"></div>
-            <div id="sub-panel"><div class="list-state list-state-loading"><span class="spinner"></span></div></div>
-            <button class="btn ${c.is_active ? 'btn-danger' : 'btn-success'} btn-block" id="toggle-company"
-                data-i18n="${c.is_active ? 'companies.block' : 'companies.unblock'}"></button>
         `);
         window.i18n.applyTranslations();
         modal.querySelector('#toggle-company').addEventListener('click', async () => {
@@ -348,15 +344,25 @@ class CompaniesComponent {
             }
         });
 
-        try {
-            const detail = await window.api.request(`/billing/subscriptions/${c.id}/`);
-            if (modal.isConnected) this.renderSubscription(modal, detail);
-        } catch (e) {
-            const panel = modal.querySelector('#sub-panel');
-            if (panel) {
-                panel.innerHTML = `<div class="list-state list-state-empty" data-i18n="subscription.none"></div>`;
-                window.i18n.applyTranslations();
-            }
+        modal.querySelector('#sub-activate').addEventListener('click', () =>
+            this.runAction(`/companies/${c.id}/subscription_activate/`, {}, modal, c));
+        modal.querySelector('#sub-extend-30').addEventListener('click', () =>
+            this.runAction(`/companies/${c.id}/subscription_extend/`, { days: 30 }, modal, c));
+        modal.querySelector('#sub-extend-custom').addEventListener('click', () =>
+            this.openExtendModal(c, modal));
+        modal.querySelector('#sub-set-end').addEventListener('click', () =>
+            this.openSetEndModal(c, modal));
+        modal.querySelector('#sub-change-plan').addEventListener('click', () =>
+            this.openPlanModal(c, modal));
+        modal.querySelector('#sub-freeze').addEventListener('click', () => {
+            const endpoint = c.subscription_status === 'frozen'
+                ? 'subscription_unfreeze' : 'subscription_freeze';
+            this.runAction(`/companies/${c.id}/${endpoint}/`, {}, modal, c);
+        });
+        const handleRequest = modal.querySelector('#sub-handle-request');
+        if (handleRequest) {
+            handleRequest.addEventListener('click', () =>
+                this.runAction(`/companies/${c.id}/subscription_extend/`, { days: 30 }, modal, c));
         }
         this.loadHistory(c.id, modal);
         window.i18n.applyTranslations();
@@ -377,11 +383,11 @@ class CompaniesComponent {
                     plan_changed: 'companies.plan_change',
                     cancelled: 'companies.status_cancelled',
                 };
-                historyEl.innerHTML = `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">` +
+                historyEl.innerHTML = `<div class="list-group u-card-flat">` +
                     history.map((h) => `
                         <div class="list-row" style="cursor:default;font-size:12px;">
                             <div>
-                                <div style="font-weight:600;" data-i18n="${actionLabels[h.action] || 'common.details'}"></div>
+                                <div class="u-strong" data-i18n="${actionLabels[h.action] || 'common.details'}"></div>
                                 <div class="text-sm text-muted">
                                     ${window.ui.escape(h.actor)} · ${window.ui.datetime(h.created_at)}
                                     ${h.days_added ? ` · +${h.days_added} ${window.ui.t('companies.days_left')}` : ''}
@@ -406,7 +412,7 @@ class CompaniesComponent {
                 <div class="form-group">
                     <label data-i18n="companies.extend_custom_label"></label>
                     <input name="days" type="number" class="form-control" min="1" max="3650" required autofocus>
-                    <p class="text-sm text-muted" style="margin-top:4px;" data-i18n="companies.extend_prompt"></p>
+                    <p class="text-sm text-muted u-mt-1" data-i18n="companies.extend_prompt"></p>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
             </form>
@@ -438,8 +444,8 @@ class CompaniesComponent {
                 ${plans.map((p) => `
                     <label class="list-row" style="cursor:pointer;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;padding:10px 12px;">
                         <input type="radio" name="plan" value="${p.id}" ${p.id === c.plan_id ? 'checked' : ''} style="margin-right:10px;">
-                        <span style="flex:1;">
-                            <span style="font-weight:600;">${window.ui.escape(p.name)}</span>
+                        <span class="u-grow">
+                            <span class="u-strong">${window.ui.escape(p.name)}</span>
                             <span class="text-sm text-muted" style="display:block;">${window.ui.escape(p.description || '')} · ${p.duration_days} ${window.ui.t('companies.days_left')}</span>
                         </span>
                     </label>`).join('')}
@@ -497,82 +503,6 @@ class CompaniesComponent {
         } catch (error) {
             window.toast.error(window.ui.errorText(error));
         }
-    }
-
-    /** Панель подписки в карточке компании: статус, срок, действия, счета. */
-    renderSubscription(modal, data) {
-        const panel = modal.querySelector('#sub-panel');
-        if (!panel) return;
-        const t = (k, p) => window.ui.t(k, p);
-        const blocked = data.is_blocked;
-        const statusBadge = blocked
-            ? '<span class="badge badge-cancel" data-i18n="subscription.frozen"></span>'
-            : '<span class="badge badge-ready" data-i18n="subscription.active"></span>';
-
-        const pendingInvoices = (data.invoices || []).filter((i) => i.status === 'pending');
-        const actions = [];
-        if (blocked) {
-            actions.push(`<button class="btn btn-success btn-sm btn-block" data-sub-action="activate">${t('subscription.activate', { days: 30 })}</button>`);
-            actions.push(`<button class="btn btn-secondary btn-sm btn-block" data-sub-action="unfreeze">${t('subscription.unfreeze')}</button>`);
-        } else {
-            actions.push(`<button class="btn btn-secondary btn-sm btn-block" data-sub-action="extend">${t('subscription.extend', { days: 30 })}</button>`);
-            actions.push(`<button class="btn btn-danger btn-sm btn-block" data-sub-action="freeze">${t('subscription.freeze')}</button>`);
-        }
-
-        panel.innerHTML = `
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:10px;">
-                <div class="list-row" style="cursor:default;">
-                    <span class="text-sm text-muted" data-i18n="subscription.plan"></span>
-                    <span class="text-sm font-bold">${window.ui.escape(data.plan)} ${statusBadge}</span>
-                </div>
-                <div class="list-row" style="cursor:default;">
-                    <span class="text-sm text-muted" data-i18n="subscription.expires"></span>
-                    <span class="text-sm font-bold">${window.ui.escape((data.expires_at || '').slice(0, 10)) || '—'}</span>
-                </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">${actions.join('')}</div>
-            ${pendingInvoices.length ? `
-                <div class="section-title" data-i18n="subscription.invoices"></div>
-                <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:10px;">
-                    ${pendingInvoices.map((i) => `
-                        <div class="list-row" style="cursor:pointer;" data-confirm-invoice="${i.id}">
-                            <span class="text-sm">#${i.id} · ${i.amount} ${i.currency} <span class="badge badge-progress" data-i18n="subscription.pending"></span></span>
-                            <span class="text-sm font-bold" style="color:var(--primary);" data-i18n="subscription.confirm_payment"></span>
-                        </div>`).join('')}
-                </div>` : ''}
-        `;
-        window.i18n.applyTranslations();
-
-        panel.querySelectorAll('[data-sub-action]').forEach((btn) => {
-            btn.addEventListener('click', async () => {
-                const action = btn.dataset.subAction;
-                const body = action === 'extend' ? { days: 30 } : {};
-                try {
-                    await window.api.request(`/billing/subscriptions/${data.id}/${action}/`, {
-                        method: 'POST', body: JSON.stringify(body),
-                    });
-                    window.toast.success(window.ui.t('common.success'));
-                    window.ui.closeModal(modal);
-                    await this.load();
-                } catch (error) {
-                    window.toast.error(window.ui.errorText(error));
-                }
-            });
-        });
-        panel.querySelectorAll('[data-confirm-invoice]').forEach((row) => {
-            row.addEventListener('click', async () => {
-                try {
-                    await window.api.request(`/billing/subscriptions/${data.id}/confirm_payment/`, {
-                        method: 'POST', body: JSON.stringify({ invoice_id: Number(row.dataset.confirmInvoice) }),
-                    });
-                    window.toast.success(window.ui.t('common.success'));
-                    window.ui.closeModal(modal);
-                    await this.load();
-                } catch (error) {
-                    window.toast.error(window.ui.errorText(error));
-                }
-            });
-        });
     }
 
     openForm() {

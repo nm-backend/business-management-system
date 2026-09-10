@@ -35,12 +35,12 @@ class _TwoCompanies(TestCase):
         # Данные компании A.
         self.client_a = Client.objects.create(company=self.a, name='Клиент A')
         self.product_a = FinishedProduct.objects.create(
-            company=self.a, name='Товар A', quantity=Decimal('1'), unit='dona')
+            company=self.a, name='Товар A', quantity=Decimal('1'), unit='sht')
         self.material_a = RawMaterial.objects.create(
             company=self.a, name='Сырьё A', quantity=Decimal('1'), unit='m2')
         self.order_a = Order.objects.create(
             company=self.a, client=self.client_a, product=self.product_a,
-            quantity=Decimal('1'), unit='dona', total_amount=Decimal('100'),
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('100'),
             deadline=timezone.now() + datetime.timedelta(days=3))
         Payment.objects.create(company=self.a, client=self.client_a, order=self.order_a,
                                amount=Decimal('40'), payment_method='cash',
@@ -53,12 +53,12 @@ class _TwoCompanies(TestCase):
         # Данные компании B.
         self.client_b = Client.objects.create(company=self.b, name='Клиент B')
         self.product_b = FinishedProduct.objects.create(
-            company=self.b, name='Товар B', quantity=Decimal('1'), unit='dona')
+            company=self.b, name='Товар B', quantity=Decimal('1'), unit='sht')
         self.material_b = RawMaterial.objects.create(
             company=self.b, name='Сырьё B', quantity=Decimal('1'), unit='m2')
         self.order_b = Order.objects.create(
             company=self.b, client=self.client_b, product=self.product_b,
-            quantity=Decimal('1'), unit='dona', total_amount=Decimal('999'),
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('999'),
             deadline=timezone.now() + datetime.timedelta(days=3))
         Payment.objects.create(company=self.b, client=self.client_b, order=self.order_b,
                                amount=Decimal('999'), payment_method='cash',

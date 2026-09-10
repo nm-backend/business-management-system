@@ -26,7 +26,7 @@ class ExportCsvFormatTests(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         RawMaterial.objects.create(
             company=self.company, name='Мрамор', stone_type='мрамор',
-            quantity=Decimal('5'), unit='dona', min_stock=Decimal('10'))
+            quantity=Decimal('5'), unit='sht', min_stock=Decimal('10'))
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 

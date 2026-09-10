@@ -30,7 +30,7 @@ class WorkForeignTaskTests(TestCase):
         self.worker_b = User.objects.create_user(username='wft_b', password='p',
                                                  role=User.Role.WORKER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Изделие', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Изделие', quantity=Decimal('0'), unit='sht')
         self.client_obj = None
 
     def _order_and_task(self, worker):
@@ -52,7 +52,7 @@ class WorkForeignTaskTests(TestCase):
             'product': self.product.id,
             'task': task_b.id,
             'quantity': 1,
-            'unit': 'dona',
+            'unit': 'sht',
         }, format='json')
         self.assertIn(resp.status_code, (400, 403))
         # Задача B не тронута, работа не создана.
@@ -68,7 +68,7 @@ class WorkForeignTaskTests(TestCase):
             'product': self.product.id,
             'task': task_a.id,
             'quantity': 1,
-            'unit': 'dona',
+            'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:300])
         task_a.refresh_from_db()
@@ -83,7 +83,7 @@ class WorkForeignTaskTests(TestCase):
             'task': task_b.id,
             'worker': self.worker_a.id,
             'quantity': 1,
-            'unit': 'dona',
+            'unit': 'sht',
         }, format='json')
         self.assertIn(resp.status_code, (400, 403))
 
@@ -98,7 +98,7 @@ class DeliverRestoresRawMaterialReserveTests(TestCase):
         self.material = RawMaterial.objects.create(
             company=self.company, name='Гранит', quantity=Decimal('10'), unit='m2')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('5'), unit='dona',
+            company=self.company, name='Столешница', quantity=Decimal('5'), unit='sht',
             required_for_orders=Decimal('0'))
         recipe = Recipe.objects.create(company=self.company, product=self.product, is_active=True)
         RecipeItem.objects.create(recipe=recipe, material=self.material,
@@ -152,18 +152,18 @@ class FinishedProductNegativeQuantityTests(TestCase):
 
     def test_negative_quantity_rejected(self):
         resp = self.api.post(PRODUCTS, {
-            'name': 'Товар с минусом', 'quantity': '-5', 'unit': 'dona',
+            'name': 'Товар с минусом', 'quantity': '-5', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
     def test_negative_min_stock_rejected(self):
         resp = self.api.post(PRODUCTS, {
-            'name': 'Товар', 'quantity': '5', 'min_stock': '-3', 'unit': 'dona',
+            'name': 'Товар', 'quantity': '5', 'min_stock': '-3', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
 
     def test_valid_product_still_created(self):
         resp = self.api.post(PRODUCTS, {
-            'name': 'Товар', 'quantity': '5', 'min_stock': '2', 'unit': 'dona',
+            'name': 'Товар', 'quantity': '5', 'min_stock': '2', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:300])

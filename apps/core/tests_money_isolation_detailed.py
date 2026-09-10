@@ -455,7 +455,7 @@ class DetailedMoneyIsolationTests(TestCase):
                 self.assertEqual(api.get('/api/v1/finance/labor-rates/').status_code, 200)
                 self.assertEqual(api.post('/api/v1/finance/labor-rates/', {
                     'product': self.product.id,
-                    'operation': 'cutting', 'rate_per_unit': '999', 'unit': 'dona',
+                    'operation': 'cutting', 'rate_per_unit': '999', 'unit': 'sht',
                 }, format='json').status_code, 403)
 
     def test_20_owner_can_access_finance(self):

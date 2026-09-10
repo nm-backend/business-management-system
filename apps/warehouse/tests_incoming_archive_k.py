@@ -40,7 +40,7 @@ class _Base(TestCase):
             company=self.company, name='Гранит', quantity=Decimal('10'), unit='m2',
             avg_cost_price=Decimal('100'))
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('2'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('2'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 

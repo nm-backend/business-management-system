@@ -42,14 +42,14 @@ class AuditBase(TestCase):
         self.material = RawMaterial.objects.create(
             company=self.company, name='Мрамор', quantity=Decimal('100'), unit='m2')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='sht')
         recipe = Recipe.objects.create(company=self.company, product=self.product,
                                        name='Основной', is_active=True)
         RecipeItem.objects.create(recipe=recipe, material=self.material,
                                   quantity_required=Decimal('2'), unit='m2')
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.OTHER,
-                                 rate_per_unit=Decimal('1000'), unit='dona')
+                                 rate_per_unit=Decimal('1000'), unit='sht')
         self.api = APIClient(); self.api.force_authenticate(self.owner)
         self.wapi = APIClient(); self.wapi.force_authenticate(self.worker)
 
@@ -58,14 +58,14 @@ class AuditBase(TestCase):
 
     def make_order(self, **over):
         body = {'client': self.cli.id, 'product': self.product.id, 'quantity': '3',
-                'unit': 'dona', 'deadline': self.deadline(), 'total_amount': '9000'}
+                'unit': 'sht', 'deadline': self.deadline(), 'total_amount': '9000'}
         body.update(over)
         return self.api.post(ORDERS, body, format='json')
 
     def produce(self, quantity='3'):
         """Полный производственный цикл: сдача работы и подтверждение."""
         work = self.wapi.post(WORKS, {'product': self.product.id, 'quantity': quantity,
-                                      'unit': 'dona'}, format='json')
+                                      'unit': 'sht'}, format='json')
         assert work.status_code == 201, work.content[:200]
         wid = work.json()['id']
         confirmed = self.api.post(f'{WORKS}{wid}/confirm/')
@@ -99,9 +99,9 @@ class ProductionChainAudit(AuditBase):
 
     def test_confirmation_without_rate_is_refused(self):
         other = FinishedProduct.objects.create(company=self.company, name='Без ставки',
-                                               quantity=Decimal('0'), unit='dona')
+                                               quantity=Decimal('0'), unit='sht')
         work = self.wapi.post(WORKS, {'product': other.id, 'quantity': '1',
-                                      'unit': 'dona'}, format='json').json()
+                                      'unit': 'sht'}, format='json').json()
         resp = self.api.post(f"{WORKS}{work['id']}/confirm/")
         self.assertEqual(resp.status_code, 400)
         other.refresh_from_db()
@@ -116,7 +116,7 @@ class ProductionChainAudit(AuditBase):
 
     def test_worker_cannot_confirm_own_work(self):
         work = self.wapi.post(WORKS, {'product': self.product.id, 'quantity': '1',
-                                      'unit': 'dona'}, format='json').json()
+                                      'unit': 'sht'}, format='json').json()
         resp = self.wapi.post(f"{WORKS}{work['id']}/confirm/")
         self.assertEqual(resp.status_code, 403, 'рабочий не может сам себе начислить')
 
@@ -210,7 +210,7 @@ class MoneyIntegrityAudit(AuditBase):
 
 class ValidationAudit(AuditBase):
     def test_order_without_product_refused(self):
-        resp = self.api.post(ORDERS, {'client': self.cli.id, 'quantity': '1', 'unit': 'dona',
+        resp = self.api.post(ORDERS, {'client': self.cli.id, 'quantity': '1', 'unit': 'sht',
                                       'deadline': self.deadline()}, format='json')
         self.assertEqual(resp.status_code, 400)
 

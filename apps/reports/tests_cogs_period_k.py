@@ -32,7 +32,7 @@ class CogsPeriodAttributionTests(TestCase):
             company=self.company, name='P', quantity=Decimal('100'), cost_price=Decimal('1000'))
         self.order = Order.objects.create(
             company=self.company, client=self.cli, product=self.product,
-            quantity=Decimal('1'), unit='dona', total_amount=Decimal('1500'),
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('1500'),
             status=Order.Status.DELIVERED)
         # Фиксируем факт выдачи в ИЮНЕ (и delivered_at, и updated_at).
         Order.objects.filter(pk=self.order.pk).update(delivered_at=JUNE, updated_at=JUNE)
@@ -48,7 +48,7 @@ class CogsPeriodAttributionTests(TestCase):
         # save-хук проставил delivered_at при создании в статусе DELIVERED.
         fresh = Order.objects.create(
             company=self.company, client=self.cli, product=self.product,
-            quantity=Decimal('1'), unit='dona', total_amount=Decimal('10'),
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('10'),
             status=Order.Status.DELIVERED)
         self.assertIsNotNone(fresh.delivered_at)
 
@@ -100,7 +100,7 @@ class CogsPeriodAttributionTests(TestCase):
         record_incoming(target=product, quantity=Decimal('10'), price_per_unit=Decimal('50'))
         order = Order.objects.create(
             company=self.company, client=self.cli, product=product,
-            quantity=Decimal('4'), unit='dona', total_amount=Decimal('400'),
+            quantity=Decimal('4'), unit='sht', total_amount=Decimal('400'),
             status=Order.Status.DELIVERED)
         Order.objects.filter(pk=order.pk).update(delivered_at=JUNE, updated_at=JUNE)
         self.assertEqual(order.cost_price, Decimal('50'))
@@ -135,7 +135,7 @@ class CogsPeriodAttributionTests(TestCase):
         Order.objects.create(
             company=self.company, client=self.cli,
             custom_product_name='Кованые ворота', quantity=Decimal('2'),
-            unit='dona', total_amount=Decimal('4000'),
+            unit='sht', total_amount=Decimal('4000'),
             status=Order.Status.DELIVERED)
         # В июне: 1 товарный заказ (снимок 1000) + 1 ручной (0).
         self.assertEqual(self._june_cogs(), Decimal('1000'))

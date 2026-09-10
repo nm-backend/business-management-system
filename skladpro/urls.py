@@ -1,9 +1,14 @@
+import re
+from urllib.parse import urlparse
+
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import FileResponse
 from pathlib import Path
+
+from apps.core.media_views import serve_protected_media
 
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -44,7 +49,6 @@ urlpatterns = [
     path("api/v1/messaging/", include("apps.messaging.urls")),
     path("api/v1/reports/", include("apps.reports.urls")),
     path("api/v1/backup/", include("apps.backup.urls")),
-    path("api/v1/billing/", include("apps.billing.urls")),
 
     # OpenAPI
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
@@ -67,12 +71,32 @@ handler403 = "skladpro.error_views.error_403"
 handler404 = "skladpro.error_views.error_404"
 handler500 = "skladpro.error_views.error_500"
 
-# static()/media-паттерны должны идти РАНЬШЕ SPA-fallback (re_path ^.*$ в
+def _protected_media_patterns():
+    """Маршрут /media/ -> serve_protected_media (с проверкой прав).
+
+    Прямая раздача через static() ЗАПРЕЩЕНА: она отдавала чеки, аватары и
+    аттачменты любому знающему URL (межкомпанийная утечка). При абсолютном
+    MEDIA_URL (S3-режим) Django ничего не монтирует — файлы живут в бакете.
+    """
+    media_url = (settings.MEDIA_URL or '').strip() or '/media/'
+    if urlparse(media_url).scheme or urlparse(media_url).netloc:
+        return []
+    prefix = re.escape(media_url.strip('/'))
+    return [
+        re_path(
+            rf'^{prefix}/(?P<path>.*)$',
+            serve_protected_media,
+            name='protected-media',
+        ),
+    ]
+
+
+# media/static-паттерны должны идти РАНЬШЕ SPA-fallback (re_path ^.*$ в
 # template_urls): иначе fallback матчится первым и кидает 404, а файлы не
 # раздаются ни в dev (DEBUG), ни на PaaS (MEDIA_SERVE).
 if settings.DEBUG:
     urlpatterns = [
-        *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
+        *_protected_media_patterns(),
         *static(
             settings.STATIC_URL,
             document_root=(
@@ -84,9 +108,10 @@ if settings.DEBUG:
         *urlpatterns,
     ]
 elif getattr(settings, 'MEDIA_SERVE', False):
-    # PaaS без nginx/Caddy (Railway/Render): /media/ отдаёт Django.
+    # PaaS без nginx/Caddy (Railway/Render): /media/ отдаёт Django —
+    # через защищённое view (с аутентификацией и проверкой компании).
     # Опция MEDIA_SERVE задаётся в production.py из переменной окружения.
     urlpatterns = [
-        *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
+        *_protected_media_patterns(),
         *urlpatterns,
     ]

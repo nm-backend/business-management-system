@@ -66,6 +66,7 @@ pyflakes==3.4.0
 Pygments==2.20.0
 PyJWT==2.13.0
 pyOpenSSL==26.3.0
+pypdf==6.18.0
 pypng==0.20220715.0
 pytest==9.1.1
 python-crontab==3.3.0

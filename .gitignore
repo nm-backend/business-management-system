@@ -255,7 +255,8 @@ test_media/
 
 # Frontend тесты (Node.js)
 node_modules/
-package-lock.json
+# package-lock.json КОММИТИТСЯ: frontend-CI ставит зависимости через `npm ci`,
+# которому нужен лок-файл в репозитории (без него job падал).
 
 # Временные файлы отладки
 tempCodeRunnerFile.py

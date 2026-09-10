@@ -35,14 +35,14 @@ class _Base(TestCase):
         self.worker = User.objects.create_user(username='pa_worker', password='p',
                                                role=User.Role.WORKER, company=self.company_a)
         self.product_a = FinishedProduct.objects.create(
-            company=self.company_a, name='Столешница A', quantity=Decimal('0'), unit='dona')
+            company=self.company_a, name='Столешница A', quantity=Decimal('0'), unit='sht')
         self.product_b = FinishedProduct.objects.create(
-            company=self.company_b, name='Изделие B', quantity=Decimal('0'), unit='dona')
+            company=self.company_b, name='Изделие B', quantity=Decimal('0'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner_a)
         resp = self.api.post('/api/v1/finance/labor-rates/', {
             'product': self.product_a.id, 'operation': 'cutting',
-            'rate_per_unit': '1000', 'unit': 'dona',
+            'rate_per_unit': '1000', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         self.worker_api = APIClient()
@@ -53,7 +53,7 @@ class _Base(TestCase):
         client = Client.objects.create(company=self.company_a, name='Клиент')
         resp = self.api.post('/api/v1/orders/orders/', {
             'client': client.id, 'product': product.id, 'quantity': str(quantity),
-            'unit': 'dona', 'total_amount': '100000',
+            'unit': 'sht', 'total_amount': '100000',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         return resp.json()['id']
@@ -68,7 +68,7 @@ class _Base(TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         resp = self.worker_api.post(WORKS, {
             'task': task_id, 'product': product.id, 'operation': 'cutting',
-            'quantity': str(quantity), 'unit': 'dona',
+            'quantity': str(quantity), 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)
         return resp.json()['id']
@@ -118,20 +118,20 @@ class RefuseConfirmedTaskTests(_Base):
 class WorkProductMustMatchOrderTests(_Base):
     def test_create_work_with_wrong_product_rejected(self):
         other = FinishedProduct.objects.create(company=self.company_a, name='Подоконник',
-                                               quantity=Decimal('0'), unit='dona')
+                                               quantity=Decimal('0'), unit='sht')
         order_id = self._order(self.product_a)
         task_id = self._task(order_id)
         self.worker_api.post(f'{TASKS}{task_id}/accept/', {}, format='json')
         resp = self.worker_api.post(WORKS, {
             'task': task_id, 'product': other.id, 'operation': 'cutting',
-            'quantity': '1', 'unit': 'dona',
+            'quantity': '1', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 400, resp.data)
         self.assertIn('product', resp.data)
 
     def test_patch_work_to_wrong_product_rejected(self):
         other = FinishedProduct.objects.create(company=self.company_a, name='Подоконник',
-                                               quantity=Decimal('0'), unit='dona')
+                                               quantity=Decimal('0'), unit='sht')
         order_id = self._order(self.product_a)
         task_id = self._task(order_id)
         work_id = self._accepted_work(task_id, self.product_a)

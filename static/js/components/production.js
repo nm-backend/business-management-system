@@ -18,7 +18,7 @@ class ProductionComponent {
                 <button class="tab-btn" data-tab="works" data-i18n="production.works"></button>
                 ${user.is_worker ? `<button class="tab-btn" data-tab="earnings" data-i18n="worker_section.my_earnings"></button>` : ''}
             </div>
-            ${!user.is_manager ? `<button class="btn btn-primary btn-block" id="add-work-btn" style="margin-bottom:12px;" data-i18n="production.add_work"></button>` : ''}
+            ${!user.is_manager ? `<button class="btn btn-primary btn-block u-mb-5" id="add-work-btn" data-i18n="production.add_work"></button>` : ''}
             <div id="production-content"></div>
         `;
 
@@ -48,7 +48,7 @@ class ProductionComponent {
      */
     statusTabs(current, items) {
         return `
-            <div class="tabs" style="margin-bottom:10px;">
+            <div class="tabs u-mb-4">
                 ${items.map(([value, key, count]) => `
                     <button class="tab-btn ${current === value ? 'active' : ''}"
                             data-status-filter="${value}">
@@ -106,7 +106,7 @@ class ProductionComponent {
             const user = window.currentUser;
             contentEl.innerHTML = tabs + tasks.map((t) => `
                 <div class="card">
-                    <div class="card-title" style="margin-bottom:4px;">
+                    <div class="card-title u-mb-1">
                         <span>#${t.id} ${window.ui.escape(t.title || t.order_product || '')}</span>
                         ${window.ui.workBadge(t.status)}
                     </div>
@@ -115,16 +115,16 @@ class ProductionComponent {
                         ${window.ui.datetime(t.assigned_at)}
                     </div>
                     ${this.taskDetails(t)}
-                    ${t.refusal_reason ? `<div class="text-sm text-danger" style="margin-top:6px;">✕ <span data-i18n="refusal_reasons.${t.refusal_reason}"></span> ${window.ui.escape(t.refusal_comment || '')}</div>` : ''}
+                    ${t.refusal_reason ? `<div class="text-sm text-danger u-mt-2">${window.icon('x', 14)} <span data-i18n="refusal_reasons.${t.refusal_reason}"></span> ${window.ui.escape(t.refusal_comment || '')}</div>` : ''}
                     ${user.is_worker && t.status === 'pending' ? `
                         <div style="display:flex;gap:10px;margin-top:12px;">
-                            <button class="btn btn-success btn-sm" style="flex:1;" data-accept="${t.id}" data-i18n="worker_section.accept"></button>
-                            <button class="btn btn-danger btn-sm" style="flex:1;" data-refuse="${t.id}" data-i18n="worker_section.refuse"></button>
+                            <button class="btn btn-success btn-sm u-grow" data-accept="${t.id}" data-i18n="worker_section.accept"></button>
+                            <button class="btn btn-danger btn-sm u-grow" data-refuse="${t.id}" data-i18n="worker_section.refuse"></button>
                         </div>` : ''}
                     ${user.is_worker && t.status === 'accepted' ? `
-                        <button class="btn btn-primary btn-sm btn-block" style="margin-top:12px;" data-submit-work="${t.id}" data-i18n="production.send_for_confirmation"></button>` : ''}
+                        <button class="btn btn-primary btn-sm btn-block u-mt-5" data-submit-work="${t.id}" data-i18n="production.send_for_confirmation"></button>` : ''}
                     ${(user.is_owner || user.is_admin) && ['pending', 'accepted'].includes(t.status) ? `
-                        <button class="btn btn-secondary btn-sm" style="margin-top:12px;" data-cancel-task="${t.id}" data-i18n="common.cancel"></button>` : ''}
+                        <button class="btn btn-secondary btn-sm u-mt-5" data-cancel-task="${t.id}" data-i18n="common.cancel"></button>` : ''}
                 </div>`).join('');
 
             this.bindStatusTabs(contentEl, 'task');
@@ -150,13 +150,13 @@ class ProductionComponent {
     photoStrip(work) {
         const photos = work.photos || [];
         if (!photos.length) {
-            return `<div class="text-sm text-muted" style="margin-top:6px;"
+            return `<div class="text-sm text-muted u-mt-2"
                          data-i18n="production.no_photos"></div>`;
         }
         const shown = photos.slice(0, 3);
         const rest = photos.length - shown.length;
         return `
-            <div class="work-photo-strip" style="margin-top:8px;">
+            <div class="work-photo-strip u-mt-3">
                 ${shown.map((p) => `
                     <a class="work-photo-thumb" href="${window.ui.escape(p.image)}" target="_blank" rel="noopener">
                         <img src="${window.ui.escape(p.image)}" alt="" loading="lazy"
@@ -177,7 +177,7 @@ class ProductionComponent {
     taskDetails(t) {
         const rows = [];
         if (t.description) {
-            rows.push(`<div class="text-sm" style="margin-top:6px;">${window.ui.escape(t.description)}</div>`);
+            rows.push(`<div class="text-sm u-mt-2">${window.ui.escape(t.description)}</div>`);
         }
         const facts = [];
         if (t.planned_quantity) {
@@ -193,18 +193,18 @@ class ProductionComponent {
         if (t.size) facts.push(`<span data-i18n="production.task_size"></span>: ${window.ui.escape(t.size)}`);
         if (t.thickness) facts.push(`<span data-i18n="production.task_thickness"></span>: ${window.ui.escape(t.thickness)}`);
         if (facts.length) {
-            rows.push(`<div class="text-sm text-muted" style="margin-top:6px;">${facts.join(' · ')}</div>`);
+            rows.push(`<div class="text-sm text-muted u-mt-2">${facts.join(' · ')}</div>`);
         }
         if (t.attachment) {
             rows.push(`
-                <div class="text-sm" style="margin-top:6px;">
-                    📎 <a href="${window.ui.escape(t.attachment)}" target="_blank" rel="noopener">
+                <div class="text-sm u-mt-2">
+                    ${window.icon('paperclip', 14)} <a href="${window.ui.escape(t.attachment)}" target="_blank" rel="noopener">
                         ${window.ui.escape(t.attachment_name || window.ui.t('production.task_attachment'))}
                     </a>
                 </div>`);
         }
         if (t.is_overdue) {
-            rows.push(`<div class="text-sm text-danger" style="margin-top:6px;">⏰ <span data-i18n="production.overdue"></span></div>`);
+            rows.push(`<div class="text-sm text-danger u-mt-2">${window.icon('clock', 14)} <span data-i18n="production.overdue"></span></div>`);
         }
         return rows.join('');
     }
@@ -242,7 +242,7 @@ class ProductionComponent {
             const canConfirm = user.is_owner || user.is_admin;
             contentEl.innerHTML = tabs + works.map((w) => `
                 <div class="card">
-                    <div class="card-title" style="margin-bottom:4px;">
+                    <div class="card-title u-mb-1">
                         <span>#${w.id} ${window.ui.escape(w.product_name || '-')}</span>
                         ${window.ui.workBadge(w.status)}
                     </div>
@@ -251,22 +251,22 @@ class ProductionComponent {
                         ${window.ui.qty(w.quantity)} <span data-i18n="units.${w.unit}"></span> · ${window.ui.datetime(w.created_at)}
                     </div>
                     ${Number(w.defect_quantity) > 0 ? `
-                        <div class="text-sm text-danger" style="margin-top:4px;">
+                        <div class="text-sm text-danger u-mt-1">
                             <span data-i18n="production.defect_quantity"></span>: ${window.ui.qty(w.defect_quantity)}
                         </div>` : ''}
                     ${this.photoStrip(w)}
-                    ${w.comment ? `<div class="text-sm" style="margin-top:6px;">${window.ui.escape(w.comment)}</div>` : ''}
-                    ${w.rejection_reason ? `<div class="text-sm text-danger" style="margin-top:6px;">✕ ${window.ui.escape(w.rejection_reason)}</div>` : ''}
+                    ${w.comment ? `<div class="text-sm u-mt-2">${window.ui.escape(w.comment)}</div>` : ''}
+                    ${w.rejection_reason ? `<div class="text-sm text-danger u-mt-2">${window.icon('x', 14)} ${window.ui.escape(w.rejection_reason)}</div>` : ''}
                     ${w.labor_cost !== undefined && w.status === 'confirmed' ? `
-                        <div class="text-sm text-success font-bold" style="margin-top:6px;">+ ${window.ui.money(w.labor_cost)}</div>` : ''}
+                        <div class="text-sm text-success font-bold u-mt-2">+ ${window.ui.money(w.labor_cost)}</div>` : ''}
                     ${w.status === 'confirmed' ? `
-                        <div class="text-xs text-muted" style="margin-top:4px;">
+                        <div class="text-xs text-muted u-mt-1">
                             ${window.ui.t('production.confirmed_by')}: ${window.ui.escape(w.confirmed_by_name || '—')} · ${window.ui.datetime(w.confirmed_at)}
                         </div>` : ''}
                     ${canConfirm && w.status === 'awaiting_confirmation' ? `
                         <div style="display:flex;gap:10px;margin-top:12px;">
-                            <button class="btn btn-success btn-sm" style="flex:1;" data-confirm="${w.id}" data-i18n="production.confirm"></button>
-                            <button class="btn btn-danger btn-sm" style="flex:1;" data-reject="${w.id}" data-i18n="production.reject"></button>
+                            <button class="btn btn-success btn-sm u-grow" data-confirm="${w.id}" data-i18n="production.confirm"></button>
+                            <button class="btn btn-danger btn-sm u-grow" data-reject="${w.id}" data-i18n="production.reject"></button>
                         </div>` : ''}
                 </div>`).join('');
 
@@ -291,32 +291,32 @@ class ProductionComponent {
                 <div class="metrics-grid">
                     <div class="metric-card green">
                         <div class="metric-title" data-i18n="worker_section.total_earned"></div>
-                        <div class="metric-value" style="font-size:17px;">${window.ui.money(data.total_earned)}</div>
+                        <div class="metric-value u-fs-17">${window.ui.money(data.total_earned)}</div>
                     </div>
                     <div class="metric-card blue">
                         <div class="metric-title" data-i18n="worker_section.paid_out"></div>
-                        <div class="metric-value" style="font-size:17px;">${window.ui.money(data.paid_out)}</div>
+                        <div class="metric-value u-fs-17">${window.ui.money(data.paid_out)}</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-title" data-i18n="worker_section.this_month"></div>
-                        <div class="metric-value" style="font-size:17px;">${window.ui.money(data.this_month)}</div>
+                        <div class="metric-value u-fs-17">${window.ui.money(data.this_month)}</div>
                     </div>
                     <div class="metric-card">
                         <div class="metric-title" data-i18n="worker_section.last_month"></div>
-                        <div class="metric-value" style="font-size:17px;">${window.ui.money(data.last_month)}</div>
+                        <div class="metric-value u-fs-17">${window.ui.money(data.last_month)}</div>
                     </div>
                 </div>
-                <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+                <div class="card u-between">
                     <span data-i18n="worker_section.remaining"></span>
-                    <span class="metric-value" style="font-size:20px;">${window.ui.money(data.remaining)}</span>
+                    <span class="metric-value u-fs-20">${window.ui.money(data.remaining)}</span>
                 </div>
                 ${(data.payments || []).length ? `
                     <div class="section-title" data-i18n="worker_section.payment_history"></div>
                     <div class="list-group list-group-compact">
                         ${(data.payments || []).map((p) => `
-                            <div class="list-row" style="cursor:default;">
-                                <div style="min-width:0;">
-                                    <div style="font-weight:600;">${window.ui.escape(window.ui.t('payment_types.' + p.payment_type))}</div>
+                            <div class="list-row u-cursor-default">
+                                <div class="u-minw-0">
+                                    <div class="u-strong">${window.ui.escape(window.ui.t('payment_types.' + p.payment_type))}</div>
                                     <div class="text-sm text-muted">${window.ui.date(p.payment_date)}</div>
                                 </div>
                                 <span class="font-bold text-success">+${window.ui.money(p.amount)}</span>
@@ -397,7 +397,7 @@ class ProductionComponent {
                     <small class="text-muted" data-i18n="production.operation_hint"></small>
                 </div>
                 <div id="work-pay-info" class="alert-box alert-box-info" style="display:none;"></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="production.quantity"></label>
                         <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
                     <div class="form-group"><label data-i18n="warehouse.unit"></label>
@@ -556,7 +556,7 @@ class ProductionComponent {
         const isOwner = window.currentUser.is_owner;
         const modal = window.ui.modal('production.confirm', `
             <div id="confirm-work-details"></div>
-            <p class="text-sm text-muted" style="margin-bottom:12px;" data-i18n="production.confirm_hint"></p>
+            <p class="text-sm text-muted u-mb-5" data-i18n="production.confirm_hint"></p>
             <form id="confirm-form">
                 ${isOwner ? `
                     <div class="form-group"><label data-i18n="production.labor_cost"></label>
@@ -571,7 +571,7 @@ class ProductionComponent {
             if (!modal.isConnected) return;
             const details = modal.querySelector('#confirm-work-details');
             const payRow = w.labor_rate
-                ? `<div class="text-sm font-bold" style="margin-top:6px;">${window.ui.escape(
+                ? `<div class="text-sm font-bold u-mt-2">${window.ui.escape(
                     window.ui.t('production.pay_calc')
                         .replace('{rate}', window.ui.qty(w.labor_rate))
                         .replace('{qty}', window.ui.qty(w.quantity))
@@ -580,18 +580,18 @@ class ProductionComponent {
             details.innerHTML = `
                 <div class="card" style="box-shadow:none;border:1px solid var(--border);margin-bottom:12px;padding:12px;">
                     <div class="text-sm font-bold">${window.ui.escape(w.product_name || '-')} × ${window.ui.qty(w.quantity)} <span data-i18n="units.${w.unit}"></span></div>
-                    <div class="text-sm text-muted" style="margin-top:4px;">${window.ui.escape(w.worker_name)} · ${window.ui.datetime(w.created_at)}</div>
+                    <div class="text-sm text-muted u-mt-1">${window.ui.escape(w.worker_name)} · ${window.ui.datetime(w.created_at)}</div>
                     ${Number(w.defect_quantity) > 0 ? `
-                        <div class="text-sm text-danger" style="margin-top:4px;"><span data-i18n="production.defect_quantity"></span>: ${window.ui.qty(w.defect_quantity)}</div>` : ''}
+                        <div class="text-sm text-danger u-mt-1"><span data-i18n="production.defect_quantity"></span>: ${window.ui.qty(w.defect_quantity)}</div>` : ''}
                     ${this.photoStrip(w)}
-                    ${w.comment ? `<div class="text-sm" style="margin-top:6px;">${window.ui.escape(w.comment)}</div>` : ''}
+                    ${w.comment ? `<div class="text-sm u-mt-2">${window.ui.escape(w.comment)}</div>` : ''}
                     ${payRow}
                 </div>`;
             window.i18n.applyTranslations();
         }).catch(() => {
             if (!modal.isConnected) return;
             modal.querySelector('#confirm-work-details').innerHTML =
-                `<div class="alert-box" style="margin-bottom:12px;"><span data-i18n="common.error"></span></div>`;
+                `<div class="alert-box u-mb-5"><span data-i18n="common.error"></span></div>`;
             window.i18n.applyTranslations();
         });
         modal.querySelector('#confirm-form').addEventListener('submit', async (e) => {

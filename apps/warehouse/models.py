@@ -188,13 +188,11 @@ class UnitChoices(models.TextChoices):
         M: метр (м)
         M2: квадратный метр (м²)
         IZDELIE: изделие (изд)
-        DONA: штука на узбекском (дона)
     """
     SHT = 'sht', 'Штук'
     M = 'm', 'Метр'
     M2 = 'm2', 'Квадратный метр'
     IZDELIE = 'izdelie', 'Изделие'
-    DONA = 'dona', 'Дона'
     KG = 'kg', 'Килограмм'
     M3 = 'm3', 'Кубический метр'
 
@@ -527,8 +525,8 @@ class StockMovement(TimestampedModel):
         price_per_unit: DecimalField - цена за единицу (ФИНАНСОВОЕ ПОЛЕ - только owner)
         reason: CharField - причина движения
         created_by: ForeignKey - пользователь, создавший запись
-        related_order_id: IntegerField - ID связанного заказа (опционально)
-        related_production_id: IntegerField - ID связанного производства (опционально)
+        related_order: ForeignKey - связанный заказ (опционально, SET_NULL:
+            история движений переживает удаление заказа)
 
     Валидация:
         - Движение должно быть связано либо с material, либо с product
@@ -600,8 +598,10 @@ class StockMovement(TimestampedModel):
         'warehouse.GoodsReceipt', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='movements', verbose_name='Документ прихода',
     )
-    related_order_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного заказа')
-    related_production_id = models.IntegerField(null=True, blank=True, verbose_name='ID связанного производства')
+    related_order = models.ForeignKey(
+        'orders.Order', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='stock_movements', verbose_name='Связанный заказ',
+    )
 
     class Meta:
         """

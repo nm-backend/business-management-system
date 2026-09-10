@@ -43,7 +43,7 @@ class OrderDeliveryFlowTests(TestCase):
             cost_price=Decimal('1000'))
         self.order = Order.objects.create(
             company=self.company, client=self.client_obj, product=self.product,
-            quantity=Decimal('2'), unit='dona', total_amount=Decimal('5000'),
+            quantity=Decimal('2'), unit='sht', total_amount=Decimal('5000'),
             deadline=datetime.datetime(2026, 12, 1, tzinfo=datetime.timezone.utc))
 
         # Подтверждение работы требует заданной ставки: без неё оно
@@ -79,7 +79,7 @@ class OrderDeliveryFlowTests(TestCase):
         # 3. Работник сдаёт выполненную работу.
         resp = worker.post('/api/v1/production/works/', {
             'task': task_id, 'product': self.product.id,
-            'quantity': '2', 'unit': 'dona',
+            'quantity': '2', 'unit': 'sht',
         }, format='json')
         self.assertIn(resp.status_code, (200, 201), f'сдача работы: {resp.status_code} {resp.content[:300]}')
         work_id = resp.json()['id']
@@ -110,7 +110,7 @@ class OrderDeliveryFlowTests(TestCase):
         owner = self.api(self.owner)
         WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal('1'), unit='dona')
+            quantity=Decimal('1'), unit='sht')
         resp = owner.post(f'/api/v1/orders/orders/{self.order.id}/deliver/')
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         self.order.refresh_from_db()
@@ -151,7 +151,7 @@ class DeliverButtonContractTests(TestCase):
     def _order(self, status):
         return Order.objects.create(
             company=self.company, client=self.cli, product=self.product,
-            quantity=Decimal('1'), unit='dona', total_amount=Decimal('100'), status=status)
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('100'), status=status)
 
     def test_api_allows_delivery_from_every_non_terminal_status(self):
         c = APIClient()

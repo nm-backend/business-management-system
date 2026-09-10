@@ -26,7 +26,7 @@ class RecipeItemMinValueTests(TestCase):
             company=self.company, name='Кирпич', stone_type='кирпич', unit='sht',
             quantity=Decimal('10'))
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Камин', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Камин', quantity=Decimal('0'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 

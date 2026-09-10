@@ -68,7 +68,7 @@ class EndToEndReconciliationTests(TestCase):
         self.material = RawMaterial.objects.create(
             company=self.company, name='Гранит', unit='m2', quantity=Decimal('0'))
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='sht')
 
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
@@ -87,12 +87,12 @@ class EndToEndReconciliationTests(TestCase):
                                   quantity_required=Decimal('2'), unit='m2')
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.CUTTING,
-                                 rate_per_unit=Decimal('1000'), unit='dona')
+                                 rate_per_unit=Decimal('1000'), unit='sht')
 
         # 2. Заказ клиента на 5 шт.
         resp = self.api.post(ORDERS, {
             'client': self.client.id, 'product': self.product.id,
-            'quantity': '5', 'unit': 'dona', 'total_amount': '100000',
+            'quantity': '5', 'unit': 'sht', 'total_amount': '100000',
             'deadline': (timezone.now() + datetime.timedelta(days=5)).isoformat(),
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:300])
@@ -106,7 +106,7 @@ class EndToEndReconciliationTests(TestCase):
         self.assertEqual(self.wapi.post(f'{TASKS}{task_id}/accept/', {}, format='json').status_code, 200)
         resp = self.wapi.post(WORKS, {
             'task': task_id, 'product': self.product.id, 'operation': 'cutting',
-            'quantity': '5', 'unit': 'dona',
+            'quantity': '5', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:300])
         work_id = resp.json()['id']

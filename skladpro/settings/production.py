@@ -106,11 +106,15 @@ VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
 VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
 VAPID_SUBJECT = config('VAPID_SUBJECT', default='mailto:admin@skladpro.nod')
 
-# Загруженные файлы (фото работ и т.п.) в production не раздаются ни Django
-# (static() подключён только при DEBUG), ни WhiteNoise (он обслуживает только
-# статику). На PaaS без nginx/Caddy это даёт 404 на все файлы в /media/.
-# Включите MEDIA_SERVE=True, если фронтенд-прокси нет (Railway/Render);
-# при наличии nginx/Caddy задайте False и отдавайте /media/ с него.
+# Загруженные файлы (фото работ и т.п.) в production не раздаются ни WhiteNoise
+# (он обслуживает только статику), ни напрямую. /media/ отдаётся ТОЛЬКО через
+# защищённое view serve_protected_media (аутентификация + проверка компании).
+# Включите MEDIA_SERVE=True, если фронтенд-прокси нет (Railway/Render).
+# При наличии nginx: НЕ отдавайте /media/ с него напрямую (alias/root без
+# прокси вернёт дыру — чужие файлы по прямой ссылке). Правильно:
+#   location /media/           { proxy_pass http://django; }  # проверки — здесь
+#   location /protected-media/ { internal; alias /app/media/; }  # только байты
+# и PROTECTED_MEDIA_ACCEL_LOCATION=/protected-media/ (см. base.py).
 MEDIA_SERVE = config('MEDIA_SERVE', default=False, cast=bool)
 
 # ── Media Storage: S3 (Cloudflare R2 / AWS S3 / MinIO) ──

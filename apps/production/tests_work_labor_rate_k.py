@@ -28,14 +28,14 @@ class WorkLaborRateFieldTests(TestCase):
         self.worker = User.objects.create_user(username='pay_worker', password='p',
                                                role=User.Role.WORKER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 
     def _work(self, **kwargs):
         defaults = dict(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal('5'), unit='dona',
+            quantity=Decimal('5'), unit='sht',
             status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION)
         defaults.update(kwargs)
         return WorkRecord.objects.create(**defaults)
@@ -43,10 +43,10 @@ class WorkLaborRateFieldTests(TestCase):
     def _rates(self):
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.CUTTING,
-                                 rate_per_unit=Decimal('50'), unit='dona')
+                                 rate_per_unit=Decimal('50'), unit='sht')
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.POLISHING,
-                                 rate_per_unit=Decimal('70'), unit='dona')
+                                 rate_per_unit=Decimal('70'), unit='sht')
 
     def test_rate_by_operation(self):
         self._rates()
@@ -58,7 +58,7 @@ class WorkLaborRateFieldTests(TestCase):
     def test_single_rate_without_operation(self):
         LaborRate.objects.create(company=self.company, product=self.product,
                                  operation=LaborRate.OperationType.OTHER,
-                                 rate_per_unit=Decimal('1500'), unit='dona')
+                                 rate_per_unit=Decimal('1500'), unit='sht')
         work = self._work()
         self.assertEqual(self.api.get(f'{WORKS}{work.id}/').json()['labor_rate'], '1500.00')
 
@@ -109,11 +109,11 @@ class LaborRateReadAccessTests(TestCase):
         self.admin = User.objects.create_user(username='acc_admin', password='p',
                                               role=User.Role.ADMIN, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('0'), unit='sht')
         self.rate = LaborRate.objects.create(
             company=self.company, product=self.product,
             operation=LaborRate.OperationType.CUTTING,
-            rate_per_unit=Decimal('50'), unit='dona')
+            rate_per_unit=Decimal('50'), unit='sht')
         self.RATES = '/api/v1/finance/labor-rates/'
 
     def _client(self, user):
@@ -136,7 +136,7 @@ class LaborRateReadAccessTests(TestCase):
         api = self._client(self.worker)
         self.assertEqual(api.post(self.RATES, {
             'product': self.product.id, 'operation': 'polishing',
-            'rate_per_unit': '999', 'unit': 'dona'}, format='json').status_code, 403)
+            'rate_per_unit': '999', 'unit': 'sht'}, format='json').status_code, 403)
         self.assertEqual(api.patch(f"{self.RATES}{self.rate.id}/",
                                    {'rate_per_unit': '999'}, format='json').status_code, 403)
         self.assertEqual(api.delete(f'{self.RATES}{self.rate.id}/').status_code, 403)

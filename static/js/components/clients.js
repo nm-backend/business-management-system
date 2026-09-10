@@ -22,8 +22,8 @@ class ClientsComponent {
                         <div style="font-weight:700;font-size:20px;color:var(--warning-color, #f59e0b);" id="debt-total-amount">—</div>
                     </div>
                 </div>
-                <div class="text-sm text-muted" style="margin:0 0 8px;" data-i18n="clients.overdue_control"></div>
-                <div id="debt-buckets" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+                <div class="text-sm text-muted u-hint" data-i18n="clients.overdue_control"></div>
+                <div id="debt-buckets" class="u-grid-2"></div>
                 <div id="debt-hot-list"></div>
             </div>` : '';
 
@@ -41,11 +41,11 @@ class ClientsComponent {
                 <button class="tab-btn" data-tab="archive" data-i18n="clients.archive"></button>
             </div>
             <div class="search-box">
-                <span class="search-icon" aria-hidden="true">🔍</span>
+                <span class="search-icon" aria-hidden="true">${window.icon('search', 18)}</span>
                 <input type="text" id="client-search" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="clients.search_hint">
             </div>
-            ${canEdit ? `<button class="btn btn-primary btn-block" id="add-client-btn" style="margin-bottom:12px;" data-i18n="clients.add_client"></button>` : ''}
-            <div class="text-sm text-muted" id="clients-listed-count" style="margin:0 0 8px;"></div>
+            ${canEdit ? `<button class="btn btn-primary btn-block u-mb-5" id="add-client-btn" data-i18n="clients.add_client"></button>` : ''}
+            <div class="text-sm text-muted u-hint" id="clients-listed-count"></div>
             <div id="clients-list" class="card-grid"></div>
         `;
 
@@ -121,11 +121,11 @@ class ClientsComponent {
                     hotEl.innerHTML = '';
                 } else {
                     hotEl.innerHTML = `
-                        <div class="list-group list-group-compact" style="margin-top:10px;">
+                        <div class="list-group list-group-compact u-mt-4">
                             ${hot.slice(0, 5).map((o) => `
-                                <a class="list-row" href="#/orders?client=${o.client}" style="text-decoration:none;color:inherit;">
-                                    <div style="min-width:0;">
-                                        <div style="font-weight:600;">${window.ui.escape(o.client_name || '')}</div>
+                                <a class="list-row u-plain-link" href="#/orders?client=${o.client}">
+                                    <div class="u-minw-0">
+                                        <div class="u-strong">${window.ui.escape(o.client_name || '')}</div>
                                         <div class="text-sm text-muted">#${o.order} · ${o.days_overdue} ${window.ui.t('companies.days_left')}</div>
                                     </div>
                                     <span class="font-bold text-danger">${window.ui.money(o.debt)}</span>
@@ -197,8 +197,8 @@ class ClientsComponent {
         return `
             <div class="card" role="button" tabindex="0" data-id="${c.id}" style="cursor:pointer;border-left:4px solid ${c.has_debt ? 'var(--danger-color)' : 'var(--success-color)'};">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-                    <div style="min-width:0;">
-                        <div style="font-size:15px;font-weight:600;">${window.ui.escape(c.name)}</div>
+                    <div class="u-minw-0">
+                        <div class="u-title-md">${window.ui.escape(c.name)}</div>
                         ${c.phone ? `<div class="text-sm text-muted">${window.ui.escape(c.phone)}</div>` : ''}
                         ${debtHtml}
                     </div>
@@ -212,16 +212,16 @@ class ClientsComponent {
         const user = window.currentUser;
         const canEdit = user.is_owner || user.is_admin;
         const row = (labelKey, valueHtml, danger = false) => (!valueHtml ? '' : `
-            <div class="list-row" style="cursor:default;">
+            <div class="list-row u-cursor-default">
                 <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
-                <span class="text-sm font-bold ${danger ? 'text-danger' : ''}" style="text-align:right;">${valueHtml}</span>
+                <span class="text-sm font-bold ${danger ? 'text-danger' : ''} u-text-right">${valueHtml}</span>
             </div>`);
 
         // Вкладка «Умумий» из макета «Мижоз картаси». Финансовые строки
         // рисуются только владельцу, но и API администратору их не отдаёт:
         // c.debt/c.total_paid в его payload попросту отсутствуют.
         const infoTab = () => `
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+            <div class="list-group u-card-flat">
                 ${row('clients.name', window.ui.escape(c.name))}
                 ${row('clients.phone', window.ui.escape(c.phone || ''))}
                 ${row('clients.address', window.ui.escape(c.address || ''))}
@@ -240,13 +240,13 @@ class ClientsComponent {
             </div>`;
 
         const payments = (c.payments || []).slice(0, 10).map((p) => `
-            <div class="list-row" style="cursor:default;">
+            <div class="list-row u-cursor-default">
                 <span class="text-sm text-muted">${window.ui.datetime(p.payment_date)}</span>
                 <span class="text-sm font-bold text-success">+${window.ui.money(p.amount)}</span>
             </div>`).join('');
 
         const modal = window.ui.modal(c.name, `
-            ${c.has_debt ? `<div class="alert-box">⚠️ <span data-i18n="clients.not_paid_warning"></span></div>` : ''}
+            ${c.has_debt ? `<div class="alert-box">${window.icon('alert-triangle', 16)} <span data-i18n="clients.not_paid_warning"></span></div>` : ''}
             <div style="display:flex;gap:4px;margin-bottom:12px;" class="tabs" id="client-detail-tabs">
                 <button class="tab-btn active" data-client-tab="info" data-i18n="clients.info"></button>
                 <button class="tab-btn" data-client-tab="orders" data-i18n="clients.orders"></button>
@@ -255,8 +255,8 @@ class ClientsComponent {
             </div>
             <div id="client-tab-content">${infoTab()}</div>
             <div style="display:flex;gap:10px;margin-top:14px;">
-                ${canEdit ? `<button class="btn btn-secondary btn-sm" id="edit-client" style="flex:1;" data-i18n="common.edit"></button>` : ''}
-                ${canEdit ? `<button class="btn btn-secondary btn-sm btn-block" id="archive-client" style="margin-top:10px;"
+                ${canEdit ? `<button class="btn btn-secondary btn-sm u-grow" id="edit-client" data-i18n="common.edit"></button>` : ''}
+                ${canEdit ? `<button class="btn btn-secondary btn-sm btn-block u-mt-4" id="archive-client"
                     data-i18n="${c.is_archived ? 'common.restore' : 'common.archive'}"></button>` : ''}
             </div>
         `);
@@ -289,13 +289,13 @@ class ClientsComponent {
                                 (o) => !['delivered', 'cancelled'].includes(o.status)
                             ).length;
                             contentEl.innerHTML = `
-                                <div class="text-sm text-muted" style="margin-bottom:8px;">
+                                <div class="text-sm text-muted u-mb-3">
                                     <span data-i18n="clients.active_orders"></span>: ${active}
                                 </div>
-                                <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+                                <div class="list-group u-card-flat">
                                     ${orders.length ? orders.map((o) => `
-                                        <div class="list-row" style="cursor:default;">
-                                            <div style="min-width:0;">
+                                        <div class="list-row u-cursor-default">
+                                            <div class="u-minw-0">
                                                 <div class="text-sm font-bold">#${o.id}
                                                     ${window.ui.escape(o.product_name || o.custom_product_name || '')}</div>
                                                 <div class="text-sm text-muted">
@@ -304,7 +304,7 @@ class ClientsComponent {
                                                     ${o.deadline ? ` · ${window.ui.date(o.deadline)}` : ''}
                                                 </div>
                                             </div>
-                                            <div style="text-align:right;flex-shrink:0;">
+                                            <div class="u-text-right u-shrink-0">
                                                 ${window.ui.orderBadge
                                                     ? window.ui.orderBadge(o.status)
                                                     : `<span class="badge" data-i18n="statuses.${o.status}"></span>`}
@@ -313,9 +313,9 @@ class ClientsComponent {
                                                     : ''}
                                             </div>
                                         </div>`).join('')
-                                        : `<div class="text-sm text-muted" style="padding:12px;text-align:center;" data-i18n="common.no_data"></div>`}
+                                        : `<div class="text-sm text-muted u-p-3 u-text-center" data-i18n="common.no_data"></div>`}
                                 </div>
-                                <a class="btn btn-secondary btn-sm btn-block" style="margin-top:10px;"
+                                <a class="btn btn-secondary btn-sm btn-block u-mt-4"
                                    href="#/orders?client=${c.id}" data-i18n="clients.open_all_orders"></a>`;
                             window.i18n.applyTranslations();
                         })
@@ -326,24 +326,24 @@ class ClientsComponent {
                     return;
                 }
                 if (tabName === 'payments') {
-                    contentEl.innerHTML = `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">${payments || '<div class="text-sm text-muted" style="padding:12px;text-align:center;">' + window.ui.t('common.no_data') + '</div>'}</div>`;
+                    contentEl.innerHTML = `<div class="list-group u-card-flat">${payments || '<div class="text-sm text-muted u-p-3 u-text-center">' + window.ui.t('common.no_data') + '</div>'}</div>`;
                 } else if (tabName === 'debts') {
                     const debtInfo = c.has_debt ? 
-                        `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
-                            <div class="list-row" style="cursor:default;">
+                        `<div class="list-group u-card-flat">
+                            <div class="list-row u-cursor-default">
                                 <span class="text-sm text-muted" data-i18n="clients.total_amount"></span>
                                 <span class="text-sm font-bold">${window.ui.money(c.total_orders_amount)}</span>
                             </div>
-                            <div class="list-row" style="cursor:default;">
+                            <div class="list-row u-cursor-default">
                                 <span class="text-sm text-muted" data-i18n="clients.paid"></span>
                                 <span class="text-sm font-bold text-success">${window.ui.money(c.total_paid)}</span>
                             </div>
-                            <div class="list-row" style="cursor:default;">
+                            <div class="list-row u-cursor-default">
                                 <span class="text-sm text-muted" data-i18n="clients.debt"></span>
                                 <span class="text-sm font-bold text-danger">${window.ui.money(c.debt)}</span>
                             </div>
                         </div>` : 
-                        `<div class="text-sm text-muted" style="padding:12px;text-align:center;">✅ ${window.ui.t('clients.no_debt')}</div>`;
+                        `<div class="text-sm text-muted u-p-3 u-text-center">${window.icon('check-circle', 16)} ${window.ui.t('clients.no_debt')}</div>`;
                     contentEl.innerHTML = debtInfo;
                 } else {
                     contentEl.innerHTML = infoTab();

@@ -8,6 +8,18 @@ window.ui = {
         return window.i18n.translate(key, params);
     },
 
+    /**
+     * Перевод enum-значения с бэкенда: te('units', 'sht') -> 'шт'.
+     * Если ключа нет в словарях (неожиданное/устаревшее значение в БД),
+     * показывает само значение, а не технический ключ вида 'units.sht'.
+     */
+    te(prefix, value) {
+        if (value === null || value === undefined || value === '') return '';
+        const key = `${prefix}.${value}`;
+        const hit = window.i18n.translate(key);
+        return hit === key ? String(value) : hit;
+    },
+
     /** Формат денег: 1250000 -> "1 250 000 сўм". */
     money(value) {
         const num = Number(value || 0);
@@ -269,12 +281,12 @@ window.ui = {
         return `
             <div id="custom-period-panel" style="display:${display};margin:8px 0 10px;">
                 <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;">
-                    <div class="form-group" style="margin:0;min-width:140px;flex:1;">
+                    <div class="form-group u-form-flex">
                         <label class="text-sm text-muted" data-i18n="periods.date_from"></label>
                         <input type="date" id="period-date-from" class="form-control"
                                value="${this.escape(dateFrom || '')}">
                     </div>
-                    <div class="form-group" style="margin:0;min-width:140px;flex:1;">
+                    <div class="form-group u-form-flex">
                         <label class="text-sm text-muted" data-i18n="periods.date_to"></label>
                         <input type="date" id="period-date-to" class="form-control"
                                value="${this.escape(dateTo || '')}">
@@ -283,7 +295,7 @@ window.ui = {
                             data-i18n="periods.apply"></button>
                 </div>
             </div>
-            <div id="period-range-label" class="text-sm text-muted" style="margin-bottom:10px;"></div>`;
+            <div id="period-range-label" class="text-sm text-muted u-mb-4"></div>`;
     },
 
     /** Человекочитаемый текст первой ошибки из ответа DRF. */
@@ -298,7 +310,7 @@ window.ui = {
 
     /** <option> для единиц измерения. */
     unitOptions(selected) {
-        return ['sht', 'kg', 'm', 'm2', 'm3', 'izdelie', 'dona']
+        return ['sht', 'kg', 'm', 'm2', 'm3', 'izdelie']
             .map((u) => `<option value="${u}" ${u === selected ? 'selected' : ''} data-i18n="units.${u}"></option>`)
             .join('');
     },
@@ -314,10 +326,10 @@ window.ui = {
             const arrow = opts.delta > 0 ? '↑' : (opts.delta < 0 ? '↓' : '→');
             deltaHtml = `<span class="stat-delta ${dir}">${arrow} ${Math.abs(opts.delta)}%</span>`;
         }
-        const cls = `stat-card${opts.id || opts.href ? ' clickable' : ''}`;
+        const cls = `stat-card${opts.id || opts.href ? ' clickable' : ''}${opts.href ? ' u-plain-link' : ''}`;
         const idAttr = opts.id ? ` id="${opts.id}"` : '';
         const tag = opts.href ? 'a' : 'div';
-        const hrefAttr = opts.href ? ` href="${opts.href}" style="text-decoration:none;color:inherit;"` : '';
+        const hrefAttr = opts.href ? ` href="${opts.href}"` : '';
         const iconHtml = opts.icon && opts.icon.startsWith('<svg')
             ? opts.icon
             : (opts.icon || window.icon('activity', 18));

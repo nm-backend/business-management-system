@@ -22,7 +22,7 @@ class DashboardComponent {
     expenseSegments(data) {
         const byCat = data.expenses_by_category || {};
         return Object.keys(byCat)
-            .map((cat) => ({ label: window.ui.t('expense_categories.' + cat), value: Number(byCat[cat]) }))
+            .map((cat) => ({ label: window.ui.te('expense_categories', cat), value: Number(byCat[cat]) }))
             .filter((s) => s.value > 0)
             .sort((a, b) => b.value - a.value);
     }
@@ -58,11 +58,11 @@ class DashboardComponent {
             </div>
 
             ${(stats.expiring_soon > 0 || stats.grace > 0 || stats.frozen > 0) ? `
-            <div class="alert-box alert-box-warning" style="margin-bottom:16px;">
+            <div class="alert-box alert-box-warning u-mb-6">
                 <span>${window.icon('alert-triangle', 16)} <strong data-i18n="superadmin.attention_needed"></strong></span>
                 <span class="badge badge-progress">${stats.expiring_soon || 0} ${window.ui.t('superadmin.expiring_soon')}</span>
-                ${stats.grace > 0 ? `<span class="badge badge-progress" style="margin-left:4px;">${stats.grace} ${window.ui.t('superadmin.in_grace')}</span>` : ''}
-                ${stats.frozen > 0 ? `<span class="badge badge-progress" style="margin-left:4px;">${stats.frozen} ${window.ui.t('superadmin.frozen')}</span>` : ''}
+                ${stats.grace > 0 ? `<span class="badge badge-progress u-ml-1">${stats.grace} ${window.ui.t('superadmin.in_grace')}</span>` : ''}
+                ${stats.frozen > 0 ? `<span class="badge badge-progress u-ml-1">${stats.frozen} ${window.ui.t('superadmin.frozen')}</span>` : ''}
             </div>` : ''}
 
             <div class="card-grid">
@@ -137,7 +137,7 @@ class DashboardComponent {
             </div>
 
             ${view.stock.low_stock_materials > 0 ? `
-                <a class="alert-box alert-box-warning" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
+                <a class="alert-box alert-box-warning u-alert-link" href="#/warehouse">
                     <span>${window.icon('alert-triangle', 16)} <span data-i18n="warehouse.low_stock_warning"></span> (${view.stock.low_stock_materials})</span>
                     <span>›</span>
                 </a>` : ''}
@@ -152,7 +152,7 @@ class DashboardComponent {
                     ${view.top_products.length ? `
                         <div class="list-group list-group-compact">
                             ${view.top_products.slice(0, 3).map((p) => `
-                                <div class="list-row" style="cursor:default;">
+                                <div class="list-row u-cursor-default">
                                     <span>${window.ui.escape(p.name)}</span>
                                     <span class="font-bold">${window.ui.qty(p.total_quantity)}</span>
                                 </div>`).join('')}
@@ -198,8 +198,8 @@ class DashboardComponent {
             // Объединяем и сортируем по дате. Приходы клиентов — плюс, расходы
             // и выплаты работникам — минус (макет ленты кассы).
             const operations = []
-                .concat(expenses.map(e => ({ type: 'expense', date: e.date, amount: -e.amount, desc: window.ui.t('expense_categories.' + e.category) })))
-                .concat(payments.map(p => ({ type: 'payment', date: p.payment_date, amount: -p.amount, desc: window.ui.t('payment_types.' + p.payment_type) + ': ' + (p.worker_name || '') })))
+                .concat(expenses.map(e => ({ type: 'expense', date: e.date, amount: -e.amount, desc: window.ui.te('expense_categories', e.category) })))
+                .concat(payments.map(p => ({ type: 'payment', date: p.payment_date, amount: -p.amount, desc: window.ui.te('payment_types', p.payment_type) + ': ' + (p.worker_name || '') })))
                 .concat(incoming.map(p => ({
                     type: 'in',
                     date: p.payment_date,
@@ -211,15 +211,15 @@ class DashboardComponent {
             if (!operations.length) return;
             const wrap = document.createElement('div');
             wrap.innerHTML = `
-                <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+                <div class="section-title u-between">
                     <span data-i18n="dashboard.cash_operations"></span>
-                    <a href="#/finance" class="text-sm" style="color:var(--primary);"><span data-i18n="common.view_all"></span> ›</a>
+                    <a href="#/finance" class="text-sm u-primary-text"><span data-i18n="common.view_all"></span> ›</a>
                 </div>
                 <div class="list-group list-group-compact">
                     ${operations.map(op => `
-                        <div class="list-row" style="cursor:default;">
-                            <div style="min-width:0;">
-                                <div style="font-weight:600;font-size:14px;">${window.ui.escape(op.desc)}</div>
+                        <div class="list-row u-cursor-default">
+                            <div class="u-minw-0">
+                                <div class="u-title-sm">${window.ui.escape(op.desc)}</div>
                                 <div class="text-sm text-muted">${window.ui.date(op.date)}</div>
                             </div>
                             <span class="font-bold ${Number(op.amount) >= 0 ? 'text-success' : ''}"
@@ -240,10 +240,10 @@ class DashboardComponent {
         const totals = worker.unit_totals || [];
         if (!totals.length) return `<span class="font-bold">${window.ui.qty(0)}</span>`;
         if (totals.length === 1) {
-            return `<span class="font-bold">${window.ui.qty(totals[0].total_quantity)} ${window.ui.escape(window.ui.t('units.' + totals[0].unit))}</span>`;
+            return `<span class="font-bold">${window.ui.qty(totals[0].total_quantity)} ${window.ui.escape(window.ui.te('units', totals[0].unit))}</span>`;
         }
         return `<span class="font-bold">${totals.map((t) =>
-            `${window.ui.qty(t.total_quantity)} ${window.ui.escape(window.ui.t('units.' + t.unit))}`
+            `${window.ui.qty(t.total_quantity)} ${window.ui.escape(window.ui.te('units', t.unit))}`
         ).join('<br>')}</span>`;
     }
 
@@ -388,7 +388,7 @@ class DashboardComponent {
             </div>
 
             ${data.low_stock_materials.length ? `
-                <a class="alert-box" href="#/warehouse" style="text-decoration:none;justify-content:space-between;">
+                <a class="alert-box u-alert-link" href="#/warehouse">
                     <span>${window.icon('alert-triangle', 16)} <span data-i18n="warehouse.low_stock_warning"></span> (${data.low_stock_materials.length})</span>
                     <span>›</span>
                 </a>` : ''}
@@ -397,7 +397,7 @@ class DashboardComponent {
                 <div class="section-title" data-i18n="admin_analytics.unpaid_clients"></div>
                 <div class="list-group list-group-compact">
                     ${data.unpaid_clients.slice(0, 3).map((c) => `
-                        <a class="list-row" href="#/orders?client=${c.id}&payment_status=unpaid" style="text-decoration:none;color:inherit;">
+                        <a class="list-row u-plain-link" href="#/orders?client=${c.id}&payment_status=unpaid">
                             <span>${window.ui.escape(c.name)}</span>
                             <span class="badge badge-cancel" data-i18n="payment_statuses.unpaid"></span>
                         </a>`).join('')}
@@ -452,7 +452,7 @@ class DashboardComponent {
                 <div class="section-title" data-i18n="production.pending_tasks"></div>
                 <div class="list-group list-group-compact">
                     ${pending.slice(0, 4).map((t) => `
-                        <a class="list-row" href="#/production" style="text-decoration:none;color:inherit;">
+                        <a class="list-row u-plain-link" href="#/production">
                             <span>#${t.id} ${window.ui.escape(t.order_product || '')}</span>
                             ${window.ui.workBadge(t.status)}
                         </a>`).join('')}

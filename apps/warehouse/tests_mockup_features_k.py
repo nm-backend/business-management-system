@@ -42,7 +42,7 @@ class _Base(TestCase):
             company=self.company, name='Гранит', quantity=Decimal('100'), unit='m2',
             avg_cost_price=Decimal('100'))
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('2'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('2'), unit='sht')
 
         # Подтверждение работы требует заданной ставки: без неё оно
         # отказывает, чтобы работнику не начислялся молча ноль.
@@ -304,7 +304,7 @@ class RawMaterialReservationTests(_Base):
     def _create_order(self, **kw):
         r = self.api().post('/api/v1/orders/orders/', {
             'client': self.cli.id, 'product': self.product.id,
-            'quantity': '3', 'unit': 'dona', **kw,
+            'quantity': '3', 'unit': 'sht', **kw,
         }, format='json')
         self.assertEqual(r.status_code, 201, r.content[:300])
         return r.json()['id']
@@ -351,7 +351,7 @@ class RawMaterialReservationTests(_Base):
                                                name='Просто товар', quantity=Decimal('1'))
         r = self.api().post('/api/v1/orders/orders/', {
             'client': self.cli.id, 'product': other.id,
-            'quantity': '2', 'unit': 'dona',
+            'quantity': '2', 'unit': 'sht',
         }, format='json')
         self.assertEqual(r.status_code, 201, r.content[:300])
         self.material.refresh_from_db()
@@ -369,7 +369,7 @@ class RawMaterialReservationTests(_Base):
             status=TaskStatus.ACCEPTED)
         work = WorkRecord.objects.create(
             company=self.company, task=task, worker=self.worker,
-            product=order.product, quantity=order.quantity, unit='dona',
+            product=order.product, quantity=order.quantity, unit='sht',
             status=WorkRecord.WorkStatus.AWAITING_CONFIRMATION)
 
         from apps.production.services import confirm_work

@@ -27,10 +27,10 @@ class FinishedProductsComponent {
                     <button class="tab-btn" role="tab" aria-selected="false" data-ptab="archive" data-i18n="common.archive"></button>
                 </div>` : ''}
             <div class="search-box">
-                <span class="search-icon">🔍</span>
+                <span class="search-icon">${window.icon('search', 18)}</span>
                 <input type="text" id="product-search" class="form-control" data-i18n="warehouse.search">
             </div>
-            ${canEdit ? `<button class="btn btn-primary btn-block" id="add-product-btn" style="margin-bottom:12px;" data-i18n="warehouse.add_product"></button>` : ''}
+            ${canEdit ? `<button class="btn btn-primary btn-block u-mb-5" id="add-product-btn" data-i18n="warehouse.add_product"></button>` : ''}
             <div class="list-group" id="products-list"></div>
         `;
 
@@ -88,18 +88,18 @@ class FinishedProductsComponent {
             }
             listEl.innerHTML = products.map((p) => `
                 <div class="list-row" role="button" tabindex="0" data-id="${p.id}">
-                    <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-                        <div class="thumb">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="" onerror="this.parentElement.innerHTML='🪟'">` : '🪟'}</div>
-                        <div style="min-width:0;">
-                            <div style="font-size:14px;font-weight:600;">${window.ui.escape(p.name)}</div>
+                    <div class="u-row">
+                        <div class="thumb">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="" onerror="this.parentElement.innerHTML=window.icon('package', 36)">` : window.icon('package', 36)}</div>
+                        <div class="u-minw-0">
+                            <div class="u-title-sm">${window.ui.escape(p.name)}</div>
                             <div class="text-sm text-muted">
                                 ${window.ui.escape(p.category || '-')} ·
                                 <span data-i18n="warehouse.required_for_orders"></span>: ${window.ui.qty(p.required_for_orders)}
                             </div>
                         </div>
                     </div>
-                    <div style="text-align:right;flex-shrink:0;">
-                        <div style="font-size:15px;font-weight:600;" class="${p.is_low_stock ? 'text-danger' : ''}">
+                    <div class="u-text-right u-shrink-0">
+                        <div class="${p.is_low_stock ? 'text-danger' : ''} u-title-md">
                             ${window.ui.qty(p.available_quantity)} <span data-i18n="units.${p.unit}"></span>
                         </div>
                         ${p.is_low_stock ? `<div class="text-sm text-danger" data-i18n="warehouse.low_stock_warning"></div>` : ''}
@@ -128,20 +128,20 @@ class FinishedProductsComponent {
         const user = window.currentUser;
         const canEdit = user.is_owner || user.is_admin;
         const row = (labelKey, value, danger = false) => (!value ? '' : `
-            <div class="list-row" style="cursor:default;">
+            <div class="list-row u-cursor-default">
                 <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
                 <span class="text-sm font-bold ${danger ? 'text-danger' : ''}">${window.ui.escape(String(value))}</span>
             </div>`);
 
         const modal = window.ui.modal('warehouse.finished_title', `
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-                <div class="thumb" style="width:56px;height:56px;">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="" onerror="this.parentElement.innerHTML='🪟'">` : '🪟'}</div>
+            <div class="u-row u-mb-14">
+                <div class="thumb u-thumb-lg">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="" onerror="this.parentElement.innerHTML=window.icon('package', 36)">` : window.icon('package', 36)}</div>
                 <div>
-                    <div style="font-weight:600;font-size:16px;">${window.ui.escape(p.name)}</div>
+                    <div class="u-title-lg">${window.ui.escape(p.name)}</div>
                     <div class="text-sm text-muted">${window.ui.escape(p.category || '')}</div>
                 </div>
             </div>
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+            <div class="list-group u-card-flat">
                 ${row('warehouse.quantity', `${window.ui.qty(p.quantity)} ${window.ui.t('units.' + p.unit)}`, p.is_low_stock)}
                 ${row('warehouse.required_for_orders', window.ui.qty(p.required_for_orders))}
                 ${row('warehouse.min_stock', window.ui.qty(p.min_stock))}
@@ -153,14 +153,14 @@ class FinishedProductsComponent {
                 ${row('warehouse.description', p.description)}
             </div>
             ${canEdit ? `
-                <button class="btn btn-secondary btn-sm btn-block" id="product-recipes" style="margin-top:10px;" data-i18n="warehouse.recipes"></button>` : ''}
+                <button class="btn btn-secondary btn-sm btn-block u-mt-4" id="product-recipes" data-i18n="warehouse.recipes"></button>` : ''}
             ${canEdit ? `
-                <div style="display:flex;gap:10px;margin-top:10px;">
-                    <button class="btn btn-secondary btn-sm" id="edit-product" style="flex:1;" data-i18n="common.edit"></button>
-                    ${p.is_archived ? '' : `<button class="btn btn-success btn-sm" id="income-product" style="flex:1;" data-i18n="warehouse.incoming"></button>`}
+                <div class="u-actions">
+                    <button class="btn btn-secondary btn-sm u-grow" id="edit-product" data-i18n="common.edit"></button>
+                    ${p.is_archived ? '' : `<button class="btn btn-success btn-sm u-grow" id="income-product" data-i18n="warehouse.incoming"></button>`}
                 </div>
                 ${user.is_owner ? `
-                    <button class="btn btn-secondary btn-sm btn-block" id="archive-product" style="margin-top:10px;"
+                    <button class="btn btn-secondary btn-sm btn-block u-mt-4" id="archive-product"
                         data-i18n="${p.is_archived ? 'common.restore' : 'common.archive'}"></button>` : ''}` : ''}
         `);
 
@@ -204,7 +204,7 @@ class FinishedProductsComponent {
     openIncomeForm(p) {
         const isOwner = window.currentUser.is_owner;
         const modal = window.ui.modal('warehouse.incoming', `
-            <p style="margin-bottom:12px;font-weight:600;">${window.ui.escape(p.name)}</p>
+            <p class="u-mb-5 u-strong">${window.ui.escape(p.name)}</p>
             <form id="product-income-form">
                 <div class="form-group"><label data-i18n="warehouse.quantity"></label>
                     <input name="quantity" type="number" step="0.001" min="0.001" class="form-control" required></div>
@@ -260,7 +260,7 @@ class FinishedProductsComponent {
                 const materialMap = Object.fromEntries(materials.map((m) => [String(m.id), m]));
 
                 body.innerHTML = `
-                    <button class="btn btn-primary btn-block" id="add-recipe-btn" style="margin-bottom:12px;" data-i18n="warehouse.add_recipe"></button>
+                    <button class="btn btn-primary btn-block u-mb-5" id="add-recipe-btn" data-i18n="warehouse.add_recipe"></button>
                     ${recipes.length ? recipes.map((r) => this.renderRecipeRow(r, materialMap)).join('')
                         : `<div class="card list-state" data-i18n="common.no_data"></div>`}
                 `;
@@ -299,7 +299,7 @@ class FinishedProductsComponent {
             const available = m ? m.available_quantity : null;
             const ok = available !== null && available >= Number(item.quantity_required);
             return `
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm">${window.ui.escape(item.material_name || '-')}</span>
                     <span class="text-sm text-muted">
                         <span data-i18n="warehouse.recipe_required"></span>: ${window.ui.qty(item.quantity_required)} <span data-i18n="units.${item.unit}"></span>
@@ -319,20 +319,20 @@ class FinishedProductsComponent {
         if (r.thickness) facts.push(`${window.ui.qty(r.thickness)} ${window.ui.t('units.mm')}`);
 
         return `
-            <div class="card" style="margin-bottom:10px;">
-                <div class="card-title" style="margin-bottom:4px;">
+            <div class="card u-mb-4">
+                <div class="card-title u-mb-1">
                     <span>${window.ui.escape(r.name || r.product_name || '-')}</span>
                     ${r.is_active ? `<span class="badge badge-ready" data-i18n="common.active"></span>` : ''}
                 </div>
                 ${facts.length ? `<div class="text-sm text-muted">${facts.join(' · ')}</div>` : ''}
-                <div class="text-sm text-muted" style="margin-bottom:6px;">
+                <div class="text-sm text-muted u-mb-2">
                     <span data-i18n="warehouse.recipe_output"></span>:
                     ${window.ui.qty(r.output_quantity ?? 1)}
                 </div>
-                ${items ? `<div class="list-group" style="box-shadow:none;border:1px solid var(--border);">${items}</div>` : ''}
-                <div style="display:flex;gap:10px;margin-top:10px;">
-                    <button class="btn btn-secondary btn-sm" style="flex:1;" data-edit-recipe="${r.id}" data-i18n="common.edit"></button>
-                    ${r.is_active ? '' : `<button class="btn btn-success btn-sm" style="flex:1;" data-activate-recipe="${r.id}" data-i18n="warehouse.recipe_activate"></button>`}
+                ${items ? `<div class="list-group u-card-flat">${items}</div>` : ''}
+                <div class="u-actions">
+                    <button class="btn btn-secondary btn-sm u-grow" data-edit-recipe="${r.id}" data-i18n="common.edit"></button>
+                    ${r.is_active ? '' : `<button class="btn btn-success btn-sm u-grow" data-activate-recipe="${r.id}" data-i18n="warehouse.recipe_activate"></button>`}
                 </div>
             </div>`;
     }
@@ -350,14 +350,14 @@ class FinishedProductsComponent {
                 </select>
                 <input name="quantity_required" type="number" step="0.001" min="0.001" class="form-control" required
                        placeholder="${window.ui.t('production.quantity')}" value="${item.quantity_required ?? ''}">
-                <button type="button" class="icon-btn recipe-item-remove" aria-label="${window.ui.t('common.delete')}">🗑️</button>
+                <button type="button" class="icon-btn recipe-item-remove" aria-label="${window.ui.t('common.delete')}">${window.icon('trash', 16)}</button>
             </div>`;
 
         const modal = window.ui.modal(recipe ? 'common.edit' : 'warehouse.add_recipe', `
             <form id="recipe-form">
                 <div class="form-group"><label data-i18n="warehouse.recipe_name"></label>
                     <input name="name" class="form-control" required value="${window.ui.escape(recipe?.name || '')}"></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="warehouse.recipe_code"></label>
                         <input name="code" class="form-control" maxlength="30" placeholder="RCP-001"
                                value="${window.ui.escape(recipe?.code || '')}"></div>
@@ -372,14 +372,14 @@ class FinishedProductsComponent {
                                value="${recipe?.output_quantity ?? 1}"></div>
                 </div>
                 <div class="form-group">
-                    <label style="display:flex;align-items:center;gap:8px;">
+                    <label class="u-row-sm">
                         <input type="checkbox" name="is_active" ${recipe?.is_active ? 'checked' : ''}>
                         <span data-i18n="warehouse.recipe_active"></span>
                     </label>
                 </div>
                 <div class="form-group"><label data-i18n="warehouse.recipe_items"></label>
                     <div id="recipe-items">${(recipe?.items || []).map((i) => itemRow(i)).join('') || itemRow()}</div>
-                    <button type="button" class="btn btn-secondary btn-sm btn-block" id="add-item-row" style="margin-top:6px;" data-i18n="warehouse.recipe_add_item"></button>
+                    <button type="button" class="btn btn-secondary btn-sm btn-block u-mt-2" id="add-item-row" data-i18n="warehouse.recipe_add_item"></button>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" data-i18n="common.save"></button>
             </form>
@@ -463,7 +463,7 @@ class FinishedProductsComponent {
                     <input name="name" class="form-control" required value="${window.ui.escape(p?.name || '')}"></div>
                 <div class="form-group"><label data-i18n="warehouse.category"></label>
                     <input name="category" class="form-control" value="${window.ui.escape(p?.category || '')}"></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="warehouse.unit"></label>
                         <select name="unit" class="form-control">${window.ui.unitOptions(p?.unit || 'izdelie')}</select></div>
                     <div class="form-group"><label data-i18n="warehouse.quantity"></label>
@@ -479,7 +479,7 @@ class FinishedProductsComponent {
                     <small class="text-muted" data-i18n="warehouse.required_for_orders_hint"></small>
                 </div>
                 ${isOwner ? `
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div class="u-grid-2">
                         <div class="form-group"><label data-i18n="warehouse.cost_price"></label>
                             <input name="cost_price" type="number" step="0.01" min="0" class="form-control" value="${p?.cost_price ?? 0}"></div>
                         <div class="form-group"><label data-i18n="warehouse.sale_price"></label>

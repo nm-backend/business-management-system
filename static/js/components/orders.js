@@ -43,9 +43,9 @@ class OrdersComponent {
                 </div>
                 ${canEdit ? `<button class="btn btn-primary btn-sm" id="add-order-btn" data-i18n="orders.new_order"></button>` : ''}
             </div>
-            <div class="tabs" style="margin-bottom:12px;" role="tablist" aria-label="Orders view switch">
+            <div class="tabs u-mb-5" role="tablist" aria-label="Orders view switch">
                 <button class="tab-btn active" role="tab" aria-selected="true" type="button" data-i18n="orders.view_list"></button>
-                <a class="tab-btn" href="#/orders/kanban" style="text-decoration:none;" role="tab" aria-selected="false" data-i18n="orders.view_kanban"></a>
+                <a class="tab-btn u-no-deco" href="#/orders/kanban" role="tab" aria-selected="false" data-i18n="orders.view_kanban"></a>
             </div>
             <div class="tabs" role="tablist" aria-label="Order status filter">
                 ${statuses.map((s) => `
@@ -54,11 +54,11 @@ class OrdersComponent {
             </div>
             ${this.clientFilter ? `
                 <div class="filter-chip" style="display:inline-flex;align-items:center;gap:8px;background:var(--secondary-bg, #f0f0f3);border-radius:16px;padding:6px 14px;margin-bottom:10px;font-size:14px;">
-                    <span>👤 ${window.ui.escape(clientName)}</span>
-                    <button type="button" id="clear-client-filter" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;" aria-label="${window.ui.t('common.clear_filter')}">✕</button>
+                    <span>${window.icon('user', 16)} ${window.ui.escape(clientName)}</span>
+                    <button type="button" id="clear-client-filter" style="border:none;background:none;cursor:pointer;font-size:14px;line-height:1;" aria-label="${window.ui.t('common.clear_filter')}">${window.icon('x', 14)}</button>
                 </div>` : ''}
             <div class="search-box">
-                <span class="search-icon" aria-hidden="true">🔍</span>
+                <span class="search-icon" aria-hidden="true">${window.icon('search', 18)}</span>
                 <input type="text" id="order-search" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="orders.search">
             </div>
             <div id="orders-list" class="card-grid"></div>
@@ -154,7 +154,7 @@ class OrdersComponent {
         const danger = o.has_material_shortage || o.has_product_shortage || o.payment_status === 'unpaid';
         return `
             <div class="card card-interactive" role="button" tabindex="0" data-id="${o.id}" style="${danger ? 'border-left:4px solid var(--danger-color);' : ''}">
-                <div class="card-title" style="margin-bottom:4px;">
+                <div class="card-title u-mb-1">
                     <span>#${o.id} ${window.ui.escape(o.client_name)}</span>
                     ${window.ui.orderBadge(o.status)}
                 </div>
@@ -163,9 +163,9 @@ class OrdersComponent {
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
                     <div>
-                        ${o.has_material_shortage ? `<div class="text-sm text-danger">⚠️ <span data-i18n="orders.material_shortage"></span></div>` : ''}
-                        ${o.has_product_shortage ? `<div class="text-sm text-danger">⚠️ <span data-i18n="orders.product_shortage"></span></div>` : ''}
-                        ${o.is_overdue ? `<div class="text-sm text-danger">⏰ <span data-i18n="dashboard.deadline_passed"></span></div>` : ''}
+                        ${o.has_material_shortage ? `<div class="text-sm text-danger">${window.icon('alert-triangle', 14)} <span data-i18n="orders.material_shortage"></span></div>` : ''}
+                        ${o.has_product_shortage ? `<div class="text-sm text-danger">${window.icon('alert-triangle', 14)} <span data-i18n="orders.product_shortage"></span></div>` : ''}
+                        ${o.is_overdue ? `<div class="text-sm text-danger">${window.icon('clock', 14)} <span data-i18n="dashboard.deadline_passed"></span></div>` : ''}
                     </div>
                     ${window.ui.paymentBadge(o.payment_status)}
                 </div>
@@ -179,20 +179,20 @@ class OrdersComponent {
         const user = window.currentUser;
         const canManage = user.is_owner || user.is_admin;
         const row = (labelKey, valueHtml) => (!valueHtml ? '' : `
-            <div class="list-row" style="cursor:default;">
+            <div class="list-row u-cursor-default">
                 <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
-                <span class="text-sm font-bold" style="text-align:right;">${valueHtml}</span>
+                <span class="text-sm font-bold u-text-right">${valueHtml}</span>
             </div>`);
 
         const shortages = (o.material_shortages || []).map((s) => `
-            <div class="alert-box" style="margin-bottom:8px;">
-                ⚠️ ${window.ui.escape(s.material_name)}:
+            <div class="alert-box u-mb-3">
+                ${window.icon('alert-triangle', 14)} ${window.ui.escape(s.material_name)}:
                 <span data-i18n="orders.required_materials"></span> ${window.ui.qty(s.required)},
                 <span data-i18n="warehouse.quantity"></span> ${window.ui.qty(s.available)}
             </div>`).join('');
         const productShortage = o.product_shortage ? `
-            <div class="alert-box" style="margin-bottom:8px;">
-                ⚠️ <span data-i18n="orders.product_shortage_detail"></span>:
+            <div class="alert-box u-mb-3">
+                ${window.icon('alert-triangle', 14)} <span data-i18n="orders.product_shortage_detail"></span>:
                 <span data-i18n="orders.required_materials"></span> ${window.ui.qty(o.product_shortage.required)},
                 <span data-i18n="warehouse.available"></span> ${window.ui.qty(o.product_shortage.available)}
                 <span data-i18n="units.${o.product_shortage.unit}"></span>
@@ -205,7 +205,7 @@ class OrdersComponent {
             </div>
             ${shortages}
             ${productShortage}
-            <div class="list-group" style="box-shadow:none;border:1px solid var(--border);">
+            <div class="list-group u-card-flat">
                 ${row('orders.product', window.ui.escape(o.product_name || o.custom_product_name || '-'))}
                 ${row('orders.quantity', `${window.ui.qty(o.quantity)} <span data-i18n="units.${o.unit}"></span>`)}
                 ${row('orders.deadline', o.deadline ? window.ui.datetime(o.deadline) : '')}
@@ -234,7 +234,7 @@ class OrdersComponent {
                         <button class="btn btn-danger btn-sm" id="cancel-order" data-i18n="common.cancel"></button>` : ''}
                 </div>
                 ${!['delivered', 'cancelled'].includes(o.status) && Number(o.paid_amount || 0) > 0 ? `
-                    <p class="text-xs text-muted" style="margin-top:8px;" data-i18n="orders.cancel_blocked_by_payment"></p>` : ''}` : ''}
+                    <p class="text-xs text-muted u-mt-3" data-i18n="orders.cancel_blocked_by_payment"></p>` : ''}` : ''}
         `);
 
         const bind = (id, handler) => {
@@ -254,9 +254,9 @@ class OrdersComponent {
                 worksEl.innerHTML = `<span class="text-muted" data-i18n="common.no_data"></span>`;
             } else {
                 worksEl.innerHTML = works.map((w) => `
-                    <div class="list-row" style="cursor:default;">
+                    <div class="list-row u-cursor-default">
                         <span class="text-sm">${window.ui.escape(w.product_name || '-')} × ${window.ui.qty(w.quantity)} ${window.ui.workBadge(w.status)}</span>
-                        <span class="text-sm text-muted" style="text-align:right;">
+                        <span class="text-sm text-muted u-text-right">
                             ${window.ui.escape(w.worker_name)}
                             ${w.status === 'confirmed' && w.confirmed_by_name ? `<br>${window.ui.t('production.confirmed_by')}: ${window.ui.escape(w.confirmed_by_name)} · ${window.ui.datetime(w.confirmed_at)}` : ''}
                         </span>
@@ -326,12 +326,12 @@ class OrdersComponent {
                         <option value="" data-i18n="common.select"></option>
                         ${products.map((p) => `<option value="${p.id}" ${o?.product === p.id ? 'selected' : ''}>${window.ui.escape(p.name)} (${window.ui.qty(availabilityOf(p))} ${window.ui.t(`units.${p.unit}`)})</option>`).join('')}
                     </select>
-                    <div id="product-availability" class="text-sm text-muted" style="margin-top:4px;"></div>
+                    <div id="product-availability" class="text-sm text-muted u-mt-1"></div>
                 </div>
                 <div class="form-group"><label data-i18n="orders.custom_product"></label>
                     <input name="custom_product_name" class="form-control" value="${window.ui.escape(o?.custom_product_name || '')}"
                            placeholder="${window.ui.t('orders.product_required')}" autocomplete="off"></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="orders.quantity"></label>
                         <input name="quantity" type="number" step="0.01" min="0.01" class="form-control" required value="${o?.quantity ?? ''}"></div>
                     <div class="form-group"><label data-i18n="orders.unit"></label>
@@ -399,7 +399,7 @@ class OrdersComponent {
             const unit = window.ui.t(`units.${p.unit}`);
             const available = availabilityOf(p);
             if (qty > available) {
-                availabilityBox.innerHTML = `⚠️ <span data-i18n="orders.product_shortage"></span> (<span data-i18n="warehouse.available"></span>: ${window.ui.qty(available)} ${unit})`;
+                availabilityBox.innerHTML = `${window.icon('alert-triangle', 14)} <span data-i18n="orders.product_shortage"></span> (<span data-i18n="warehouse.available"></span>: ${window.ui.qty(available)} ${unit})`;
                 availabilityBox.classList.add('text-danger');
                 availabilityBox.classList.remove('text-muted');
             } else {
@@ -413,7 +413,7 @@ class OrdersComponent {
         if (o) {
             if (o.has_product_shortage && o.product_shortage) {
                 const s = o.product_shortage;
-                availabilityBox.innerHTML = `⚠️ <span data-i18n="orders.product_shortage"></span> (<span data-i18n="warehouse.available"></span>: ${window.ui.qty(s.available)} ${window.ui.t(`units.${s.unit}`)})`;
+                availabilityBox.innerHTML = `${window.icon('alert-triangle', 14)} <span data-i18n="orders.product_shortage"></span> (<span data-i18n="warehouse.available"></span>: ${window.ui.qty(s.available)} ${window.ui.t(`units.${s.unit}`)})`;
                 availabilityBox.classList.add('text-danger');
                 availabilityBox.classList.remove('text-muted');
             }
@@ -470,7 +470,7 @@ class OrdersComponent {
 
         const modal = window.ui.modal('orders.send_to_worker', `
             ${o.has_material_shortage ? `
-                <div class="alert-box">⚠️ <span data-i18n="orders.material_shortage"></span></div>` : ''}
+                <div class="alert-box">${window.icon('alert-triangle', 16)} <span data-i18n="orders.material_shortage"></span></div>` : ''}
             <form id="assign-form">
                 <div class="form-group"><label data-i18n="orders.worker"></label>
                     <select name="worker" class="form-control" required>
@@ -541,7 +541,7 @@ class OrdersComponent {
     openPaymentForm(o) {
         const debt = Math.max(Number(o.total_amount) - Number(o.paid_amount), 0);
         const modal = window.ui.modal('orders.add_payment', `
-            <p style="margin-bottom:12px;">
+            <p class="u-mb-5">
                 <span data-i18n="clients.debt"></span>:
                 <strong class="text-danger">${window.ui.money(debt)}</strong>
             </p>

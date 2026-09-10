@@ -96,17 +96,17 @@ class FinanceComponent {
                 const label = window.ui.t('finance.quarter_label', { quarter: qn, year: y });
                 if (!data) {
                     return `<tr>
-                        <td style="padding:8px;border-bottom:1px solid var(--border);">${label}</td>
+                        <td class="u-cell-line">${label}</td>
                         <td colspan="4" style="padding:8px;border-bottom:1px solid var(--border);text-align:center;">—</td>
                     </tr>`;
                 }
                 const net = Number(data.total_net_profit || 0);
                 return `<tr>
-                    <td style="padding:8px;border-bottom:1px solid var(--border);">${label}</td>
-                    <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.total_revenue || 0)}</td>
-                    <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">${window.ui.money(data.total_cogs || 0)}</td>
+                    <td class="u-cell-line">${label}</td>
+                    <td class="u-cell-total">${window.ui.money(data.total_revenue || 0)}</td>
+                    <td class="u-cell-total">${window.ui.money(data.total_cogs || 0)}</td>
                     <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;color:${net >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${window.ui.money(data.total_net_profit || 0)}</td>
-                    <td style="padding:8px;border-bottom:1px solid var(--border);text-align:right;">
+                    <td class="u-cell-total">
                         ${data.profitability_percent === null || data.profitability_percent === undefined
                             ? '—'
                             : `${data.profitability_percent}%`}
@@ -120,10 +120,10 @@ class FinanceComponent {
                         <thead>
                             <tr style="background:var(--bg-secondary);">
                                 <th style="padding:8px;text-align:left;">${window.ui.t('finance.quarterly')}</th>
-                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.revenue')}</th>
-                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.cost_of_goods')}</th>
-                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.net_profit')}</th>
-                                <th style="padding:8px;text-align:right;">${window.ui.t('finance.profitability')}</th>
+                                <th class="u-p-2 u-text-right">${window.ui.t('finance.revenue')}</th>
+                                <th class="u-p-2 u-text-right">${window.ui.t('finance.cost_of_goods')}</th>
+                                <th class="u-p-2 u-text-right">${window.ui.t('finance.net_profit')}</th>
+                                <th class="u-p-2 u-text-right">${window.ui.t('finance.profitability')}</th>
                             </tr>
                         </thead>
                         <tbody>${rows}</tbody>
@@ -184,7 +184,7 @@ class FinanceComponent {
             ? window.ui.reportPeriodRangeText(data.date_from, data.date_to)
             : '';
         const row = (labelKey, value, cls = '') => `
-                <div class="list-row" style="cursor:default;">
+                <div class="list-row u-cursor-default">
                     <span class="text-sm text-muted" data-i18n="${labelKey}"></span>
                     <span class="text-sm font-bold ${cls}">${window.ui.money(value)}</span>
                 </div>`;
@@ -225,9 +225,9 @@ class FinanceComponent {
                 ${window.ui.customPeriodPanelHtml(this.dateFrom, this.dateTo, period === 'custom')}
                 ${body}
                 <div class="section-title" data-i18n="settings.export"></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                    <a class="btn btn-secondary btn-sm" href="#" id="export-xlsx">📊 Excel</a>
-                    <a class="btn btn-secondary btn-sm" href="#" id="export-pdf">📄 PDF</a>
+                <div class="u-grid-2">
+                    <a class="btn btn-secondary btn-sm" href="#" id="export-xlsx">${window.icon('trending-up', 16)} Excel</a>
+                    <a class="btn btn-secondary btn-sm" href="#" id="export-pdf">${window.icon('file-text', 16)} PDF</a>
                 </div>`;
         const labelEl = el.querySelector('#period-range-label');
         if (labelEl && rangeText) {
@@ -300,19 +300,19 @@ class FinanceComponent {
             const response = await window.api.request('/finance/expenses/');
             const expenses = response.results || response;
             el.innerHTML = `
-                <button class="btn btn-primary btn-block" id="add-expense-btn" style="margin-bottom:12px;" data-i18n="finance.add_expense"></button>
+                <button class="btn btn-primary btn-block u-mb-5" id="add-expense-btn" data-i18n="finance.add_expense"></button>
                 ${expenses.length ? `
                     <div class="list-group">
                         ${expenses.map((x) => `
-                            <div class="list-row" style="cursor:default;">
-                                <div style="min-width:0;">
-                                    <div style="font-weight:600;font-size:14px;" data-i18n="expense_categories.${x.category}"></div>
+                            <div class="list-row u-cursor-default">
+                                <div class="u-minw-0">
+                                    <div class="u-title-sm" data-i18n="expense_categories.${x.category}"></div>
                                     <div class="text-sm text-muted">${window.ui.date(x.date)}${x.comment ? ` · ${window.ui.escape(x.comment)}` : ''}</div>
                                 </div>
-                                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                                <div class="u-row-md">
                                     <span class="font-bold text-danger">-${window.ui.money(x.amount)}</span>
-                                    <button class="icon-btn" data-edit="${x.id}" title="${window.ui.t('common.edit')}">✏️</button>
-                                    <button class="icon-btn" data-delete="${x.id}" title="${window.ui.t('common.delete')}">🗑️</button>
+                                    <button class="icon-btn" data-edit="${x.id}" title="${window.ui.t('common.edit')}">${window.icon('edit', 16)}</button>
+                                    <button class="icon-btn" data-delete="${x.id}" title="${window.ui.t('common.delete')}">${window.icon('trash', 16)}</button>
                                 </div>
                             </div>`).join('')}
                     </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
@@ -348,7 +348,7 @@ class FinanceComponent {
                     <select name="category" class="form-control" required>
                         ${categories.map((c) => `<option value="${c}"${sel(c, expense?.category)} data-i18n="expense_categories.${c}"></option>`).join('')}
                     </select></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="common.amount"></label>
                         <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required
                                value="${expense ? window.ui.escape(String(expense.amount)) : ''}"></div>
@@ -418,9 +418,9 @@ class FinanceComponent {
             // не видел, кому должен.
             const rows = settlements?.results || [];
             const debtRow = (r) => `
-                <div class="list-row" style="cursor:default;">
-                    <div style="min-width:0;">
-                        <div style="font-weight:600;font-size:14px;">${window.ui.escape(r.worker_name)}</div>
+                <div class="list-row u-cursor-default">
+                    <div class="u-minw-0">
+                        <div class="u-title-sm">${window.ui.escape(r.worker_name)}</div>
                         <div class="text-sm text-muted">
                             <span data-i18n="finance.accrued"></span>: ${window.ui.money(r.accrued)} ·
                             <span data-i18n="finance.paid_out"></span>: ${window.ui.money(r.paid)}
@@ -433,21 +433,21 @@ class FinanceComponent {
                 ${rows.length ? `
                     <div class="section-title" data-i18n="finance.worker_settlements"></div>
                     <div class="list-group">${rows.map(debtRow).join('')}</div>` : ''}
-                <button class="btn btn-primary btn-block" id="add-payment-btn" style="margin-bottom:12px;" data-i18n="finance.add_payment"></button>
+                <button class="btn btn-primary btn-block u-mb-5" id="add-payment-btn" data-i18n="finance.add_payment"></button>
                 ${payments.length ? `
                     <div class="list-group">
                         ${payments.map((p) => `
-                            <div class="list-row" style="cursor:default;">
-                                <div style="min-width:0;">
-                                    <div style="font-weight:600;font-size:14px;">${window.ui.escape(p.worker_name)}</div>
+                            <div class="list-row u-cursor-default">
+                                <div class="u-minw-0">
+                                    <div class="u-title-sm">${window.ui.escape(p.worker_name)}</div>
                                     <div class="text-sm text-muted">
                                         ${window.ui.date(p.payment_date)} · <span data-i18n="payment_types.${p.payment_type}"></span>
                                     </div>
                                 </div>
-                                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                                <div class="u-row-md">
                                     <span class="font-bold">${window.ui.money(p.amount)}</span>
-                                    <button class="icon-btn" data-pay-edit="${p.id}" title="${window.ui.t('common.edit')}">✏️</button>
-                                    <button class="icon-btn" data-pay-delete="${p.id}" title="${window.ui.t('common.delete')}">🗑️</button>
+                                    <button class="icon-btn" data-pay-edit="${p.id}" title="${window.ui.t('common.edit')}">${window.icon('edit', 16)}</button>
+                                    <button class="icon-btn" data-pay-delete="${p.id}" title="${window.ui.t('common.delete')}">${window.icon('trash', 16)}</button>
                                 </div>
                             </div>`).join('')}
                     </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
@@ -483,7 +483,7 @@ class FinanceComponent {
                         <option value="" data-i18n="common.select"></option>
                         ${workers.map((w) => `<option value="${w.id}"${sel(w.id, payment?.worker)}>${window.ui.escape(w.full_name || w.username)}</option>`).join('')}
                     </select></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="common.amount"></label>
                         <input name="amount" type="number" step="0.01" min="0.01" class="form-control" required
                                value="${payment ? window.ui.escape(String(payment.amount)) : ''}"></div>
@@ -544,19 +544,19 @@ class FinanceComponent {
             const response = await window.api.request('/finance/labor-rates/');
             const rates = response.results || response;
             el.innerHTML = `
-                <button class="btn btn-primary btn-block" id="add-rate-btn" style="margin-bottom:12px;" data-i18n="finance.add_rate"></button>
+                <button class="btn btn-primary btn-block u-mb-5" id="add-rate-btn" data-i18n="finance.add_rate"></button>
                 ${rates.length ? `
                     <div class="list-group">
                         ${rates.map((r) => `
-                            <div class="list-row" style="cursor:default;">
-                                <div style="min-width:0;">
-                                    <div style="font-weight:600;font-size:14px;">${window.ui.escape(r.product_name)}</div>
+                            <div class="list-row u-cursor-default">
+                                <div class="u-minw-0">
+                                    <div class="u-title-sm">${window.ui.escape(r.product_name)}</div>
                                     <div class="text-sm text-muted" data-i18n="operations.${r.operation}"></div>
                                 </div>
-                                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                                <div class="u-row-md">
                                     <span class="font-bold">${window.ui.money(r.rate_per_unit)} / <span data-i18n="units.${r.unit}"></span></span>
-                                    <button class="icon-btn" data-rate-edit="${r.id}" title="${window.ui.t('common.edit')}">✏️</button>
-                                    <button class="icon-btn" data-rate-delete="${r.id}" title="${window.ui.t('common.delete')}">🗑️</button>
+                                    <button class="icon-btn" data-rate-edit="${r.id}" title="${window.ui.t('common.edit')}">${window.icon('edit', 16)}</button>
+                                    <button class="icon-btn" data-rate-delete="${r.id}" title="${window.ui.t('common.delete')}">${window.icon('trash', 16)}</button>
                                 </div>
                             </div>`).join('')}
                     </div>` : `<div class="card list-state" data-i18n="common.no_data"></div>`}`;
@@ -595,7 +595,7 @@ class FinanceComponent {
                     <select name="operation" class="form-control">
                         ${operations.map((o) => `<option value="${o}"${sel(o, rate?.operation)} data-i18n="operations.${o}"></option>`).join('')}
                     </select></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="u-grid-2">
                     <div class="form-group"><label data-i18n="finance.rate"></label>
                         <input name="rate_per_unit" type="number" step="0.01" min="0.01" class="form-control" required
                                value="${rate ? window.ui.escape(String(rate.rate_per_unit)) : ''}"></div>

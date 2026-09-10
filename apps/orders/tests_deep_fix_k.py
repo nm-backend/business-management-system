@@ -31,7 +31,7 @@ class OrderDeepFixTests(TestCase):
         self.client_a = Client.objects.create(company=self.company, name='Клиент А')
         self.client_b = Client.objects.create(company=self.company, name='Клиент Б')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Стул', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Стул', quantity=Decimal('10'), unit='sht')
 
     def api(self, user=None):
         c = APIClient()
@@ -43,7 +43,7 @@ class OrderDeepFixTests(TestCase):
             'client': client.id,
             'product': self.product.id,
             'quantity': '2',
-            'unit': 'dona',
+            'unit': 'sht',
             'total_amount': '100',
             **kwargs,
         }, format='json')
@@ -61,7 +61,7 @@ class OrderDeepFixTests(TestCase):
                 'client': self.client_a.id,
                 'product': self.product.id,
                 'quantity': '2',
-                'unit': 'dona',
+                'unit': 'sht',
                 'total_amount': '100',
             }, format='json')
         self.assertEqual(resp.status_code, 500, resp.content[:200])
@@ -100,7 +100,7 @@ class OrderDeepFixTests(TestCase):
     def test_update_changes_product_under_lock(self):
         """Смена товара при правке корректно переносит резерв (регрессия)."""
         other = FinishedProduct.objects.create(
-            company=self.company, name='Стол', quantity=Decimal('20'), unit='dona')
+            company=self.company, name='Стол', quantity=Decimal('20'), unit='sht')
         order_id = self._create_order(self.client_a)
         self.product.refresh_from_db()
         self.assertEqual(self.product.required_for_orders, Decimal('2'))

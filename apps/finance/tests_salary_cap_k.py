@@ -36,14 +36,14 @@ class WorkerPaymentSalaryCapTests(TestCase):
         self.worker = User.objects.create_user(username='cap_worker', password='p',
                                                role=User.Role.WORKER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Плита', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Плита', quantity=Decimal('0'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 
     def _accrue(self, cost):
         WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal('1'), unit='dona', labor_cost=Decimal(cost),
+            quantity=Decimal('1'), unit='sht', labor_cost=Decimal(cost),
             status=WorkRecord.WorkStatus.CONFIRMED)
 
     def _pay(self, amount, payment_type='salary'):
@@ -107,12 +107,12 @@ class WorkerPaymentSalaryConcurrencyTests(TransactionTestCase):
         self.worker = User.objects.create_user(username='concurrent_worker', password='p',
                                                role=User.Role.WORKER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Плита', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Плита', quantity=Decimal('0'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
         WorkRecord.objects.create(
             company=self.company, worker=self.worker, product=self.product,
-            quantity=Decimal('1'), unit='dona', labor_cost=Decimal('100'),
+            quantity=Decimal('1'), unit='sht', labor_cost=Decimal('100'),
             status=WorkRecord.WorkStatus.CONFIRMED)
 
     def _pay(self, amount):
@@ -139,14 +139,14 @@ class LaborRateMinValueTests(TestCase):
         self.owner = User.objects.create_user(username='rate_owner', password='p',
                                               role=User.Role.OWNER, company=self.company)
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Плита', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Плита', quantity=Decimal('0'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 
     def test_zero_rate_rejected(self):
         resp = self.api.post(RATES_URL, {
             'product': self.product.id, 'operation': 'cutting',
-            'rate_per_unit': '0', 'unit': 'dona',
+            'rate_per_unit': '0', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 400, resp.data)
         self.assertIn('rate_per_unit', resp.data)
@@ -154,6 +154,6 @@ class LaborRateMinValueTests(TestCase):
     def test_positive_rate_ok(self):
         resp = self.api.post(RATES_URL, {
             'product': self.product.id, 'operation': 'cutting',
-            'rate_per_unit': '0.01', 'unit': 'dona',
+            'rate_per_unit': '0.01', 'unit': 'sht',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.data)

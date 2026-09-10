@@ -29,12 +29,12 @@ class CancelAfterDeliveryTests(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         self.client_obj = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('10'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
         self.order_id = self.api.post(ORDERS, {
             'client': self.client_obj.id, 'product': self.product.id,
-            'quantity': '3', 'unit': 'dona', 'total_amount': '1000',
+            'quantity': '3', 'unit': 'sht', 'total_amount': '1000',
             'deadline': (timezone.now() + datetime.timedelta(days=5)).isoformat(),
         }, format='json').json()['id']
 
@@ -86,12 +86,12 @@ class DestroyBypassTests(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         self.client_obj = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('10'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
         self.order_id = self.api.post(ORDERS, {
             'client': self.client_obj.id, 'product': self.product.id,
-            'quantity': '3', 'unit': 'dona', 'total_amount': '1000',
+            'quantity': '3', 'unit': 'sht', 'total_amount': '1000',
             'deadline': (timezone.now() + datetime.timedelta(days=5)).isoformat(),
         }, format='json').json()['id']
 

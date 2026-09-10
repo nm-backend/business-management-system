@@ -37,7 +37,7 @@ class _Base(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         self.cli = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Товар', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Товар', quantity=Decimal('10'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 
@@ -69,7 +69,7 @@ class WarehouseValidationTests(_Base):
 
     def test_negative_cost_price_rejected(self):
         r = self.post('/api/v1/warehouse/finished-products/',
-                      {'name': 'Т', 'quantity': '1', 'unit': 'dona', 'cost_price': '-50'})
+                      {'name': 'Т', 'quantity': '1', 'unit': 'sht', 'cost_price': '-50'})
         self.assertEqual(r.status_code, 400)
 
     def test_required_for_orders_cannot_be_set_via_api(self):
@@ -80,13 +80,13 @@ class WarehouseValidationTests(_Base):
         исказить нехватку.
         """
         r = self.post('/api/v1/warehouse/finished-products/',
-                      {'name': 'Т', 'quantity': '1', 'unit': 'dona', 'required_for_orders': '100'})
+                      {'name': 'Т', 'quantity': '1', 'unit': 'sht', 'required_for_orders': '100'})
         self.assertEqual(r.status_code, 201, r.content[:300])
         self.assertEqual(Decimal(str(r.json()['required_for_orders'])), Decimal('0'))
 
     def test_reserved_equal_quantity_accepted_but_ignored(self):
         r = self.post('/api/v1/warehouse/finished-products/',
-                      {'name': 'Т2', 'quantity': '5', 'unit': 'dona', 'required_for_orders': '5'})
+                      {'name': 'Т2', 'quantity': '5', 'unit': 'sht', 'required_for_orders': '5'})
         self.assertEqual(r.status_code, 201)
         self.assertEqual(Decimal(str(r.json()['required_for_orders'])), Decimal('0'))
 
@@ -94,7 +94,7 @@ class WarehouseValidationTests(_Base):
 class OrderValidationTests(_Base):
     def _order(self, **over):
         body = {'client': self.cli.id, 'product': self.product.id,
-                'quantity': '1', 'unit': 'dona',
+                'quantity': '1', 'unit': 'sht',
                 'deadline': (timezone.now() + datetime.timedelta(days=5)).isoformat()}
         body.update(over)
         return self.post('/api/v1/orders/orders/', body)
@@ -103,7 +103,7 @@ class OrderValidationTests(_Base):
         self.assertEqual(self._order(unit='выдумка').status_code, 400)
 
     def test_known_units_accepted(self):
-        for unit in ('sht', 'm', 'm2', 'izdelie', 'dona'):
+        for unit in ('sht', 'm', 'm2', 'izdelie'):
             self.assertEqual(self._order(unit=unit).status_code, 201, unit)
 
     def test_deadline_in_the_past_rejected_on_create(self):

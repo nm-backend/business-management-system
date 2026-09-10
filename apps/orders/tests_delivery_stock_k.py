@@ -35,7 +35,7 @@ class _Base(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         self.client_obj = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('10'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
 
@@ -44,7 +44,7 @@ class _Base(TestCase):
 
     def create_order(self, **over):
         body = {'client': self.client_obj.id, 'product': self.product.id,
-                'quantity': '3', 'unit': 'dona', 'deadline': self.deadline(),
+                'quantity': '3', 'unit': 'sht', 'deadline': self.deadline(),
                 'total_amount': '1000'}
         body.update(over)
         return self.api.post(ORDERS, body, format='json')
@@ -53,7 +53,7 @@ class _Base(TestCase):
 class OrderMustHaveProductTests(_Base):
     def test_order_without_any_product_is_rejected(self):
         resp = self.api.post(ORDERS, {
-            'client': self.client_obj.id, 'quantity': '2', 'unit': 'dona',
+            'client': self.client_obj.id, 'quantity': '2', 'unit': 'sht',
             'deadline': self.deadline(),
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -61,7 +61,7 @@ class OrderMustHaveProductTests(_Base):
 
     def test_blank_custom_name_is_not_enough(self):
         resp = self.api.post(ORDERS, {
-            'client': self.client_obj.id, 'quantity': '2', 'unit': 'dona',
+            'client': self.client_obj.id, 'quantity': '2', 'unit': 'sht',
             'custom_product_name': '   ', 'deadline': self.deadline(),
         }, format='json')
         self.assertEqual(resp.status_code, 400)
@@ -72,7 +72,7 @@ class OrderMustHaveProductTests(_Base):
     def test_custom_product_name_is_accepted(self):
         """Изделие «по описанию» каталожной позиции не имеет — это законно."""
         resp = self.api.post(ORDERS, {
-            'client': self.client_obj.id, 'quantity': '2', 'unit': 'dona',
+            'client': self.client_obj.id, 'quantity': '2', 'unit': 'sht',
             'custom_product_name': 'Столешница по эскизу', 'deadline': self.deadline(),
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:200])
@@ -139,7 +139,7 @@ class DeliveryWritesOffStockTests(_Base):
     def test_custom_product_order_delivers_without_stock_movement(self):
         """У заказа «по описанию» каталожной позиции нет — списывать нечего."""
         resp = self.api.post(ORDERS, {
-            'client': self.client_obj.id, 'quantity': '1', 'unit': 'dona',
+            'client': self.client_obj.id, 'quantity': '1', 'unit': 'sht',
             'custom_product_name': 'По эскизу', 'deadline': self.deadline(),
         }, format='json')
         order_id = resp.json()['id']

@@ -37,7 +37,7 @@ class RequiredForOrdersSemanticsTests(TestCase):
                                               role=User.Role.OWNER, company=self.company)
         self.client = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Столешница', quantity=Decimal('10'), unit='dona')
+            company=self.company, name='Столешница', quantity=Decimal('10'), unit='sht')
         self.material = RawMaterial.objects.create(
             company=self.company, name='Мрамор', quantity=Decimal('4'), unit='m2')
         recipe = Recipe.objects.create(company=self.company, product=self.product,
@@ -53,7 +53,7 @@ class RequiredForOrdersSemanticsTests(TestCase):
     def _order(self, product, quantity):
         resp = self.api.post(ORDERS, {
             'client': self.client.id, 'product': product.id,
-            'quantity': str(quantity), 'unit': 'dona',
+            'quantity': str(quantity), 'unit': 'sht',
             'deadline': self._deadline(), 'total_amount': '1000',
         }, format='json')
         self.assertEqual(resp.status_code, 201, resp.content[:300])

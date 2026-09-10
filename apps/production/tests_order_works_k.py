@@ -30,20 +30,20 @@ class OrderWorkFilterTests(TestCase):
         self.crm_client = Client.objects.create(company=self.company, name='Алишер',
                                                 phone='+998901234567')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Платье', quantity=Decimal('0'), unit='dona')
+            company=self.company, name='Платье', quantity=Decimal('0'), unit='sht')
         self.order1 = Order.objects.create(
             company=self.company, client=self.crm_client, product=self.product,
-            quantity=Decimal('2'), unit='dona', total_amount=Decimal('200000'))
+            quantity=Decimal('2'), unit='sht', total_amount=Decimal('200000'))
         self.order2 = Order.objects.create(
             company=self.company, client=self.crm_client, product=self.product,
-            quantity=Decimal('1'), unit='dona', total_amount=Decimal('100000'))
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('100000'))
 
     def _work(self, order, worker, quantity='1'):
         task = Task.objects.create(company=self.company, order=order, worker=worker,
                                    assigned_by=self.owner)
         return WorkRecord.objects.create(
             company=self.company, task=task, worker=worker, product=self.product,
-            quantity=Decimal(quantity), unit='dona')
+            quantity=Decimal(quantity), unit='sht')
 
     def test_filter_returns_only_order_works(self):
         """?order=N отдаёт только работы заказа N, не соседнего."""
