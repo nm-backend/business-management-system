@@ -69,7 +69,7 @@ class TaskViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         # status='confirmed' в обход confirm_work или переназначил бы её на
         # заказ другой компании (поле order на update раньше не проверялось).
         # Создание задачи: owner/admin назначают, worker создаёт свою
-        # самостоятельную задачу — manager НЕ создаёт (только просмотр).
+        # самостоятельную задачу.
         if self.action == 'create':
             return [IsCompanyMember(), IsOwnerOrAdminOrWorker()]
         if self.action in ('update', 'partial_update'):
@@ -309,8 +309,7 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         # labor_cost, минуя confirm_work — без проверки склада, без списания
         # сырья и без audit (раздувая свой заработок). Прямой update разрешаем
         # лишь owner/admin, а чувствительные поля закрыты в сериализаторе.
-        # Создание записи: worker сдаёт свою работу, owner/admin заводят чужую —
-        # manager НЕ создаёт (только просмотр).
+        # Создание записи: worker сдаёт свою работу, owner/admin заводят чужую.
         if self.action == 'create':
             return [IsCompanyMember(), IsOwnerOrAdminOrWorker()]
         if self.action in ('update', 'partial_update'):

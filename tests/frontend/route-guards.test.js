@@ -64,7 +64,6 @@ describe('ролевая защита маршрутов SPA', () => {
         expect(isAllowed('/finance', 'owner')).toBe(true);
         expect(isAllowed('/finance', 'admin')).toBe(false);
         expect(isAllowed('/finance', 'worker')).toBe(false);
-        expect(isAllowed('/finance', 'manager')).toBe(false);
     });
 
     it('журнал аудита и резервные копии — только владельцу', () => {
@@ -78,8 +77,18 @@ describe('ролевая защита маршрутов SPA', () => {
     it('клиенты закрыты от работника, открыты владельцу и администратору', () => {
         expect(isAllowed('/clients', 'owner')).toBe(true);
         expect(isAllowed('/clients', 'admin')).toBe(true);
-        expect(isAllowed('/clients', 'manager')).toBe(true);
         expect(isAllowed('/clients', 'worker')).toBe(false);
+    });
+
+    it('удалённая роль manager не выдана ни на одном маршруте', () => {
+        // Роль убрана из User.Role (ТЗ знает только owner/admin/worker). Маршруты
+        // не должны тайно оставлять ей доступ: иначе SPA откроет раздел, который
+        // API всё равно отклонит.
+        for (const [path, allowed] of Object.entries(routes)) {
+            if (allowed === null) continue;
+            expect(allowed, `маршрут ${path} ссылается на удалённую роль manager`)
+                .not.toContain('manager');
+        }
     });
 
     it('подписка — владельцу и администратору', () => {
