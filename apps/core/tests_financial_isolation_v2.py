@@ -176,17 +176,6 @@ class LaborRateLeakTests(_IsolationBase):
         work = results[0]
         self.assertIn('labor_cost', work)
 
-    def test_manager_works_no_financial_data(self):
-        """Менеджер: /production/works/ — без labor_rate и labor_cost."""
-        manager = User.objects.create_user(
-            username='iso_manager', password='pw', role=User.Role.MANAGER,
-            company=self.company,
-        )
-        resp = self._api(manager).get('/api/v1/production/works/')
-        self.assertEqual(resp.status_code, 200)
-        leaks = deep_find_keys(resp.json(), {'labor_rate', 'labor_cost'})
-        self.assertEqual(leaks, [], f'Manager увидел финансовые поля: {leaks}')
-
 
 # ── Тесты утечки на складе ──────────────────────────────────────
 

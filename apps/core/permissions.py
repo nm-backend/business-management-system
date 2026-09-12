@@ -9,7 +9,7 @@ Custom permissions for role-based access control.
 SaaS GATE: бизнес-доступ требует активной подписки компании. Проверка живёт
 в ДВУХ местах:
 1. IsCompanyMember — базовый permission всех бизнес-эндпоинтов (owner/admin/
-   worker/manager); замороженная/истёкшая компания получает 403 с понятным
+   worker); замороженная/истёкшая компания получает 403 с понятным
    сообщением, даже если view переопределила permission_classes.
 2. SubscriptionAccessPermission — подключён глобально (DEFAULT_PERMISSION_
    CLASSES) как страховка для view, которые могли бы его не использовать.
@@ -33,7 +33,7 @@ class IsCompanyMember(permissions.BasePermission):
     Permission - пользователь состоит в компании (арендаторе) с активной подпиской.
 
     База для всех бизнес-эндпоинтов: доступ только аутентифицированным
-    пользователям owner/admin/worker/manager, у которых задана company.
+    пользователям owner/admin/worker, у которых задана company.
     Супер-админ (company=None) к данным компаний не допускается.
 
     Дополнительно проверяется SaaS-подписка: для замороженной (FROZEN),
@@ -127,21 +127,6 @@ class IsOwnerOrAdmin(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and (request.user.is_owner or request.user.is_admin))
-
-
-class IsOwnerOrAdminOrManager(permissions.BasePermission):
-    """
-    Permission - владелец, администратор или менеджер.
-
-    Менеджер получает ПРОСМОТР клиентов/заказов/производства (только чтение,
-    без финансовых сумм). Изменяющие операции остаются за owner/admin
-    (проверяется на уровне view через get_permissions), поэтому этот класс
-    применяется к чтению (list/retrieve) и операционной аналитике.
-    """
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and (
-            request.user.is_owner or request.user.is_admin or request.user.is_manager
-        ))
 
 
 class IsOwnerOrAdminOrWorker(permissions.BasePermission):

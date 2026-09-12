@@ -22,7 +22,7 @@ from apps.finance.models import ExpenseCategory
 from apps.orders.models import Order
 from apps.production.models import WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
-from core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAdminOrManager
+from core.permissions import IsOwner, IsOwnerOrAdmin
 from core.utils import translate
 
 # Service layer — all calculations
@@ -191,7 +191,7 @@ class QuarterlyReportView(APIView):
     выходил: фронтенд собирал квартал сам из шести обычных периодов, а
     администратору квартальный отчёт был недоступен вовсе.
     """
-    permission_classes = [IsCompanyMember, IsOwnerOrAdminOrManager]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
 
     def get(self, request):
         today = datetime.date.today()
@@ -244,7 +244,7 @@ class QuarterlyReportView(APIView):
 
 class AdminAnalyticsView(APIView):
     """GET /api/v1/reports/analytics/admin/ — operational, no financial sums."""
-    permission_classes = [IsCompanyMember, IsOwnerOrAdminOrManager]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
 
     def get(self, request):
         return Response(get_admin_operational_analytics(request.user.company_id))

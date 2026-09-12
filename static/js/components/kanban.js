@@ -115,8 +115,7 @@ class KanbanComponent {
 
     createCard(o) {
         const user = window.currentUser || {};
-        // Перетаскивать заказ между статусами может только owner/admin:
-        // manager видит доску только на чтение (двигать заказы нельзя).
+        // Перетаскивать заказ между статусами может только owner/admin.
         const canDrag = !!(user.is_owner || user.is_admin);
         const card = document.createElement('div');
         card.className = 'kanban-card';

@@ -13,7 +13,7 @@ class DashboardComponent {
         if (user.is_superadmin) {
             await this.renderSuperAdmin(container);
         } else if (user.is_owner) await this.renderOwner(container);
-        else if (user.is_admin || user.is_manager) await this.renderAdmin(container);
+        else if (user.is_admin) await this.renderAdmin(container);
         else await this.renderWorker(container);
         window.i18n.applyTranslations();
     }

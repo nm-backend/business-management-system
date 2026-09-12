@@ -18,7 +18,7 @@ class ProductionComponent {
                 <button class="tab-btn" data-tab="works" data-i18n="production.works"></button>
                 ${user.is_worker ? `<button class="tab-btn" data-tab="earnings" data-i18n="worker_section.my_earnings"></button>` : ''}
             </div>
-            ${!user.is_manager ? `<button class="btn btn-primary btn-block u-mb-5" id="add-work-btn" data-i18n="production.add_work"></button>` : ''}
+            ${!user.is_worker ? `<button class="btn btn-primary btn-block u-mb-5" id="add-work-btn" data-i18n="production.add_work"></button>` : ''}
             <div id="production-content"></div>
         `;
 

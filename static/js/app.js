@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     //
     // Список ролей у каждого маршрута совпадает с правами API:
     //   /finance, /audit  -> IsOwner
-    //   /clients          -> IsOwnerOrAdmin (+ manager на чтение)
+    //   /clients          -> IsOwnerOrAdmin
     //   /subscription     -> владелец и администратор компании
     const forbiddenRoute = function(container) {
         container.innerHTML = '<div class="card route-error"><p class="eyebrow">403</p>'
@@ -142,9 +142,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     addGuardedRoute('/', window.DashboardComponent, null);
     addGuardedRoute('/warehouse', window.WarehouseComponent, null);
     addGuardedRoute('/finished-products', window.FinishedProductsComponent, null);
-    addGuardedRoute('/clients', window.ClientsComponent, ['owner', 'admin', 'manager']);
+    addGuardedRoute('/clients', window.ClientsComponent, ['owner', 'admin']);
     addGuardedRoute('/orders', window.OrdersComponent, null);
-    addGuardedRoute('/orders/kanban', window.KanbanComponent, ['owner', 'admin', 'manager']);
+    addGuardedRoute('/orders/kanban', window.KanbanComponent, ['owner', 'admin']);
     addGuardedRoute('/production', window.ProductionComponent, null);
     addGuardedRoute('/sales', window.SalesComponent, ['owner']);
     addGuardedRoute('/finance', window.FinanceComponent, ['owner']);
@@ -479,9 +479,9 @@ function setupSidebar(user) {
         } else if (role === 'owner-admin') {
             show = user.is_owner || user.is_admin;
         } else if (role === 'staff') {
-            show = user.is_owner || user.is_admin || user.is_manager;
+            show = user.is_owner || user.is_admin;
         } else if (role === 'staff-worker') {
-            show = user.is_worker || user.is_manager;
+            show = user.is_worker;
         }
         link.style.display = show ? '' : 'none';
         link.setAttribute('aria-hidden', show ? 'false' : 'true');
@@ -495,7 +495,7 @@ function setupBottomNav(user) {
         if (user.is_superadmin) {
             show = ['dashboard', 'settings'].includes(navKey);
         } else if (navKey === 'production') {
-            show = user.is_worker || user.is_manager;
+            show = user.is_worker;
         } else if (navKey === 'clients') {
             show = !user.is_worker;
         }

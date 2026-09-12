@@ -15,7 +15,7 @@ from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.core.permissions import IsCompanyMember
 from apps.core.validators import parse_date_param, parse_int_param
-from core.permissions import IsOwnerOrAdmin, IsOwnerOrAdminOrManager
+from core.permissions import IsOwnerOrAdmin
 from .models import (
     FinishedProduct, GoodsReceipt, RawMaterial, Recipe, RecipeItem, StockMovement,
     Warehouse, WarehouseCell,
@@ -457,9 +457,8 @@ class RawMaterialViewSet(StockOperationsMixin, CompanyScopedViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy',
                            'incoming', 'outgoing', 'returned', 'archive', 'restore']:
             return [IsCompanyMember(), IsOwnerOrAdmin()]
-        # Чтение склада: все сотрудники компании (owner/admin/worker/manager) —
-        # цены (purchase_price/avg_cost_price) скрыты не-owner сериализатором,
-        # финансовых сумм manager не видит.
+        # Чтение склада: все сотрудники компании (owner/admin/worker) —
+        # цены (purchase_price/avg_cost_price) скрыты не-owner сериализатором.
         return [IsCompanyMember()]
 
     @action(detail=False, methods=['get'])
@@ -703,9 +702,8 @@ class FinishedProductViewSet(StockOperationsMixin, CompanyScopedViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy',
                            'incoming', 'outgoing', 'returned', 'archive', 'restore']:
             return [IsCompanyMember(), IsOwnerOrAdmin()]
-        # Чтение склада: все сотрудники компании (owner/admin/worker/manager) —
-        # цены (purchase_price/avg_cost_price) скрыты не-owner сериализатором,
-        # финансовых сумм manager не видит.
+        # Чтение склада: все сотрудники компании (owner/admin/worker) —
+        # цены (purchase_price/avg_cost_price) скрыты не-owner сериализатором.
         return [IsCompanyMember()]
 
     def get_queryset(self):
@@ -757,13 +755,12 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
 
     Важное правило ТЗ: склад меняется через бизнес-операции и подтверждения, а
     история должна быть следом этих операций. Поэтому здесь нет ручного create,
-    update или delete. Чтение — owner/admin/manager (worker историю не видит:
+    update или delete. Чтение — owner/admin (worker историю не видит:
     см. test_worker_cannot_read_history); цена единицы (price_per_unit)
-    скрывается limited-сериализатором для не-owner ролей, поэтому финансовых
-    сумм manager не видит.
+    скрывается limited-сериализатором для не-owner ролей.
     """
     queryset = StockMovement.objects.all()  # для интроспекции схемы; runtime-фильтрация ниже
-    permission_classes = [IsCompanyMember, IsOwnerOrAdminOrManager]
+    permission_classes = [IsCompanyMember, IsOwnerOrAdmin]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     # Вкладки «Ҳаммаси / Келган / Ишлатилган / Қайтарилган» из макета — это
     # фильтр по movement_type НА СЕРВЕРЕ, а не отбор загруженной страницы:

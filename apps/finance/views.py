@@ -149,14 +149,14 @@ class LaborRateViewSet(CompanyScopedViewSet):
         """
         Сериализатор по действию и роли.
 
-        Администратор и менеджер получают ставку без суммы: список операций им
+        Администратор получает ставку без суммы: список операций им
         нужен для оформления работ, а деньги по ТЗ им недоступны.
         """
         if self.action == 'create':
             return LaborRateCreateSerializer
         user = getattr(self.request, 'user', None)
         if not getattr(self, 'swagger_fake_view', False) and user is not None:
-            if getattr(user, 'is_admin', False) or getattr(user, 'is_manager', False):
+            if getattr(user, 'is_admin', False):
                 return LaborRateNoMoneySerializer
         return LaborRateSerializer
 

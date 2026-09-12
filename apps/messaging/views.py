@@ -259,7 +259,7 @@ class EmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         ).exclude(pk=user.pk).exclude(role=User.Role.SUPERADMIN)
 
         # Флаг can_see_other_workers (у admin и worker, owner видит всегда):
-        # без него в контактах видны только admin/owner/manager — работники
+        # без него в контактах видны только admin/owner — работники
         # скрыты, и личный диалог с ними не начнётся (зеркально валидатору).
         if not user.is_owner and not user.can_see_other_workers:
             qs = qs.exclude(role=User.Role.WORKER)

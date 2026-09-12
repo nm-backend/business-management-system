@@ -74,10 +74,6 @@ class MediaSecurityTests(TestCase):
             username='med_a_a', password='p', role=User.Role.ADMIN,
             company=self.company_a,
         )
-        self.manager_a = User.objects.create_user(
-            username='med_m_a', password='p', role=User.Role.MANAGER,
-            company=self.company_a,
-        )
         self.worker_a = User.objects.create_user(
             username='med_w_a', password='p', role=User.Role.WORKER,
             company=self.company_a,
@@ -291,8 +287,6 @@ class MediaSecurityTests(TestCase):
         self.assertEqual(self.client.get(self.order_url).status_code, 200)
         self.client.force_login(self.worker_a2)  # чужой заказ
         self.assertEqual(self.client.get(self.order_url).status_code, 403)
-        self.client.force_login(self.manager_a)
-        self.assertEqual(self.client.get(self.order_url).status_code, 200)
 
     def test_task_attachment_worker_only_own(self):
         self.client.force_login(self.worker_a)

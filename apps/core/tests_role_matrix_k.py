@@ -4,12 +4,11 @@
 Один прогон сверяет HTTP-код КАЖДОГО бизнес-окна с ожиданиями ТЗ для всех ролей:
   * owner (Egasi)        — всё;
   * admin (Administrator)— всё, кроме финансов (403 либо сериализатор без сумм);
-  * manager              — только чтение клиентов/заказов/производства/склада;
   * worker (Ishchi)      — только своё: свои задачи/работы/заказы, склад на
                            чтение, чужие окна закрыты;
   * superadmin           — только платформенный контур, бизнес-данные 403.
 
-Дополняет точечные тесты (tests_financial_isolation_v2, tests_manager_role_k):
+Дополняет точечные тесты (tests_financial_isolation_v2):
 матрица ловит регрессию на любом пересечении «эндпоинт × роль» — например,
 если при рефакторинге у view пропадёт IsOwner или слетит ветка get_permissions.
 """
@@ -28,11 +27,11 @@ from apps.orders.models import Order
 from apps.production.models import Task, TaskStatus, WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
 
-ALL = {'owner': 200, 'admin': 200, 'manager': 200, 'worker': 200, 'superadmin': 403}
-STAFF_READ = {'owner': 200, 'admin': 200, 'manager': 200, 'worker': 403, 'superadmin': 403}
-OWNER_ONLY = {'owner': 200, 'admin': 403, 'manager': 403, 'worker': 403, 'superadmin': 403}
-NO_SUPER = lambda o=200, a=200, m=200, w=200, s=403: {  # noqa: E731
-    'owner': o, 'admin': a, 'manager': m, 'worker': w, 'superadmin': s,
+ALL = {'owner': 200, 'admin': 200, 'worker': 200, 'superadmin': 403}
+STAFF_READ = {'owner': 200, 'admin': 200, 'worker': 403, 'superadmin': 403}
+OWNER_ONLY = {'owner': 200, 'admin': 403, 'worker': 403, 'superadmin': 403}
+NO_SUPER = lambda o=200, a=200, w=200, s=403: {  # noqa: E731
+    'owner': o, 'admin': a, 'worker': w, 'superadmin': s,
 }
 
 
@@ -47,8 +46,6 @@ class RoleAccessMatrixTests(TestCase):
         cls.admin = User.objects.create_user(
             username='mx_admin', password='pw', role=User.Role.ADMIN, company=cls.company,
             can_create_workers=True)
-        cls.manager = User.objects.create_user(
-            username='mx_manager', password='pw', role=User.Role.MANAGER, company=cls.company)
         cls.worker = User.objects.create_user(
             username='mx_worker', password='pw', role=User.Role.WORKER, company=cls.company)
         cls.superadmin = User.objects.create_user(
@@ -103,15 +100,15 @@ class RoleAccessMatrixTests(TestCase):
         ('/api/v1/warehouse/warehouses/', ALL),
         ('/api/v1/warehouse/cells/', ALL),
         # Приходные документы и рецепты — владелец/админ.
-        ('/api/v1/warehouse/goods-receipts/', NO_SUPER(a=200, m=403, w=403)),
-        ('/api/v1/warehouse/recipes/', NO_SUPER(a=200, m=403, w=403)),
-        # История склада — владелец/админ/менеджер; работник не видит.
-        ('/api/v1/warehouse/stock-movements/', NO_SUPER(a=200, m=200, w=403)),
+        ('/api/v1/warehouse/goods-receipts/', NO_SUPER(a=200, w=403)),
+        ('/api/v1/warehouse/recipes/', NO_SUPER(a=200, w=403)),
+        # История склада — владелец/админ; работник не видит.
+        ('/api/v1/warehouse/stock-movements/', NO_SUPER(a=200, w=403)),
         # Производство: задачи и работы — все сотрудники; worker видит только свои.
         ('/api/v1/production/tasks/', ALL),
         ('/api/v1/production/works/', ALL),
-        # Мой заработок — сам работник (и владелец); админ/менеджер — нет.
-        ('/api/v1/production/works/my_earnings/', NO_SUPER(o=200, a=403, m=403, w=200)),
+        # Мой заработок — сам работник (и владелец); админ — нет.
+        ('/api/v1/production/works/my_earnings/', NO_SUPER(o=200, a=403, w=200)),
         # Клиенты — владелец/админ/менеджер; работник не видит.
         ('/api/v1/clients/clients/', STAFF_READ),
         # Долги и оплаты — деньги, только владелец.
@@ -121,7 +118,7 @@ class RoleAccessMatrixTests(TestCase):
         ('/api/v1/finance/expenses/', OWNER_ONLY),
         ('/api/v1/finance/worker-payments/', OWNER_ONLY),
         # Ставки труда: читают владелец/админ/работник (выбор операции), менеджер — нет.
-        ('/api/v1/finance/labor-rates/', NO_SUPER(o=200, a=200, m=403, w=200)),
+        ('/api/v1/finance/labor-rates/', NO_SUPER(o=200, a=200, w=200)),
         # Аналитика владельца — только владелец.
         ('/api/v1/reports/analytics/owner/?period=month', OWNER_ONLY),
         ('/api/v1/reports/analytics/revenue-timeline/', OWNER_ONLY),
@@ -132,25 +129,25 @@ class RoleAccessMatrixTests(TestCase):
         ('/api/v1/reports/export/finance/?format=xlsx', OWNER_ONLY),
         ('/api/v1/reports/export/company-data/?format=xlsx', OWNER_ONLY),
         # Экспорты админа (без денежных колонок) — владелец/админ.
-        ('/api/v1/reports/export/stock/?format=xlsx', NO_SUPER(a=200, m=403, w=403)),
-        ('/api/v1/reports/export/orders/?format=xlsx', NO_SUPER(a=200, m=403, w=403)),
-        ('/api/v1/reports/export/work/?format=xlsx', NO_SUPER(a=200, m=403, w=403)),
+        ('/api/v1/reports/export/stock/?format=xlsx', NO_SUPER(a=200, w=403)),
+        ('/api/v1/reports/export/orders/?format=xlsx', NO_SUPER(a=200, w=403)),
+        ('/api/v1/reports/export/work/?format=xlsx', NO_SUPER(a=200, w=403)),
         # Аудит — только владелец.
         ('/api/v1/audit/logs/', OWNER_ONLY),
-        # Сотрудники: владелец видит всех, админ — работников, manager/worker — пусто.
+        # Сотрудники: владелец видит всех, админ — работников, worker — пусто.
         # (Супер-админу список тоже открыт, но queryset пуст: компании у него нет.)
-        ('/api/v1/accounts/users/', NO_SUPER(o=200, a=200, m=200, w=200, s=200)),
+        ('/api/v1/accounts/users/', NO_SUPER(o=200, a=200, w=200, s=200)),
         # Чат: сотрудники/диалоги — все сотрудники компании.
         ('/api/v1/messaging/conversations/', ALL),
         ('/api/v1/messaging/employees/', ALL),
         # Платформенный контур: список компаний и бэкапы — только супер-админ;
         # своя подписка — владелец/админ (как и экран #/subscription).
         ('/api/v1/companies/',
-         {'owner': 403, 'admin': 403, 'manager': 403, 'worker': 403, 'superadmin': 200}),
+         {'owner': 403, 'admin': 403, 'worker': 403, 'superadmin': 200}),
         ('/api/v1/companies/my-subscription/',
-         {'owner': 200, 'admin': 200, 'manager': 403, 'worker': 403, 'superadmin': 403}),
+         {'owner': 200, 'admin': 200, 'worker': 403, 'superadmin': 403}),
         ('/api/v1/backup/logs/',
-         {'owner': 403, 'admin': 403, 'manager': 403, 'worker': 403, 'superadmin': 200}),
+         {'owner': 403, 'admin': 403, 'worker': 403, 'superadmin': 200}),
     ]
 
     def test_read_matrix(self):
@@ -171,51 +168,51 @@ class RoleAccessMatrixTests(TestCase):
             ('создать заказ', 'post', '/api/v1/orders/orders/',
              {'client': '{client}', 'product': None, 'quantity': '2', 'unit': 'izdelie',
               'custom_product_name': 'Матрица'},
-             {'owner': 201, 'admin': 201, 'manager': 403, 'worker': 403, 'superadmin': 403}),
+             {'owner': 201, 'admin': 201, 'worker': 403, 'superadmin': 403}),
             ('изменить заказ', 'patch', '/api/v1/orders/orders/{order}/',
              {'comment': 'матрица'},
-             {'owner': 200, 'admin': 200, 'manager': 403, 'worker': 403}),
+             {'owner': 200, 'admin': 200, 'worker': 403}),
             ('создать задачу (назначить)', 'post', '/api/v1/production/tasks/',
              {'title': 'Матрица', 'worker': '{worker}'},
-             {'owner': 201, 'admin': 201, 'manager': 403, 'worker': 201, 'superadmin': 403}),
+             {'owner': 201, 'admin': 201, 'worker': 201, 'superadmin': 403}),
             # Работник с чужим worker= всё равно получает СВОЮ самостоятельную
             # задачу (сервер форсирует worker=request.user) — проверяется ниже
             # в test_worker_cannot_create_task_for_other_worker.
             ('создать свою задачу (worker)', 'post', '/api/v1/production/tasks/',
              {'title': 'Своя', 'worker': '{worker}'},
-             {'manager': 403, 'worker': 201, 'superadmin': 403}),
+             {'worker': 201, 'superadmin': 403}),
             ('принять задачу', 'post', '/api/v1/production/tasks/{task}/accept/', {},
-             {'owner': 403, 'admin': 403, 'manager': 403, 'worker': 200}),
+             {'owner': 403, 'admin': 403, 'worker': 200}),
             # confirm — действие РАБОТ (works), не задач: роль проверяется до данных.
             ('подтвердить работу', 'post', '/api/v1/production/works/{work}/confirm/', {},
-             {'owner': '<403', 'admin': '<403', 'manager': 403, 'worker': 403}),
+             {'owner': '<403', 'admin': '<403', 'worker': 403}),
             ('отменить задачу', 'post', '/api/v1/production/tasks/{task}/cancel/', {},
-             {'owner': '<403', 'admin': '<403', 'manager': 403, 'worker': 403}),
+             {'owner': '<403', 'admin': '<403', 'worker': 403}),
             ('создать клиента', 'post', '/api/v1/clients/clients/',
              {'name': 'МатрикоКлиент2'},
-             {'owner': 201, 'admin': 201, 'manager': 403, 'worker': 403, 'superadmin': 403}),
+             {'owner': 201, 'admin': 201, 'worker': 403, 'superadmin': 403}),
             ('изменить клиента', 'patch', '/api/v1/clients/clients/{client}/',
              {'name': 'МатрикоКлиент3'},
-             {'owner': 200, 'admin': 200, 'manager': 403, 'worker': 403}),
+             {'owner': 200, 'admin': 200, 'worker': 403}),
             ('принять оплату', 'post', '/api/v1/clients/payments/',
              {'client': '{client}', 'amount': '100', 'payment_date': '__now__'},
-             {'owner': 201, 'admin': 403, 'manager': 403, 'worker': 403, 'superadmin': 403}),
+             {'owner': 201, 'admin': 403, 'worker': 403, 'superadmin': 403}),
             ('создать расход', 'post', '/api/v1/finance/expenses/',
              {'category': 'rent', 'amount': '5000', 'date': today},
-             {'owner': 201, 'admin': 403, 'manager': 403, 'worker': 403, 'superadmin': 403}),
+             {'owner': 201, 'admin': 403, 'worker': 403, 'superadmin': 403}),
             ('создать ставку труда', 'post', '/api/v1/finance/labor-rates/',
              {'product': '{product}', 'operation': 'cutting', 'rate_per_unit': '100', 'unit': 'izdelie'},
-             {'owner': 201, 'admin': 403, 'manager': 403, 'worker': 403}),
+             {'owner': 201, 'admin': 403, 'worker': 403}),
             # Логин уникален: подставляем роль, чтобы owner и admin не столкнулись.
             ('создать сотрудника (owner)', 'post', '/api/v1/accounts/users/',
              {'username': 'mx_new_{role}', 'role': 'worker', 'password': 'longpassword1'},
-             {'owner': 201, 'admin': 201, 'manager': 403, 'worker': 403}),
+             {'owner': 201, 'admin': 201, 'worker': 403}),
             ('изменить сотрудника', 'patch', '/api/v1/accounts/users/{worker}/',
              {'full_name': 'Матрица'},
-             {'owner': 200, 'admin': 403, 'manager': 403, 'worker': 403}),
+             {'owner': 200, 'admin': 403, 'worker': 403}),
             ('приход материала', 'post', '/api/v1/warehouse/raw-materials/',
              {'name': 'Матрица-сырьё', 'unit': 'm2', 'quantity': '5'},
-             {'owner': 201, 'admin': 201, 'manager': 403, 'worker': 403}),
+             {'owner': 201, 'admin': 201, 'worker': 403}),
         ]
         problems = []
         for title, method, url, payload, expected in cases:
@@ -307,19 +304,6 @@ class RoleAccessMatrixTests(TestCase):
             '/api/v1/accounts/users/',
             {'username': 'mx_denied', 'role': 'worker'}, format='json')
         self.assertEqual(response.status_code, 403)
-
-    def test_manager_has_no_write_anywhere(self):
-        """Менеджер нигде не пишет: заказ/клиент/задачу/склад — 403."""
-        api = self._api('manager')
-        checks = [
-            ('/api/v1/orders/orders/', {'client': self.customer.pk, 'quantity': '1'}),
-            ('/api/v1/clients/clients/', {'name': 'X'}),
-            ('/api/v1/production/tasks/', {'title': 'X'}),
-            ('/api/v1/warehouse/raw-materials/', {'name': 'X', 'unit': 'm2'}),
-        ]
-        for url, payload in checks:
-            response = api.post(url, payload, format='json')
-            self.assertEqual(response.status_code, 403, url)
 
     def test_worker_cannot_read_history_and_goods_receipts(self):
         """Работнику недоступны история склада и приходные документы (403)."""

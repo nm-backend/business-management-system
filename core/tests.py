@@ -27,7 +27,6 @@ def make_user(role='worker', authenticated=True, **extra):
         is_owner=role == 'owner',
         is_admin=role == 'admin',
         is_worker=role == 'worker',
-        is_manager=role == 'manager',
         is_superadmin=is_superadmin,
         **extra,
     )
@@ -143,12 +142,6 @@ class CorePermissionTests(SimpleTestCase):
         perm = core_permissions.IsOwnerOrAdmin()
         self.assertTrue(perm.has_permission(make_request(make_user('owner')), None))
         self.assertTrue(perm.has_permission(make_request(make_user('admin')), None))
-        self.assertFalse(perm.has_permission(make_request(make_user('worker')), None))
-
-    def test_is_owner_or_admin_or_manager(self):
-        perm = core_permissions.IsOwnerOrAdminOrManager()
-        for role in ('owner', 'admin', 'manager'):
-            self.assertTrue(perm.has_permission(make_request(make_user(role)), None), role)
         self.assertFalse(perm.has_permission(make_request(make_user('worker')), None))
 
     def test_is_owner_or_admin_or_worker(self):

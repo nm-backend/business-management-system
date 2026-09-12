@@ -3,7 +3,6 @@ from apps.core.permissions import (
     IsAdmin,
     IsWorker,
     IsOwnerOrAdmin,
-    IsOwnerOrAdminOrManager,
     IsOwnerOrAdminOrWorker,
     FinancialDataPermission,
 )
@@ -13,7 +12,6 @@ __all__ = [
     'IsAdmin',
     'IsWorker',
     'IsOwnerOrAdmin',
-    'IsOwnerOrAdminOrManager',
     'IsOwnerOrAdminOrWorker',
     'FinancialDataPermission',
 ]

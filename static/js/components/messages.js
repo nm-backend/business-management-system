@@ -645,7 +645,7 @@ class MessagesComponent {
     notificationRoute(n) {
         const user = window.currentUser || {};
         const owner = !!user.is_owner;
-        const staff = owner || !!user.is_admin || !!user.is_manager;
+        const staff = owner || !!user.is_admin;
         const clientUnpaid = n.related_client
             ? `#/orders?client=${n.related_client}&payment_status=unpaid` : (staff ? '#/clients' : '');
         const map = {

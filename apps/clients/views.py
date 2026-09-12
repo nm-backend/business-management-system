@@ -27,7 +27,7 @@ from apps.orders.models import Order
 from rest_framework.permissions import SAFE_METHODS
 
 from apps.core.permissions import IsCompanyMember
-from core.permissions import IsOwner, IsOwnerOrAdmin, IsOwnerOrAdminOrManager
+from core.permissions import IsOwner, IsOwnerOrAdmin
 from .models import ACTIVE_ORDER_STATUSES, Client, Payment
 from .serializers import ClientAdminSerializer, ClientOwnerSerializer, PaymentSerializer
 from apps.core.views import CompanyScopedViewSet
@@ -39,18 +39,14 @@ class ClientViewSet(CompanyScopedViewSet):
 
     def get_permissions(self):
         """
-        Менеджер видит клиентов (только чтение), но не управляет ими.
-
-        Чтение (list/retrieve): owner/admin/manager. Изменения (create/update/
+        Чтение (list/retrieve): owner/admin. Изменения (create/update/
         archive/restore): только owner/admin. Работник клиентов не видит вовсе.
         """
         if self.request.method in SAFE_METHODS:
             # Сводка по долгам — финансовые суммы, только владельцу.
-            # (permission_classes у @action не применяются: get_permissions
-            # перекрывает их целиком, поэтому проверяем action явно.)
             if getattr(self, 'action', None) == 'debt_summary':
                 return [IsCompanyMember(), IsOwner()]
-            return [IsCompanyMember(), IsOwnerOrAdminOrManager()]
+            return [IsCompanyMember(), IsOwnerOrAdmin()]
         return [IsCompanyMember(), IsOwnerOrAdmin()]
 
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]

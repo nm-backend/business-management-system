@@ -958,7 +958,7 @@ class UserViewSet(CompanyScopedViewSet):
         counts = {row['role']: row['total'] for row in rows}
         payload = {
             role: counts.get(role, 0)
-            for role in (User.Role.OWNER, User.Role.ADMIN, User.Role.WORKER, User.Role.MANAGER)
+            for role in (User.Role.OWNER, User.Role.ADMIN, User.Role.WORKER)
         }
         payload['total'] = sum(payload.values())
         return Response(payload)

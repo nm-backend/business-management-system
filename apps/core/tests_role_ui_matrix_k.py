@@ -14,7 +14,6 @@
   * owner                — всё: дашборд, заказы, продажи, склад, производство,
                            финансы, клиенты, чат, подписка, настройки, аудит;
   * admin                — без финансов и продаж (сервер тоже не отдаёт);
-  * manager              — как админ, но только чтение;
   * worker               — дашборд, свои заказы, склад (чтение), производство, чат;
   * superadmin           — платформа: компании, настройки.
 """
@@ -27,11 +26,11 @@ APP_JS = 'static/js/app.js'
 
 # data-role → множество ролей, которым пункт виден в навигации.
 ROLE_SETS = {
-    None: {'owner', 'admin', 'manager', 'worker'},
+    None: {'owner', 'admin', 'worker'},
     'owner': {'owner'},
     'owner-admin': {'owner', 'admin'},
-    'staff': {'owner', 'admin', 'manager'},
-    'staff-worker': {'worker', 'manager'},
+    'staff': {'owner', 'admin'},
+    'staff-worker': {'worker'},
     'superadmin': {'superadmin'},
 }
 
@@ -55,9 +54,9 @@ EXPECTED_ROUTES = {
     '/': None,
     '/warehouse': None,
     '/finished-products': None,
-    '/clients': ['owner', 'admin', 'manager'],
+    '/clients': ['owner', 'admin'],
     '/orders': None,
-    '/orders/kanban': ['owner', 'admin', 'manager'],
+    '/orders/kanban': ['owner', 'admin'],
     '/production': None,
     '/sales': ['owner'],
     '/finance': ['owner'],

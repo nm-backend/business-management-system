@@ -71,10 +71,6 @@ class GateLifecycleTests(TestCase):
         self.admin = make_admin(self.company, username='gate_admin')
         self.admin.set_password('pw')
         self.admin.save(update_fields=['password'])
-        self.manager = User.objects.create_user(
-            username='gate_mgr', password='pw',
-            role=User.Role.MANAGER, company=self.company,
-        )
         self.worker = User.objects.create_user(
             username='gate_w', password='pw',
             role=User.Role.WORKER, company=self.company,
@@ -176,7 +172,7 @@ class GateLifecycleTests(TestCase):
     def test_gate_blocks_all_business_models_for_all_roles(self):
         """Заморозка: НИ ОДИН бизнес-эндпоинт не доступен ни одной роли."""
         self._expire_and_freeze()
-        for user in (self.owner, self.admin, self.manager, self.worker):
+        for user in (self.owner, self.admin, self.worker):
             self._auth(user)
             for url in BUSINESS_ENDPOINTS:
                 resp = self.api.get(url)
