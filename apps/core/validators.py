@@ -9,6 +9,8 @@ import os
 
 from django.core.exceptions import ValidationError
 
+from core.utils import translate
+
 MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 МБ
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 ALLOWED_IMAGE_CONTENT_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
@@ -24,7 +26,7 @@ ALLOWED_ATTACHMENT_EXTENSIONS = {
 }
 
 
-def parse_int_param(value, field_name):
+def parse_int_param(value, field_name, lang='uz_cyrl'):
     """
     Приводит query-параметр к int или возвращает 400 вместо 500.
 
@@ -38,10 +40,10 @@ def parse_int_param(value, field_name):
     try:
         return int(value)
     except (TypeError, ValueError):
-        raise DRFValidationError({field_name: 'Ожидается числовой идентификатор.'})
+        raise DRFValidationError({field_name: translate('errors.validators.numeric_expected', lang)})
 
 
-def parse_date_param(value, field_name):
+def parse_date_param(value, field_name, lang='uz_cyrl'):
     """
     Приводит query-параметр к date или возвращает 400 вместо 500.
 
@@ -57,10 +59,10 @@ def parse_date_param(value, field_name):
     try:
         return datetime.date.fromisoformat(str(value))
     except (TypeError, ValueError):
-        raise DRFValidationError({field_name: 'Ожидается дата в формате ГГГГ-ММ-ДД.'})
+        raise DRFValidationError({field_name: translate('errors.validators.date_format', lang)})
 
 
-def validate_image_upload(f):
+def validate_image_upload(f, lang='uz_cyrl'):
     """Проверяет размер, расширение и content-type загружаемого изображения."""
     if not f:
         return f
@@ -68,30 +70,31 @@ def validate_image_upload(f):
     size = getattr(f, 'size', 0) or 0
     if size > MAX_IMAGE_SIZE:
         raise ValidationError(
-            f'Файл слишком большой ({size // (1024 * 1024)} МБ). Максимум — 5 МБ.'
+            translate('errors.validators.file_too_large', lang, {'size': size // (1024 * 1024)})
         )
 
     ext = os.path.splitext(getattr(f, 'name', '') or '')[1].lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        raise ValidationError('Недопустимый тип файла. Разрешены: JPG, PNG, WEBP, GIF.')
+        raise ValidationError(translate('errors.validators.invalid_file_type', lang))
 
     content_type = getattr(f, 'content_type', None)
     if content_type and content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
-        raise ValidationError('Недопустимый тип содержимого файла.')
+        raise ValidationError(translate('errors.validators.invalid_content_type', lang))
 
     return f
 
 
-def validate_file_size(value):
+def validate_file_size(value, lang='uz_cyrl'):
     """Ограничение размера загружаемого файла до 10 МБ."""
     limit = 10 * 1024 * 1024  # 10 MB
     if value.size > limit:
         raise ValidationError(
-            f'Файл хажми {limit // (1024 * 1024)} МБ дан ошмаслиги керак.'
+            translate('errors.validators.file_size_limit', lang,
+                      {'size': value.size // (1024 * 1024), 'limit': limit // (1024 * 1024)})
         )
 
 
-def validate_attachment_extension(value):
+def validate_attachment_extension(value, lang='uz_cyrl'):
     """
     Белый список расширений для вложений (чат, задачи).
 
@@ -102,10 +105,10 @@ def validate_attachment_extension(value):
     ext = os.path.splitext(value.name)[1].lower()
     if ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
         allowed = ', '.join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS))
-        raise ValidationError(f'Файл тури қўллаб-қувватланмайди. Рухсат этилган: {allowed}')
+        raise ValidationError(translate('errors.validators.unsupported_file_type', lang, {'allowed': allowed}))
 
 
-def validate_not_future(value):
+def validate_not_future(value, lang='uz_cyrl'):
     """
     Запрещает даты «из будущего».
 
@@ -122,13 +125,13 @@ def validate_not_future(value):
     # Поле может быть как датой, так и датой-временем.
     current = now if hasattr(value, 'hour') else timezone.localdate()
     if value > current:
-        raise ValidationError('Дата не может быть в будущем.')
+        raise ValidationError(translate('errors.validators.date_in_future', lang))
 
 
 PHONE_ALLOWED = set('0123456789 +-()')
 
 
-def validate_phone(value):
+def validate_phone(value, lang='uz_cyrl'):
     """
     Мягкая проверка телефона: цифры и разделители, минимум 5 цифр.
 
@@ -140,6 +143,4 @@ def validate_phone(value):
         return
     text = str(value).strip()
     if set(text) - PHONE_ALLOWED or sum(ch.isdigit() for ch in text) < 5:
-        raise ValidationError(
-            'Телефон может содержать только цифры и знаки + - ( ), минимум 5 цифр.'
-        )
+        raise ValidationError(translate('errors.validators.phone_invalid', lang))

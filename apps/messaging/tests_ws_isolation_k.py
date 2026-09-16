@@ -61,7 +61,9 @@ class ChatIsolationTests(TransactionTestCase):
             'conversation': conv.id, 'content': 'привет чужому',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
-        self.assertIn('Беседа не найдена.', str(resp.data))
+        from core.utils import translate
+        expected = translate('errors.messaging.conversation_not_found', 'uz_cyrl')
+        self.assertIn(expected, str(resp.data))
 
     def test_message_length_capped(self):
         resp = self.api.post(MESSAGES_URL, {

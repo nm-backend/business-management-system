@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import User
+from core.utils import translate
 from .models import Company
 from .subscriptions import activate_for_new_company
 
@@ -142,7 +143,9 @@ class CompanyCreateSerializer(serializers.ModelSerializer):
 
     def validate_owner_username(self, value):
         if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError('Username already exists')
+            request = self.context.get('request')
+            lang = getattr(request.user, 'language', 'uz_cyrl') if request and hasattr(request.user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.username_taken', lang))
         return value
 
     def validate_owner_password(self, value):

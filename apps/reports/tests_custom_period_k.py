@@ -17,6 +17,7 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.clients.models import Client, Payment
 from apps.companies.models import Company
+from apps.orders.models import Order
 
 BISHKEK = ZoneInfo('Asia/Bishkek')
 ANALYTICS = '/api/v1/reports/analytics/owner/'
@@ -59,6 +60,20 @@ class CustomReportPeriodTests(TestCase):
             payment_date=when,
         )
 
+    def _deliver(self, when, amount, client=None, company=None):
+        if isinstance(when, datetime.date) and not isinstance(when, datetime.datetime):
+            when = datetime.datetime(when.year, when.month, when.day, 12, 0, tzinfo=BISHKEK)
+        order = Order.objects.create(
+            company=company or self.company,
+            client=client or self.cli,
+            custom_product_name='\u0418\u0437\u0434\u0435\u043b\u0438\u0435', quantity=Decimal('1'),
+            unit='sht', total_amount=Decimal(str(amount)),
+            deadline=when + datetime.timedelta(days=3),
+        )
+        order.status = Order.Status.DELIVERED
+        order.save(update_fields=['status'])
+        Order.objects.filter(pk=order.pk).update(delivered_at=when)
+
     def _get(self, params, user=None):
         api = self.api
         if user is not None:
@@ -68,9 +83,13 @@ class CustomReportPeriodTests(TestCase):
 
     def test_custom_range_returns_exact_bounds_and_revenue(self):
         self._pay(datetime.date(2026, 7, 31), 100)
+        self._deliver(datetime.date(2026, 7, 31), 100)
         self._pay(datetime.date(2026, 8, 1), 200)
+        self._deliver(datetime.date(2026, 8, 1), 200)
         self._pay(datetime.date(2026, 8, 10), 300)
+        self._deliver(datetime.date(2026, 8, 10), 300)
         self._pay(datetime.date(2026, 8, 11), 400)
+        self._deliver(datetime.date(2026, 8, 11), 400)
         resp = self._get({'date_from': '2026-08-01', 'date_to': '2026-08-10'})
         self.assertEqual(resp.status_code, 200, resp.content[:300])
         data = resp.json()
@@ -80,7 +99,9 @@ class CustomReportPeriodTests(TestCase):
 
     def test_same_day_range_is_inclusive(self):
         self._pay(datetime.date(2026, 8, 5), 77)
+        self._deliver(datetime.date(2026, 8, 5), 77)
         self._pay(datetime.date(2026, 8, 6), 11)
+        self._deliver(datetime.date(2026, 8, 6), 11)
         resp = self._get({'date_from': '2026-08-05', 'date_to': '2026-08-05'})
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -110,6 +131,7 @@ class CustomReportPeriodTests(TestCase):
     def test_presets_still_work_without_custom_dates(self):
         today = timezone.localdate()
         self._pay(today, 55)
+        self._deliver(today, 55)
         resp = self._get({'period': 'today'})
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -129,7 +151,12 @@ class CustomReportPeriodTests(TestCase):
 
     def test_tenant_isolation_on_custom_range(self):
         self._pay(datetime.date(2026, 8, 3), 40)
+        self._deliver(datetime.date(2026, 8, 3), 40)
         self._pay(
+            datetime.date(2026, 8, 3), 999,
+            client=self.cli_b, company=self.other,
+        )
+        self._deliver(
             datetime.date(2026, 8, 3), 999,
             client=self.cli_b, company=self.other,
         )
@@ -144,8 +171,11 @@ class CustomReportPeriodTests(TestCase):
         # 18:01 UTC 1 августа = 00:01 2 августа в Бишкеке — уже другой день.
         utc_next_local = datetime.datetime(2026, 8, 1, 18, 1, tzinfo=datetime.timezone.utc)
         self._pay(inside, 10)
+        self._deliver(inside, 10)
         self._pay(outside, 20)
+        self._deliver(outside, 20)
         self._pay(utc_next_local, 40)
+        self._deliver(utc_next_local, 40)
         resp = self._get({'date_from': '2026-08-01', 'date_to': '2026-08-01'})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(Decimal(str(resp.json()['revenue'])), Decimal('10'))

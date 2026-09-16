@@ -9,6 +9,8 @@
 
 WorkerPayment и Expense — разные журналы: расход заводят вручную, выплата
 создаётся при выдаче денег работнику. Двойного учёта нет.
+
+Revenue = SUM(Order.total_amount) для выданных заказов (accrual).
 """
 import datetime
 from decimal import Decimal
@@ -20,6 +22,7 @@ from apps.accounts.models import User
 from apps.clients.models import Client, Payment
 from apps.companies.models import Company
 from apps.finance.models import Expense, ExpenseCategory, WorkerPayment
+from apps.orders.models import Order
 
 UTC = datetime.timezone.utc
 PERIOD = '?date_from=2026-06-01&date_to=2026-06-30'
@@ -30,11 +33,22 @@ class NetProfitTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name='NPCo', is_active=True)
         self.owner = User.objects.create_user(username='np_owner', password='p',
-                                              role=User.Role.OWNER, company=self.company)
+                                               role=User.Role.OWNER, company=self.company)
         self.worker = User.objects.create_user(username='np_worker', password='p',
-                                               role=User.Role.WORKER, company=self.company)
+                                                role=User.Role.WORKER, company=self.company)
         self.cli = Client.objects.create(company=self.company, name='К')
-        # Выручка 10 000
+        # Заказ на 10 000 (accrual revenue)
+        order = Order.objects.create(
+            company=self.company, client=self.cli,
+            custom_product_name='Изделие', quantity=Decimal('1'),
+            unit='sht', total_amount=Decimal('10000'),
+            deadline=datetime.datetime(2026, 6, 20, tzinfo=UTC),
+        )
+        order.status = Order.Status.DELIVERED
+        order.save(update_fields=['status'])
+        Order.objects.filter(pk=order.pk).update(
+            delivered_at=datetime.datetime(2026, 6, 15, tzinfo=UTC))
+        # Оплата 10 000
         Payment.objects.create(company=self.company, client=self.cli, amount=Decimal('10000'),
                                payment_date=datetime.datetime(2026, 6, 10, tzinfo=UTC),
                                payment_method='cash')

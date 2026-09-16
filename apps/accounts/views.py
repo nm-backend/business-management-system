@@ -49,6 +49,7 @@ from .serializers import (
     PushSubscriptionSerializer,
 )
 from apps.core.views import CompanyScopedViewSet
+from core.utils import translate
 
 
 class SetupCheckView(APIView):
@@ -128,6 +129,7 @@ class SetupOwnerView(APIView):
         """
         serializer = SetupOwnerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         try:
             with transaction.atomic():
                 # Сериализуем параллельные setup-запросы через единственную
@@ -140,18 +142,18 @@ class SetupOwnerView(APIView):
                 # платформенный аккаунт через публичный эндпоинт.
                 if User.objects.exists():
                     return Response(
-                        {'error': 'Setup is already complete.'},
+                        {'error': translate('errors.auth.setup_complete', lang)},
                         status=status.HTTP_403_FORBIDDEN,
                     )
                 user = serializer.save()
         except SetupGate.DoesNotExist:
             return Response(
-                {'error': 'Setup is not available.'},
+                {'error': translate('errors.auth.setup_not_available', lang)},
                 status=status.HTTP_403_FORBIDDEN,
             )
         except IntegrityError:
             return Response(
-                {'error': 'Setup is already complete.'},
+                {'error': translate('errors.auth.setup_complete', lang)},
                 status=status.HTTP_403_FORBIDDEN,
             )
         fingerprint = request.data.get('fingerprint', '')
@@ -216,6 +218,7 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
 
         # Второй фактор проверяется ПОСЛЕ пароля и ДО выдачи токенов: пока код
         # не подтверждён, ни access, ни refresh не существуют, поэтому украсть
@@ -225,7 +228,7 @@ class LoginView(APIView):
             if not code:
                 return Response(
                     {'two_factor_required': True,
-                     'detail': 'Требуется код двухэтапного подтверждения.'},
+                     'detail': translate('errors.auth.two_factor_required', lang)},
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
             method = two_factor.verify_code(user, code)
@@ -235,7 +238,7 @@ class LoginView(APIView):
                     actor=user, target=user, request=request,
                 )
                 return Response(
-                    {'two_factor_required': True, 'detail': 'Неверный код подтверждения.'},
+                    {'two_factor_required': True, 'detail': translate('errors.auth.two_factor_invalid', lang)},
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
             if method == two_factor.VERIFY_RECOVERY:
@@ -307,16 +310,17 @@ class MySessionsView(APIView):
 
     def post(self, request):
         jti = request.data.get('jti')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         if not jti:
-            return Response({'jti': 'Укажите сессию.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'jti': translate('errors.auth.session_required', lang)}, status=status.HTTP_400_BAD_REQUEST)
         if not revoke_session(request.user, jti):
             # 404, а не 403: существование чужой сессии не подтверждаем.
-            return Response({'detail': 'Сессия не найдена.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': translate('errors.auth.session_not_found', lang)}, status=status.HTTP_404_NOT_FOUND)
         write_audit_log(
             action=AuditLog.Action.LOGOUT, actor=request.user, target=request.user,
             metadata={'revoked_session': jti}, request=request,
         )
-        return Response({'detail': 'Сессия закрыта.'})
+        return Response({'detail': translate('errors.auth.session_closed', lang)})
 
 
 class RevokeOtherSessionsView(APIView):
@@ -370,6 +374,7 @@ class LogoutView(APIView):
         Возвращает:
             205 Reset Content
         """
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         try:
             refresh_token = request.data.get('refresh')
             if refresh_token:
@@ -378,7 +383,7 @@ class LogoutView(APIView):
                 # завладеть чужим refresh (логи, сниффинг) и выбить жертву.
                 if token.get('user_id') != request.user.id:
                     return Response(
-                        {'detail': 'Refresh token does not belong to the current user'},
+                        {'detail': translate('errors.auth.refresh_not_yours', lang)},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 token.blacklist()
@@ -386,7 +391,7 @@ class LogoutView(APIView):
             # Токен не валиден — черный список его не примет. Не глотаем
             # молча: клиент должен знать, что сессия не заблокирована.
             return Response(
-                {'detail': 'Invalid refresh token'},
+                {'detail': translate('errors.auth.refresh_invalid', lang)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         write_audit_log(
@@ -512,6 +517,7 @@ class ChangePasswordView(APIView):
         """
         serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         request.user.set_password(serializer.validated_data['new_password'])
         request.user.save()
         # Смена пароля обесценивает все прежние refresh-токены.
@@ -522,7 +528,7 @@ class ChangePasswordView(APIView):
             target=request.user,
             request=request,
         )
-        return Response({'message': 'Пароль успешно изменён'})
+        return Response({'message': translate('errors.auth.password_changed', lang)})
 
 
 class ChangeLanguageView(APIView):
@@ -557,6 +563,7 @@ class ChangeLanguageView(APIView):
         """
         serializer = LanguageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         old_language = request.user.language
         request.user.language = serializer.validated_data['language']
         request.user.save(update_fields=['language'])
@@ -572,7 +579,7 @@ class ChangeLanguageView(APIView):
             },
             request=request,
         )
-        return Response({'language': request.user.language, 'message': 'Language updated'})
+        return Response({'language': request.user.language, 'message': translate('errors.auth.language_updated', lang)})
 
 @extend_schema(tags=['Employees'])
 class SkillViewSet(CompanyScopedViewSet):
@@ -684,15 +691,16 @@ class AccessKeyRedeemView(APIView):
     def post(self, request):
         serializer = AccessKeyRedeemSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         user, error = redeem_access_key(
             code=serializer.validated_data['access_key'],
             new_password=serializer.validated_data['new_password'],
         )
         if error == 'company_inactive':
-            return Response({'detail': 'Компания деактивирована'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': translate('errors.auth.company_deactivated', lang)}, status=status.HTTP_400_BAD_REQUEST)
         if error or user is None:
             return Response(
-                {'detail': 'Invalid, expired or already used access key'},
+                {'detail': translate('errors.auth.access_key_invalid', lang)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         fingerprint = request.data.get('fingerprint', '')
@@ -848,11 +856,12 @@ class UserViewSet(CompanyScopedViewSet):
         """
         user = self.request.user
         requested_role = serializer.validated_data.get('role', User.Role.WORKER)
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if self.request.user and hasattr(self.request.user, 'language') else 'uz_cyrl'
 
         if user.is_owner:
             # Владелец может создавать admin и worker только в своей компании.
             if requested_role in (User.Role.OWNER, User.Role.SUPERADMIN):
-                raise ValidationError({'role': 'Owner can create only admin or worker accounts'})
+                raise ValidationError({'role': translate('errors.auth.owner_only_admin_worker', lang)})
             created_user = serializer.save(company=user.company)
             write_audit_log(
                 action=AuditLog.Action.CREATE,
@@ -866,9 +875,9 @@ class UserViewSet(CompanyScopedViewSet):
         if user.is_admin:
             # Администратор может создавать только workers своей компании.
             if not user.can_create_workers:
-                raise PermissionDenied('Нет прав на создание работников')
+                raise PermissionDenied(translate('errors.auth.no_permission_create_workers', lang))
             if requested_role != User.Role.WORKER:
-                raise PermissionDenied('Администраторы могут создавать только аккаунты работников')
+                raise PermissionDenied(translate('errors.auth.admins_only_workers', lang))
             created_user = serializer.save(
                 company=user.company,
                 role=User.Role.WORKER,
@@ -885,7 +894,7 @@ class UserViewSet(CompanyScopedViewSet):
             )
             return
 
-        raise PermissionDenied('Нет прав на создание аккаунтов')
+        raise PermissionDenied(translate('errors.auth.no_permission_create_accounts', lang))
 
     def perform_update(self, serializer):
         """
@@ -927,7 +936,8 @@ class UserViewSet(CompanyScopedViewSet):
         Исключение:
             MethodNotAllowed - удаление запрещено
         """
-        raise MethodNotAllowed('DELETE', detail='Account deletion is prohibited. Block the account instead.')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
+        raise MethodNotAllowed('DELETE', detail=translate('errors.auth.account_delete_prohibited', lang))
 
     @action(detail=False, methods=['get'], url_path='role-counts',
             permission_classes=[IsOwnerOrAdmin])
@@ -987,7 +997,8 @@ class UserViewSet(CompanyScopedViewSet):
         with transaction.atomic():
             user = User.objects.select_for_update().get(pk=user.pk)
             if user.role == 'owner':
-                return Response({'error': 'Нельзя деактивировать аккаунт владельца'}, status=status.HTTP_400_BAD_REQUEST)
+                lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
+                return Response({'error': translate('errors.auth.cannot_deactivate_owner', lang)}, status=status.HTTP_400_BAD_REQUEST)
             user.is_active = not user.is_active
             # Помечаем индивидуальную блокировку, чтобы разблокировка КОМПАНИИ её
             # не сняла молча (blocked_by_owner=True сохраняется через company-каскад).
@@ -1026,6 +1037,7 @@ class UserViewSet(CompanyScopedViewSet):
         """
         user = self.get_object()
         new_password = request.data.get('new_password')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         # Раньше проверялась только длина: пароль «aaaaaaaa» проходил, хотя
         # change-password и access-key-redeem (validate_password) его резали —
         # обходной путь ослабить чужой аккаунт паролем «из коробки».
@@ -1043,7 +1055,7 @@ class UserViewSet(CompanyScopedViewSet):
             target=user,
             request=request,
         )
-        return Response({'message': 'Пароль успешно сброшен'})
+        return Response({'message': translate('errors.auth.password_reset_success', lang)})
 
     @extend_schema(request=AccessKeyIssueSerializer, responses=AccessKeySerializer)
     @action(detail=True, methods=['get', 'post'], permission_classes=[IsOwnerOrAdmin])
@@ -1062,7 +1074,8 @@ class UserViewSet(CompanyScopedViewSet):
 
         if request.method == 'POST':
             if employee.is_owner or employee.is_superadmin:
-                raise ValidationError({'detail': 'Cannot issue an access key for this account.'})
+                lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
+                raise ValidationError({'detail': translate('errors.auth.access_key_not_available', lang)})
             serializer = AccessKeyIssueSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             try:
@@ -1107,9 +1120,10 @@ class PushSubscriptionView(APIView):
     def post(self, request):
         endpoint = request.data.get('endpoint')
         keys = request.data.get('keys', {})
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         if not endpoint or not keys.get('p256dh') or not keys.get('auth'):
             return Response(
-                {'error': 'endpoint, keys.p256dh and keys.auth are required'},
+                {'error': translate('errors.auth.push_keys_required', lang)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         # Endpoint — произвольный URL: без проверки сотрудник мог зарегистрировать
@@ -1118,7 +1132,7 @@ class PushSubscriptionView(APIView):
         parsed = urlparse(str(endpoint))
         if parsed.scheme != 'https' or not parsed.netloc:
             return Response(
-                {'error': 'endpoint must be a valid https URL'},
+                {'error': translate('errors.auth.push_invalid_url', lang)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         # Лимит подписок на пользователя: сломанный клиент, плодящий подписки
@@ -1151,7 +1165,7 @@ class PushSubscriptionView(APIView):
                 ).count()
                 if active_count >= 5:
                     return Response(
-                        {'error': 'Push subscription limit reached (5). Unsubscribe old devices first.'},
+                        {'error': translate('errors.auth.push_limit_reached', lang)},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 sub = PushSubscription.objects.create(
@@ -1163,8 +1177,9 @@ class PushSubscriptionView(APIView):
 
     def delete(self, request):
         endpoint = request.data.get('endpoint')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         if not endpoint:
-            return Response({'error': 'endpoint is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': translate('errors.auth.push_endpoint_required', lang)}, status=status.HTTP_400_BAD_REQUEST)
         deleted, _ = PushSubscription.objects.filter(
             user=request.user, endpoint=endpoint
         ).delete()
@@ -1204,11 +1219,12 @@ class TwoFactorSetupView(APIView):
     def post(self, request):
         serializer = TwoFactorPasswordSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         try:
             device = two_factor.begin_setup(request.user)
         except ValueError:
             raise ValidationError(
-                {'detail': 'Двухэтапное подтверждение уже включено. Сначала отключите его.'}
+                {'detail': translate('errors.auth.two_factor_already_enabled', lang)}
             )
         return Response({
             'secret': device.config_url.split('secret=')[1].split('&')[0],
@@ -1234,13 +1250,14 @@ class TwoFactorConfirmView(APIView):
     def post(self, request):
         serializer = TwoFactorConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         codes = two_factor.confirm_setup(request.user, serializer.validated_data['code'])
         if codes is None:
             write_audit_log(
                 action=AuditLog.Action.TWO_FACTOR_FAILED,
                 actor=request.user, target=request.user, request=request,
             )
-            raise ValidationError({'code': 'Неверный код подтверждения.'})
+            raise ValidationError({'code': translate('errors.auth.two_factor_invalid', lang)})
 
         write_audit_log(
             action=AuditLog.Action.TWO_FACTOR_ENABLED,
@@ -1265,14 +1282,15 @@ class TwoFactorDisableView(APIView):
     def post(self, request):
         serializer = TwoFactorDisableSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         if not two_factor.has_two_factor(request.user):
-            raise ValidationError({'detail': 'Двухэтапное подтверждение не включено.'})
+            raise ValidationError({'detail': translate('errors.auth.two_factor_not_enabled', lang)})
         if two_factor.verify_code(request.user, serializer.validated_data['code']) is None:
             write_audit_log(
                 action=AuditLog.Action.TWO_FACTOR_FAILED,
                 actor=request.user, target=request.user, request=request,
             )
-            raise ValidationError({'code': 'Неверный код подтверждения.'})
+            raise ValidationError({'code': translate('errors.auth.two_factor_invalid', lang)})
 
         two_factor.disable(request.user)
         write_audit_log(
@@ -1299,8 +1317,9 @@ class TwoFactorRecoveryCodesView(APIView):
     def post(self, request):
         serializer = TwoFactorPasswordSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
+        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
         if not two_factor.has_two_factor(request.user):
-            raise ValidationError({'detail': 'Двухэтапное подтверждение не включено.'})
+            raise ValidationError({'detail': translate('errors.auth.two_factor_not_enabled', lang)})
 
         codes = two_factor.regenerate_recovery_codes(request.user)
         write_audit_log(

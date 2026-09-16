@@ -11,6 +11,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from apps.core.validators import validate_image_upload
+from core.utils import translate
 
 from .models import AccessKey, PushSubscription, Skill, User
 
@@ -47,7 +48,8 @@ class SkillSerializer(serializers.ModelSerializer):
         if instance is not None:
             duplicate = duplicate.exclude(pk=instance.pk)
         if duplicate.exists():
-            raise serializers.ValidationError('Навык с таким названием уже существует.')
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.skill_exists', lang))
         return value
 
 
@@ -232,7 +234,8 @@ class UserCreateSerializer(CompanyScopedSkillsMixin, serializers.ModelSerializer
         # Без проверки дубликат username ронял создание в IntegrityError — 500
         # вместо понятного 400 (журнал аудита ждал бы уже созданного юзера).
         if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError('Пользователь с таким логином уже существует.')
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.username_exists', lang))
         return value
 
     def create(self, validated_data):
@@ -331,16 +334,20 @@ class LoginSerializer(serializers.Serializer):
         # пользователя сами и проверяем статусы ДО проверки пароля.
         user = User.objects.filter(username=data['username']).first()
         if user is None:
-            raise serializers.ValidationError('Неверное имя пользователя или пароль')
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.invalid_credentials', lang))
         # Сначала компания: при блокировке компании её сотрудники получают
         # is_active=False каскадом, и оба сообщения формально верны, но
         # «Company is deactivated» объясняет причину лучше.
         if user.company_id is not None and not user.company.is_active:
-            raise serializers.ValidationError('Компания деактивирована')
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.company_inactive', lang))
         if not user.is_active:
-            raise serializers.ValidationError('Аккаунт деактивирован')
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.account_inactive', lang))
         if not user.check_password(data['password']):
-            raise serializers.ValidationError('Неверное имя пользователя или пароль')
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.invalid_credentials', lang))
         data['user'] = user
         return data
 
@@ -380,7 +387,8 @@ class ChangePasswordSerializer(serializers.Serializer):
         """
         user = self.context['request'].user
         if not user.check_password(value):
-            raise serializers.ValidationError('Current password is incorrect')
+            lang = user.language if hasattr(user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.password_incorrect', lang))
         return value
 
     def validate(self, attrs):
@@ -446,9 +454,11 @@ class SetupOwnerSerializer(serializers.Serializer):
             ValidationError - если пароли не совпадают или username занят
         """
         if data['password'] != data['password_confirm']:
-            raise serializers.ValidationError({'password_confirm': 'Passwords do not match'})
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError({'password_confirm': translate('errors.auth.passwords_no_match', lang)})
         if User.objects.filter(username=data['username']).exists():
-            raise serializers.ValidationError({'username': 'Username already exists'})
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError({'username': translate('errors.auth.username_taken', lang)})
         candidate = User(
             username=data['username'],
             full_name=data['full_name'],
@@ -563,7 +573,8 @@ class TwoFactorPasswordSerializer(serializers.Serializer):
     def validate_password(self, value):
         user = self.context['request'].user
         if not user.check_password(value):
-            raise serializers.ValidationError('Пароль неверный.')
+            lang = user.language if hasattr(user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.auth.wrong_password', lang))
         return value
 
 

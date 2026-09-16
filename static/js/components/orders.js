@@ -248,11 +248,31 @@ class OrdersComponent {
                         <button class="btn btn-success btn-sm" id="add-payment" data-i18n="orders.add_payment"></button>` : ''}
                     ${!['delivered', 'cancelled'].includes(o.status) ? `
                         <button class="btn btn-secondary btn-sm" id="edit-order" data-i18n="common.edit"></button>` : ''}
-                    <!-- Отмена скрыта для оплаченных заказов: API её отклоняет
-                         (деньги уже приняты, отмена их не возвращает). -->
+                    <!-- Возврат: только owner, только delivered, только если есть что возвращать -->
+                    ${user.is_owner && o.status === 'delivered' && Number(o.refundable_amount || 0) > 0 ? `
+                        <button class="btn btn-warning btn-sm" id="refund-order" data-i18n="orders.refund"></button>` : ''}
+                    <!-- Отмена: скрыта для оплаченных/доставленных заказов -->
                     ${!['delivered', 'cancelled'].includes(o.status) && Number(o.paid_amount || 0) <= 0 ? `
                         <button class="btn btn-danger btn-sm" id="cancel-order" data-i18n="common.cancel"></button>` : ''}
                 </div>
+                <!-- Информация об оплате/возврате для delivered заказов -->
+                ${user.is_owner && o.status === 'delivered' ? `
+                    <div class="text-sm u-mt-3" style="padding:8px 12px;background:var(--secondary-bg,#f5f5f8);border-radius:8px;">
+                        <div style="display:flex;justify-content:space-between;">
+                            <span data-i18n="orders.refund_paid"></span>
+                            <span class="font-bold">${window.ui.money(o.paid_amount)}</span>
+                        </div>
+                        ${Number(o.refundable_amount || 0) < Number(o.paid_amount || 0) ? `
+                        <div style="display:flex;justify-content:space-between;">
+                            <span data-i18n="orders.refund_refunded"></span>
+                            <span class="font-bold text-success">${window.ui.money(Number(o.paid_amount) - Number(o.refundable_amount))}</span>
+                        </div>` : ''}
+                        ${Number(o.refundable_amount || 0) > 0 ? `
+                        <div style="display:flex;justify-content:space-between;">
+                            <span data-i18n="orders.refund_remaining"></span>
+                            <span class="font-bold">${window.ui.money(o.refundable_amount)}</span>
+                        </div>` : ''}
+                    </div>` : ''}
                 ${!['delivered', 'cancelled'].includes(o.status) && Number(o.paid_amount || 0) > 0 ? `
                     <p class="text-xs text-muted u-mt-3" data-i18n="orders.cancel_blocked_by_payment"></p>` : ''}` : ''}
         `);
@@ -312,6 +332,7 @@ class OrdersComponent {
                 window.toast.error(window.ui.errorText(error));
             }
         });
+        bind('refund-order', () => { window.ui.closeModal(modal); this.openRefundForm(o); });
     }
 
     /** Форма создания/редактирования заказа. */
@@ -595,6 +616,61 @@ class OrdersComponent {
                     await window.api.request('/clients/payments/', { method: 'POST', body: JSON.stringify(data) });
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
+                    await this.loadOrders();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    /** Возврат средств по заказу (только owner). */
+    openRefundForm(o) {
+        const refundable = Number(o.refundable_amount || 0);
+        const paid = Number(o.paid_amount || 0);
+        const refunded = paid - refundable;
+        const modal = window.ui.modal('orders.refund', `
+            <div class="list-group u-card-flat u-mb-3">
+                <div class="list-row u-cursor-default">
+                    <span class="text-sm text-muted" data-i18n="orders.refund_paid"></span>
+                    <span class="text-sm font-bold">${window.ui.money(paid)}</span>
+                </div>
+                ${refunded > 0 ? `
+                <div class="list-row u-cursor-default">
+                    <span class="text-sm text-muted" data-i18n="orders.refund_refunded"></span>
+                    <span class="text-sm font-bold text-success">${window.ui.money(refunded)}</span>
+                </div>` : ''}
+                <div class="list-row u-cursor-default">
+                    <span class="text-sm text-muted" data-i18n="orders.refund_remaining"></span>
+                    <span class="text-sm font-bold">${window.ui.money(refundable)}</span>
+                </div>
+            </div>
+            <form id="refund-form">
+                <div class="form-group"><label data-i18n="orders.refund_amount_label"></label>
+                    <input name="amount" type="number" step="0.01" min="0.01" max="${refundable}"
+                           class="form-control" required value="${refundable || ''}"></div>
+                <div class="form-group"><label data-i18n="common.payment_method"></label>
+                    <select name="payment_method" class="form-control">
+                        <option value="cash" data-i18n="common.cash"></option>
+                        <option value="card" data-i18n="common.card"></option>
+                        <option value="transfer" data-i18n="common.transfer"></option>
+                        <option value="other" data-i18n="common.other"></option>
+                    </select></div>
+                <div class="form-group"><label data-i18n="orders.comment"></label>
+                    <textarea name="comment" class="form-control" rows="2"></textarea></div>
+                <button type="submit" class="btn btn-primary btn-block" data-i18n="orders.refund"></button>
+            </form>
+        `);
+
+        modal.querySelector('#refund-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+            if (!(await window.confirmation.confirm(window.ui.t('orders.refund_confirm'), window.ui.t('orders.refund')))) return;
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request(`/orders/orders/${o.id}/refund/`, { method: 'POST', body: JSON.stringify(data) });
+                    window.ui.closeModal(modal);
+                    window.toast.success(window.ui.t('orders.refund_success'));
                     await this.loadOrders();
                 } catch (error) {
                     window.toast.error(window.ui.errorText(error));

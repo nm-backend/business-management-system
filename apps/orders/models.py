@@ -125,6 +125,17 @@ class Order(TimestampedModel, SoftDeleteModel):
         return not self.is_paid
 
     @property
+    def refundable_amount(self):
+        """Сумма, доступная для возврата: оплачено минус уже возвращённое."""
+        from apps.finance.models import Expense
+        refunded = Expense.objects.filter(
+            order_id=self.pk,
+            category='client_refund',
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        paid = self.paid_amount or Decimal('0')
+        return max(paid - refunded, Decimal('0'))
+
+    @property
     def is_overdue(self):
         return bool(
             self.deadline

@@ -17,6 +17,7 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.clients.models import Client, Payment
 from apps.companies.models import Company
+from apps.orders.models import Order
 
 UTC = datetime.timezone.utc
 ANALYTICS = '/api/v1/reports/analytics/owner/'
@@ -44,6 +45,19 @@ class PeriodPresetsTests(TestCase):
             payment_method='cash',
         )
 
+    def _deliver(self, days_ago, amount):
+        day = self.today - datetime.timedelta(days=days_ago)
+        when = datetime.datetime.combine(day, datetime.time(12, 0), tzinfo=UTC)
+        order = Order.objects.create(
+            company=self.company, client=self.cli,
+            custom_product_name='\u0418\u0437\u0434\u0435\u043b\u0438\u0435', quantity=Decimal('1'),
+            unit='sht', total_amount=Decimal(str(amount)),
+            deadline=when + datetime.timedelta(days=3),
+        )
+        order.status = Order.Status.DELIVERED
+        order.save(update_fields=['status'])
+        Order.objects.filter(pk=order.pk).update(delivered_at=when)
+
     def _analytics(self, period):
         resp = self.api.get(ANALYTICS, {'period': period})
         self.assertEqual(resp.status_code, 200, resp.content[:300])
@@ -54,6 +68,7 @@ class PeriodPresetsTests(TestCase):
         amounts = {0: 100, 1: 200, 5: 400, 12: 800, 250: 1600}
         for days_ago, amount in amounts.items():
             self._pay(days_ago, amount)
+            self._deliver(days_ago, amount)
 
         monday = self.today - datetime.timedelta(days=self.today.weekday())
 
@@ -97,6 +112,7 @@ class PeriodPresetsTests(TestCase):
         monday = self.today - datetime.timedelta(days=self.today.weekday())
         prev_sunday = monday - datetime.timedelta(days=1)
         self._pay(0, 100)
+        self._deliver(0, 100)
 
         Payment.objects.create(
             company=self.company, client=self.cli, amount=Decimal('999'),

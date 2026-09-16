@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from apps.core.validators import validate_not_future
 from apps.orders.models import Order
+from core.utils import translate
 from .models import (
     FinishedProduct, GoodsReceipt, GoodsReceiptLine, RawMaterial, Recipe,
     RecipeItem, StockMovement, Warehouse, WarehouseCell,
@@ -78,8 +79,9 @@ class OutgoingSerializer(serializers.Serializer):
         """Заказ обязан быть своей компании: иначе расход уедет в чужую историю."""
         request = self.context.get('request')
         company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
         if order is not None and company_id is not None and order.company_id != company_id:
-            raise serializers.ValidationError('Заказ другой компании.')
+            raise serializers.ValidationError(translate('errors.warehouse.order_other_company', lang))
         return order
 
 class ReturnSerializer(serializers.Serializer):
@@ -193,17 +195,18 @@ class RawMaterialSerializer(StockQuantityGuardMixin, serializers.ModelSerializer
         """
         request = self.context.get('request')
         company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
         warehouse = attrs.get('warehouse', getattr(self.instance, 'warehouse', None))
         cell = attrs.get('cell', getattr(self.instance, 'cell', None))
 
         if company_id is not None:
             if warehouse and warehouse.company_id != company_id:
-                raise serializers.ValidationError({'warehouse': 'Склад другой компании.'})
+                raise serializers.ValidationError({'warehouse': translate('errors.warehouse.storage_other_company', lang)})
             if cell and cell.company_id != company_id:
-                raise serializers.ValidationError({'cell': 'Ячейка другой компании.'})
+                raise serializers.ValidationError({'cell': translate('errors.warehouse.cell_other_company', lang)})
         if cell and warehouse and cell.warehouse_id != warehouse.id:
             raise serializers.ValidationError({
-                'cell': 'Ячейка принадлежит другому складу.',
+                'cell': translate('errors.warehouse.cell_other_storage', lang),
             })
         if cell and not warehouse:
             # Ячейка без склада — потерянное размещение; подставляем её склад.
@@ -393,6 +396,7 @@ class GoodsReceiptCreateSerializer(serializers.Serializer):
         request = self.context.get('request')
         company_id = getattr(getattr(request, 'user', None), 'company_id', None)
         is_owner = getattr(getattr(request, 'user', None), 'is_owner', False)
+        lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
 
         materials = {
             m.id: m for m in RawMaterial.objects.filter(company_id=company_id, is_archived=False)
@@ -402,19 +406,19 @@ class GoodsReceiptCreateSerializer(serializers.Serializer):
             try:
                 material_id = int(line.get('material'))
             except (TypeError, ValueError):
-                raise serializers.ValidationError(f'Позиция {index + 1}: не указан материал.')
+                raise serializers.ValidationError(translate('errors.warehouse.position_no_material', lang, {'index': index + 1}))
             material = materials.get(material_id)
             if material is None:
                 raise serializers.ValidationError(
-                    f'Позиция {index + 1}: материал недоступен в вашей компании.'
+                    translate('errors.warehouse.position_material_unavailable', lang, {'index': index + 1})
                 )
             try:
                 quantity = Decimal(str(line.get('quantity')))
             except (TypeError, ValueError, ArithmeticError):
-                raise serializers.ValidationError(f'Позиция {index + 1}: неверное количество.')
+                raise serializers.ValidationError(translate('errors.warehouse.position_bad_quantity', lang, {'index': index + 1}))
             if quantity <= 0:
                 raise serializers.ValidationError(
-                    f'Позиция {index + 1}: количество должно быть больше нуля.'
+                    translate('errors.warehouse.position_quantity_zero', lang, {'index': index + 1})
                 )
 
             price = None
@@ -422,10 +426,10 @@ class GoodsReceiptCreateSerializer(serializers.Serializer):
                 try:
                     price = Decimal(str(line['price_per_unit']))
                 except (TypeError, ValueError, ArithmeticError):
-                    raise serializers.ValidationError(f'Позиция {index + 1}: неверная цена.')
+                    raise serializers.ValidationError(translate('errors.warehouse.position_bad_price', lang, {'index': index + 1}))
                 if price < 0:
                     raise serializers.ValidationError(
-                        f'Позиция {index + 1}: цена не может быть отрицательной.'
+                        translate('errors.warehouse.position_negative_price', lang, {'index': index + 1})
                     )
             cleaned.append({'material': material, 'quantity': quantity, 'price_per_unit': price})
         return cleaned
@@ -463,12 +467,10 @@ class RecipeItemSerializer(serializers.ModelSerializer):
             # Единицу не прислали (обычный случай из интерфейса) — берём у материала.
             attrs['unit'] = material.unit
         elif unit != material.unit:
+            lang = getattr(self.context.get('request', object()), 'language', 'uz_cyrl') if hasattr(self.context.get('request', object()), 'language') else 'uz_cyrl'
             raise serializers.ValidationError({
-                'unit': (
-                    f'Единица позиции рецепта ({unit}) не совпадает с единицей '
-                    f'материала «{material.name}» ({material.unit}). Пересчёта '
-                    f'единиц нет: расход списывается в единицах материала.'
-                ),
+                'unit': translate('errors.warehouse.recipe_unit_mismatch', lang,
+                                  params={'unit': unit, 'material': material.name, 'material_unit': material.unit}),
             })
         return attrs
 

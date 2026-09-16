@@ -95,6 +95,7 @@ class QuarterlyReportData(TypedDict):
     total_cogs: Decimal | int
     total_gross_profit: Decimal | int
     total_expenses: Decimal | int
+    total_salaries: Decimal | int
     total_worker_payments: Decimal | int
     total_net_profit: Decimal | int
     profitability_percent: Decimal | None
@@ -191,12 +192,17 @@ def get_period_financials(
     date_from: datetime.date,
     date_to: datetime.date,
 ) -> PeriodFinancials:
-    """Key financial totals for a period (used for period-over-period comparison)."""
+    """Key financial totals for a period (used for period-over-period comparison).
+
+    Revenue = SUM(Order.total_amount) for delivered orders (accrual basis).
+    Net Profit = Revenue - COGS - ExpensesTotal - WorkerPayments.
+    """
     revenue = _money(
-        Payment.objects.filter(
+        Order.objects.filter(
             company_id=company_id,
-            payment_date__date__range=(date_from, date_to),
-        ).aggregate(s=Sum('amount'))['s']
+            status=Order.Status.DELIVERED,
+            delivered_at__date__range=(date_from, date_to),
+        ).aggregate(s=Sum('total_amount'))['s']
     )
     cost_of_goods = _money(
         Order.objects.filter(
@@ -222,18 +228,11 @@ def get_period_financials(
             payment_date__range=(date_from, date_to),
         ).aggregate(s=Sum('amount'))['s']
     )
-    salaries = _money(
-        Expense.objects.filter(
-            company_id=company_id,
-            date__range=(date_from, date_to),
-            category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE),
-        ).aggregate(s=Sum('amount'))['s']
-    )
     return {
         'revenue': revenue,
         'expenses_total': expenses_total,
         'worker_payments': worker_payments,
-        'net_profit': revenue - cost_of_goods - (expenses_total - salaries) - worker_payments,
+        'net_profit': revenue - cost_of_goods - expenses_total - worker_payments,
     }
 
 
@@ -246,20 +245,22 @@ def get_owner_analytics_data(
     Full financial analytics for the business owner.
 
     Formulas:
-        Revenue       = SUM(Payment.amount) by delivered orders
+        Revenue       = SUM(Order.total_amount) by delivered orders (accrual)
         COGS          = SUM(Order.quantity × Order.cost_price) for delivered
         Gross Profit  = Revenue − COGS
-        Net Profit    = Revenue − COGS − Expenses − WorkerPayments
-        Cash          = Payments − NonSalaryExpenses − WorkerPayments
+        Net Profit    = Revenue − COGS − ExpensesTotal − WorkerPayments
+        Cash          = SUM(Payment.amount) − ExpensesTotal − WorkerPayments
         Client Debt   = SUM(Client.debt)
         Worker Debt   = Σ confirmed labor_cost − Σ payments (accumulative)
     """
-    # --- Revenue ---
-    payments = Payment.objects.filter(
-        company_id=company_id,
-        payment_date__date__range=(date_from, date_to),
+    # --- Revenue (accrual: sum of delivered order totals) ---
+    revenue = _money(
+        Order.objects.filter(
+            company_id=company_id,
+            status=Order.Status.DELIVERED,
+            delivered_at__date__range=(date_from, date_to),
+        ).aggregate(s=Sum('total_amount'))['s']
     )
-    revenue = _money(payments.aggregate(s=Sum('amount'))['s'])
 
     # --- COGS (cost of goods sold) ---
     delivered = Order.objects.filter(
@@ -317,15 +318,14 @@ def get_owner_analytics_data(
     )
     worker_debts = max(worker_earned - worker_paid_total, 0)
 
-    # --- Cash ---
-    non_salary_expenses = _money(
-        Expense.objects.filter(
+    # --- Cash (payments received, independent of revenue) ---
+    payments_sum = _money(
+        Payment.objects.filter(
             company_id=company_id,
-            date__range=(date_from, date_to),
-        ).exclude(category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE))
-        .aggregate(s=Sum('amount'))['s']
+            payment_date__date__range=(date_from, date_to),
+        ).aggregate(s=Sum('amount'))['s']
     )
-    cash = revenue - non_salary_expenses - worker_payments
+    cash = payments_sum - expenses_total - worker_payments
 
     # --- Top products & workers ---
     top_products = list(
@@ -362,7 +362,7 @@ def get_owner_analytics_data(
     prev_to = date_from - datetime.timedelta(days=1)
     prev_from = prev_to - datetime.timedelta(days=span - 1)
     prev = get_period_financials(company_id, prev_from, prev_to)
-    net_profit = revenue - cost_of_goods - (expenses_total - salaries) - worker_payments
+    net_profit = revenue - cost_of_goods - expenses_total - worker_payments
 
     # --- Employee counts ---
     active_employees = User.objects.filter(
@@ -504,33 +504,12 @@ def get_revenue_timeline_data(company_id: int, lang: str = 'uz_cyrl') -> Revenue
     """
     Monthly revenue and net profit for the last 6 months (chart data).
 
-    lang: язык подписей месяцев. Раньше они были захардкожены в коде и
-    приходили одинаковыми во всех языках интерфейса.
+    Revenue = SUM(Order.total_amount) for delivered orders (accrual).
+    Net Profit = Revenue − COGS − Expenses − WorkerPayments.
+    lang: язык подписей месяцев.
     """
     today = timezone.localdate()
     six_months_ago = today - datetime.timedelta(days=180)
-
-    payments = (
-        Payment.objects.filter(
-            company_id=company_id,
-            payment_date__date__gte=six_months_ago,
-        )
-        .annotate(month=TruncMonth('payment_date'))
-        .values('month')
-        .annotate(total=Sum('amount'))
-        .order_by('month')
-    )
-
-    expenses = (
-        Expense.objects.filter(
-            company_id=company_id,
-            date__gte=six_months_ago,
-        ).exclude(category__in=(ExpenseCategory.SALARY, ExpenseCategory.ADVANCE))
-        .annotate(month=TruncMonth('date'))
-        .values('month')
-        .annotate(total=Sum('amount'))
-        .order_by('month')
-    )
 
     delivered = (
         Order.objects.filter(
@@ -541,11 +520,23 @@ def get_revenue_timeline_data(company_id: int, lang: str = 'uz_cyrl') -> Revenue
         .annotate(month=TruncMonth('delivered_at'))
         .values('month')
         .annotate(
+            revenue=Sum('total_amount'),
             cogs=Sum(ExpressionWrapper(
                 F('quantity') * F('cost_price'),
                 output_field=DecimalField(max_digits=15, decimal_places=2),
             ))
         )
+        .order_by('month')
+    )
+
+    expenses = (
+        Expense.objects.filter(
+            company_id=company_id,
+            date__gte=six_months_ago,
+        )
+        .annotate(month=TruncMonth('date'))
+        .values('month')
+        .annotate(total=Sum('amount'))
         .order_by('month')
     )
 
@@ -566,22 +557,18 @@ def get_revenue_timeline_data(company_id: int, lang: str = 'uz_cyrl') -> Revenue
 
     months_set: set[datetime.date] = set()
     rev_map: dict[datetime.date, Decimal | int] = {}
-    for p in payments:
-        m = _month_key(p['month'])
+    cogs_map: dict[datetime.date, Decimal | int] = {}
+    for d in delivered:
+        m = _month_key(d['month'])
         months_set.add(m)
-        rev_map[m] = _money(p['total'])
+        rev_map[m] = _money(d['revenue'])
+        cogs_map[m] = _money(d['cogs'])
 
     exp_map: dict[datetime.date, Decimal | int] = {}
     for e in expenses:
         m = _month_key(e['month'])
         months_set.add(m)
         exp_map[m] = _money(e['total'])
-
-    cogs_map: dict[datetime.date, Decimal | int] = {}
-    for d in delivered:
-        m = _month_key(d['month'])
-        months_set.add(m)
-        cogs_map[m] = _money(d['cogs'])
 
     payout_map: dict[datetime.date, Decimal | int] = {}
     for w in payouts:
@@ -649,6 +636,7 @@ def get_quarterly_report_data(
     total_revenue = sum(m['revenue'] for m in months_data)
     total_cogs = sum(m['cost_of_goods'] for m in months_data)
     total_expenses = sum(m['expenses_total'] for m in months_data)
+    total_salaries = sum(m['salaries'] for m in months_data)
     total_worker_payments = sum(m['worker_payments'] for m in months_data)
 
     return {
@@ -661,12 +649,11 @@ def get_quarterly_report_data(
         'total_cogs': total_cogs,
         'total_gross_profit': total_revenue - total_cogs,
         'total_expenses': total_expenses,
+        'total_salaries': total_salaries,
         'total_worker_payments': total_worker_payments,
         'total_net_profit': total_revenue - total_cogs - total_expenses - total_worker_payments,
-        # Рентабельность = доля чистой прибыли в выручке (макет: «Рентабеллик
-        # 71.2 %»). Семантика однозначная, поэтому показатель считается, а не
-        # берётся «с потолка». При нулевой выручке возвращаем None, а не ноль:
-        # «0 %» означало бы убыточность, хотя продаж просто не было.
+        # Рентабельность = доля чистой прибыли в выручке. При нулевой
+        # выручке возвращаем None, а не ноль.
         'profitability_percent': (
             ((total_revenue - total_cogs - total_expenses - total_worker_payments)
              / total_revenue * 100).quantize(Decimal('0.1'))

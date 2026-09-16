@@ -99,11 +99,10 @@ class ExportLocalizationTests(TestCase):
         self.assertTrue(response.content.startswith(b'%PDF'))
 
     def test_revenue_timeline_labels_localized(self):
-        # График строится по фактическим платежам — создаём один.
-        Payment.objects.create(
-            company=self.company, client=self.client_obj, order=self.order,
-            amount=Decimal('500'), payment_date=timezone.now(),
-        )
+        # График строится по выданным заказам — делаем заказ выданным.
+        self.order.status = Order.Status.DELIVERED
+        self.order.save(update_fields=['status'])
+        Order.objects.filter(pk=self.order.pk).update(delivered_at=timezone.now())
         response = self._api(self.owner_ru).get('/api/v1/reports/analytics/revenue-timeline/')
         self.assertEqual(response.status_code, 200)
         labels = response.json()['labels']

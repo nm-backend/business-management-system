@@ -10,6 +10,7 @@ from typing import Any
 
 from rest_framework import serializers
 
+from core.utils import translate
 from apps.production.services import check_material_shortages, get_recipe_requirements
 from .models import Order
 
@@ -47,8 +48,9 @@ class OrderSerializer(serializers.ModelSerializer):
         custom = attrs.get('custom_product_name',
                            getattr(instance, 'custom_product_name', '') or '')
         if not product and not custom.strip():
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
             raise serializers.ValidationError({
-                'product': 'Выберите товар из каталога или впишите название вручную.',
+                'product': translate('errors.orders.select_product', lang),
             })
         return attrs
 
@@ -63,7 +65,8 @@ class OrderSerializer(serializers.ModelSerializer):
         from django.utils import timezone
 
         if value and self.instance is None and value < timezone.now():
-            raise serializers.ValidationError('Срок выполнения не может быть в прошлом.')
+            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
+            raise serializers.ValidationError(translate('errors.orders.deadline_in_past', lang))
         return value
 
     class Meta:
@@ -158,10 +161,15 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class OrderOwnerSerializer(OrderSerializer):
-    """Сериализатор заказа для владельца — с total_amount и paid_amount."""
+    """Сериализатор заказа для владельца — с total_amount, paid_amount и refundable_amount."""
+    refundable_amount = serializers.SerializerMethodField()
+
     class Meta(OrderSerializer.Meta):
-        fields = OrderSerializer.Meta.fields + ['total_amount', 'paid_amount']
+        fields = OrderSerializer.Meta.fields + ['total_amount', 'paid_amount', 'refundable_amount']
         # paid_amount — вычисляемое поле (Order.apply_payment_amount из платежей),
         # прямой записи быть не должно: иначе заказ помечался бы «оплачен» без
         # реального платежа. total_amount — вход владельца, остаётся записываемым.
-        read_only_fields = OrderSerializer.Meta.read_only_fields + ['paid_amount']
+        read_only_fields = OrderSerializer.Meta.read_only_fields + ['paid_amount', 'refundable_amount']
+
+    def get_refundable_amount(self, obj):
+        return str(obj.refundable_amount)

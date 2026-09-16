@@ -31,6 +31,7 @@ from core.permissions import IsOwner, IsOwnerOrAdmin
 from .models import ACTIVE_ORDER_STATUSES, Client, Payment
 from .serializers import ClientAdminSerializer, ClientOwnerSerializer, PaymentSerializer
 from apps.core.views import CompanyScopedViewSet
+from core.utils import translate
 
 
 class ClientViewSet(CompanyScopedViewSet):
@@ -268,18 +269,17 @@ class ClientViewSet(CompanyScopedViewSet):
         """
         from apps.orders.models import Order
 
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         if (client.debt or 0) > 0:
             raise DRFValidationError({
-                'detail': 'У клиента есть долг — архивировать нельзя. '
-                          'Сначала закройте долг оплатой.',
+                'detail': translate('errors.clients.has_debt_no_archive', lang),
             })
         unfinished = client.orders.exclude(
             status__in=(Order.Status.DELIVERED, Order.Status.CANCELLED),
         ).filter(is_archived=False)
         if unfinished.exists():
             raise DRFValidationError({
-                'detail': 'У клиента есть незавершённые заказы — архивировать нельзя. '
-                          'Сначала выдайте товар или отмените заказ.',
+                'detail': translate('errors.clients.has_orders_no_archive', lang),
             })
 
     # Вкладка «Архив» была только на чтение: положить туда клиента или вернуть
@@ -336,16 +336,17 @@ class PaymentViewSet(CompanyScopedViewSet):
         company = self.request.user.company
         client = serializer.validated_data.get('client')
         order = serializer.validated_data.get('order')
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         if client and client.company_id != company.id:
-            raise PermissionDenied('Клиент должен принадлежать вашей компании')
+            raise PermissionDenied(translate('errors.clients.client_must_belong_company', lang))
         # Заказ (если указан) — тоже строго своей компании и именно этого клиента.
         # Иначе владелец компании A мог передать order компании B и изменить его
         # paid_amount/payment_status (межтенантная запись в чужие финансы).
         if order is not None:
             if order.company_id != company.id:
-                raise PermissionDenied('Заказ должен принадлежать вашей компании')
+                raise PermissionDenied(translate('errors.clients.order_must_belong_company', lang))
             if client is not None and order.client_id != client.id:
-                raise PermissionDenied('Заказ не принадлежит этому клиенту')
+                raise PermissionDenied(translate('errors.clients.order_not_client', lang))
         payment = serializer.save(received_by=self.request.user, company=company)
         if payment.order:
             # Атомарно (select_for_update) — защита от потери обновления при
@@ -369,7 +370,9 @@ class PaymentViewSet(CompanyScopedViewSet):
         )
 
     def update(self, request, *args, **kwargs):
-        raise MethodNotAllowed('PUT/PATCH', detail='Payments are immutable. Create a correcting payment instead.')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
+        raise MethodNotAllowed('PUT/PATCH', detail=translate('errors.clients.payments_immutable', lang))
 
     def destroy(self, request, *args, **kwargs):
-        raise MethodNotAllowed('DELETE', detail='Payment deletion is prohibited.')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
+        raise MethodNotAllowed('DELETE', detail=translate('errors.clients.payment_delete_prohibited', lang))

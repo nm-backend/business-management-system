@@ -102,7 +102,8 @@ class CompanyViewSet(viewsets.ModelViewSet):
         if status_filter:
             valid = set(Company.SubscriptionStatus.values) | {'trial'}
             if status_filter not in valid:
-                raise ValidationError({'status': f'Допустимые значения: {", ".join(sorted(valid))}'})
+                lang = getattr(req.user, 'language', 'uz_cyrl')
+                raise ValidationError({'status': translate('errors.companies.invalid_language', lang, {'values': ", ".join(sorted(valid))})})
             if status_filter == 'trial':
                 # Триалы = активные компании с флагом is_trial (не продлевались).
                 queryset = queryset.filter(
@@ -150,7 +151,8 @@ class CompanyViewSet(viewsets.ModelViewSet):
         )
 
     def destroy(self, request, *args, **kwargs):
-        raise MethodNotAllowed('DELETE', detail='Company deletion is prohibited. Block it instead.')
+        lang = getattr(request.user, 'language', 'uz_cyrl')
+        raise MethodNotAllowed('DELETE', detail=translate('errors.companies.delete_prohibited', lang))
 
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
@@ -196,11 +198,13 @@ class CompanyViewSet(viewsets.ModelViewSet):
         """
         company = request.user.company
         if company is None:
-            return Response({'detail': 'У пользователя нет компании'}, status=400)
+            lang = getattr(request.user, 'language', 'uz_cyrl')
+            return Response({'detail': translate('errors.companies.no_company', lang)}, status=400)
 
         if request.method == 'PATCH':
             if not request.user.is_owner:
-                raise PermissionDenied('Настройки компании меняет только владелец')
+                lang = getattr(request.user, 'language', 'uz_cyrl')
+                raise PermissionDenied(translate('errors.companies.owner_only_settings', lang))
             serializer = CompanySettingsSerializer(company, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             updated = serializer.save()
@@ -309,13 +313,14 @@ class CompanyViewSet(viewsets.ModelViewSet):
         (история + аудит + уведомление владельцу).
         """
         raw = request.data.get('plan_id')
+        lang = getattr(request.user, 'language', 'uz_cyrl')
         try:
             plan_id = int(raw)
         except (TypeError, ValueError):
-            raise ValidationError({'plan_id': 'Укажите идентификатор тарифа.'})
+            raise ValidationError({'plan_id': translate('errors.subscriptions.plan_id_required', lang)})
         plan = SubscriptionPlan.objects.filter(pk=plan_id).first()
         if plan is None:
-            raise ValidationError({'plan_id': 'Тариф не найден.'})
+            raise ValidationError({'plan_id': translate('errors.subscriptions.plan_not_found', lang)})
         return self._run_subscription_action(request, pk, change_plan, plan=plan)
 
     @action(detail=True, methods=['post'])
@@ -333,11 +338,12 @@ class CompanyViewSet(viewsets.ModelViewSet):
         момента и автоматически активируется.
         """
         days = request.data.get('days')
+        lang = getattr(request.user, 'language', 'uz_cyrl')
         if isinstance(days, str):
             try:
                 days = int(days)
             except (TypeError, ValueError):
-                raise ValidationError({'days': 'Ожидается целое число дней.'})
+                raise ValidationError({'days': translate('errors.subscriptions.days_integer_expected', lang)})
         return self._run_subscription_action(request, pk, extend_subscription, days=days)
 
     @action(detail=True, methods=['post'])
@@ -349,8 +355,9 @@ class CompanyViewSet(viewsets.ModelViewSet):
         """
         raw = request.data.get('end')
         end = parse_datetime(str(raw)) if raw else None
+        lang = getattr(request.user, 'language', 'uz_cyrl')
         if end is None:
-            raise ValidationError({'end': 'Укажите дату окончания (ISO-8601).'})
+            raise ValidationError({'end': translate('errors.subscriptions.end_date_required_short', lang)})
         return self._run_subscription_action(request, pk, set_subscription_end, end=end)
 
     @action(detail=True, methods=['post'])
@@ -467,6 +474,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         from apps.messaging.models import Notification
         from apps.messaging.services import notify
 
+        lang = getattr(request.user, 'language', 'uz_cyrl')
         if Notification.objects.filter(
             company_id=company.id,
             type=Notification.NotificationType.SUBSCRIPTION_RENEWAL_REQUEST,
@@ -474,7 +482,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         ).exists():
             return Response({
                 'created': False,
-                'detail': 'Запрос на продление уже отправлен администратору платформы.',
+                'detail': translate('errors.subscriptions.extension_already_sent', lang),
             })
 
         end_text = (
@@ -510,7 +518,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         )
         return Response({
             'created': True,
-            'detail': 'Запрос на продление отправлен администратору платформы.',
+            'detail': translate('errors.subscriptions.extension_sent', lang),
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'])

@@ -94,6 +94,7 @@ class AuditLog(TimestampedModel):
         SUBSCRIPTION_PLAN_CHANGED = 'subscription_plan_changed', 'Тариф изменён'
         SUBSCRIPTION_RENEWAL_REQUESTED = 'subscription_renewal_requested', 'Запрошено продление подписки'
         INVOICE_PAID = 'invoice_paid', 'Счёт оплачен'
+        REFUND = 'refund', 'Возврат средств'
 
     company = models.ForeignKey(
         'companies.Company',

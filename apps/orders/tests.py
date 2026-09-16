@@ -175,7 +175,9 @@ class PaymentAPIDevToolsAttackTests(TestCase):
         }, format='json')
         resp = self.api.post(f'/api/v1/orders/orders/{self.order.id}/cancel/', format='json')
         self.assertEqual(resp.status_code, 400, resp.data)
-        self.assertIn('оплата', str(resp.data))
+        from core.utils import translate
+        expected = translate('errors.orders.has_payments_no_cancel', 'uz_cyrl')
+        self.assertIn(expected[:6], str(resp.data))
 
     def test_cancel_unpaid_order_succeeds(self):
         """Отмена неоплаченного заказа — 200."""

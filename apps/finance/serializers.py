@@ -10,6 +10,7 @@ from typing import Any
 
 from rest_framework import serializers
 from .models import Expense, LaborRate, WorkerPayment
+from core.utils import translate
 
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -118,11 +119,11 @@ class _SalaryCapMixin:
         # переплату не наращиваем, но и не блокируем её сохранение как есть
         # (например, при смене работника в записи).
         if Decimal(amount) > max(balance, Decimal('0')) and Decimal(amount) > current:
+            request = self.context.get('request')
+            lang = getattr(request.user, 'language', 'uz_cyrl') if request and hasattr(request.user, 'language') else 'uz_cyrl'
             raise serializers.ValidationError({
-                'amount': 'Сумма зарплаты превышает начисленное '
-                          '(начислено {0}, уже выдано {1}). Аванс или премию '
-                          'проводите с соответствующим типом выплаты.'.format(
-                              accrued, paid),
+                'amount': translate('errors.finance.salary_cap_exceeded', lang,
+                                   params={'accrued': accrued, 'paid': paid}),
             })
 
 

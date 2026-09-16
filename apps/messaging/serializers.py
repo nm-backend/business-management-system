@@ -8,6 +8,7 @@ from apps.accounts.models import User
 
 from .models import ChatMessage, Conversation, Notification
 from .services import GENERAL_TITLE, unread_count
+from core.utils import translate
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -65,28 +66,31 @@ class ChatMessageCreateSerializer(serializers.ModelSerializer):
 
     def validate_content(self, value):
         value = (value or '').strip()
+        lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
         if len(value) > 10000:
-            raise serializers.ValidationError('Сообщение слишком длинное (максимум 10000 символов).')
+            raise serializers.ValidationError(translate('errors.messaging.message_too_long', lang))
         return value
 
     def validate(self, attrs):
         # Раньше пустой content отклонялся в validate_content, из-за чего
         # сообщение из одного файла (без подписи) вообще нельзя было отправить.
+        lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
         if not attrs.get('content') and not attrs.get('attachment'):
             raise serializers.ValidationError(
-                {'content': 'Сообщение не может быть пустым.'},
+                {'content': translate('errors.messaging.message_empty', lang)},
             )
         return attrs
 
     def validate_conversation(self, conversation):
         user = self.context['request'].user
+        lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
         if conversation.company_id != user.company_id:
             # Не раскрываем существование чужой беседы.
-            raise serializers.ValidationError('Беседа не найдена.')
+            raise serializers.ValidationError(translate('errors.messaging.conversation_not_found', lang))
         is_general = conversation.kind == Conversation.Kind.GENERAL
         is_member = conversation.participants.filter(user=user).exists()
         if not is_general and not is_member:
-            raise serializers.ValidationError('Вы не участник этой беседы.')
+            raise serializers.ValidationError(translate('errors.messaging.not_participant', lang))
         return conversation
 
 
@@ -190,21 +194,22 @@ class StartDirectSerializer(serializers.Serializer):
     def validate_user_id(self, value):
         request = self.context['request']
         me = request.user
+        lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
         if value == me.id:
-            raise serializers.ValidationError('Нельзя начать диалог с самим собой.')
+            raise serializers.ValidationError(translate('errors.messaging.no_self_dialog', lang))
         try:
             other = User.objects.get(pk=value, is_active=True)
         except User.DoesNotExist:
-            raise serializers.ValidationError('Сотрудник не найден.')
+            raise serializers.ValidationError(translate('errors.messaging.employee_not_found', lang))
         if other.company_id != me.company_id or other.is_superadmin:
-            raise serializers.ValidationError('Сотрудник не найден.')
+            raise serializers.ValidationError(translate('errors.messaging.employee_not_found', lang))
         # Работники скрыты от тех, у кого нет флага can_see_other_workers
         # (owner видит всех) — зеркально списку контактов EmployeeViewSet.
         if other.role == User.Role.WORKER and not me.is_owner and not me.can_see_other_workers:
-            raise serializers.ValidationError('Сотрудник не найден.')
+            raise serializers.ValidationError(translate('errors.messaging.employee_not_found', lang))
         # Работник не может писать хозяину без разрешения.
         if me.role == User.Role.WORKER and other.role == User.Role.OWNER and not me.can_write_to_owner:
-            raise serializers.ValidationError('Эгасига ёзиш учун рухсат йўқ.')
+            raise serializers.ValidationError(translate('errors.messaging.cannot_message_owner', lang))
         self.context['other_user'] = other
         return value
 

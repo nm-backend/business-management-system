@@ -14,6 +14,7 @@ from rest_framework import serializers
 
 from apps.core.validators import validate_phone
 from apps.orders.models import Order
+from core.utils import translate
 
 from .models import Client, Payment
 
@@ -61,8 +62,9 @@ class ClientAdminSerializer(serializers.ModelSerializer):
         """Ответственный обязан быть сотрудником этой же компании."""
         request = self.context.get('request')
         company_id = getattr(getattr(request, 'user', None), 'company_id', None)
+        lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
         if employee is not None and company_id is not None and employee.company_id != company_id:
-            raise serializers.ValidationError('Сотрудник другой компании.')
+            raise serializers.ValidationError(translate('errors.clients.employee_other_company', lang))
         return employee
 
     class Meta:
@@ -90,16 +92,20 @@ class ClientOwnerSerializer(ClientAdminSerializer):
     # (один SQL-запрос на весь список). Fallback ниже — для прямого вызова
     # сериализатора без аннотации (тесты/админка): считается тем же правилом.
     profit = serializers.SerializerMethodField()
+    # Остаток аванса: если оплата превышает сумму активных заказов — это аванс.
+    customer_advance = serializers.SerializerMethodField()
 
     class Meta(ClientAdminSerializer.Meta):
         fields = ClientAdminSerializer.Meta.fields + [
             'total_orders_amount', 'total_paid', 'debt', 'profit', 'payments',
+            'customer_advance',
         ]
         # Производные финполя считает recalculate_financials из заказов/платежей.
         # Прямой записи через API быть не должно — иначе owner PATCH-ем подменял
         # бы долг клиента (искажение отчётов) до следующего пересчёта.
         read_only_fields = ClientAdminSerializer.Meta.read_only_fields + [
             'total_orders_amount', 'total_paid', 'debt', 'profit',
+            'customer_advance',
         ]
 
     def get_profit(self, obj):
@@ -122,3 +128,10 @@ class ClientOwnerSerializer(ClientAdminSerializer):
         # Строка, как остальные денежные поля (DecimalField с COERCE_DECIMAL_TO_STRING):
         # float потерял бы копейки на больших суммах (метод-поля минуют DecimalField).
         return '{:.2f}'.format(profit)
+
+    def get_customer_advance(self, obj):
+        """Остаток аванса: total_paid − total_orders_amount, если > 0."""
+        paid = obj.total_paid or Decimal('0')
+        orders_total = obj.total_orders_amount or Decimal('0')
+        advance = paid - orders_total
+        return '{:.2f}'.format(max(advance, Decimal('0')))

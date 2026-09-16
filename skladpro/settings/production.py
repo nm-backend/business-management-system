@@ -134,8 +134,9 @@ if _AWS_BUCKET:
             'endpoint_url': config('AWS_S3_ENDPOINT_URL', default=None),
             'access_key': config('AWS_ACCESS_KEY_ID', default=''),
             'secret_key': config('AWS_SECRET_ACCESS_KEY', default=''),
-            'default_acl': 'public-read',
-            'querystring_auth': False,  # прямые URL без подписи
+            'default_acl': 'private',
+            'querystring_auth': True,
+            'signature_version': 's3v4',
             'location': 'media',
         },
     }

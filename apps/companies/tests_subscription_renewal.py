@@ -18,6 +18,7 @@ from apps.accounts.models import User
 from apps.audit.models import AuditLog
 from apps.companies.models import Company, SubscriptionChange
 from apps.messaging.models import Notification
+from core.utils import translate
 
 from .tests_subscriptions import make_admin, make_company, make_owner
 
@@ -145,7 +146,9 @@ class RenewalRequestTests(SubscriptionPageTestCase):
         )
         self.assertEqual(push.call_count, 0)
         # Пока запрос непрочитан — повторная подача не спамит.
-        self.assertIn('уже отправлен', resp.data['detail'])
+        from core.utils import translate as _t
+        expected = _t('errors.subscriptions.extension_already_sent', 'uz_cyrl')
+        self.assertIn(expected, resp.data['detail'])
 
     def test_request_after_superadmin_reads_creates_new(self):
         self.api_owner.post(

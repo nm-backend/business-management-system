@@ -26,6 +26,7 @@ from .serializers import (
     WorkerPaymentSerializer, WorkerPaymentCreateSerializer
 )
 from apps.core.views import CompanyScopedViewSet
+from core.utils import translate
 
 
 class ExpenseViewSet(CompanyScopedViewSet):
@@ -107,7 +108,8 @@ class ExpenseViewSet(CompanyScopedViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        raise MethodNotAllowed('DELETE', detail='Financial records cannot be deleted.')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
+        raise MethodNotAllowed('DELETE', detail=translate('errors.finance.financial_not_deletable', lang))
 
 
 class LaborRateReadPermission(BasePermission):
@@ -169,9 +171,10 @@ class LaborRateViewSet(CompanyScopedViewSet):
         return super().get_queryset().select_related('product')
 
     def perform_create(self, serializer):
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         product = serializer.validated_data.get('product')
         if product and product.company_id != self.request.user.company_id:
-            raise PermissionDenied('Товар должен принадлежать вашей компании')
+            raise PermissionDenied(translate('errors.finance.product_other_company', lang))
         rate = serializer.save(company=self.request.user.company)
         from apps.audit.models import AuditLog
         from apps.audit.services import write_audit_log
@@ -185,9 +188,10 @@ class LaborRateViewSet(CompanyScopedViewSet):
     def perform_update(self, serializer):
         # Без этой проверки PATCH мог перепривязать ставку к product ЧУЖОЙ
         # компании (IDOR-запись + утечка чужого product_name в ответе).
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         product = serializer.validated_data.get('product')
         if product and product.company_id != self.request.user.company_id:
-            raise PermissionDenied('Товар должен принадлежать вашей компании')
+            raise PermissionDenied(translate('errors.finance.product_other_company', lang))
         from apps.audit.models import AuditLog
         from apps.audit.services import collect_model_changes, write_audit_log
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
@@ -202,7 +206,8 @@ class LaborRateViewSet(CompanyScopedViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        raise MethodNotAllowed('DELETE', detail='Financial records cannot be deleted.')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
+        raise MethodNotAllowed('DELETE', detail=translate('errors.finance.financial_not_deletable', lang))
 
 
 class WorkerPaymentViewSet(CompanyScopedViewSet):
@@ -306,9 +311,10 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         })
 
     def perform_create(self, serializer):
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         worker = serializer.validated_data.get('worker')
         if worker and worker.company_id != self.request.user.company_id:
-            raise PermissionDenied('Работник должен принадлежать вашей компании')
+            raise PermissionDenied(translate('errors.finance.worker_other_company', lang))
 
         from apps.audit.models import AuditLog
         from apps.audit.services import write_audit_log
@@ -349,11 +355,10 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
                 amount = serializer.validated_data.get('amount')
                 debt = Decimal(accrued) - Decimal(paid)
                 if Decimal(amount) > max(debt, Decimal('0')):
+                    lang = getattr(self.request.user, 'language', 'uz_cyrl')
                     raise ValidationError({
-                        'amount': (
-                            f'Сумма зарплаты превышает начисленное (начислено {accrued}, уже выдано {paid}). '
-                            'Аванс или премию проводите с соответствующим типом выплаты.'
-                        )
+                        'amount': translate('errors.finance.salary_cap_exceeded', lang,
+                                            params={'accrued': accrued, 'paid': paid})
                     })
 
             payment = serializer.save(created_by=self.request.user, company=self.request.user.company)
@@ -368,13 +373,14 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
         # Без этой проверки PATCH мог перепривязать выплату к worker ЧУЖОЙ
         # компании (IDOR-запись + утечка чужого worker_name; чужой работник
         # начинал видеть выплату в своих my_earnings).
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         worker = serializer.validated_data.get('worker')
         if worker and worker.company_id != self.request.user.company_id:
-            raise PermissionDenied('Работник должен принадлежать вашей компании')
+            raise PermissionDenied(translate('errors.finance.worker_other_company', lang))
         # Смена работника обходит потолок зарплаты: выплата создавалась под
         # начисление одного, а перевешивалась на другого с пустым балансом.
         if worker and worker.id != serializer.instance.worker_id:
-            raise PermissionDenied('Работника нельзя изменить после создания выплаты')
+            raise PermissionDenied(translate('errors.finance.worker_immutable', lang))
         from apps.audit.models import AuditLog
         from apps.audit.services import collect_model_changes, write_audit_log
         from apps.production.models import WorkRecord
@@ -398,11 +404,10 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
                 amount = serializer.validated_data.get('amount', serializer.instance.amount)
                 debt = Decimal(accrued) - Decimal(paid)
                 if Decimal(amount) > max(debt, Decimal('0')):
+                    lang = getattr(self.request.user, 'language', 'uz_cyrl')
                     raise ValidationError({
-                        'amount': (
-                            f'Сумма зарплаты превышает начисленное (начислено {accrued}, уже выдано {paid}). '
-                            'Аванс или премию проводите с соответствующим типом выплаты.'
-                        )
+                        'amount': translate('errors.finance.salary_cap_exceeded', lang,
+                                            params={'accrued': accrued, 'paid': paid})
                     })
                 payment = serializer.save()
         else:
@@ -418,4 +423,5 @@ class WorkerPaymentViewSet(CompanyScopedViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        raise MethodNotAllowed('DELETE', detail='Financial records cannot be deleted.')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
+        raise MethodNotAllowed('DELETE', detail=translate('errors.finance.financial_not_deletable', lang))

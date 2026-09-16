@@ -47,6 +47,8 @@ class QuarterProfitabilityTests(TestCase):
             quantity=Decimal('1'), unit='sht', total_amount=Decimal(amount),
             deadline=timezone.now() + timezone.timedelta(days=1),
         )
+        order.status = Order.Status.DELIVERED
+        order.save(update_fields=['status'])
         Payment.objects.create(
             company=self.company, client=self.client_obj, order=order,
             amount=Decimal(amount), payment_date=timezone.now(),

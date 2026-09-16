@@ -17,6 +17,7 @@ from django_celery_beat.models import PeriodicTask, IntervalSchedule
 from apps.core.permissions import IsSuperAdmin
 from .models import BackupConfig, BackupLog
 from .tasks import run_backup_task
+from core.utils import translate
 
 
 class BackupConfigView(APIView):
@@ -46,10 +47,7 @@ class BackupConfigView(APIView):
 
     def patch(self, request):
         config, _ = BackupConfig.objects.get_or_create(company=None)
-        # Валидация ДО записи: сырые значения из PATCH раньше доходили до БД —
-        # keep_last='abc' ронял сохранение в 500, а schedule='hourly' молча
-        # сохранялся и в _sync_beat_schedule превращался в ЕЖЕЧАСНЫЙ бэкап
-        # (маппинг по умолчанию MINUTES/1440).
+        lang = getattr(request.user, 'language', 'uz_cyrl')
         updates = {}
         for field in [
             'is_enabled', 'schedule', 'storage', 'keep_last',
@@ -60,18 +58,18 @@ class BackupConfigView(APIView):
                 continue
             value = request.data[field]
             if field == 'schedule' and value not in BackupConfig.Schedule.values:
-                return Response({'error': f'Invalid schedule: {value!r}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': translate('errors.backup.invalid_schedule', lang, {'value': value})}, status=status.HTTP_400_BAD_REQUEST)
             if field == 'storage' and value not in BackupConfig.Storage.values:
-                return Response({'error': f'Invalid storage: {value!r}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': translate('errors.backup.invalid_storage', lang, {'value': value})}, status=status.HTTP_400_BAD_REQUEST)
             if field == 'keep_last':
                 try:
                     value = int(value)
                 except (TypeError, ValueError):
-                    return Response({'error': 'keep_last must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({'error': translate('errors.backup.keep_last_integer', lang)}, status=status.HTTP_400_BAD_REQUEST)
                 if not 1 <= value <= 365:
-                    return Response({'error': 'keep_last must be between 1 and 365'}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({'error': translate('errors.backup.keep_last_range', lang)}, status=status.HTTP_400_BAD_REQUEST)
             if field == 'is_enabled' and value not in (True, False):
-                return Response({'error': 'is_enabled must be a boolean'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': translate('errors.backup.is_enabled_boolean', lang)}, status=status.HTTP_400_BAD_REQUEST)
             updates[field] = value
 
         # Секреты обновляем только если переданы явно (не пустые).
@@ -132,15 +130,16 @@ class BackupTriggerView(APIView):
 
     def post(self, request):
         config, _ = BackupConfig.objects.get_or_create(company=None)
+        lang = getattr(request.user, 'language', 'uz_cyrl')
         if not config.is_enabled:
-            return Response({'error': 'Бэкап не включён'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': translate('errors.backup.backup_not_enabled', lang)}, status=status.HTTP_400_BAD_REQUEST)
 
         # Запускаем Celery задачу асинхронно
         run_backup_task.delay(
             company_id=None,          # платформенный бэкап: дамп всей БД
             user_id=request.user.id,
         )
-        return Response({'status': 'started', 'message': 'Backup запущен'})
+        return Response({'status': 'started', 'message': translate('errors.backup.backup_started', lang)})
 
 
 class BackupLogsView(APIView):

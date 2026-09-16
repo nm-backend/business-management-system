@@ -26,13 +26,14 @@ TIMELINE = '/api/v1/reports/analytics/revenue-timeline/'
 class OwnerFinanceMathTests(TestCase):
     """
     Сценарий одного месяца:
+        сумма заказа (выданного)   150 000
         поступления от клиента     120 000
         себестоимость выданного     3 * 10 000 = 30 000
         расходы (аренда)            20 000
         выплата работнику           15 000
     Ожидания:
-        валовая прибыль = 120 000 - 30 000            =  90 000
-        чистая прибыль  = 90 000 - 20 000 - 15 000    =  55 000
+        валовая прибыль = 150 000 - 30 000            = 120 000
+        чистая прибыль  = 120 000 - 20 000 - 15 000   =  85 000
         касса           = 120 000 - 20 000 - 15 000   =  85 000
     """
     def setUp(self):
@@ -73,12 +74,12 @@ class OwnerFinanceMathTests(TestCase):
 
     def test_every_figure_matches_the_scenario(self):
         d = self.analytics()
-        self.assertEqual(Decimal(str(d['revenue'])), Decimal('120000'))
+        self.assertEqual(Decimal(str(d['revenue'])), Decimal('150000'))
         self.assertEqual(Decimal(str(d['cost_of_goods'])), Decimal('30000'))
-        self.assertEqual(Decimal(str(d['gross_profit'])), Decimal('90000'))
+        self.assertEqual(Decimal(str(d['gross_profit'])), Decimal('120000'))
         self.assertEqual(Decimal(str(d['expenses_total'])), Decimal('20000'))
         self.assertEqual(Decimal(str(d['worker_payments'])), Decimal('15000'))
-        self.assertEqual(Decimal(str(d['net_profit'])), Decimal('55000'))
+        self.assertEqual(Decimal(str(d['net_profit'])), Decimal('85000'))
         self.assertEqual(Decimal(str(d['cash'])), Decimal('85000'))
 
     def test_net_profit_is_gross_minus_expenses_minus_payouts(self):
@@ -125,7 +126,7 @@ class PeriodBoundariesTests(TestCase):
     def setUp(self):
         self.company = Company.objects.create(name='BoundCo', is_active=True)
         self.owner = User.objects.create_user(username='bound_owner', password='p',
-                                              role=User.Role.OWNER, company=self.company)
+                                               role=User.Role.OWNER, company=self.company)
         self.client_obj = Client.objects.create(company=self.company, name='К')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
@@ -135,16 +136,31 @@ class PeriodBoundariesTests(TestCase):
                                amount=Decimal(amount), payment_method='cash',
                                payment_date=when)
 
+    def _make_delivered_order(self, total_amount, delivered_at):
+        order = Order.objects.create(
+            company=self.company, client=self.client_obj,
+            custom_product_name='Изделие', quantity=Decimal('1'),
+            unit='sht', total_amount=Decimal(total_amount),
+            deadline=timezone.now() + datetime.timedelta(days=3),
+        )
+        order.status = Order.Status.DELIVERED
+        order.save(update_fields=['status'])
+        Order.objects.filter(pk=order.pk).update(delivered_at=delivered_at)
+        return order
+
     def test_first_and_last_day_of_month_are_counted(self):
         today = timezone.localdate()
         first = today.replace(day=1)
         start = timezone.make_aware(datetime.datetime.combine(first, datetime.time(0, 5)))
-        self.pay(start, '1000')                      # первый день месяца
-        self.pay(timezone.now(), '2000')             # сегодня
+        self.pay(start, '1000')
+        self._make_delivered_order('1000', start)
+        self.pay(timezone.now(), '2000')
+        self._make_delivered_order('2000', timezone.now())
         # день до начала месяца в период попасть не должен
         before = timezone.make_aware(
             datetime.datetime.combine(first - datetime.timedelta(days=1), datetime.time(23, 55)))
         self.pay(before, '999999')
+        self._make_delivered_order('999999', before)
 
         resp = self.api.get(ANALYTICS, {'period': 'month'})
         self.assertEqual(resp.status_code, 200)

@@ -66,6 +66,10 @@ class Expense(TimestampedModel):
         - Категоризация расходов
     """
     company = models.ForeignKey('companies.Company', on_delete=models.CASCADE, related_name='expenses', null=True, verbose_name='Компания')
+    order = models.ForeignKey(
+        'orders.Order', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='refund_expenses', verbose_name='Заказ',
+    )
     category = models.CharField(max_length=30, choices=ExpenseCategory.choices, db_index=True, verbose_name='Категория')
     amount = models.DecimalField(max_digits=15, decimal_places=2,
                                  validators=[MinValueValidator(Decimal('0.01'))], verbose_name='Сумма')

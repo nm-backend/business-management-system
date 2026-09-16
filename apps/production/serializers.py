@@ -11,6 +11,7 @@ from typing import Any
 from rest_framework import serializers
 
 from apps.core.validators import validate_file_size
+from core.utils import translate
 from .models import Task, WorkPhoto, WorkRecord
 
 
@@ -92,8 +93,11 @@ class TaskCreateSerializer(serializers.ModelSerializer):
     def validate_deadline(self, value):
         """Срок в прошлом — почти всегда опечатка в дате, задача сразу просрочена."""
         from django.utils import timezone
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        lang = getattr(user, 'language', 'uz_cyrl') if user and hasattr(user, 'language') else 'uz_cyrl'
         if value and value < timezone.now():
-            raise serializers.ValidationError('Срок выполнения не может быть в прошлом.')
+            raise serializers.ValidationError(translate('errors.production.deadline_in_past', lang))
         return value
 
     def validate(self, attrs):
@@ -106,13 +110,14 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         """
         request = self.context.get('request')
         user = getattr(request, 'user', None)
+        lang = getattr(user, 'language', 'uz_cyrl') if user and hasattr(user, 'language') else 'uz_cyrl'
         if attrs.get('is_self_assigned') or getattr(user, 'is_worker', False):
             return attrs
         order = attrs.get('order')
         title = (attrs.get('title') or '').strip()
         if not order and not title:
             raise serializers.ValidationError({
-                'title': 'Укажите название задачи или свяжите её с заказом.',
+                'title': translate('errors.production.task_name_or_order_required', lang),
             })
         return attrs
 
@@ -129,12 +134,15 @@ class _ConfirmedWorkGuardMixin:
     _CONFIRMED_LOCKED_FIELDS = ('quantity', 'defect_quantity')
 
     def validate(self, attrs):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        lang = getattr(user, 'language', 'uz_cyrl') if user and hasattr(user, 'language') else 'uz_cyrl'
         instance = self.instance
         if instance and instance.status == WorkRecord.WorkStatus.CONFIRMED:
             for field in self._CONFIRMED_LOCKED_FIELDS:
                 if field in attrs and attrs[field] != getattr(instance, field):
                     raise serializers.ValidationError({
-                        field: 'Количество подтверждённой работы изменить нельзя.',
+                        field: translate('errors.production.confirmed_quantity_unchangeable', lang),
                     })
         return attrs
 
@@ -142,8 +150,11 @@ class _ConfirmedWorkGuardMixin:
         # Та же защита, что у Create-сериализатора: quantity — ГОДНОЕ количество.
         # Нуль/отрицательное при PATCH до подтверждения испортило бы расчёты
         # confirm_work (входной контракт ТЗ «quantity <= 0 → reject»).
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        lang = getattr(user, 'language', 'uz_cyrl') if user and hasattr(user, 'language') else 'uz_cyrl'
         if value is None or value <= 0:
-            raise serializers.ValidationError('Годное количество должно быть больше нуля.')
+            raise serializers.ValidationError(translate('errors.production.good_quantity_required', lang))
         return value
 
 
@@ -241,7 +252,9 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
         """
         attrs = super().validate(attrs) if hasattr(super(), 'validate') else attrs
         request = self.context.get('request')
-        company = getattr(getattr(request, 'user', None), 'company', None)
+        user = getattr(request, 'user', None)
+        lang = getattr(user, 'language', 'uz_cyrl') if user and hasattr(user, 'language') else 'uz_cyrl'
+        company = getattr(user, 'company', None)
         minimum = getattr(company, 'min_work_photos', 0) or 0
         if minimum:
             uploaded = attrs.get('uploaded_photos') or []
@@ -249,10 +262,8 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
             total = len(uploaded) + (1 if single and not uploaded else 0)
             if total < minimum:
                 raise serializers.ValidationError({
-                    'uploaded_photos': (
-                        f'Приложите минимум {minimum} фото готовой продукции '
-                        f'(сейчас {total}).'
-                    ),
+                    'uploaded_photos': translate('errors.production.min_photos_required', lang,
+                                                params={'minimum': minimum, 'total': total}),
                 })
         return attrs
 
@@ -276,6 +287,9 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
         # labor_cost уходит в минус. Отсекаем на входе (ТЗ «quantity <= 0 →
         # reject»). Работа «всё в брак» (0 годных + N брака) штатным API не
         # создаётся; confirm_work обрабатывает такие записи оборонительно.
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        lang = getattr(user, 'language', 'uz_cyrl') if user and hasattr(user, 'language') else 'uz_cyrl'
         if value is None or value <= 0:
-            raise serializers.ValidationError('Годное количество должно быть больше нуля.')
+            raise serializers.ValidationError(translate('errors.production.good_quantity_required', lang))
         return value

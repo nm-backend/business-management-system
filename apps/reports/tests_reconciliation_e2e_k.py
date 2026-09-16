@@ -15,13 +15,13 @@
 
 Ожидаемые показатели (месяц):
 
-    revenue        70 000
+    revenue       100 000   (= sum delivered orders)
     cost_of_goods   5 500
-    gross_profit   64 500
+    gross_profit   94 500   (= 100000 - 5500)
     expenses       10 000
     worker_payments 2 000
-    net_profit     52 500   (= 70000 - 5500 - 10000 - 2000)
-    cash           58 000   (= 70000 - 10000 - 2000)
+    net_profit     82 500   (= 100000 - 5500 - 10000 - 2000)
+    cash           88 000   (= 100000 - 10000 - 2000)
     client_debts   30 000
     worker_debts    3 000   (= начислено 5000 - выплачено 2000, накопительно)
 
@@ -42,6 +42,7 @@ from apps.accounts.models import User
 from apps.clients.models import Client, Payment
 from apps.companies.models import Company
 from apps.finance.models import Expense, ExpenseCategory, LaborRate, WorkerPayment
+from apps.orders.models import Order
 from apps.production.models import WorkRecord
 from apps.warehouse.models import RawMaterial, Recipe, RecipeItem, FinishedProduct, StockMovement
 
@@ -163,7 +164,9 @@ class EndToEndReconciliationTests(TestCase):
     # ── Деньги: БД == аналитика == расчёты ───────────────────────────
     def test_every_money_figure_matches(self):
         # БД (независимые агрегаты).
-        revenue_db = Payment.objects.filter(company=self.company).aggregate(s=Sum('amount'))['s']
+        revenue_db = Order.objects.filter(
+            company=self.company, status=Order.Status.DELIVERED,
+        ).aggregate(s=Sum('total_amount'))['s']
         expenses_db = Expense.objects.filter(company=self.company).aggregate(s=Sum('amount'))['s']
         payout_db = WorkerPayment.objects.filter(company=self.company).aggregate(s=Sum('amount'))['s']
         self.client.refresh_from_db()
@@ -171,14 +174,14 @@ class EndToEndReconciliationTests(TestCase):
         self.assertEqual(work.labor_cost, Decimal('5000.00'), '5 × 1000')
 
         d = self.api.get(ANALYTICS, {'period': 'month'}).json()
-        self.assertEqual(Decimal(str(revenue_db)), Decimal('70000.00'))
+        self.assertEqual(Decimal(str(revenue_db)), Decimal('100000.00'))
         self.assertEqual(Decimal(str(d['revenue'])), Decimal(str(revenue_db)))
-        self.assertEqual(Decimal(str(d['revenue'])), Decimal('70000'))
+        self.assertEqual(Decimal(str(d['revenue'])), Decimal('100000'))
         self.assertEqual(Decimal(str(d['cost_of_goods'])), Decimal('5500'))
-        self.assertEqual(Decimal(str(d['gross_profit'])), Decimal('64500'))
+        self.assertEqual(Decimal(str(d['gross_profit'])), Decimal('94500'))
         self.assertEqual(Decimal(str(d['expenses_total'])), Decimal(str(expenses_db)))
         self.assertEqual(Decimal(str(d['worker_payments'])), Decimal(str(payout_db)))
-        self.assertEqual(Decimal(str(d['net_profit'])), Decimal('52500'))
+        self.assertEqual(Decimal(str(d['net_profit'])), Decimal('82500'))
         self.assertEqual(Decimal(str(d['cash'])), Decimal('58000'))
         self.assertEqual(Decimal(str(d['client_debts'])), Decimal(str(self.client.debt)))
         self.assertEqual(Decimal(str(self.client.debt)), Decimal('30000'))
@@ -195,9 +198,9 @@ class EndToEndReconciliationTests(TestCase):
     def test_export_matches_analytics(self):
         d = self.api.get(ANALYTICS, {'period': 'month'}).json()
         expected = {
-            'revenue': Decimal('70000'),
+            'revenue': Decimal('100000'),
             'cost_of_goods': Decimal('5500'),
-            'net_profit': Decimal('52500'),
+            'net_profit': Decimal('82500'),
             'cash': Decimal('58000'),
             'client_debts': Decimal('30000'),
             'worker_debts': Decimal('3000'),
@@ -215,9 +218,9 @@ class EndToEndReconciliationTests(TestCase):
         from core.utils import translate
         lang = self.owner.language or 'uz_cyrl'
         for key, value in (
-            ('finance.revenue', '70000'),
+            ('finance.revenue', '100000'),
             ('finance.cost_of_goods', '5500'),
-            ('finance.net_profit', '52500'),
+            ('finance.net_profit', '82500'),
             ('finance.cash_in_register', '58000'),
             ('finance.client_debts', '30000'),
             ('finance.worker_debts', '3000'),
@@ -236,9 +239,9 @@ class EndToEndReconciliationTests(TestCase):
             if row and row[0] is not None:
                 cells[str(row[0])] = row[1]
         # Ключи совпадают с CSV (по тексту отчёта на языке пользователя).
-        self.assertEqual(str(cells.get(translate('finance.revenue', lang))), '70000')
+        self.assertEqual(str(cells.get(translate('finance.revenue', lang))), '100000')
         self.assertEqual(str(cells.get(translate('finance.cost_of_goods', lang))), '5500')
-        self.assertEqual(str(cells.get(translate('finance.net_profit', lang))), '52500')
+        self.assertEqual(str(cells.get(translate('finance.net_profit', lang))), '82500')
         self.assertEqual(str(cells.get(translate('finance.cash_in_register', lang))), '58000')
 
         # PDF: 200 + content-type (числа не парсим — тот же rows-источник).
@@ -272,15 +275,27 @@ class PeriodBoundaryReconciliationTests(TestCase):
                                amount=Decimal(amount), payment_method='cash',
                                payment_date=aware)
 
+    def _make_delivered_order(self, total_amount, delivered_at):
+        order = Order.objects.create(
+            company=self.company, client=self.client, custom_product_name='Изделие',
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal(total_amount),
+            deadline=timezone.now() + datetime.timedelta(days=3),
+        )
+        order.status = Order.Status.DELIVERED
+        order.save(update_fields=['status'])
+        Order.objects.filter(pk=order.pk).update(delivered_at=delivered_at)
+
     def analytics(self, date_from, date_to):
         resp = self.api.get(ANALYTICS, {'date_from': date_from, 'date_to': date_to})
         self.assertEqual(resp.status_code, 200, resp.content[:200])
         return resp.json()
 
     def test_payment_at_midnight_boundaries_land_in_one_period(self):
-        # Платежи на границе июля/августа.
-        self._pay(2026, 7, 31, 23, 59, 59, '1000')   # последняя секунда июля
-        self._pay(2026, 8, 1, 0, 0, 0, '2000')       # первая секунда августа
+        # Платежи на границе июля/августа + соответствующие заказы.
+        self._pay(2026, 7, 31, 23, 59, 59, '1000')
+        self._make_delivered_order('1000', datetime.datetime(2026, 7, 31, 23, 59, 59))
+        self._pay(2026, 8, 1, 0, 0, 0, '2000')
+        self._make_delivered_order('2000', datetime.datetime(2026, 8, 1, 0, 0, 0))
         # Расходы (DateField) по обе стороны границы.
         Expense.objects.create(company=self.company, category=ExpenseCategory.RENT,
                                amount=Decimal('100'), date=datetime.date(2026, 7, 31))
@@ -306,6 +321,13 @@ class PeriodBoundaryReconciliationTests(TestCase):
         Payment.objects.create(company=self.company, client=self.client,
                                amount=Decimal('500'), payment_method='cash',
                                payment_date=timezone.now())
+        order = Order.objects.create(
+            company=self.company, client=self.client, custom_product_name='Изделие',
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('500'),
+            deadline=timezone.now() + datetime.timedelta(days=3),
+        )
+        order.status = Order.Status.DELIVERED
+        order.save(update_fields=['status'])
         Expense.objects.create(company=self.company, category=ExpenseCategory.RENT,
                                amount=Decimal('50'), date=timezone.localdate())
         for period in ('today', 'week', 'month', 'quarter', 'year'):

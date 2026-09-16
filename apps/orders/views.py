@@ -4,6 +4,10 @@ Views for orders API.
 Заказы создают владелец и администратор. Работник видит только заказы,
 назначенные ему. Owner дополнительно видит суммы заказа.
 """
+import decimal
+from decimal import Decimal
+
+from django.utils import timezone
 from rest_framework import filters, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -12,12 +16,13 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 
+from core.utils import translate
 from apps.audit.models import AuditLog
 from apps.audit.services import collect_model_changes, write_audit_log
 from apps.messaging.models import Notification
 from apps.messaging.services import notify_staff
 from apps.core.permissions import IsCompanyMember
-from core.permissions import IsOwnerOrAdmin
+from core.permissions import IsOwner, IsOwnerOrAdmin
 from apps.warehouse.services import record_incoming, record_outgoing
 from apps.production.models import Task, TaskStatus
 from .models import Order
@@ -73,6 +78,8 @@ class OrderViewSet(CompanyScopedViewSet):
         if self.action in ('create', 'update', 'partial_update', 'destroy',
                            'deliver', 'cancel', 'transition'):
             return [IsCompanyMember(), IsOwnerOrAdmin()]
+        if self.action == 'refund':
+            return [IsCompanyMember(), IsOwner()]
         return [IsCompanyMember()]
 
     def _assert_related_own_company(self, validated_data):
@@ -80,11 +87,16 @@ class OrderViewSet(CompanyScopedViewSet):
         # update. Раньше worker вообще не проверялся, а update не проверял ничего:
         # можно было привязать заказ к сотруднику/клиенту/товару чужой компании.
         company_id = self.request.user.company_id
-        labels = {'client': 'Клиент', 'product': 'Товар', 'worker': 'Работник'}
+        lang = getattr(self.request.user, 'language', 'uz_cyrl')
+        labels = {
+            'client': translate('common.client', lang),
+            'product': translate('common.product', lang),
+            'worker': translate('common.worker', lang),
+        }
         for field in ('client', 'product', 'worker'):
             obj = validated_data.get(field)
             if obj is not None and obj.company_id != company_id:
-                raise PermissionDenied(f'{labels.get(field, field)} должен принадлежать вашей компании')
+                raise PermissionDenied(translate('errors.orders.must_belong_company', lang, {'field': labels.get(field, field)}))
 
     def perform_create(self, serializer):
         company = self.request.user.company
@@ -139,17 +151,18 @@ class OrderViewSet(CompanyScopedViewSet):
             # раньше проходила: заказ «становился» 5 шт, а склад был списан на 2 —
             # COGS, журнал и отчёты расходились.
             if locked.status == Order.Status.DELIVERED:
+                lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request, 'user') else 'uz_cyrl'
                 raise DRFValidationError({
-                    'detail': 'Выданный заказ нельзя редактировать — оформите '
-                              'возврат расходом, если товар вернули.',
+                    'detail': translate('errors.orders.delivered_cannot_edit', lang),
                 })
             # Оплаты привязаны к клиенту: смена клиента оставляла Payment на
             # старом клиенте, а долг нового считался без уже принятых денег.
             if 'client' in serializer.validated_data:
                 from apps.clients.models import Payment
                 if Payment.objects.filter(order=locked).exists():
+                    lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request, 'user') else 'uz_cyrl'
                     raise DRFValidationError({
-                        'client': 'По заказу есть оплаты — сменить клиента нельзя.',
+                        'client': translate('errors.orders.has_payments_no_change_client', lang),
                     })
             old_product_id = locked.product_id
             old_quantity = locked.quantity
@@ -208,13 +221,13 @@ class OrderViewSet(CompanyScopedViewSet):
 
         Возвращает текст ошибки, если разбирать нельзя, иначе None.
         """
+        lang = getattr(actor, 'language', 'uz_cyrl') if hasattr(actor, 'language') else 'uz_cyrl'
         with transaction.atomic():
             locked = Order.objects.select_for_update().get(pk=order.pk)
-            if (locked.paid_amount or 0) > 0:
-                return ('По заказу есть оплата — отменить нельзя. '
-                        'Оформите возврат расходом «Возврат клиенту».')
+            if locked.refundable_amount > 0:
+                return translate('errors.orders.has_payments_no_cancel', lang)
             if locked.status == Order.Status.CANCELLED:
-                return 'Заказ уже отменён.'
+                return translate('errors.orders.already_cancelled', lang)
             # Выданный заказ уже списал товар. Отмена означает возврат от клиента:
             # приходуем обратно со следом в журнале, иначе товар исчезает с бумаги.
             if locked.status == Order.Status.DELIVERED and locked.product_id:
@@ -281,8 +294,9 @@ class OrderViewSet(CompanyScopedViewSet):
         """
         order = self.get_object()
         new_status = request.data.get('status')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
         if not new_status:
-            return Response({'error': 'Укажите новый статус заказа.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': translate('errors.orders.status_required', lang)}, status=status.HTTP_400_BAD_REQUEST)
 
         allowed_transitions = {
             Order.Status.NEW: [Order.Status.AWAITING_MATERIAL, Order.Status.SENT_TO_WORKER],
@@ -303,8 +317,7 @@ class OrderViewSet(CompanyScopedViewSet):
             allowed = allowed_transitions.get(order.status, [])
             if new_status not in allowed:
                 return Response(
-                    {'error': f'Недопустимый переход: {order.status} → {new_status}. '
-                              f'Допустимые статусы: {", ".join(allowed) or "—"}'},
+                    {'error': translate('errors.orders.invalid_transition', lang, {'from': order.status, 'to': new_status, 'allowed': ', '.join(allowed) or '—'})},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -332,14 +345,15 @@ class OrderViewSet(CompanyScopedViewSet):
         # DELIVERED и останавливается.
         with transaction.atomic():
             order = Order.objects.select_for_update().get(pk=order.pk)
+            lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
             if order.status == Order.Status.CANCELLED:
-                return Response({'detail': 'Заказ отменён'},
+                return Response({'detail': translate('errors.orders.cancelled', lang)},
                                 status=status.HTTP_400_BAD_REQUEST)
             # Повторная выдача блокируется: заказ уже отдан клиенту, второй раз
             # списать потребность/начислить долг нельзя (раньше выдачу можно было
             # дёргать сколько угодно — дубли в audit и лишний пересчёт финансов).
             if order.status == Order.Status.DELIVERED:
-                return Response({'detail': 'Заказ уже доставлен'},
+                return Response({'detail': translate('errors.orders.already_delivered', lang)},
                                 status=status.HTTP_400_BAD_REQUEST)
             # Товар и сырьё уходят клиенту — потребность заказов снимаем.
             # Потребность снимаем ДО списания: record_outgoing разрешает
@@ -376,17 +390,8 @@ class OrderViewSet(CompanyScopedViewSet):
                     # клиент получил бы то, чего нет.
                     order.apply_product_requirement()
                     order.apply_raw_material_requirements()
-                    # Сообщение из record_outgoing говорит про «списание» и
-                    # «потребность» — на выдаче это непонятно. Особенно когда клиент
-                    # уже оплатил и пришёл забирать раньше срока: он видит отказ
-                    # и не понимает, что делать. Объясняем ситуацию по-человечески.
                     return Response({
-                        'detail': (
-                            f'На складе недостаточно товара «{order.product.name}»: '
-                            f'нужно {order.quantity}, доступно {max(available, 0)}. '
-                            f'Подтвердите производство этой партии или оприходуйте товар '
-                            f'приходом — после этого выдача пройдёт.'
-                        ),
+                        'detail': translate('errors.orders.insufficient_stock', lang, {'name': order.product.name, 'qty': order.quantity, 'avail': max(available, 0)}),
                         'code': 'not_enough_stock',
                         'required': str(order.quantity),
                         'available': str(max(available, 0)),
@@ -429,9 +434,10 @@ class OrderViewSet(CompanyScopedViewSet):
 
         Оплаченный заказ отменить нельзя: отмена не возвращает деньги, долг
         клиента пересчитывается — и уже принятая оплата просто повисала бы
-        ни на чём. Возврат оформляется расходом категории «Возврат клиенту».
+        ни на чём. Возврат оформляется через refund endpoint.
         """
         order = self.get_object()
+        old_status = order.status
         error = self._unwind_order(order, request.user)
         if error:
             return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
@@ -439,8 +445,83 @@ class OrderViewSet(CompanyScopedViewSet):
             action=AuditLog.Action.UPDATE,
             actor=request.user,
             target=order,
-            changes={'status': {'new': 'cancelled'}},
+            changes={'status': {'old': old_status, 'new': 'cancelled'}},
             request=request,
         )
         order.refresh_product_cache()
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=['post'])
+    def refund(self, request, pk=None):
+        """
+        Возврат денег клиенту по заказу.
+
+        POST /api/v1/orders/orders/{id}/refund/
+        Body: {"amount": "...", "payment_method": "...", "comment": "..."}
+
+        Возврат = Expense с category=CLIENT_REFUND. Atomic, с lock строки.
+        Доступен только Owner. Amount > 0, не больше refundable_amount.
+        """
+        order = self.get_object()
+        lang = getattr(request.user, 'language', 'uz_cyrl')
+
+        amount_str = request.data.get('amount', '')
+        payment_method = request.data.get('payment_method', 'cash')
+        comment = request.data.get('comment', '')
+
+        try:
+            amount = Decimal(str(amount_str))
+        except (TypeError, ValueError, decimal.InvalidOperation):
+            return Response(
+                {'detail': translate('errors.orders.refund_invalid_amount', lang)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if amount <= 0:
+            return Response(
+                {'detail': translate('errors.orders.refund_invalid_amount', lang)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            locked = Order.objects.select_for_update().get(pk=order.pk)
+
+            if locked.status != Order.Status.DELIVERED:
+                return Response(
+                    {'detail': translate('errors.orders.refund_not_delivered', lang)},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            refundable = locked.refundable_amount
+            if amount > refundable:
+                return Response(
+                    {'detail': translate('errors.orders.refund_exceeds_refundable', lang, {'amount': str(refundable)})},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            from apps.finance.models import Expense
+            expense = Expense.objects.create(
+                company=locked.company,
+                order=locked,
+                category='client_refund',
+                amount=amount,
+                date=timezone.localdate(),
+                comment=comment or translate('orders.refund_expense_comment', lang, {'id': locked.id}),
+                created_by=request.user,
+                payment_method=payment_method,
+            )
+
+        locked.client.recalculate_financials()
+        write_audit_log(
+            action=AuditLog.Action.REFUND,
+            actor=request.user,
+            target=locked,
+            changes={
+                'refund_amount': str(amount),
+                'payment_method': payment_method,
+                'comment': comment,
+                'expense_id': expense.pk,
+            },
+            request=request,
+        )
         return Response(self.get_serializer(order).data)

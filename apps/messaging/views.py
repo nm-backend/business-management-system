@@ -39,6 +39,7 @@ from .services import (
     issue_ws_ticket,
     notify,
 )
+from core.utils import translate
 
 MESSAGE_PAGE = 50  # сколько последних сообщений отдаём при открытии беседы
 
@@ -146,7 +147,8 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         participant = ensure_participant(conversation, request.user)
         participant.last_read_at = timezone.now()
         participant.save(update_fields=['last_read_at', 'updated_at'])
-        return Response({'detail': 'ok'})
+        lang = getattr(request.user, 'language', 'uz_cyrl')
+        return Response({'detail': translate('errors.messaging.marked_read', lang)})
 
 
 @extend_schema(tags=['Chat'])
@@ -238,7 +240,8 @@ class WsTicketView(APIView):
 
     def get(self, request):
         if request.user.is_superadmin or request.user.company_id is None:
-            return Response({'error': 'Чат доступен только сотрудникам компании.'}, status=status.HTTP_403_FORBIDDEN)
+            lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
+            return Response({'error': translate('errors.messaging.company_only', lang)}, status=status.HTTP_403_FORBIDDEN)
         return Response({'ticket': issue_ws_ticket(request.user)})
 
 
@@ -339,8 +342,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         """Помечает уведомление как прочитанное."""
         notification = self.get_object()
         if notification.user != request.user:
+            lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
             return Response(
-                {'detail': 'Можно отмечать только свои уведомления.'},
+                {'detail': translate('errors.messaging.mark_own_only', lang)},
                 status=status.HTTP_403_FORBIDDEN,
             )
         notification.is_read = True
@@ -357,8 +361,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         """
         notification = self.get_object()
         if notification.user != request.user:
+            lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
             return Response(
-                {'detail': 'Можно архивировать только свои уведомления.'},
+                {'detail': translate('errors.messaging.archive_own_only', lang)},
                 status=status.HTTP_403_FORBIDDEN,
             )
         notification.archive()
@@ -367,7 +372,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['post'])
     def mark_all_read(self, request):
         """Помечает все уведомления как прочитанные."""
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
         request.user.notifications.filter(is_read=False).update(
             is_read=True, read_at=timezone.now(),
         )
-        return Response({'detail': 'Все уведомления отмечены прочитанными'})
+        return Response({'detail': translate('errors.messaging.all_read', lang)})

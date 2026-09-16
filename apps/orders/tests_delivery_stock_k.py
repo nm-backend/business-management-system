@@ -174,7 +174,10 @@ class EarlyPickupMessageTests(_Base):
         self.assertEqual(body['required'], '2.00')
         self.assertEqual(body['available'], '0.000')
         self.assertIn('Столешница', body['detail'])
-        self.assertIn('Подтвердите производство', body['detail'])
+        from core.utils import translate
+        expected = translate('errors.orders.insufficient_stock', 'uz_cyrl',
+                             {'name': 'Столешница', 'qty': '2.00', 'avail': '0.000'})
+        self.assertEqual(body['detail'], expected)
 
     def test_available_ignores_own_reserve(self):
         """Резерв этого же заказа не должен занижать цифру в сообщении."""

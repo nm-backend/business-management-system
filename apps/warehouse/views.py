@@ -32,6 +32,7 @@ from .services import (
     create_goods_receipt, record_incoming, record_outgoing, record_return,
 )
 from apps.core.views import CompanyScopedViewSet
+from core.utils import translate
 
 
 def _available_expression():
@@ -261,9 +262,10 @@ class WarehouseViewSet(CompanyScopedViewSet):
         Склад с материалами не архивируем: остатки повисли бы в невидимом
         месте, и «где лежит материал» перестало бы отвечать.
         """
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         if instance.materials.filter(is_archived=False).exists():
             raise PermissionDenied(
-                'На складе есть материалы — сначала переместите их на другой склад.'
+                translate('errors.warehouse.has_materials_delete_first', lang)
             )
         instance.archive()
         write_audit_log(
@@ -330,9 +332,10 @@ class WarehouseCellViewSet(CompanyScopedViewSet):
         return qs
 
     def perform_create(self, serializer):
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         warehouse = serializer.validated_data.get('warehouse')
         if warehouse and warehouse.company_id != self.request.user.company_id:
-            raise PermissionDenied('Склад другой компании')
+            raise PermissionDenied(translate('errors.warehouse.other_company', lang))
         cell = serializer.save(company=self.request.user.company)
         write_audit_log(
             action=AuditLog.Action.CREATE, actor=self.request.user,
@@ -340,9 +343,10 @@ class WarehouseCellViewSet(CompanyScopedViewSet):
         )
 
     def perform_update(self, serializer):
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         warehouse = serializer.validated_data.get('warehouse')
         if warehouse and warehouse.company_id != self.request.user.company_id:
-            raise PermissionDenied('Склад другой компании')
+            raise PermissionDenied(translate('errors.warehouse.other_company', lang))
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
         cell = serializer.save()
         if changes:
@@ -353,9 +357,10 @@ class WarehouseCellViewSet(CompanyScopedViewSet):
 
     def perform_destroy(self, instance):
         """Ячейку с материалами не архивируем — сначала их надо переложить."""
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         if instance.materials.filter(is_archived=False).exists():
             raise PermissionDenied(
-                'В ячейке есть материалы — сначала переместите их в другую ячейку.'
+                translate('errors.warehouse.cell_has_materials', lang)
             )
         instance.archive()
         write_audit_log(
@@ -880,9 +885,10 @@ class RecipeViewSet(CompanyScopedViewSet):
         return super().get_queryset().prefetch_related('items__material')
 
     def _check_product_company(self, serializer):
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         product = serializer.validated_data.get('product')
         if product and product.company_id != self.request.user.company_id:
-            raise PermissionDenied('Товар должен принадлежать вашей компании')
+            raise PermissionDenied(translate('errors.warehouse.product_must_belong_company', lang))
 
     def perform_create(self, serializer):
         self._check_product_company(serializer)
@@ -908,7 +914,8 @@ class RecipeViewSet(CompanyScopedViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        raise MethodNotAllowed('DELETE', detail='Recipe deletion is prohibited. Mark the recipe inactive instead.')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
+        raise MethodNotAllowed('DELETE', detail=translate('errors.warehouse.recipe_delete_prohibited', lang))
 
 class RecipeItemViewSet(CompanyScopedViewSet):
     """
@@ -934,11 +941,12 @@ class RecipeItemViewSet(CompanyScopedViewSet):
 
     def perform_create(self, serializer):
         # Нельзя добавить строку в чужой рецепт/материал.
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         company_id = self.request.user.company_id
         recipe = serializer.validated_data.get('recipe')
         material = serializer.validated_data.get('material')
         if (recipe and recipe.company_id != company_id) or (material and material.company_id != company_id):
-            raise PermissionDenied('Рецепт и материал должны принадлежать вашей компании')
+            raise PermissionDenied(translate('errors.warehouse.recipe_material_other_company', lang))
         recipe_item = serializer.save()
         write_audit_log(
             action=AuditLog.Action.CREATE,
@@ -950,11 +958,12 @@ class RecipeItemViewSet(CompanyScopedViewSet):
     def perform_update(self, serializer):
         # На update проверяем принадлежность так же, как на create — иначе строку
         # можно было перепривязать к рецепту/материалу чужой компании.
+        lang = getattr(self.request.user, 'language', 'uz_cyrl') if hasattr(self.request.user, 'language') else 'uz_cyrl'
         company_id = self.request.user.company_id
         recipe = serializer.validated_data.get('recipe')
         material = serializer.validated_data.get('material')
         if (recipe and recipe.company_id != company_id) or (material and material.company_id != company_id):
-            raise PermissionDenied('Рецепт и материал должны принадлежать вашей компании')
+            raise PermissionDenied(translate('errors.warehouse.recipe_material_other_company', lang))
         changes = collect_model_changes(serializer.instance, serializer.validated_data)
         recipe_item = serializer.save()
         if changes:
@@ -967,4 +976,5 @@ class RecipeItemViewSet(CompanyScopedViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        raise MethodNotAllowed('DELETE', detail='Recipe item deletion is prohibited. Update the recipe instead.')
+        lang = getattr(request.user, 'language', 'uz_cyrl') if hasattr(request.user, 'language') else 'uz_cyrl'
+        raise MethodNotAllowed('DELETE', detail=translate('errors.warehouse.recipe_item_delete_prohibited', lang))

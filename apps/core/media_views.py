@@ -48,6 +48,7 @@ from apps.messaging.models import (
 from apps.orders.models import Order
 from apps.production.models import Task, WorkPhoto, WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
+from core.utils import translate
 
 #: Код ответа, когда компания заморожена — тот же, что у API-gate
 #: (apps/companies/gate.py), чтобы фронтенд показывал экран «Подписка истекла».
@@ -260,26 +261,26 @@ def _serve_authorized_file(relative_path):
 def serve_protected_media(request, path):
     """GET /media/<path> — файл своей компании после проверки прав."""
     if request.method not in ('GET', 'HEAD'):
+        user = _resolve_user(request)
+        lang = getattr(user, 'language', 'uz_cyrl') if user else 'uz_cyrl'
         return JsonResponse(
-            {'detail': 'Метод не поддерживается.', 'code': 'method_not_allowed'},
+            {'detail': translate('errors.common.method_not_allowed', lang), 'code': 'method_not_allowed'},
             status=405,
         )
     user = _resolve_user(request)
     if user is None:
         return JsonResponse(
-            {'detail': 'Требуется аутентификация.',
+            {'detail': translate('errors.common.authentication_required', 'uz_cyrl'),
              'code': 'authentication_required'},
             status=401,
         )
+    lang = getattr(user, 'language', 'uz_cyrl')
     if user.company_id is not None:
         # Замороженная компания не читает даже свои файлы — как в API-gate.
         # user.company подтянут select_related в JWT-слое; для сессии — 1 запрос.
         if not user.company.is_subscription_active:
             return JsonResponse(
-                {'detail': (
-                    'Подписка компании истекла. Продлите подписку, '
-                    'чтобы продолжить работу.'
-                ),
+                {'detail': translate('errors.common.subscription_expired', lang),
                  'code': SUBSCRIPTION_EXPIRED_CODE},
                 status=403,
             )
@@ -287,7 +288,7 @@ def serve_protected_media(request, path):
     obj, checker = _find_owner(relative_path)
     if not checker(user, obj):
         return JsonResponse(
-            {'detail': 'Нет доступа к этому файлу.', 'code': 'forbidden'},
+            {'detail': translate('errors.common.not_yours', lang), 'code': 'forbidden'},
             status=403,
         )
     return _serve_authorized_file(relative_path)

@@ -15,6 +15,7 @@ SaaS GATE: бизнес-доступ требует активной подпи�
    CLASSES) как страховка для view, которые могли бы его не использовать.
 """
 from rest_framework import permissions
+from core.utils import translate
 
 
 class IsSuperAdmin(permissions.BasePermission):
@@ -41,7 +42,6 @@ class IsCompanyMember(permissions.BasePermission):
     данным закрыт на сервере. Аккаунты при этом НЕ деактивируются — владелец
     может войти и увидеть экран «Подписка истекла».
     """
-    message = 'Подписка компании истекла или приостановлена. Обратитесь к администратору платформы.'
 
     def has_permission(self, request, view):
         user = request.user
@@ -52,7 +52,11 @@ class IsCompanyMember(permissions.BasePermission):
             and user.company_id is not None
         ):
             return False
-        return user.company.is_subscription_active
+        if not user.company.is_subscription_active:
+            lang = getattr(user, 'language', 'uz_cyrl')
+            self.message = translate('errors.common.subscription_expired_or_suspended', lang)
+            return False
+        return True
 
 
 class SubscriptionAccessPermission(permissions.BasePermission):
@@ -65,7 +69,6 @@ class SubscriptionAccessPermission(permissions.BasePermission):
     замороженной компании должен иметь возможность войти и увидеть экран
     «Подписка истекла».
     """
-    message = 'Подписка компании истекла или приостановлена. Обратитесь к администратору платформы.'
 
     _ALLOWED_PREFIXES = (
         '/api/v1/accounts/me',
@@ -86,7 +89,11 @@ class SubscriptionAccessPermission(permissions.BasePermission):
         if request.path.startswith(self._ALLOWED_PREFIXES):
             return True
         # user.company кэшируется select_related('company') в JWT-аутентификации.
-        return user.company.is_subscription_active
+        if not user.company.is_subscription_active:
+            lang = getattr(user, 'language', 'uz_cyrl')
+            self.message = translate('errors.common.subscription_expired_or_suspended', lang)
+            return False
+        return True
 
 
 class IsOwner(permissions.BasePermission):

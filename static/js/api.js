@@ -171,7 +171,8 @@ class APIClient {
             return response.json();
         } catch (e) {
             if (e.name === 'AbortError') {
-                throw { status: 0, data: { detail: 'Request timed out' } };
+                const msg = window.i18n?.translate('common.error') || 'Request timed out';
+                throw { status: 0, data: { detail: msg } };
             }
             throw e;
         } finally {
