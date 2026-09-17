@@ -436,7 +436,7 @@ class MessagesComponent {
                 box.innerHTML = `<div class="chat-empty u-m-auto"><span data-i18n="chat.no_messages"></span></div>`;
                 window.i18n.applyTranslations();
             } else {
-                box.innerHTML = messages.map((m) => this.messageHtml(m)).join('');
+                box.innerHTML = messages.map((m, i) => this.messageHtml(m, messages[i - 1])).join('');
                 this.scrollToBottom();
             }
             // Отмечаем прочитанным + обнуляем счётчик в списке.
@@ -454,24 +454,26 @@ class MessagesComponent {
         return !!(window.currentUser && m.sender === window.currentUser.id);
     }
 
-    messageHtml(m) {
+    messageHtml(m, prev) {
         const mine = this.isMine(m);
         const conv = this.conversations.find((c) => c.id === this.activeId);
         const showSender = !mine && conv && conv.kind === 'general';
+        // Consecutive grouping: if same sender as prev, reduce visual gap
+        const grouped = prev && prev.sender === m.sender;
         // Вложение файла
         let attachmentHtml = '';
         if (m.attachment) {
             const ext = (m.attachment_name || m.attachment.split('.').pop() || '').toLowerCase();
             const isImage = /^jpg|jpeg|png|gif|webp|svg$/.test(ext);
             if (isImage) {
-                attachmentHtml = `<div class="msg-attachment u-mt-2"><img src="${window.ui.escape(m.attachment)}" alt="" style="max-width:200px;border-radius:8px;cursor:pointer;" onerror="this.style.display='none'" onclick="window.open(this.src,'_blank')"></div>`;
+                attachmentHtml = `<div class="msg-attachment"><img src="${window.ui.escape(m.attachment)}" alt="" style="max-width:180px;border-radius:8px;cursor:pointer;" data-fallback="hide" data-fallback-hide class="msg-attachment-img"></div>`;
             } else {
-                attachmentHtml = `<div class="msg-attachment u-mt-2"><a href="${window.ui.escape(m.attachment)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.15);border-radius:6px;text-decoration:none;color:inherit;font-size:13px;">${window.icon('paperclip', 14)} ${window.ui.escape(m.attachment_name || window.ui.t('chat.file'))}</a></div>`;
+                attachmentHtml = `<div class="msg-attachment"><a href="${window.ui.escape(m.attachment)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(255,255,255,0.15);border-radius:6px;text-decoration:none;color:inherit;font-size:12px;">${window.icon('paperclip', 12)} ${window.ui.escape(m.attachment_name || window.ui.t('chat.file'))}</a></div>`;
             }
         }
         return `
-            <div class="msg ${mine ? 'mine' : 'theirs'}" data-msg="${m.id}">
-                ${showSender ? `<div class="msg-sender">${window.ui.escape(m.sender_name)}</div>` : ''}
+            <div class="msg ${mine ? 'mine' : 'theirs'}${grouped ? ' grouped' : ''}" data-msg="${m.id}" data-sender="${m.sender}">
+                ${showSender && !grouped ? `<div class="msg-sender">${window.ui.escape(m.sender_name)}</div>` : ''}
                 ${m.content ? `<span>${window.ui.escape(m.content)}</span>` : ''}
                 ${attachmentHtml}
                 <span class="msg-time">${this.shortTime(m.created_at)}</span>
@@ -524,7 +526,9 @@ class MessagesComponent {
         if (!box) return;
         const empty = box.querySelector('.chat-empty');
         if (empty) box.innerHTML = '';
-        box.insertAdjacentHTML('beforeend', this.messageHtml(m));
+        const lastMsg = box.querySelector('.msg:last-child');
+        const prev = lastMsg ? { sender: lastMsg.dataset.sender } : null;
+        box.insertAdjacentHTML('beforeend', this.messageHtml(m, prev));
         this.scrollToBottom();
     }
 

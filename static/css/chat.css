@@ -1,14 +1,14 @@
 /* ============================================================
-   Корпоративный чат — минималистичный интерфейс (Telegram/Slack).
+   Корпоративный чат — компактный messenger layout.
    Двухпанельная раскладка: список чатов слева, беседа справа.
    ============================================================ */
 
 .chat-page {
     height: 100%;
-    min-height: 520px;
+    min-height: 400px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 6px;
 }
 
 /* Вкладки Чат / Уведомления */
@@ -21,11 +21,11 @@
     appearance: none;
     border: none;
     background: transparent;
-    padding: 8px 14px;
+    padding: 6px 12px;
     border-radius: 999px;
     font: inherit;
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-muted);
     cursor: pointer;
     transition: background .15s ease, color .15s ease;
@@ -65,22 +65,22 @@
 
 /* Список чатов */
 .chat-aside {
-    width: 320px;
+    width: 280px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     min-height: 0;
     border-right: 1px solid var(--border);
 }
-.chat-aside-head { padding: 12px; border-bottom: 1px solid var(--border); }
+.chat-aside-head { padding: 8px 10px; border-bottom: 1px solid var(--border); }
 .chat-search {
     width: 100%;
-    height: 38px;
-    padding: 0 12px;
+    height: 32px;
+    padding: 0 10px;
     border: 1px solid transparent;
     border-radius: 999px;
     font: inherit;
-    font-size: 14px;
+    font-size: 13px;
     outline: none;
     background: rgba(118, 118, 128, 0.12);
     transition: border-color .15s ease, background .15s ease;
@@ -92,15 +92,16 @@
     text-transform: uppercase;
     letter-spacing: .04em;
     color: var(--text-muted);
-    padding: 10px 14px 4px;
+    padding: 8px 12px 3px;
     font-weight: 700;
 }
 
+/* Conversation list item — compact */
 .chat-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
+    gap: 8px;
+    padding: 6px 10px;
     cursor: pointer;
     border: none;
     background: transparent;
@@ -112,32 +113,32 @@
 .chat-item:hover { background: var(--surface-page); }
 .chat-item.active { background: var(--surface-row-hover); }
 .chat-item-body { flex: 1; min-width: 0; }
-.chat-item-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.chat-item-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .chat-item-name {
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.chat-item-time { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
-.chat-item-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.chat-item-time { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.chat-item-bottom { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 1px; }
 .chat-item-last {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .chat-unread {
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
     border-radius: 999px;
     background: var(--primary);
     color: #fff;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     display: inline-flex;
     align-items: center;
@@ -145,10 +146,10 @@
     flex-shrink: 0;
 }
 
-/* Аватар */
+/* Аватар — smaller */
 .chat-avatar {
-    width: 42px;
-    height: 42px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     flex-shrink: 0;
     display: flex;
@@ -156,7 +157,7 @@
     justify-content: center;
     color: #fff;
     font-weight: 600;
-    font-size: 15px;
+    font-size: 13px;
     text-transform: uppercase;
 }
 .chat-avatar.general { background: linear-gradient(135deg, var(--primary), var(--primary-hover)); }
@@ -166,8 +167,8 @@
 .chat-main-head {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
+    gap: 8px;
+    padding: 8px 14px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
 }
@@ -176,23 +177,24 @@
     appearance: none;
     border: none;
     background: transparent;
-    font-size: 22px;
+    font-size: 20px;
     line-height: 1;
     cursor: pointer;
     color: var(--text);
-    padding: 4px;
+    padding: 2px;
 }
-.chat-main-title { font-weight: 600; font-size: 15px; }
-.chat-main-sub { font-size: 12px; color: var(--text-muted); }
+.chat-main-title { font-weight: 600; font-size: 14px; }
+.chat-main-sub { font-size: 11px; color: var(--text-muted); }
 
+/* Messages area — fills available height, scrollable */
 .chat-messages {
     flex: 1;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 16px;
+    padding: 8px 12px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 1px;
     background: var(--surface-page);
 }
 .chat-day {
@@ -203,40 +205,75 @@
     border: 1px solid var(--border);
     padding: 2px 10px;
     border-radius: 999px;
-    margin: 8px 0;
+    margin: 6px 0;
 }
 
+/* Message bubble — compact, width by content */
 .msg {
-    max-width: 72%;
-    padding: 8px 14px 7px;
-    border-radius: 20px;
-    font-size: 14px;
-    line-height: 1.45;
+    max-width: 70%;
+    padding: 6px 10px 5px;
+    border-radius: 16px;
+    font-size: 13px;
+    line-height: 1.4;
     white-space: pre-wrap;
     word-wrap: break-word;
     position: relative;
-    animation: msg-in .22s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: msg-in .2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes msg-in {
-    from { opacity: 0; transform: translateY(6px) scale(.97); }
+    from { opacity: 0; transform: translateY(4px) scale(.98); }
     to { opacity: 1; transform: none; }
 }
 .msg.theirs {
     align-self: flex-start;
     background: rgba(118, 118, 128, 0.12);
     border: none;
-    border-bottom-left-radius: 6px;
+    border-bottom-left-radius: 4px;
 }
 .msg.mine {
     align-self: flex-end;
     background: var(--primary);
     color: #fff;
-    border-bottom-right-radius: 6px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.10);
 }
-.msg-sender { font-size: 12px; font-weight: 600; color: var(--primary); margin-bottom: 2px; }
-.msg-time { font-size: 10.5px; opacity: .65; margin-left: 8px; float: right; margin-top: 4px; }
-.msg.mine .msg-time { opacity: .85; }
+
+/* Consecutive message grouping: reduce top-radius for stacked bubbles */
+.msg.theirs + .msg.theirs {
+    border-top-left-radius: 4px;
+}
+.msg.mine + .msg.mine {
+    border-top-right-radius: 4px;
+}
+/* Show sender only for first in a group */
+.msg.grouped .msg-sender { display: none; }
+
+.msg-sender {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 1px;
+}
+.msg-time {
+    font-size: 10px;
+    opacity: .6;
+    margin-left: 6px;
+    float: right;
+    margin-top: 3px;
+}
+.msg.mine .msg-time { opacity: .8; }
+
+/* Grouped messages: tighter spacing, smaller timestamp */
+.msg.grouped {
+    margin-top: 0;
+}
+.msg.grouped .msg-time {
+    margin-top: 0;
+}
+/* Show timestamp only on last message of a group (or always show all) */
+.msg.grouped:not(:last-child) .msg-time {
+    display: none;
+}
 
 .chat-empty {
     flex: 1;
@@ -244,19 +281,19 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     text-align: center;
     color: var(--text-muted);
-    padding: 32px;
+    padding: 24px;
 }
-.chat-empty-icon { font-size: 40px; opacity: .5; }
+.chat-empty-icon { font-size: 36px; opacity: .5; }
 
-/* Поле ввода */
+/* Поле ввода — compact, pinned bottom */
 .chat-input {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: 6px;
+    padding: 8px 10px;
     border-top: 1px solid var(--border);
     flex-shrink: 0;
     background: var(--surface-card);
@@ -264,13 +301,14 @@
 .chat-input textarea {
     flex: 1;
     resize: none;
-    max-height: 120px;
-    min-height: 40px;
-    padding: 9px 16px;
+    max-height: 100px;
+    min-height: 34px;
+    padding: 7px 12px;
     border: 1px solid transparent;
-    border-radius: 20px;
+    border-radius: 18px;
     font: inherit;
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 1.35;
     outline: none;
     background: rgba(118, 118, 128, 0.12);
     transition: border-color .15s ease, background .15s ease;
@@ -278,8 +316,8 @@
 .chat-input textarea:focus { border-color: var(--primary); background: var(--surface-card); }
 .chat-send {
     flex-shrink: 0;
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     border: none;
     background: var(--primary);
@@ -289,11 +327,21 @@
     align-items: center;
     justify-content: center;
     transition: background .15s ease, transform .15s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 6px rgba(var(--primary-rgb), 0.35);
+    box-shadow: 0 1px 4px rgba(var(--primary-rgb), 0.3);
 }
 .chat-send:hover { background: var(--primary-hover); transform: translateY(-1px); }
 .chat-send:active { transform: scale(.92); }
 .chat-send:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
+
+/* Attachment preview bar */
+.chat-file-preview {
+    flex-shrink: 0;
+}
+
+/* Attach button */
+.chat-attach {
+    flex-shrink: 0;
+}
 
 /* ---------- Мобильная адаптация ---------- */
 @media (max-width: 768px) {
@@ -305,7 +353,7 @@
     .msg { max-width: 85%; }
 }
 
-/* ---------- Тёмная тема (iMessage: серые пузыри на чёрном) ---------- */
+/* ---------- Тёмная тема ---------- */
 body.theme-dark .chat-tab.active { background: rgba(255, 255, 255, 0.12); color: var(--text); }
 body.theme-dark .chat-item.active { background: rgba(255, 255, 255, 0.10); }
 body.theme-dark .chat-search { background: rgba(118, 118, 128, 0.24); }

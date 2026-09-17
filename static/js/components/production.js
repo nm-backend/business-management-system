@@ -187,7 +187,7 @@ class ProductionComponent {
                 ${shown.map((p) => `
                     <a class="work-photo-thumb" href="${window.ui.escape(p.image)}" target="_blank" rel="noopener">
                         <img src="${window.ui.escape(p.image)}" alt="" loading="lazy"
-                             onerror="this.parentElement.style.display='none'">
+                             data-fallback="hide" data-fallback-hide>
                     </a>`).join('')}
                 ${rest > 0 ? `<span class="work-photo-more">+${rest}</span>` : ''}
             </div>`;

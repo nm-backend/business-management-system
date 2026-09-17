@@ -7,10 +7,10 @@
     <form method="post" action="{% url 'admin:accounts_user_generate_access_key' original.pk|admin_urlquote %}"
           style="display:inline;" id="generate-key-form">
       {% csrf_token %}
-      <button type="submit" class="button"
+      <button type="submit" class="button gen-key-btn"
               style="background:#1c64d9;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;"
               title="Сгенерировать новый Access Key для сотрудника"
-              onclick="return confirm('Выпустить новый Access Key для {{ original.full_name|default:original.username }}?\\n\\nПрежний активный ключ будет отозван.');">
+              data-confirm-msg="Выпустить новый Access Key для {{ original.full_name|default:original.username }}?&#10;&#10;Прежний активный ключ будет отозван.">
         🔑 Сгенерировать ключ доступа
       </button>
     </form>
@@ -72,9 +72,9 @@
         <form method="post" action="{% url 'admin:accounts_user_generate_access_key' original.pk|admin_urlquote %}"
               style="display:inline;">
           {% csrf_token %}
-          <button type="submit" class="default"
+          <button type="submit" class="default gen-key-btn"
                   style="background:#1c64d9;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;"
-                  onclick="return confirm('Выпустить новый Access Key для {{ original.full_name|default:original.username }}?\\n\\nПрежний активный ключ будет отозван.');">
+                  data-confirm-msg="Выпустить новый Access Key для {{ original.full_name|default:original.username }}?&#10;&#10;Прежний активный ключ будет отозван.">
             🔑 Сгенерировать новый ключ доступа
           </button>
         </form>
@@ -88,4 +88,15 @@
   </div>
   {% endif %}
   {{ block.super }}
+{% endblock %}
+
+{% block footer %}
+{{ block.super }}
+<script nonce="{{ csp_nonce }}">
+document.querySelectorAll('.gen-key-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+        if (!confirm(this.dataset.confirmMsg)) e.preventDefault();
+    });
+});
+</script>
 {% endblock %}

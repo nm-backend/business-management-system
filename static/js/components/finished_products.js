@@ -89,7 +89,7 @@ class FinishedProductsComponent {
             listEl.innerHTML = products.map((p) => `
                 <div class="list-row" role="button" tabindex="0" data-id="${p.id}">
                     <div class="u-row">
-                        <div class="thumb">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="" onerror="this.parentElement.innerHTML=window.icon('package', 36)">` : window.icon('package', 36)}</div>
+                        <div class="thumb">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="" data-fallback="package" data-fallback-size="36">` : window.icon('package', 36)}</div>
                         <div class="u-minw-0">
                             <div class="u-title-sm">${window.ui.escape(p.name)}</div>
                             <div class="text-sm text-muted">
@@ -135,7 +135,7 @@ class FinishedProductsComponent {
 
         const modal = window.ui.modal('warehouse.finished_title', `
             <div class="u-row u-mb-14">
-                <div class="thumb u-thumb-lg">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="" onerror="this.parentElement.innerHTML=window.icon('package', 36)">` : window.icon('package', 36)}</div>
+                <div class="thumb u-thumb-lg">${p.photo ? `<img src="${window.ui.escape(p.photo)}" alt="" data-fallback="package" data-fallback-size="36">` : window.icon('package', 36)}</div>
                 <div>
                     <div class="u-title-lg">${window.ui.escape(p.name)}</div>
                     <div class="text-sm text-muted">${window.ui.escape(p.category || '')}</div>

@@ -499,7 +499,16 @@ window.ui = {
         const label = field.closest('.form-group')?.querySelector('label')?.textContent?.trim();
         const text = label ? `${label}: ${field.validationMessage}` : field.validationMessage;
         if (window.toast && window.toast.error) window.toast.error(text);
-    }, true);
+}, true);
+
+/**
+ * Delegated click handler for chat attachment images.
+ * Opens full-size image in a new tab — CSP-safe, no inline onclick needed.
+ */
+document.addEventListener('click', function(e) {
+    const img = e.target.closest('.msg-attachment-img');
+    if (img && img.src) window.open(img.src, '_blank');
+});
 })();
 
 /**
@@ -547,3 +556,30 @@ window.ui = {
     if (document.body) start();
     else document.addEventListener('DOMContentLoaded', start);
 })();
+
+/**
+ * Delegated image error handler.
+ *
+ * Images with data-fallback="layers" (or other icon name) replace themselves
+ * with the fallback icon on load error — CSP-safe, no inline onerror needed.
+ * data-fallback-size sets the icon size (default 36).
+ * data-fallback-parent replaces the parent element instead of the img itself.
+ * data-fallback-hide hides the parent element on error.
+ */
+document.addEventListener('error', function(e) {
+    const img = e.target;
+    if (img.tagName !== 'IMG' || !img.dataset.fallback) return;
+    if (img.dataset.fallbackHide) {
+        img.parentElement.style.display = 'none';
+        return;
+    }
+    const iconName = img.dataset.fallback;
+    const size = parseInt(img.dataset.fallbackSize, 10) || 36;
+    const icon = window.icon ? window.icon(iconName, size) : '';
+    if (img.dataset.fallbackParent) {
+        img.parentElement.innerHTML = icon;
+    } else {
+        img.insertAdjacentHTML('afterend', icon);
+        img.remove();
+    }
+}, true);

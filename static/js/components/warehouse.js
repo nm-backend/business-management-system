@@ -648,7 +648,7 @@ class WarehouseComponent {
         return `
             <div class="list-row" role="button" tabindex="0" data-id="${m.id}">
                 <div class="u-row">
-                    <div class="thumb">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML=window.icon('layers', 36)">` : window.icon('layers', 36)}</div>
+                    <div class="thumb">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" data-fallback="layers" data-fallback-size="36">` : window.icon('layers', 36)}</div>
                     <div class="u-minw-0">
                         <div class="u-title-sm">${window.ui.escape(m.name)}</div>
                         <div class="text-sm text-muted">${window.ui.escape([m.stone_type, m.size].filter(Boolean).join(' · ') || '-')}</div>
@@ -696,10 +696,10 @@ class WarehouseComponent {
         
         const modal = window.ui.modal('warehouse.title', `
             ${m.photo ? `<div style="margin:-20px -20px 14px;border-radius:12px;overflow:hidden;height:180px;background:var(--bg-secondary);">
-                <img src="${window.ui.escape(m.photo)}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;font-size:48px;\'>' + window.icon('layers', 48) + '</div>'">
+                <img src="${window.ui.escape(m.photo)}" alt="" style="width:100%;height:100%;object-fit:cover;" data-fallback="layers" data-fallback-size="48" data-fallback-parent>
             </div>` : ''}
             <div class="u-row u-mb-14">
-                <div class="thumb u-thumb-lg">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" onerror="this.parentElement.innerHTML=window.icon('layers', 36)">` : window.icon('layers', 36)}</div>
+                <div class="thumb u-thumb-lg">${m.photo ? `<img src="${window.ui.escape(m.photo)}" alt="" data-fallback="layers" data-fallback-size="36">` : window.icon('layers', 36)}</div>
                 <div style="flex:1;min-width:0;">
                     <div class="u-title-lg">${window.ui.escape(m.name)}</div>
                     <div class="text-sm text-muted">${window.ui.escape(m.stone_type || '')} · ${window.ui.escape(m.color || '')}</div>
