@@ -215,7 +215,7 @@
     border-radius: 16px;
     font-size: 13px;
     line-height: 1.4;
-    white-space: pre-wrap;
+    white-space: normal;
     word-wrap: break-word;
     position: relative;
     animation: msg-in .2s cubic-bezier(0.16, 1, 0.3, 1);

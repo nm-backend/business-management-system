@@ -474,7 +474,7 @@ class MessagesComponent {
         return `
             <div class="msg ${mine ? 'mine' : 'theirs'}${grouped ? ' grouped' : ''}" data-msg="${m.id}" data-sender="${m.sender}">
                 ${showSender && !grouped ? `<div class="msg-sender">${window.ui.escape(m.sender_name)}</div>` : ''}
-                ${m.content ? `<span>${window.ui.escape(m.content)}</span>` : ''}
+                ${m.content ? `<span>${window.ui.escape(m.content).replace(/\n/g, '<br>')}</span>` : ''}
                 ${attachmentHtml}
                 <span class="msg-time">${this.shortTime(m.created_at)}</span>
             </div>`;
