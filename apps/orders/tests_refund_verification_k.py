@@ -501,3 +501,86 @@ class StockInvariantTests(TestCase):
             movement_type=StockMovement.MovementType.INCOMING,
             reason__icontains=str(order_id))
         self.assertEqual(movements.count(), 1)
+
+
+# ── 10. Regression: refund expense comment translation (NF-1) ────────────
+
+class RefundExpenseCommentTranslationTests(TestCase):
+
+    def test_refund_without_comment_uses_translated_key(self):
+        company = Company.objects.create(name='CommCo', is_active=True)
+        order_id, client_obj, product, owner = _create_delivered_order(
+            company, total='1000', paid='1000')
+        api = APIClient()
+        api.force_authenticate(owner)
+        api.post(f'{ORDERS}{order_id}/refund/', {
+            'amount': '300', 'payment_method': 'cash',
+        }, format='json')
+        expense = Expense.objects.get(order_id=order_id, category='client_refund')
+        self.assertNotEqual(expense.comment, 'orders.refund_expense_comment',
+                            'Expense comment must not be the raw translation key')
+        self.assertTrue(len(expense.comment) > 0,
+                        'Expense comment must not be empty')
+
+    def test_refund_with_custom_comment_uses_it(self):
+        company = Company.objects.create(name='CommCo2', is_active=True)
+        order_id, client_obj, product, owner = _create_delivered_order(
+            company, total='1000', paid='1000')
+        api = APIClient()
+        api.force_authenticate(owner)
+        api.post(f'{ORDERS}{order_id}/refund/', {
+            'amount': '200', 'payment_method': 'card', 'comment': 'custom note',
+        }, format='json')
+        expense = Expense.objects.get(order_id=order_id, category='client_refund')
+        self.assertEqual(expense.comment, 'custom note')
+
+
+# ── 11. Regression: locale key exists in all 3 files (NF-1) ──────────────
+
+class RefundExpenseCommentKeyExistsTests(TestCase):
+
+    def test_refund_expense_comment_key_in_root_orders(self):
+        from pathlib import Path
+        from django.conf import settings
+        import json
+        locale_dir = Path(settings.BASE_DIR) / 'locale'
+        for lang in ('uz_cyrl', 'ru', 'ky'):
+            data = json.loads((locale_dir / f'{lang}.json').read_text(encoding='utf-8'))
+            orders = data.get('orders', {})
+            self.assertIn('refund_expense_comment', orders,
+                          f'Missing orders.refund_expense_comment in {lang}.json')
+
+
+# ── 12. Regression: AuditLog REFUND migration (NF-2) ─────────────────────
+
+class AuditLogRefundMigrationTests(TestCase):
+
+    def test_refund_action_in_model_choices(self):
+        actions = dict(AuditLog.Action.choices)
+        self.assertIn('refund', actions,
+                      'REFUND action missing from AuditLog.Action.choices')
+
+    def test_refund_action_value(self):
+        self.assertEqual(AuditLog.Action.REFUND, 'refund')
+
+    def test_refund_migration_exists(self):
+        from pathlib import Path
+        from django.conf import settings
+        migration_dir = Path(settings.BASE_DIR) / 'apps' / 'audit' / 'migrations'
+        migration_files = sorted(f.name for f in migration_dir.glob('*.py')
+                                  if f.name.startswith('0'))
+        last_migration = migration_files[-1]
+        self.assertGreaterEqual(int(last_migration[:4]), 15,
+                                f'Expected audit migration >= 0015, got {last_migration}')
+        content = (migration_dir / last_migration).read_text(encoding='utf-8')
+        self.assertIn("'refund'", content,
+                      f'Last migration {last_migration} does not contain refund choice')
+
+    def test_no_pending_migrations(self):
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        try:
+            call_command('makemigrations', '--check', '--dry-run', stdout=out, stderr=out)
+        except SystemExit:
+            self.fail(f'makemigrations --check failed:\n{out.getvalue()}')

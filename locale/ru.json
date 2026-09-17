@@ -310,7 +310,8 @@
         "refund_refunded": "Возвращено",
         "refund_remaining": "Остаток возврата",
         "refund_amount_label": "Сумма возврата",
-        "refund_success": "Возврат оформлен"
+        "refund_success": "Возврат оформлен",
+        "refund_expense_comment": "Возврат по заказу #{id}"
     },
     "statuses": {
         "new": "Новый",
@@ -663,6 +664,7 @@
         "contacts": "Контакты",
         "system": "Информация о системе",
         "backend_dev": "Backend Developer",
+        "fullstack_dev": "Full-stack Developer",
         "architecture": "Financial Architecture & System Design",
         "app_name": "Название приложения",
         "company_label": "Компания"

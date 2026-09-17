@@ -360,7 +360,7 @@ class SettingsComponent {
             <div class="list-group u-card-flat-alt">
                 <div class="list-row u-cursor-default">
                     <span class="text-sm font-bold">Nurullo Musajanov</span>
-                    <span class="text-sm text-muted">Full-stack Developer</span>
+                    <span class="text-sm text-muted" data-i18n="about.fullstack_dev"></span>
                 </div>
             </div>
             <div class="section-title" data-i18n="about.contacts"></div>

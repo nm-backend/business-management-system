@@ -595,7 +595,9 @@ class MessagesComponent {
 
     shortTime(iso) {
         if (!iso) return '';
-        return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const localeMap = { uz_cyrl: 'uz-Cyrl-UZ', ru: 'ru-RU', ky: 'ky-KG' };
+        const locale = localeMap[window.i18n?.currentLang] || 'uz-Cyrl-UZ';
+        return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     }
 
     /* ─────────────── Уведомления (как прежде) ─────────────── */

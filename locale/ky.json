@@ -310,7 +310,8 @@
         "refund_refunded": "Кайтарылган",
         "refund_remaining": "Кайтаруу калдыгы",
         "refund_amount_label": "Кайтаруу суммасы",
-        "refund_success": "Кайтаруу расмийлештирилди"
+        "refund_success": "Кайтаруу расмийлештирилди",
+        "refund_expense_comment": "Буйрутма #{id} үчүн кайтаруу"
     },
     "statuses": {
         "new": "Жаңы",
@@ -663,6 +664,7 @@
         "contacts": "Байланыш",
         "system": "Система маалыматы",
         "backend_dev": "Backend Developer",
+        "fullstack_dev": "Full-stack Өнүктүрүүчү",
         "architecture": "Financial Architecture & System Design",
         "app_name": "Колдонмо аталышы",
         "company_label": "Компания"

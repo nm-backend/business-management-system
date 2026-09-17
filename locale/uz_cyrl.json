@@ -310,7 +310,8 @@
         "refund_refunded": "Қайтариб олинган",
         "refund_remaining": "Қайтариш остати",
         "refund_amount_label": "Қайтариш суммаси",
-        "refund_success": "Қайтариш расмийлаштирилди"
+        "refund_success": "Қайтариш расмийлаштирилди",
+        "refund_expense_comment": "Буюртма #{id} учун қайтариш"
     },
     "statuses": {
         "new": "Янги",
@@ -663,6 +664,7 @@
         "contacts": "Алоқа",
         "system": "Тизим маълумоти",
         "backend_dev": "Backend Developer",
+        "fullstack_dev": "Full-stack Dasturchi",
         "architecture": "Financial Architecture & System Design",
         "app_name": "Илова номи",
         "company_label": "Компания"
