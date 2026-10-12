@@ -1,11 +1,4 @@
-"""
-Аудит K: SPA-fallback — прямой заход на подстраницу не должен давать 404.
-
-Раньше маршрутизацию делал только браузерный роутер со старта на '/':
-/orders/, /warehouse/ и т.п. при hard-reload/вставке ссылки извне
-отдавали 404. Fallback отдаёт index.html для любых неизвестных GET,
-но не маскирует API/admin/static и не обслуживает не-GET методы.
-"""
+"""SPA routes use hash URLs; unknown server paths must remain real 404s."""
 from django.test import TestCase
 
 
@@ -15,12 +8,12 @@ class SpaFallbackTests(TestCase):
     def setUp(self):
         from django.test import Client
         self.client = Client(enforce_csrf_checks=True)
-    def test_unknown_get_path_serves_index(self):
-        for path in ('/orders/', '/orders/123/detail/', '/warehouse', '/some/deep/page'):
+    def test_unknown_get_path_returns_custom_404(self):
+        for path in ('/orders/', '/orders/123/detail/', '/warehouse', '/что-то-неправильно/'):
             resp = self.client.get(path)
-            self.assertEqual(resp.status_code, 200, f'{path}: {resp.status_code}')
-            self.assertContains(resp, 'index.html' if False else 'SkladPro',
-                                msg_prefix=f'{path} не отдал SPA: ')
+            self.assertEqual(resp.status_code, 404, f'{path}: {resp.status_code}')
+            self.assertContains(resp, 'Страница не найдена', status_code=404)
+            self.assertContains(resp, 'href="/"', status_code=404)
 
     def test_known_pages_still_resolve(self):
         self.assertEqual(self.client.get('/').status_code, 200)
@@ -33,6 +26,30 @@ class SpaFallbackTests(TestCase):
 
     def test_api_404_not_masked(self):
         self.assertEqual(self.client.get('/api/v1/nonexistent-endpoint/').status_code, 404)
+
+    def test_openapi_ui_routes_resolve(self):
+        self.assertEqual(self.client.get('/api/v1/schema/').status_code, 200)
+        self.assertEqual(self.client.get('/api/v1/swagger/').status_code, 200)
+        self.assertEqual(self.client.get('/api/v1/redoc/').status_code, 200)
+
+    def test_accounts_me_requires_authentication(self):
+        self.assertEqual(self.client.get('/api/v1/accounts/me/').status_code, 401)
+
+    def test_admin_route_is_not_captured_by_spa(self):
+        self.assertIn(self.client.get('/admin/').status_code, (200, 302))
+
+    def test_error_views_render_standalone_pages(self):
+        from django.test import RequestFactory
+        from skladpro.error_views import error_403, error_500
+
+        request = RequestFactory().get('/')
+        forbidden = error_403(request)
+        server_error = error_500(request)
+
+        self.assertEqual(forbidden.status_code, 403)
+        self.assertContains(forbidden, 'Доступ запрещён', status_code=403)
+        self.assertEqual(server_error.status_code, 500)
+        self.assertContains(server_error, 'Ошибка сервера', status_code=500)
 
     def test_post_garbage_under_api_prefix_is_404_not_csrf_page(self):
         """csrf_exempt на fallback: POST-мусор по несуществующему пути

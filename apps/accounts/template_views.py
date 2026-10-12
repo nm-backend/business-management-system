@@ -11,16 +11,11 @@ def index_view(request):
     return render(request, 'index.html')
 
 
-# Префиксы, которые fallback НЕ обслуживает, даже если они не сматчились
-# раньше (API-мусор, отсутствующие статические файлы и т.п.) — для них
-# остаётся честная 404.
-SPA_FALLBACK_EXCLUDED_PREFIXES = ('/api/', '/admin/', '/static/', '/media/', '/sw.js')
-
-
 @csrf_exempt
 def spa_fallback_view(request):
     """
-    SPA-fallback: любой неизвестный GET-путь отдаёт index.html.
+    Неизвестные серверные пути не являются маршрутами SPA: навигация SPA
+    находится после # и не отправляется серверу.
 
     csrf_exempt обязателен: CSRF-проверка middleware срабатывает раньше
     нашей вьюхи, и POST-мусор по несуществующему пути (например,
@@ -29,11 +24,7 @@ def spa_fallback_view(request):
     тут не нужна — защищённые операции живут в DRF (csrf_exempt там
     тоже, но со своими проверками прав).
     """
-    if request.method != 'GET':
-        raise Http404
-    if request.path.startswith(SPA_FALLBACK_EXCLUDED_PREFIXES):
-        raise Http404
-    return render(request, 'index.html')
+    raise Http404
 
 
 def login_view(request):
