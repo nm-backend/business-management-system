@@ -1175,6 +1175,7 @@
             "task_name_or_order_required": "Вазифа номини кўрсатинг ёки буюртмаланг.",
             "confirmed_quantity_unchangeable": "Тасдиқланган иш миқдорини ўзгартириб бўлмайди.",
             "good_quantity_required": "Яроқли миқдор нольдан кatta бўлиши керак.",
+            "quantity_or_defect_required": "Яроқли маҳсулот ёки брак миқдори нолдан катта бўлиши керак.",
             "min_photos_required": "Каминда {min} та тайёр товар Расми қўлинг (ҳозир {count}).",
             "material_not_found": "Бошқа компаниянинг материали."
         },

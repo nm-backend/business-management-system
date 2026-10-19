@@ -1175,6 +1175,7 @@
             "task_name_or_order_required": "Укажите название задачи или свяжите её с заказом.",
             "confirmed_quantity_unchangeable": "Количество подтверждённой работы изменить нельзя.",
             "good_quantity_required": "Годное количество должно быть больше нуля.",
+            "quantity_or_defect_required": "Количество годной продукции или брака должно быть больше нуля.",
             "min_photos_required": "Приложите минимум {min} фото готовой продукции (сейчас {count}).",
             "material_not_found": "Материал另一 компании."
         },

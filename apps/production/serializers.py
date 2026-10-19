@@ -144,17 +144,25 @@ class _ConfirmedWorkGuardMixin:
                     raise serializers.ValidationError({
                         field: translate('errors.production.confirmed_quantity_unchangeable', lang),
                     })
+        # Ноль годных допустим, если есть брак: сырьё на брак всё равно списано.
+        # Нельзя только «ноль годных и ноль брака» — такая работа не описывает
+        # ни одного факта производства.
+        quantity = attrs.get('quantity', getattr(instance, 'quantity', None))
+        defect = attrs.get('defect_quantity', getattr(instance, 'defect_quantity', 0))
+        if quantity is not None and (quantity + (defect or 0)) <= 0:
+            raise serializers.ValidationError({
+                'quantity': translate('errors.production.quantity_or_defect_required', lang),
+            })
         return attrs
 
     def validate_quantity(self, value):
-        # Та же защита, что у Create-сериализатора: quantity — ГОДНОЕ количество.
-        # Нуль/отрицательное при PATCH до подтверждения испортило бы расчёты
-        # confirm_work (входной контракт ТЗ «quantity <= 0 → reject»).
+        # Та же защита, что у Create-сериализатора: quantity — ГОДНОЕ количество,
+        # отрицательным быть не может; ноль допустим при ненулевом браке.
         request = self.context.get('request')
         user = getattr(request, 'user', None)
         lang = getattr(user, 'language', 'uz_cyrl') if user and hasattr(user, 'language') else 'uz_cyrl'
-        if value is None or value <= 0:
-            raise serializers.ValidationError(translate('errors.production.good_quantity_required', lang))
+        if value is None or value < 0:
+            raise serializers.ValidationError(translate('errors.production.quantity_or_defect_required', lang))
         return value
 
 
@@ -265,6 +273,14 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
                     'uploaded_photos': translate('errors.production.min_photos_required', lang,
                                                 params={'minimum': minimum, 'total': total}),
                 })
+        # Партия «всё в брак» (0 годных + N брака) — легальный факт производства:
+        # сырьё израсходовано, товара нет. Требуем лишь, чтобы сумма была > 0.
+        quantity = attrs.get('quantity')
+        defect = attrs.get('defect_quantity', 0) or 0
+        if quantity is not None and (quantity + defect) <= 0:
+            raise serializers.ValidationError({
+                'quantity': translate('errors.production.quantity_or_defect_required', lang),
+            })
         return attrs
 
     def create(self, validated_data):
@@ -281,15 +297,14 @@ class WorkRecordCreateSerializer(serializers.ModelSerializer):
         return work
 
     def validate_quantity(self, value):
-        # quantity — ГОДНОЕ количество. Нуль/отрицательное портит склад при
+        # quantity — ГОДНОЕ количество. Отрицательное портит склад при
         # подтверждении: требования по рецепту становятся отрицательными,
         # проверка нехватки сырья не срабатывает, остаток «дорисовывается», а
-        # labor_cost уходит в минус. Отсекаем на входе (ТЗ «quantity <= 0 →
-        # reject»). Работа «всё в брак» (0 годных + N брака) штатным API не
-        # создаётся; confirm_work обрабатывает такие записи оборонительно.
+        # labor_cost уходит в минус. Ноль допустим, если указан брак: партия
+        # «всё в брак» — реальный производственный факт (сырьё израсходовано).
         request = self.context.get('request')
         user = getattr(request, 'user', None)
         lang = getattr(user, 'language', 'uz_cyrl') if user and hasattr(user, 'language') else 'uz_cyrl'
-        if value is None or value <= 0:
-            raise serializers.ValidationError(translate('errors.production.good_quantity_required', lang))
+        if value is None or value < 0:
+            raise serializers.ValidationError(translate('errors.production.quantity_or_defect_required', lang))
         return value

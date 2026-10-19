@@ -481,10 +481,13 @@ class WorkRecordViewSet(ReadAfterCreateMixin, CompanyScopedViewSet):
         if work.status != WorkRecord.WorkStatus.AWAITING_CONFIRMATION:
             return Response({'detail': translate('errors.production.work_not_pending', lang)},
                             status=status.HTTP_400_BAD_REQUEST)
-        # Защита склада: при quantity <= 0 требования по рецепту стали бы
-        # отрицательными, проверка нехватки сырья не сработала бы, и склад бы
-        # «дорисовался». Отсекаем до расчётов (создание уже валидирует > 0).
-        if work.quantity is None or work.quantity <= 0:
+        # Защита склада: отрицательные количества сделали бы требования по
+        # рецепту отрицательными, проверка нехватки сырья не сработала бы, и
+        # склад бы «дорисовался». Ноль годных допустим, если есть брак: партия
+        # «всё в брак» списывает сырьё, но не приходует товар.
+        good = work.quantity if work.quantity is not None else Decimal('0')
+        defect = work.defect_quantity or Decimal('0')
+        if good < 0 or defect < 0 or good + defect <= 0:
             return Response({'detail': translate('errors.production.invalid_quantity', lang)},
                             status=status.HTTP_400_BAD_REQUEST)
 

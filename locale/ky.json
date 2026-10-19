@@ -1175,6 +1175,7 @@
             "task_name_or_order_required": "Тапшырма аталышын көрсөтүңүз же буйрутмаңыз.",
             "confirmed_quantity_unchangeable": "Ысталган иш көлөмүн өзгөртүүгө болбойт.",
             "good_quantity_required": "Жарактуу көлөм нөлдөн чоң болушу керек.",
+            "quantity_or_defect_required": "Жарактуу продукциянын же брактын саны нөлдөн чоң болушу керек.",
             "min_photos_required": "Кеминде {min} даана бүтүк товардын сүрөтүн тартыңыз (азыр {count}).",
             "material_not_found": "Башка компаниянын материалы."
         },

@@ -257,15 +257,18 @@ def confirm_work(
                 (previous_quantity * previous_cost + work.quantity * unit_batch_cost) / new_total
             ).quantize(Decimal('0.01'))
         product.save(update_fields=['quantity', 'cost_price', 'updated_at'])
-        StockMovement.objects.create(
-            company_id=work.company_id,
-            movement_type=StockMovement.MovementType.PRODUCTION_IN,
-            product=product,
-            quantity=work.quantity,
-            reason=f'Work #{work.id} confirmed',
-            created_by=confirmed_by,
-            related_order_id=work.task.order_id if work.task else None,
-        )
+        # Партия «всё в брак» не приходует товар: движение с quantity=0 было бы
+        # ложным следом прихода в истории склада.
+        if work.quantity > 0:
+            StockMovement.objects.create(
+                company_id=work.company_id,
+                movement_type=StockMovement.MovementType.PRODUCTION_IN,
+                product=product,
+                quantity=work.quantity,
+                reason=f'Work #{work.id} confirmed',
+                created_by=confirmed_by,
+                related_order_id=work.task.order_id if work.task else None,
+            )
 
     # 5. Начисление работнику.
     work.status = WorkRecord.WorkStatus.CONFIRMED
