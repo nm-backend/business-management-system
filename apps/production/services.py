@@ -186,7 +186,13 @@ def confirm_work(
     # стало. Считали только по годному — материал, ушедший в брак, оставался
     # на складе и остаток был завышен (макет «Ишни якунлаш», поле «Брак»).
     consumed_quantity = work.quantity + (work.defect_quantity or Decimal('0'))
-    requirements = get_recipe_requirements(product, consumed_quantity)
+    # Единый порядок блокировок (по pk), как в Order.apply_raw_material_requirements:
+    # два рецепта с материалами в разном порядке иначе блокируют строки
+    # крест-накрест и получают дедлок PostgreSQL (500/зависание подтверждения).
+    requirements = sorted(
+        get_recipe_requirements(product, consumed_quantity),
+        key=lambda item: item[0].pk,
+    )
 
     # 1-2. Рецепт и наличие сырья (блокируем строки от параллельных подтверждений).
     shortages = []
