@@ -61,6 +61,26 @@ class OrderViewSet(CompanyScopedViewSet):
             qs = queryset
         else:
             qs = queryset.filter(worker=user)
+        if user.is_owner:
+            from apps.finance.models import Expense
+            from django.db.models import Subquery, OuterRef, Sum, Value, DecimalField
+            from django.db.models.functions import Coalesce
+
+            refund_sq = (
+                Expense.objects.filter(
+                    order_id=OuterRef('pk'),
+                    category='client_refund',
+                )
+                .values('order_id')
+                .annotate(s=Sum('amount'))
+                .values('s')[:1]
+            )
+            qs = qs.annotate(
+                total_refunded=Coalesce(
+                    Subquery(refund_sq, output_field=DecimalField(max_digits=15, decimal_places=2)),
+                    Value(Decimal('0'), output_field=DecimalField(max_digits=15, decimal_places=2)),
+                )
+            )
         search = self.request.query_params.get('search')
         if search:
             # product__name — заказ на товар из каталога хранит имя в связанном
@@ -486,9 +506,9 @@ class OrderViewSet(CompanyScopedViewSet):
         with transaction.atomic():
             locked = Order.objects.select_for_update().get(pk=order.pk)
 
-            if locked.status != Order.Status.DELIVERED:
+            if locked.status == Order.Status.CANCELLED:
                 return Response(
-                    {'detail': translate('errors.orders.refund_not_delivered', lang)},
+                    {'detail': translate('errors.orders.cancelled', lang)},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 

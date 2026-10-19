@@ -127,6 +127,9 @@ class Order(TimestampedModel, SoftDeleteModel):
     @property
     def refundable_amount(self):
         """Сумма, доступная для возврата: оплачено минус уже возвращённое."""
+        if getattr(self, 'total_refunded', None) is not None:
+            paid = self.paid_amount or Decimal('0')
+            return max(paid - self.total_refunded, Decimal('0'))
         from apps.finance.models import Expense
         refunded = Expense.objects.filter(
             order_id=self.pk,

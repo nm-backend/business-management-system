@@ -14,8 +14,10 @@ Covers:
 """
 import datetime
 import threading
+import unittest
 from decimal import Decimal
 
+from django.db import connection
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -76,6 +78,7 @@ def _create_delivered_order(company, total='1000', paid='1000', quantity='5'):
 
 # ── 1. Concurrent refund (real, TransactionTestCase) ────────────────────────
 
+@unittest.skipUnless(connection.vendor == 'postgresql', 'Requires PostgreSQL for thread concurrency')
 class ConcurrentRefundDBTests(TransactionTestCase):
     """Real concurrent refund with threading.Barrier and TransactionTestCase.
 
@@ -136,6 +139,7 @@ class ConcurrentRefundDBTests(TransactionTestCase):
 
 # ── 2. Concurrent cancel (real, TransactionTestCase) ────────────────────────
 
+@unittest.skipUnless(connection.vendor == 'postgresql', 'Requires PostgreSQL for thread concurrency')
 class ConcurrentCancelDBTests(TransactionTestCase):
     """Real concurrent cancel: exactly 1 succeeds, stock returned once."""
     reset_sequences = True

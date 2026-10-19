@@ -151,26 +151,168 @@ class RefundWorkerDeniedTests(TestCase):
         self.assertIn(resp.status_code, [403, 404])
 
 
-# ── D. Refund non-delivered denied ─────────────────────────────────────────
-class RefundNonDeliveredDeniedTests(TestCase):
+# ── D. Prepayment refund and cancel scenarios (DEF-001) ───────────────────────
+class PrepaymentRefundAndCancelTests(TestCase):
     def setUp(self):
-        self.company = Company.objects.create(name='RefundCo4', is_active=True)
+        self.company = Company.objects.create(name='RefundPrepayCo', is_active=True)
         self.owner = User.objects.create_user(
-            username='ref_owner4', password='p',
+            username='ref_prepay_owner', password='p',
             role=User.Role.OWNER, company=self.company)
         self.client_obj = Client.objects.create(company=self.company, name='Клиент')
         self.product = FinishedProduct.objects.create(
-            company=self.company, name='Товар', quantity=Decimal('20'), unit='sht')
+            company=self.company, name='Товар', quantity=Decimal('20'),
+            cost_price=Decimal('100'), unit='sht')
         self.api = APIClient()
         self.api.force_authenticate(self.owner)
         self.order_id = _make_order(self.api, self.company, self.client_obj, self.product)
         _pay_order(self.api, self.client_obj, self.order_id, 1000)
 
-    def test_new_order_refund_denied(self):
+    def test_prepayment_full_refund_then_cancel(self):
+        """1) Заказ с предоплатой -> полный возврат -> отмена проходит штатно."""
+        order = Order.objects.get(pk=self.order_id)
+        self.assertEqual(order.status, Order.Status.NEW)
+        self.assertEqual(order.refundable_amount, Decimal('1000'))
+
         resp = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
-            'amount': '500', 'payment_method': 'cash',
+            'amount': '1000', 'payment_method': 'cash',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        order.refresh_from_db()
+        self.assertEqual(order.refundable_amount, Decimal('0'))
+
+        cancel_resp = self.api.post(f'{ORDERS}{self.order_id}/cancel/')
+        self.assertEqual(cancel_resp.status_code, 200, cancel_resp.data)
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.CANCELLED)
+
+        # Склад не изменился (не списывался и не возвращался дважды)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.quantity, Decimal('20'))
+        self.assertEqual(self.product.required_for_orders, Decimal('0'))
+
+    def test_prepayment_partial_refund_then_exceed_denied(self):
+        """2) Заказ с предоплатой -> частичный возврат -> попытка возврата больше остатка."""
+        resp = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '400', 'payment_method': 'cash',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+        order = Order.objects.get(pk=self.order_id)
+        self.assertEqual(order.refundable_amount, Decimal('600'))
+
+        # Попытка вернуть больше остатка
+        resp_over = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '700', 'payment_method': 'cash',
+        }, format='json')
+        self.assertEqual(resp_over.status_code, 400)
+
+        # Возврат точного остатка
+        resp_exact = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '600', 'payment_method': 'cash',
+        }, format='json')
+        self.assertEqual(resp_exact.status_code, 200)
+
+        order.refresh_from_db()
+        self.assertEqual(order.refundable_amount, Decimal('0'))
+
+    def test_refund_cancelled_order_denied(self):
+        """3) Попытка возврата отменённого заказа."""
+        # Полный возврат, затем отмена
+        self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '1000', 'payment_method': 'cash',
+        }, format='json')
+        self.api.post(f'{ORDERS}{self.order_id}/cancel/')
+
+        # Попытка повторного возврата уже отменённого заказа
+        resp = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '100', 'payment_method': 'cash',
         }, format='json')
         self.assertEqual(resp.status_code, 400)
+
+    def test_cancel_with_unrefunded_prepayment_blocked(self):
+        """4) Попытка отмены заказа с неотрицательным остатком к возврату (блокируется)."""
+        cancel_resp = self.api.post(f'{ORDERS}{self.order_id}/cancel/')
+        self.assertEqual(cancel_resp.status_code, 400)
+
+        # Частичный возврат: отмена всё ещё заблокирована
+        self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '300', 'payment_method': 'cash',
+        }, format='json')
+        cancel_resp2 = self.api.post(f'{ORDERS}{self.order_id}/cancel/')
+        self.assertEqual(cancel_resp2.status_code, 400)
+
+        # Полный возврат остатка: отмена разрешена
+        self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '700', 'payment_method': 'cash',
+        }, format='json')
+        cancel_resp3 = self.api.post(f'{ORDERS}{self.order_id}/cancel/')
+        self.assertEqual(cancel_resp3.status_code, 200)
+
+    def test_prepayment_refund_does_not_affect_stock(self):
+        """5) Отсутствие списания или оприходования склада при возврате предоплаты."""
+        self.product.refresh_from_db()
+        qty_before = self.product.quantity
+
+        self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '1000', 'payment_method': 'cash',
+        }, format='json')
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.quantity, qty_before)
+        # Движений по складу не создано
+        movements = StockMovement.objects.filter(product=self.product)
+        self.assertEqual(movements.count(), 0)
+
+    def test_prepayment_refund_creates_expense_and_decreases_cash(self):
+        """6) Появление Expense(category=CLIENT_REFUND) и корректное уменьшение кассы."""
+        from apps.reports.services import get_owner_analytics_data
+        today = timezone.localdate()
+        analytics_before = get_owner_analytics_data(self.company.pk, today, today)
+        cash_before = analytics_before['cash']
+
+        resp = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '400', 'payment_method': 'cash',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+        expense = Expense.objects.get(order_id=self.order_id, category='client_refund')
+        self.assertEqual(expense.amount, Decimal('400'))
+        self.assertEqual(expense.company, self.company)
+
+        analytics_after = get_owner_analytics_data(self.company.pk, today, today)
+        self.assertEqual(analytics_after['cash'], cash_before - Decimal('400'))
+
+    def test_prepayment_refund_no_wac_distortion(self):
+        """7) Отсутствие искажения WAC и себестоимости."""
+        self.product.refresh_from_db()
+        cost_price_before = self.product.cost_price
+
+        self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '500', 'payment_method': 'cash',
+        }, format='json')
+
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.cost_price, cost_price_before)
+
+    def test_concurrent_prepayment_refund_cannot_over_refund(self):
+        """8) Защита от over-refund при предоплате."""
+        resp1 = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '600', 'payment_method': 'cash',
+        }, format='json')
+        self.assertEqual(resp1.status_code, 200)
+
+        resp2 = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '500', 'payment_method': 'cash',
+        }, format='json')
+        self.assertEqual(resp2.status_code, 400)
+
+        resp3 = self.api.post(f'{ORDERS}{self.order_id}/refund/', {
+            'amount': '400', 'payment_method': 'cash',
+        }, format='json')
+        self.assertEqual(resp3.status_code, 200)
+
 
 
 # ── E. Refund cancelled denied ─────────────────────────────────────────────
