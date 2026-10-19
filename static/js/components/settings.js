@@ -141,6 +141,12 @@ class SettingsComponent {
                 <div class="list-row" id="change-password-row" role="button" tabindex="0">
                     <span>${window.icon('key', 18)} <span data-i18n="auth.change_password"></span></span><span>›</span>
                 </div>
+                <!-- Двухэтапная проверка: сервер умеет TOTP давно, но включить
+                     её без экрана было нельзя — защитой не пользовались. -->
+                <div class="list-row" id="twofa-row" role="button" tabindex="0">
+                    <span>${window.icon('lock', 18)} <span data-i18n="settings.twofa"></span></span>
+                    <span id="twofa-status" class="badge badge-new" data-i18n="common.disabled"></span>
+                </div>
                 <!-- «Сеансларни бошқариш» из макета: где я вошёл и как закрыть
                      лишнее устройство. Управление только СВОИМИ сессиями. -->
                 <div class="list-row" id="sessions-row" role="button" tabindex="0">
@@ -236,6 +242,8 @@ class SettingsComponent {
             this.loadSubscriptionBadge();
         }
         bindActionRow('#change-password-row', () => this.openChangePassword());
+        bindActionRow('#twofa-row', () => this.openTwoFactor());
+        this.loadTwoFactorStatus();
         bindActionRow('#about-row', () => this.openAbout());
         bindActionRow('#logout-row', async () => {
             if (await window.confirmation.confirm(window.ui.t('auth.logout_confirm'), window.ui.t('auth.logout'))) {
@@ -594,6 +602,202 @@ class SettingsComponent {
                     window.ui.closeModal(modal);
                     window.toast.success(window.ui.t('common.success'));
                     await this.loadUsers();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    /**
+     * Двухэтапная проверка (2FA).
+     *
+     * Серверная часть (`apps/accounts/two_factor.py`) умеет TOTP целиком:
+     * выдача секрета и QR, подтверждение кодом, резервные коды, отключение по
+     * паролю и коду. Не хватало только экрана — здесь он.
+     *
+     * Пока код не подтверждён, 2FA не включено: закрытое окно ничего не ломает.
+     */
+    async loadTwoFactorStatus() {
+        const badge = document.querySelector('#twofa-status');
+        if (!badge) return;
+        try {
+            const data = await window.api.request('/accounts/me/2fa/');
+            this.twoFactorEnabled = !!data.enabled;
+            badge.textContent = window.ui.t(data.enabled ? 'common.enabled' : 'common.disabled');
+            badge.className = `badge ${data.enabled ? 'badge-ready' : 'badge-new'}`;
+        } catch (error) {
+            // Настройки остаются рабочими: индикатор просто остаётся нейтральным.
+            badge.textContent = '';
+        }
+    }
+
+    async openTwoFactor() {
+        const modal = window.ui.modal('settings.twofa_title', '<div id="twofa-body"></div>');
+        const body = modal.querySelector('#twofa-body');
+        let data = { enabled: false, recovery_codes_left: 0 };
+        try {
+            data = await window.api.request('/accounts/me/2fa/');
+        } catch (error) {
+            window.toast.error(window.ui.errorText(error));
+        }
+        if (data.enabled) this.renderTwoFactorOn(body, modal, data);
+        else this.renderTwoFactorOff(body, modal);
+    }
+
+    renderTwoFactorOff(body, modal) {
+        body.innerHTML = `
+            <p class="text-muted" data-i18n="settings.twofa_hint"></p>
+            <form id="twofa-setup-form">
+                <div class="form-group">
+                    <label data-i18n="auth.password"></label>
+                    <input name="password" type="password" class="form-control" required
+                           autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block"
+                        data-i18n="settings.twofa_enable"></button>
+            </form>`;
+        window.i18n.applyTranslations();
+        body.querySelector('#twofa-setup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = e.target.password.value;
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    const setup = await window.api.request('/accounts/me/2fa/setup/', {
+                        method: 'POST', body: JSON.stringify({ password }),
+                    });
+                    this.renderTwoFactorScan(body, modal, setup);
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    renderTwoFactorScan(body, modal, setup) {
+        body.innerHTML = `
+            <p class="text-muted" data-i18n="settings.twofa_scan_hint"></p>
+            <div class="u-text-center u-mb-5">
+                <img src="${setup.qr_code}" alt="2FA QR" width="180" height="180">
+            </div>
+            <div class="form-group">
+                <label data-i18n="settings.twofa_secret"></label>
+                <input class="form-control" readonly value="${window.ui.escape(setup.secret)}">
+            </div>
+            <form id="twofa-confirm-form">
+                <div class="form-group">
+                    <label data-i18n="settings.twofa_code"></label>
+                    <input name="code" class="form-control" inputmode="numeric" maxlength="6"
+                           pattern="[0-9]{6}" autocomplete="one-time-code" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block"
+                        data-i18n="settings.twofa_confirm"></button>
+            </form>`;
+        window.i18n.applyTranslations();
+        body.querySelector('#twofa-confirm-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const code = e.target.code.value.trim();
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    const data = await window.api.request('/accounts/me/2fa/confirm/', {
+                        method: 'POST', body: JSON.stringify({ code }),
+                    });
+                    window.toast.success(window.ui.t('settings.twofa_enabled'));
+                    this.renderTwoFactorRecovery(body, modal, data.recovery_codes || []);
+                    this.loadTwoFactorStatus();
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+    }
+
+    renderTwoFactorRecovery(body, modal, codes) {
+        body.innerHTML = `
+            <p class="text-muted" data-i18n="settings.twofa_recovery_hint"></p>
+            <div class="list-group u-mb-5">
+                ${codes.map((c) => `<div class="list-row"><span style="font-family:ui-monospace,monospace">${window.ui.escape(c)}</span></div>`).join('')}
+            </div>
+            <button type="button" class="btn btn-secondary btn-block u-mb-5" id="twofa-copy"
+                    data-i18n="settings.copy_key"></button>
+            <button type="button" class="btn btn-primary btn-block" id="twofa-done"
+                    data-i18n="common.close"></button>`;
+        window.i18n.applyTranslations();
+        body.querySelector('#twofa-copy')?.addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(codes.join('\n'));
+                window.toast.success(window.ui.t('common.copied'));
+            } catch (error) {
+                window.toast.error(window.ui.t('common.error'));
+            }
+        });
+        body.querySelector('#twofa-done')?.addEventListener('click', () => window.ui.closeModal(modal));
+    }
+
+    renderTwoFactorOn(body, modal, data) {
+        body.innerHTML = `
+            <p class="text-muted" data-i18n="settings.twofa_on_hint"></p>
+            <div class="list-group">
+                <div class="list-row">
+                    <span data-i18n="settings.twofa"></span>
+                    <span class="badge badge-ready" data-i18n="common.enabled"></span>
+                </div>
+                <div class="list-row">
+                    <span data-i18n="settings.twofa_recovery_left"></span>
+                    <span>${Number(data.recovery_codes_left) || 0}</span>
+                </div>
+            </div>
+            <form id="twofa-regenerate-form" class="u-mt-5">
+                <div class="form-group">
+                    <label data-i18n="auth.password"></label>
+                    <input name="password" type="password" class="form-control" required
+                           autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-secondary btn-block"
+                        data-i18n="settings.twofa_regenerate"></button>
+            </form>
+            <form id="twofa-disable-form">
+                <div class="form-group">
+                    <label data-i18n="auth.password"></label>
+                    <input name="password" type="password" class="form-control" required
+                           autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label data-i18n="settings.twofa_code"></label>
+                    <input name="code" class="form-control" inputmode="numeric" maxlength="6"
+                           pattern="[0-9]{6}" autocomplete="one-time-code" required>
+                </div>
+                <button type="submit" class="btn btn-danger btn-block"
+                        data-i18n="settings.twofa_disable"></button>
+            </form>`;
+        window.i18n.applyTranslations();
+        body.querySelector('#twofa-regenerate-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = e.target.password.value;
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    const result = await window.api.request('/accounts/me/2fa/recovery-codes/', {
+                        method: 'POST', body: JSON.stringify({ password }),
+                    });
+                    window.toast.success(window.ui.t('common.success'));
+                    this.renderTwoFactorRecovery(body, modal, result.recovery_codes || []);
+                } catch (error) {
+                    window.toast.error(window.ui.errorText(error));
+                }
+            });
+        });
+        body.querySelector('#twofa-disable-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = e.target.password.value;
+            const code = e.target.code.value.trim();
+            await window.ui.submitGuard(e.target.querySelector('button[type=submit]'), async () => {
+                try {
+                    await window.api.request('/accounts/me/2fa/disable/', {
+                        method: 'POST', body: JSON.stringify({ password, code }),
+                    });
+                    window.toast.success(window.ui.t('settings.twofa_disabled'));
+                    window.ui.closeModal(modal);
+                    this.loadTwoFactorStatus();
                 } catch (error) {
                     window.toast.error(window.ui.errorText(error));
                 }
