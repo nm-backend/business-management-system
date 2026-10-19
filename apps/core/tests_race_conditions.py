@@ -12,6 +12,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from decimal import Decimal
 
+from django.db import connections
 from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APIClient
 
@@ -123,6 +124,11 @@ class ConfirmWorkMaterialDeductionTests(_ConcurrencyBase):
                 errors[label] = str(e)
             except Exception as e:
                 errors[label] = f'Unexpected: {e}'
+            finally:
+                # Соединение потока открыто до конца теста: без закрытия Django
+                # не может удалить тестовую БД (DROP DATABASE ... accessed by
+                # other users), и весь PG-прогон завершается с exit 1.
+                connections.close_all()
 
         tasks = []
         works = []
@@ -146,7 +152,9 @@ class ConfirmWorkMaterialDeductionTests(_ConcurrencyBase):
         for t in threads:
             t.start()
         for t in threads:
-            t.join()
+            t.join(timeout=60)
+        self.assertFalse([t for t in threads if t.is_alive()],
+                         'Потоки подтверждения не завершились за 60 с')
 
         self.material.refresh_from_db()
         initial_qty = Decimal('20')
@@ -329,10 +337,13 @@ class ParallelDeliverTests(_ConcurrencyBase):
         statuses = {}
 
         def do_deliver(label):
-            api = APIClient()
-            api.force_authenticate(user=self.owner)
-            resp = api.post(f'/api/v1/orders/orders/{order.pk}/deliver/')
-            statuses[label] = resp.status_code
+            try:
+                api = APIClient()
+                api.force_authenticate(user=self.owner)
+                resp = api.post(f'/api/v1/orders/orders/{order.pk}/deliver/')
+                statuses[label] = resp.status_code
+            finally:
+                connections.close_all()
 
         threads = [
             threading.Thread(target=do_deliver, args=('A',)),
@@ -341,7 +352,9 @@ class ParallelDeliverTests(_ConcurrencyBase):
         for t in threads:
             t.start()
         for t in threads:
-            t.join()
+            t.join(timeout=60)
+        self.assertFalse([t for t in threads if t.is_alive()],
+                         'Потоки выдачи не завершились за 60 с')
 
         self.product.refresh_from_db()
         # Должен быть только один successful deliver

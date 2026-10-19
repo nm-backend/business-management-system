@@ -114,7 +114,11 @@ class ConcurrentRefundDBTests(TransactionTestCase):
         t2 = threading.Thread(target=self._refund_thread,
                               args=(barrier, api2, order_id, amt2, results, 1))
         t1.start(); t2.start()
-        t1.join(timeout=10); t2.join(timeout=10)
+        t1.join(timeout=30); t2.join(timeout=30)
+        # Гонка считается проверенной только если оба потока действительно
+        # завершились: зависший поток оставил бы соединение и не записал результат
+        # (results.count(None) == 2 прошёл бы как «два отказа»).
+        self.assertEqual([t for t in (t1, t2) if t.is_alive()], [])
 
         order = Order.objects.get(pk=order_id)
         return results, order.refundable_amount
@@ -171,7 +175,8 @@ class ConcurrentCancelDBTests(TransactionTestCase):
         t2 = threading.Thread(target=self._cancel_thread,
                               args=(barrier, api2, order_id, results, 1))
         t1.start(); t2.start()
-        t1.join(timeout=10); t2.join(timeout=10)
+        t1.join(timeout=30); t2.join(timeout=30)
+        self.assertEqual([t for t in (t1, t2) if t.is_alive()], [])
 
         self.assertEqual(results.count(200), 1)
         self.assertEqual(results.count(400), 1)
