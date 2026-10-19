@@ -15,7 +15,7 @@ description: Инструкция для Buffy (AI ассистент) по ра
 - **Database**: PostgreSQL 16
 - **Cache/Channels**: Redis 7
 - **Frontend**: Vanilla JS (без сборщиков), HTML-шаблоны Django
-- **Deploy**: Docker Compose, Render (Blueprint)
+- **Deploy**: Docker Compose + nginx (TLS), без привязки к PaaS
 
 ### Структура приложений (12 apps)
 
@@ -150,8 +150,9 @@ Admin создаёт сотрудника → система генерируе�
 ```
 
 ## 📦 Деплой
-- **Render Blueprint**: `render.yaml` (web + PostgreSQL + Redis)
-- **Docker**: `docker compose up --build`
+- **Production**: `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`
+- **Прокси/TLS**: `deploy/nginx.conf`, runbook — `deploy/README.md`
+- **Dev**: `docker compose up --build`
 - **Production гарды**: SECRET_KEY > 50 символов, ALLOWED_HOSTS != '*', HSTS, CORS
 - **Healthcheck**: `/api/v1/core/health/`
 - **Команда запуска**: `daphne -b 0.0.0.0 -p $PORT skladpro.asgi:application`

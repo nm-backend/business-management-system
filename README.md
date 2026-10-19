@@ -1469,18 +1469,18 @@ Celery Worker
 Celery Beat
 Daphne
 Docker
-Render
+nginx (TLS)
 ```
 
-Проверять не только `render.yaml`, но и фактическое состояние Render.
+Развёртывание не зависит от PaaS: приложение, БД и брокер описаны в
+`docker-compose.prod.yml`, TLS и прокси — в `deploy/nginx.conf`.
 
-Наличие конфигурации:
+Пошаговый runbook (переменные окружения, первый запуск, TLS, обновление,
+бэкап/восстановление, перенос с другого хостинга, диагностика) —
+`deploy/README.md`.
 
-```text
-render.yaml
-```
-
-не означает, что соответствующий сервис реально создан и работает.
+Проверять не только файлы конфигурации, но и фактическое состояние сервисов:
+`docker compose ps`, логи, health-эндпоинт.
 
 ---
 
@@ -1550,7 +1550,7 @@ SkladPro считается готовым только когда подтве�
 * PostgreSQL concurrency verified;
 * no unexpected HTTP 500;
 * Docker build works;
-* Render deployment works.
+* Docker Compose deployment works (см. `deploy/README.md`).
 
 ---
 

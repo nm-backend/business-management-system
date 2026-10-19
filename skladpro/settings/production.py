@@ -24,15 +24,14 @@ CHANNEL_LAYERS = {
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=lambda v: [s.strip() for s in v.split(',')])
 
-# Railway (и другие PaaS) опрашивают healthcheck по внутреннему домену
-# (RAILWAY_PRIVATE_DOMAIN, напр. business-management-system.railway.internal),
-# которого обычно нет в ALLOWED_HOSTS. Без него Django отвечает 400 DisallowedHost,
-# оркестратор считает контейнер нездоровым, и edge отдаёт 502 "Application failed
-# to respond" при живом приложении (воспроизведено на боевом Railway).
-# Добавляем приватный домен автоматически, если он задан и ещё не в списке.
-_railway_private_domain = config('RAILWAY_PRIVATE_DOMAIN', default='')
-if _railway_private_domain and _railway_private_domain not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(_railway_private_domain)
+# Внутренняя health-проба может ходить по имени, которого нет в ALLOWED_HOSTS
+# (имя контейнера в Docker-сети, сервис в k8s, приватный домен платформы).
+# Без него Django отвечает 400 DisallowedHost, проба считает контейнер
+# нездоровым, и внешний прокси отдаёт 502 при живом приложении.
+# Задайте PRIVATE_HEALTH_HOST, если проба использует отдельное имя.
+_private_health_host = config('PRIVATE_HEALTH_HOST', default='')
+if _private_health_host and _private_health_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_private_health_host)
 
 # ── Защита: production не должен стартовать с небезопасными настройками ──
 # Превращаем «тихий риск» (Django лишь предупреждает) в громкий отказ запуска.
@@ -60,7 +59,7 @@ if '*' in ALLOWED_HOSTS:
     )
 
 CORS_ALLOW_ALL_ORIGINS = False
-# Разрешённые origins для CORS. Задайте через env: https://skladpro.onrender.com
+# Разрешённые origins для CORS. Задайте через env: https://app.example.com
 _CORS_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='')
 if _CORS_ORIGINS:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in _CORS_ORIGINS.split(',') if o.strip()]
@@ -81,11 +80,9 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-# Health-эндпоинт исключён из HTTPS-редиректа. Оркестратор (Railway, k8s, ELB)
-# опрашивает контейнер изнутри по обычному HTTP и без X-Forwarded-Proto, поэтому
-# получал 301 вместо 200 и считал ЖИВОЙ контейнер нездоровым.
-# Воспроизведено на Railway: "1/1 replicas never became healthy!", в логах
-# приложения — "GET /api/v1/core/health/ 301" при работающем daphne.
+# Health-эндпоинт исключён из HTTPS-редиректа: внутренняя проба (docker
+# healthcheck, k8s, ELB) ходит по обычному HTTP без X-Forwarded-Proto и иначе
+# получает 301 вместо 200, а контейнер считается нездоровым при живом daphne.
 # Весь остальной трафик по-прежнему принудительно уходит на HTTPS.
 SECURE_REDIRECT_EXEMPT = [r'^api/v1/core/health/$']
 SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)  # 1 год
@@ -109,7 +106,7 @@ VAPID_SUBJECT = config('VAPID_SUBJECT', default='mailto:admin@skladpro.nod')
 # Загруженные файлы (фото работ и т.п.) в production не раздаются ни WhiteNoise
 # (он обслуживает только статику), ни напрямую. /media/ отдаётся ТОЛЬКО через
 # защищённое view serve_protected_media (аутентификация + проверка компании).
-# Включите MEDIA_SERVE=True, если фронтенд-прокси нет (Railway/Render).
+# Включите MEDIA_SERVE=True, если перед приложением нет reverse-proxy.
 # При наличии nginx: НЕ отдавайте /media/ с него напрямую (alias/root без
 # прокси вернёт дыру — чужие файлы по прямой ссылке). Правильно:
 #   location /media/           { proxy_pass http://django; }  # проверки — здесь
@@ -118,7 +115,7 @@ VAPID_SUBJECT = config('VAPID_SUBJECT', default='mailto:admin@skladpro.nod')
 MEDIA_SERVE = config('MEDIA_SERVE', default=False, cast=bool)
 
 # ── Media Storage: S3 (Cloudflare R2 / AWS S3 / MinIO) ──
-# Render filesystem эфемерный: файлы теряются при redeploy/restart.
+# Файловая система контейнера эфемерна: файлы теряются при пересоздании.
 # Для сохранения фото задайте S3-переменные окружения:
 #   AWS_STORAGE_BUCKET_NAME, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 #   AWS_S3_ENDPOINT_URL (для Cloudflare R2: https://<account-id>.r2.cloudflarestorage.com)

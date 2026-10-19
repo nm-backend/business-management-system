@@ -108,9 +108,9 @@ if settings.DEBUG:
         *urlpatterns,
     ]
 elif getattr(settings, 'MEDIA_SERVE', False):
-    # PaaS без nginx/Caddy (Railway/Render): /media/ отдаёт Django —
-    # через защищённое view (с аутентификацией и проверкой компании).
-    # Опция MEDIA_SERVE задаётся в production.py из переменной окружения.
+    # Без reverse-proxy: /media/ отдаёт Django через защищённое view
+    # (аутентификация + проверка компании). Опция MEDIA_SERVE задаётся
+    # в production.py из переменной окружения.
     urlpatterns = [
         *_protected_media_patterns(),
         *urlpatterns,

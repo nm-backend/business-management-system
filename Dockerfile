@@ -57,6 +57,7 @@ EXPOSE 8000
 
 # entrypoint ждёт БД, применяет миграции и собирает статику, затем — CMD.
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
-# $PORT задаётся платформой (Railway/Render); локальный compose переопределяет
-# command и использует 8000. sh -c нужен для подстановки переменной.
+# $PORT позволяет переопределить порт из окружения (любой хостинг/оркестратор);
+# docker-compose.prod.yml задаёт свой command и слушает 8000. sh -c нужен для
+# подстановки переменной.
 CMD ["sh", "-c", "daphne -b 0.0.0.0 -p ${PORT:-8000} skladpro.asgi:application"]

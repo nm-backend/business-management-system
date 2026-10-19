@@ -1,14 +1,14 @@
 """
-Health-проба под production-настройками (аудит K + доводка после Railway).
+Health-проба под production-настройками (аудит K + доводка под любой хостинг).
 
-Оркестратор опрашивает контейнер изнутри обычным HTTP и без X-Forwarded-Proto.
-Два гарда production мешали этому:
+Внутренняя проба (docker healthcheck, k8s, балансировщик) опрашивает контейнер
+обычным HTTP и без X-Forwarded-Proto. Два production-гарда мешали этому:
   1) Host не из ALLOWED_HOSTS -> DisallowedHost (400);
   2) SECURE_SSL_REDIRECT=True -> 301 на https.
 
-(2) воспроизведён на боевом Railway: daphne слушал порт, но health отдавал 301,
-и деплой падал с "1/1 replicas never became healthy!". Лечится точечным
-SECURE_REDIRECT_EXEMPT только для health — остальной трафик по-прежнему на HTTPS.
+(2) лечится точечным SECURE_REDIRECT_EXEMPT только для health — остальной
+трафик по-прежнему уходит на HTTPS. (1) — переменной PRIVATE_HEALTH_HOST,
+которую production.py добавляет в ALLOWED_HOSTS.
 """
 from django.test import TestCase, override_settings
 
@@ -16,7 +16,7 @@ HEALTH = '/api/v1/core/health/'
 
 PROD = dict(
     DEBUG=False,
-    ALLOWED_HOSTS=['skladpro.example.com', 'healthcheck.railway.app'],
+    ALLOWED_HOSTS=['skladpro.example.com', 'healthcheck.internal'],
     SECURE_SSL_REDIRECT=True,
     SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO', 'https'),
     SECURE_REDIRECT_EXEMPT=[r'^api/v1/core/health/$'],
@@ -31,26 +31,22 @@ class ProdHealthcheckProbeTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_plain_http_probe_without_forwarded_proto_returns_200(self):
-        # Так ходит Railway: внутренний HTTP, свой Host, без X-Forwarded-Proto.
-        # Раньше здесь был 301 -> деплой считался неудачным.
-        resp = self.client.get(HEALTH, HTTP_HOST='healthcheck.railway.app')
+        # Так ходит внутренняя проба: обычный HTTP, свой Host, без
+        # X-Forwarded-Proto. Раньше здесь был 301 -> контейнер «нездоров».
+        resp = self.client.get(HEALTH, HTTP_HOST='healthcheck.internal')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()['status'], 'ok')
 
-    def test_private_railway_domain_rejected_when_not_allowed(self):
-        # Railway опрашивает healthcheck по приватному домену
-        # (business-management-system.railway.internal), которого обычно нет в
-        # ALLOWED_HOSTS. Без него Django отдаёт 400 DisallowedHost, оркестратор
-        # помечает контейнер нездоровым и edge возвращает 502 при живом
-        # приложении (воспроизведено на боевом Railway).
-        resp = self.client.get(HEALTH,
-                               HTTP_HOST='business-management-system.railway.internal')
+    def test_private_host_rejected_when_not_allowed(self):
+        # Имя контейнера/сервиса, которого нет в ALLOWED_HOSTS и в
+        # PRIVATE_HEALTH_HOST: Django отдаёт 400, проба считает контейнер
+        # нездоровым, внешний прокси возвращает 502 при живом приложении.
+        resp = self.client.get(HEALTH, HTTP_HOST='app-container.internal')
         self.assertEqual(resp.status_code, 400)
 
-    def test_private_railway_domain_accepted_when_allowed(self):
-        # production.py добавляет RAILWAY_PRIVATE_DOMAIN в ALLOWED_HOSTS,
-        # и тогда healthcheck по приватному домену проходит.
-        with self.settings(ALLOWED_HOSTS=['business-management-system.railway.internal']):
-            resp = self.client.get(HEALTH,
-                                   HTTP_HOST='business-management-system.railway.internal')
+    def test_private_host_accepted_when_allowed(self):
+        # PRIVATE_HEALTH_HOST добавляется в ALLOWED_HOSTS в production.py,
+        # и тогда healthcheck по внутреннему имени проходит.
+        with self.settings(ALLOWED_HOSTS=['app-container.internal']):
+            resp = self.client.get(HEALTH, HTTP_HOST='app-container.internal')
             self.assertEqual(resp.status_code, 200)

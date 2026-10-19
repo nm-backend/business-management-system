@@ -64,8 +64,10 @@ services:
     volumes:
       - media_data:/app/media
       - static_data:/app/staticfiles
+    # Только loopback: снаружи доступен исключительно nginx с TLS.
+    # Публичный 0.0.0.0:8000 отдавал бы Django в обход прокси.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     # Probe шлёт Host из ALLOWED_HOSTS и X-Forwarded-Proto=https, иначе под
     # production настройками loopback-запрос падает на DisallowedHost/SSL-redirect
     # и контейнер навсегда 'unhealthy'. Логика — в docker/healthcheck.py.
