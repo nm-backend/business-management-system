@@ -12,7 +12,7 @@ class SpaFallbackTests(TestCase):
         for path in ('/orders/', '/orders/123/detail/', '/warehouse', '/что-то-неправильно/'):
             resp = self.client.get(path)
             self.assertEqual(resp.status_code, 404, f'{path}: {resp.status_code}')
-            self.assertContains(resp, 'Страница не найдена', status_code=404)
+            self.assertContains(resp, 'Саҳифа топилмади', status_code=404)
             self.assertContains(resp, 'href="/"', status_code=404)
 
     def test_known_pages_still_resolve(self):
@@ -47,9 +47,9 @@ class SpaFallbackTests(TestCase):
         server_error = error_500(request)
 
         self.assertEqual(forbidden.status_code, 403)
-        self.assertContains(forbidden, 'Доступ запрещён', status_code=403)
+        self.assertContains(forbidden, 'Кириш тақиқланган', status_code=403)
         self.assertEqual(server_error.status_code, 500)
-        self.assertContains(server_error, 'Ошибка сервера', status_code=500)
+        self.assertContains(server_error, 'Сервер хатолиги', status_code=500)
 
     def test_post_garbage_under_api_prefix_is_404_not_csrf_page(self):
         """csrf_exempt на fallback: POST-мусор по несуществующему пути

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="uz">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>403 - Доступ запрещён</title>
+	<title data-i18n="errors.pages.forbidden_title">403 - Кириш тақиқланган</title>
 	<style>
 		body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;box-sizing:border-box;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%)}
 		.container{width:100%;max-width:500px;box-sizing:border-box;text-align:center;background:white;padding:40px;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -12,5 +12,12 @@
 		@media(max-width:480px){.container{padding:32px 24px}}
 	</style>
 </head>
-<body><main class="container"><h1>403</h1><p>Доступ запрещён</p><p class="detail">У вас недостаточно прав для доступа к этому ресурсу.</p><a href="/">На главную страницу</a></main></body>
+<body>
+	<main class="container">
+		<h1>403</h1>
+		<p data-i18n="common.forbidden">Кириш тақиқланган</p>
+		<p class="detail" data-i18n="errors.pages.forbidden_detail">Бу ресурсга кириш учун сизда етарли ҳуқуқлар йўқ.</p>
+		<a href="/" data-i18n="errors.pages.back_to_home">Бош саҳифага қайтиш</a>
+	</main>
+</body>
 </html>

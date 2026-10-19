@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="uz">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>404 - Страница не найдена</title>
+	<title data-i18n="errors.pages.not_found_title">404 - Саҳифа топилмади</title>
 	<style>
 		body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;box-sizing:border-box;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
 		.container{width:100%;max-width:500px;box-sizing:border-box;text-align:center;background:white;padding:40px;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -12,5 +12,12 @@
 		@media(max-width:480px){.container{padding:32px 24px}}
 	</style>
 </head>
-<body><main class="container"><h1>404</h1><p>Страница не найдена</p><p class="detail">Извините, запрашиваемая страница не существует.</p><a href="/">На главную страницу</a></main></body>
+<body>
+	<main class="container">
+		<h1>404</h1>
+		<p data-i18n="common.page_not_found">Саҳифа топилмади</p>
+		<p class="detail" data-i18n="errors.pages.not_found_detail">Кечирасиз, сўралган саҳифа мавжуд эмас.</p>
+		<a href="/" data-i18n="errors.pages.back_to_home">Бош саҳифага қайтиш</a>
+	</main>
+</body>
 </html>
