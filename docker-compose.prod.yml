@@ -8,7 +8,9 @@
 #
 # Запуск:  docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 # .env.prod ДОЛЖЕН задавать: SECRET_KEY, ALLOWED_HOSTS, DB_PASSWORD, REDIS_PASSWORD.
-# HTTPS/SSL терминируйте reverse-proxy (nginx/Caddy/Traefik) перед web:8000.
+# HTTPS/SSL терминирует reverse-proxy (nginx/Caddy/Traefik) НА ХОСТЕ:
+# порт приложения опубликован только на 127.0.0.1, из другой docker-сети
+# до него не достучаться. Готовый конфиг — deploy/nginx.conf.
 
 # Общее окружение приложения для web/worker/beat (YAML-якорь: переменные не
 # расходятся между сервисами — иначе воркер молча работает с другой БД/брокером).
