@@ -109,6 +109,16 @@ class CrossTenantReadIsolationTests(_TwoCompanies):
         self.assertFalse(set(foreign_logs) & ids)
 
     def test_reports_analytics_isolated(self):
+        Order.objects.create(
+            company=self.a, client=self.client_a, product=self.product_a,
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('40'),
+            status=Order.Status.DELIVERED, delivered_at=timezone.now(),
+            deadline=timezone.now() + datetime.timedelta(days=3))
+        Order.objects.create(
+            company=self.b, client=self.client_b, product=self.product_b,
+            quantity=Decimal('1'), unit='sht', total_amount=Decimal('999'),
+            status=Order.Status.DELIVERED, delivered_at=timezone.now(),
+            deadline=timezone.now() + datetime.timedelta(days=3))
         resp = self.api.get('/api/v1/reports/analytics/owner/', {'period': 'year'})
         self.assertEqual(resp.status_code, 200, resp.content[:200])
         data = resp.json()

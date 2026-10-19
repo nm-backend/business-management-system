@@ -505,8 +505,10 @@ class PayrollAndFinanceFormulaTests(TzScenarioMixin, TestCase):
         Проверяем арифметику отчёта на подготовленных цифрах:
             валовая прибыль = выручка − себестоимость,
             чистая прибыль  = выручка − себестоимость − расходы − выплаты,
-            касса           = оплаты − расходы − выплаты − вывод владельца.
+            касса           = оплаты − расходы − выплаты.
         """
+        from django.db.models import Sum
+
         WorkerPayment.objects.create(
             company=self.company, worker=self.worker, amount=Decimal('200.00'),
             payment_date=timezone.now().date(),
@@ -518,7 +520,13 @@ class PayrollAndFinanceFormulaTests(TzScenarioMixin, TestCase):
         cogs = Decimal(str(data['cost_of_goods']))
         expenses = Decimal(str(data['expenses_total']))
         payouts = Decimal(str(data['worker_payments']))
-        withdrawal = Decimal(str(data['owner_withdrawal']))
+
+        today = timezone.localdate()
+        date_from = today.replace(day=1)
+        payments_sum = Payment.objects.filter(
+            company=self.company,
+            payment_date__date__range=(date_from, today),
+        ).aggregate(s=Sum('amount'))['s'] or Decimal('0')
 
         self.assertEqual(Decimal(str(data['gross_profit'])), revenue - cogs)
         self.assertEqual(
@@ -527,7 +535,7 @@ class PayrollAndFinanceFormulaTests(TzScenarioMixin, TestCase):
         )
         self.assertEqual(
             Decimal(str(data['cash'])),
-            revenue - expenses - payouts - withdrawal,
+            Decimal(str(payments_sum)) - expenses - payouts,
         )
 
     def test_money_is_decimal_not_float(self):

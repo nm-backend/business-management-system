@@ -189,7 +189,7 @@ class AdminExportLeakTests(ExportScanMixin, TestCase):
         response = api.get('/api/v1/reports/export/finance/?format=csv')
         self.assertEqual(response.status_code, 200)
         body = response.content.decode('utf-8')
-        self.assertIn('654.32', body.replace(' ', ''))  # оплата попала в выручку
+        self.assertIn(self.SECRET_AMOUNTS['expense'], body.replace(' ', ''))
 
     def test_pdf_scanner_is_not_blind(self):
         """
@@ -203,7 +203,7 @@ class AdminExportLeakTests(ExportScanMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         text = pdf_text(response.content)
         self.assertGreater(len(text), 50, 'из PDF не извлёкся текст — сканер слеп')
-        self.assertIn('654.32', text.replace(' ', ''))
+        self.assertIn(self.SECRET_AMOUNTS['expense'], text.replace(' ', ''))
 
 
 class JwtLifecycleTests(TestCase):
