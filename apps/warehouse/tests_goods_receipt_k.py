@@ -342,3 +342,33 @@ class GoodsReceiptConcurrencyTests(GoodsReceiptSetupMixin, TransactionTestCase):
         self.marble.refresh_from_db()
         self.assertEqual(self.marble.quantity, Decimal('50.000'))
         self.assertEqual(StockMovement.objects.filter(material=self.marble).count(), 4)
+
+    def test_parallel_receipts_link_movements_to_their_own_document(self):
+        """
+        Каждое движение прихода принадлежит своему документу.
+
+        Раньше связь искалась как «последнее INCOMING этого материала» после
+        проведения строки. При параллельных поставках одного материала движение
+        могло достаться чужому документу, а свой оставался без истории.
+        """
+        def post(index):
+            return self.api_as(self.owner).post(RECEIPTS, self.payload(
+                document_number=f'LINK-{index}',
+                lines=[{'material': self.marble.id, 'quantity': '5'}],
+            ), format='json').status_code
+
+        results = self._run(post, threads=4)
+        self.assertEqual([r for r in results if r == 201].__len__(), 4, results)
+
+        receipts = GoodsReceipt.objects.filter(document_number__startswith='LINK-')
+        self.assertEqual(receipts.count(), 4)
+        for receipt in receipts:
+            movements = list(receipt.movements.all())
+            self.assertEqual(len(movements), 1,
+                             f'{receipt.document_number}: движений {len(movements)}')
+            self.assertEqual(movements[0].document_number, receipt.document_number)
+            self.assertEqual(movements[0].material_id, self.marble.id)
+
+        self.assertEqual(StockMovement.objects.filter(
+            receipt__isnull=True, material=self.marble,
+        ).count(), 0)

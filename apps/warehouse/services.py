@@ -34,6 +34,7 @@ def record_incoming(
     document_number: str | None = None,
     user: Any | None = None,
     reason: str = '',
+    receipt: Any | None = None,
 ) -> RawMaterial | FinishedProduct:
     """
     Приходует количество на склад и записывает движение.
@@ -94,6 +95,10 @@ def record_incoming(
         quantity=quantity,
         price_per_unit=price,
         document_number=document_number or '',
+        # Документ передаётся явно: поиск «последнего INCOMING по материалу»
+        # после вызова привязывал движение к чужому документу, если параллельно
+        # приходила другая поставка того же материала.
+        receipt=receipt,
         reason=reason or f'Приход {timezone.localdate().isoformat()}',
         created_by=user,
     )
@@ -309,7 +314,7 @@ def create_goods_receipt(
             quantity=line['quantity'],
             price_per_unit=price or Decimal('0'),
         )
-        updated = record_incoming(
+        record_incoming(
             target=material,
             quantity=line['quantity'],
             price_per_unit=price,
@@ -317,17 +322,7 @@ def create_goods_receipt(
             document_number=document_number,
             user=user,
             reason=comment,
+            receipt=receipt,
         )
-        # Привязываем созданное движение к документу: record_incoming пишет
-        # ровно одно движение INCOMING, берём последнее по id.
-        last_movement_id = (
-            StockMovement.objects
-            .filter(material=updated, movement_type=StockMovement.MovementType.INCOMING)
-            .order_by('-id')
-            .values_list('pk', flat=True)
-            .first()
-        )
-        if last_movement_id:
-            StockMovement.objects.filter(pk=last_movement_id).update(receipt=receipt)
 
     return receipt
