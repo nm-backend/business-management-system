@@ -1,7 +1,12 @@
 name: CD
 
+# Деплой запускается ТОЛЬКО после успешного CI на main: workflow_run
+# срабатывает по завершении CI, а условие job отсекает failure/cancelled.
+# Раньше CD стартовал по push параллельно с тестами и выкатывал красный код.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -11,11 +16,16 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
           port: ${{ secrets.SSH_PORT || 22 }}
@@ -23,12 +33,23 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script_stop: true
           command_timeout: 15m
+          envs: DEPLOY_SHA
           script: |
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
 
             git fetch origin main
-            git reset --hard origin/main
+            if [ -n "${DEPLOY_SHA:-}" ]; then
+              # Деплоим ровно тот коммит, который прошёл CI. Если main уже
+              # ушёл вперёд, этот запуск устарел: его выкатит следующий CD.
+              if [ "$(git rev-parse "${DEPLOY_SHA}^{commit}")" != "$(git rev-parse origin/main)" ]; then
+                echo "Commit $DEPLOY_SHA superseded by origin/main; skip deploy."
+                exit 0
+              fi
+              git reset --hard "$DEPLOY_SHA"
+            else
+              git reset --hard origin/main
+            fi
 
             docker compose -f docker-compose.prod.yml --env-file .env.prod \
               up -d --build --remove-orphans --wait --wait-timeout 300
@@ -36,7 +57,7 @@ jobs:
             docker compose -f docker-compose.prod.yml --env-file .env.prod ps
             docker image prune -f
 
-      - name: Smoke test
+      - name: Smoke test (apex)
         run: |
           for i in $(seq 1 10); do
             code=$(curl -s -o /dev/null -w '%{http_code}' https://skkadpronod.world/api/v1/core/health/ || true)
@@ -44,3 +65,15 @@ jobs:
             echo "[$i/10] status=$code, retry in 6s"; sleep 6
           done
           echo "Health check failed"; exit 1
+
+      # www пока не входит в SAN сертификата (известное ограничение
+      # инфраструктуры), поэтому проверка диагностическая: она не блокирует
+      # деплой, но явно сигнализирует, когда DNS/сертификат починят не полностью.
+      - name: Smoke test (www, advisory)
+        continue-on-error: true
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' https://www.skkadpronod.world/ || true)
+          case "$code" in
+            200|301|302) echo "www OK ($code)" ;;
+            *) echo "::warning::www.skkadpronod.world недоступен (status=$code): проверьте TLS SAN для www" ;;
+          esac
