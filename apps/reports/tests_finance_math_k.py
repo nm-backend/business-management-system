@@ -86,9 +86,40 @@ class OwnerFinanceMathTests(TestCase):
         """Инвариант: показатели не могут противоречить друг другу."""
         d = self.analytics()
         expected = (Decimal(str(d['gross_profit']))
-                    - Decimal(str(d['expenses_total']))
+                    - Decimal(str(d['operating_expenses']))
                     - Decimal(str(d['worker_payments'])))
         self.assertEqual(Decimal(str(d['net_profit'])), expected)
+
+    def test_owner_withdrawal_reduces_cash_not_net_profit(self):
+        """
+        Вывод владельца (owner_withdrawal) — распределение капитала (дивиденды),
+        а не операционный расход бизнеса. Он уменьшает кассу, но не чистую прибыль.
+        """
+        Expense.objects.create(
+            company=self.company, category=ExpenseCategory.OWNER_WITHDRAWAL,
+            amount=Decimal('5000'), date=self.today,
+        )
+        d = self.analytics()
+        self.assertEqual(Decimal(str(d['owner_withdrawal'])), Decimal('5000'))
+        self.assertEqual(Decimal(str(d['expenses_total'])), Decimal('25000'))
+        self.assertEqual(Decimal(str(d['operating_expenses'])), Decimal('20000'))
+        self.assertEqual(Decimal(str(d['cash'])), Decimal('80000'))
+        self.assertEqual(Decimal(str(d['net_profit'])), Decimal('85000'))
+
+    def test_client_refund_reduces_cash_not_net_profit(self):
+        """
+        Возврат предоплаты клиенту (client_refund) уменьшает кассу, но не уменьшает
+        чистую прибыль.
+        """
+        Expense.objects.create(
+            company=self.company, category=ExpenseCategory.CLIENT_REFUND,
+            amount=Decimal('10000'), date=self.today,
+        )
+        d = self.analytics()
+        self.assertEqual(Decimal(str(d['expenses_total'])), Decimal('30000'))
+        self.assertEqual(Decimal(str(d['operating_expenses'])), Decimal('20000'))
+        self.assertEqual(Decimal(str(d['cash'])), Decimal('75000'))
+        self.assertEqual(Decimal(str(d['net_profit'])), Decimal('85000'))
 
     def test_timeline_profit_equals_card_profit(self):
         """

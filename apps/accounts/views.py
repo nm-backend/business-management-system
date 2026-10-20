@@ -597,6 +597,7 @@ class SkillViewSet(CompanyScopedViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'category']
     ordering_fields = ['name', 'created_at']
+    ordering = ['name']
 
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
@@ -607,7 +608,7 @@ class SkillViewSet(CompanyScopedViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Skill.objects.none()
         # employees_total -> используется SkillSerializer вместо COUNT на каждый навык.
-        return super().get_queryset().annotate(employees_total=Count('employees', distinct=True))
+        return super().get_queryset().annotate(employees_total=Count('employees', distinct=True)).order_by('name')
 
     def perform_create(self, serializer):
         skill = serializer.save(company=self.request.user.company)

@@ -23,12 +23,18 @@ from apps.production.models import WorkRecord
 from apps.warehouse.models import FinishedProduct, RawMaterial
 from core.utils import translate
 
+NON_OPERATING_EXPENSE_CATEGORIES = (
+    ExpenseCategory.OWNER_WITHDRAWAL,
+    ExpenseCategory.CLIENT_REFUND,
+)
+
 
 # ── Typed dicts for return values ────────────────────────────────────────────
 
 class PeriodFinancials(TypedDict):
     revenue: Decimal | int
     expenses_total: Decimal | int
+    operating_expenses: Decimal | int
     worker_payments: Decimal | int
     net_profit: Decimal | int
 
@@ -46,6 +52,7 @@ class OwnerAnalyticsData(TypedDict):
     cost_of_goods: Decimal | int
     gross_profit: Decimal | int
     expenses_total: Decimal | int
+    operating_expenses: Decimal | int
     deltas: DeltaDict
     expenses_by_category: dict[str, Decimal | int]
     salaries: Decimal | int
@@ -95,6 +102,7 @@ class QuarterlyReportData(TypedDict):
     total_cogs: Decimal | int
     total_gross_profit: Decimal | int
     total_expenses: Decimal | int
+    total_operating_expenses: Decimal | int
     total_salaries: Decimal | int
     total_worker_payments: Decimal | int
     total_net_profit: Decimal | int
@@ -216,11 +224,14 @@ def get_period_financials(
             ))
         )['s']
     )
-    expenses_total = _money(
-        Expense.objects.filter(
-            company_id=company_id,
-            date__range=(date_from, date_to),
-        ).aggregate(s=Sum('amount'))['s']
+    expenses_qs = Expense.objects.filter(
+        company_id=company_id,
+        date__range=(date_from, date_to),
+    )
+    expenses_total = _money(expenses_qs.aggregate(s=Sum('amount'))['s'])
+    operating_expenses = _money(
+        expenses_qs.exclude(category__in=NON_OPERATING_EXPENSE_CATEGORIES)
+        .aggregate(s=Sum('amount'))['s']
     )
     worker_payments = _money(
         WorkerPayment.objects.filter(
@@ -231,8 +242,9 @@ def get_period_financials(
     return {
         'revenue': revenue,
         'expenses_total': expenses_total,
+        'operating_expenses': operating_expenses,
         'worker_payments': worker_payments,
-        'net_profit': revenue - cost_of_goods - expenses_total - worker_payments,
+        'net_profit': revenue - cost_of_goods - operating_expenses - worker_payments,
     }
 
 
@@ -281,6 +293,10 @@ def get_owner_analytics_data(
         date__range=(date_from, date_to),
     )
     expenses_total = _money(expenses_qs.aggregate(s=Sum('amount'))['s'])
+    operating_expenses = _money(
+        expenses_qs.exclude(category__in=NON_OPERATING_EXPENSE_CATEGORIES)
+        .aggregate(s=Sum('amount'))['s']
+    )
 
     def _expenses_by(*categories: ExpenseCategory) -> Decimal | int:
         return _money(
@@ -362,7 +378,7 @@ def get_owner_analytics_data(
     prev_to = date_from - datetime.timedelta(days=1)
     prev_from = prev_to - datetime.timedelta(days=span - 1)
     prev = get_period_financials(company_id, prev_from, prev_to)
-    net_profit = revenue - cost_of_goods - expenses_total - worker_payments
+    net_profit = revenue - cost_of_goods - operating_expenses - worker_payments
 
     # --- Employee counts ---
     active_employees = User.objects.filter(
@@ -401,6 +417,7 @@ def get_owner_analytics_data(
         'cost_of_goods': cost_of_goods,
         'gross_profit': revenue - cost_of_goods,
         'expenses_total': expenses_total,
+        'operating_expenses': operating_expenses,
         'deltas': {
             'revenue': _pct_change(revenue, prev['revenue']),
             'net_profit': _pct_change(net_profit, prev['net_profit']),
@@ -534,6 +551,7 @@ def get_revenue_timeline_data(company_id: int, lang: str = 'uz_cyrl') -> Revenue
             company_id=company_id,
             date__gte=six_months_ago,
         )
+        .exclude(category__in=NON_OPERATING_EXPENSE_CATEGORIES)
         .annotate(month=TruncMonth('date'))
         .values('month')
         .annotate(total=Sum('amount'))
@@ -636,8 +654,10 @@ def get_quarterly_report_data(
     total_revenue = sum(m['revenue'] for m in months_data)
     total_cogs = sum(m['cost_of_goods'] for m in months_data)
     total_expenses = sum(m['expenses_total'] for m in months_data)
+    total_operating_expenses = sum(m.get('operating_expenses', m['expenses_total']) for m in months_data)
     total_salaries = sum(m['salaries'] for m in months_data)
     total_worker_payments = sum(m['worker_payments'] for m in months_data)
+    total_net_profit = sum(m['net_profit'] for m in months_data)
 
     return {
         'year': year,
@@ -649,14 +669,14 @@ def get_quarterly_report_data(
         'total_cogs': total_cogs,
         'total_gross_profit': total_revenue - total_cogs,
         'total_expenses': total_expenses,
+        'total_operating_expenses': total_operating_expenses,
         'total_salaries': total_salaries,
         'total_worker_payments': total_worker_payments,
-        'total_net_profit': total_revenue - total_cogs - total_expenses - total_worker_payments,
+        'total_net_profit': total_net_profit,
         # Рентабельность = доля чистой прибыли в выручке. При нулевой
         # выручке возвращаем None, а не ноль.
         'profitability_percent': (
-            ((total_revenue - total_cogs - total_expenses - total_worker_payments)
-             / total_revenue * 100).quantize(Decimal('0.1'))
+            (total_net_profit / total_revenue * 100).quantize(Decimal('0.1'))
             if total_revenue else None
         ),
     }

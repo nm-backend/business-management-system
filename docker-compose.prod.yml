@@ -27,6 +27,8 @@ x-app-env: &app-env
   REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}@redis:6379/0
   # Django за reverse-proxy: доверяем X-Forwarded-Proto для HTTPS-редиректа.
   SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-True}
+  # Раздача медиафайлов через защищённое view Django (apps/core/media_views.py)
+  MEDIA_SERVE: ${MEDIA_SERVE:-True}
 
 services:
   db:

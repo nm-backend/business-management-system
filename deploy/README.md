@@ -53,6 +53,7 @@ Render Blueprint и платформенные переменные Railway из
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | web-push уведомления |
 | `AWS_STORAGE_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_ENDPOINT_URL`, `AWS_S3_REGION_NAME` | S3/R2 для media вместо локального тома |
 | `PRIVATE_HEALTH_HOST` | имя, по которому внутренняя проба обращается к контейнеру, если оно отличается от `ALLOWED_HOSTS` |
+| `MEDIA_SERVE` | `True` (по умолчанию в compose); обязательно при проксировании `/media/` из nginx в Django |
 | `PROTECTED_MEDIA_ACCEL_LOCATION` | `/protected-media/`, только если включили accel-блок в nginx |
 | `SECURE_SSL_REDIRECT` | по умолчанию `True`; `False` только для отладки без TLS |
 
