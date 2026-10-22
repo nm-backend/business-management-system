@@ -269,3 +269,4 @@ preview.sqlite3
 
 # Аудит на локальном PostgreSQL: настройки песочницы, не часть проекта.
 pg_settings.py
+screenshots/

@@ -29,6 +29,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    if (window.i18n) {
+        await window.i18n.init();
+    }
+
     let user;
     try {
         user = await window.api.getMe();
@@ -36,6 +40,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return; // APIClient сам уводит на логин при истёкшей сессии
     }
     window.currentUser = user;
+
+    if (user.language && window.i18n && user.language !== window.i18n.currentLang) {
+        await window.i18n.loadTranslations(user.language);
+        window.i18n.applyTranslations();
+    }
     // Флаг каскадной перезагрузки из api.js (403 подписки) сбрасываем всегда:
     // компания могла быть разморожена, пока шла перезагрузка.
     sessionStorage.removeItem('sub_blocked_reload');
