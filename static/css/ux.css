@@ -65,7 +65,7 @@
     background: var(--primary-soft);
 }
 
-.login-trust {
+/* .login-trust {
     margin-top: 20px;
     padding-top: 16px;
     border-top: 1px solid var(--border);
@@ -86,7 +86,7 @@
     font-size: 15px;
     line-height: 22px;
     flex-shrink: 0;
-}
+} */
 
 /* Мобильный: цель касания 48px — WCAG 2.5.8 (Target Size Minimum). */
 @media (max-width: 519px) {
