@@ -4,6 +4,10 @@
  * Загружает переводы с бэкенда и применяет к элементам с data-i18n.
  * Хранит текущий язык + узбекский как fallback (по ТЗ).
  */
+// Коды интерфейса в BCP-47 для атрибута <html lang>: скринридер выбирает по
+// нему произношение, поэтому «uz_cyrl» (внутренний код) там недопустим.
+const HTML_LANG = { uz_cyrl: 'uz-Cyrl', ru: 'ru', ky: 'ky' };
+
 class I18nManager {
     constructor() {
         this.translations = {};
@@ -86,6 +90,11 @@ class I18nManager {
     }
 
     applyTranslations() {
+        // Держим <html lang> синхронным с реальным языком интерфейса: раньше
+        // он был захардкожен «uz» и не менялся даже после переключения на
+        // русский/кыргызский — страница для скринридера оставалась узбекской.
+        document.documentElement.lang = HTML_LANG[this.currentLang] || this.currentLang;
+
         const elements = document.querySelectorAll('[data-i18n]');
         elements.forEach(el => {
             if (el.hasAttribute('data-i18n-attr')) return; // атрибутный перевод — второй проход

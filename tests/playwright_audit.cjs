@@ -4,8 +4,8 @@
  * Scenarios:
  * 1. UI/UX: Login page design, branding, responsiveness (Desktop 1280x800 & Mobile 375x667),
  *    Uzbek as primary default, language switcher to Russian and back, translation key validation.
- * 2. Superadmin flow: Login with business2026/admin2026, verify dashboard stats,
- *    navigate to Companies, create a new business tenant with an Owner.
+ * 2. Superadmin flow: log in with credentials from the environment, verify
+ *    dashboard stats, navigate to Companies, create a new business tenant.
  * 3. Owner flow: Login as the new Owner, verify financial dashboard,
  *    create an Administrator and a Worker in Settings/Employees.
  * 4. Business lifecycle:
@@ -18,13 +18,64 @@
  *    - Login as Admin, verify strict financial isolation (no revenue, no profit, no cogs, no client money)
  *    - Login as Worker, verify worker sees only assigned tasks and own earnings
  * 6. UI/UX inspection: Capture screenshots, check color contrast, typography, layout states.
+ *
+ * ЗАПУСК (креды НЕ хранятся в репозитории):
+ *   AUDIT_BASE_URL=http://localhost:8000 \
+ *   AUDIT_SUPERADMIN_USERNAME=... AUDIT_SUPERADMIN_PASSWORD=... \
+ *   node --env-file=.env tests/playwright_audit.cjs
+ *
+ * По умолчанию скрипт работает только с локальным стендом. Запуск против
+ * production заблокирован: чтобы его разрешить, нужно явно указать
+ * AUDIT_ALLOW_PRODUCTION=<hostname цели> (совпадение с хостом проверяется).
  */
 
 const { chromium } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
-const BASE_URL = 'https://skkadpronod.world';
+// ── Конфигурация стенда ───────────────────────────────────────────
+// Адрес и креды супер-админа задаются ТОЛЬКО через окружение: в репозитории
+// их быть не должно. Без AUDIT_BASE_URL скрипт идёт на локальный сервер.
+const DEFAULT_LOCAL_URL = 'http://localhost:8000';
+const PRODUCTION_HOSTS = ['skkadpronod.world', 'www.skkadpronod.world'];
+
+function env(name) {
+  return (process.env[name] || '').trim();
+}
+
+const BASE_URL = (env('AUDIT_BASE_URL') || DEFAULT_LOCAL_URL).replace(/\/+$/, '');
+const SUPERADMIN_USERNAME = env('AUDIT_SUPERADMIN_USERNAME');
+const SUPERADMIN_PASSWORD = env('AUDIT_SUPERADMIN_PASSWORD');
+
+let targetHost;
+try {
+  targetHost = new URL(BASE_URL).hostname.toLowerCase();
+} catch {
+  console.error(`AUDIT_BASE_URL is not a valid URL: ${BASE_URL}`);
+  process.exit(1);
+}
+
+// Защита от случайного запуска по боевому контуру: скрипт создаёт компании,
+// пользователей и заказы, поэтому production требует явного подтверждения
+// именно этого хоста.
+const isProduction = PRODUCTION_HOSTS.includes(targetHost) || env('AUDIT_ENV') === 'production';
+if (isProduction && env('AUDIT_ALLOW_PRODUCTION') !== targetHost) {
+  console.error(
+    `Refusing to run against production host "${targetHost}".\n` +
+    'This audit creates real companies/users/orders. To allow it explicitly, set ' +
+    `AUDIT_ALLOW_PRODUCTION=${targetHost} (must match the target host exactly).`,
+  );
+  process.exit(1);
+}
+
+if (!SUPERADMIN_USERNAME || !SUPERADMIN_PASSWORD) {
+  console.error(
+    'Set AUDIT_SUPERADMIN_USERNAME and AUDIT_SUPERADMIN_PASSWORD in the environment ' +
+    '(for example: node --env-file=.env tests/playwright_audit.cjs).',
+  );
+  process.exit(1);
+}
+
 const SCREENSHOT_DIR = path.join(__dirname, '..', 'screenshots');
 
 if (!fs.existsSync(SCREENSHOT_DIR)) {
@@ -109,11 +160,11 @@ async function runAudit() {
     await page.setViewportSize({ width: 1280, height: 800 });
 
     // ─────────────────────────────────────────────────────────────
-    // STEP 2: LOGIN AS SUPERADMIN (business2026 / admin2026)
+    // STEP 2: LOGIN AS SUPERADMIN (credentials from environment)
     // ─────────────────────────────────────────────────────────────
     console.log('\n--- Step 2: Login as Superadmin ---');
-    await page.fill('#username', 'business2026');
-    await page.fill('#password', 'admin2026');
+    await page.fill('#username', SUPERADMIN_USERNAME);
+    await page.fill('#password', SUPERADMIN_PASSWORD);
     await page.click('#login-form button[type="submit"]');
 
     await page.waitForFunction(() => window.location.pathname === '/' && !!window.currentUser, { timeout: 15000 });
@@ -132,8 +183,8 @@ async function runAudit() {
     // STEP 3: SUPERADMIN CREATES A COMPANY & OWNER
     // ─────────────────────────────────────────────────────────────
     console.log('\n--- Step 3: Create Company and Owner ---');
-    await page.goto(`${BASE_URL}/#/companies`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1000);
+    await page.click('a[href="#/companies"]');
+    await page.waitForSelector('#add-company-btn', { state: 'visible', timeout: 10000 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '05_companies_list.png') });
     console.log('Saved 05_companies_list.png');
 
@@ -187,7 +238,7 @@ async function runAudit() {
     // STEP 5: OWNER CREATES ADMINISTRATOR AND WORKER
     // ─────────────────────────────────────────────────────────────
     console.log('\n--- Step 5: Owner creates Admin and Worker ---');
-    await page.goto(`${BASE_URL}/#/settings`, { waitUntil: 'networkidle' });
+    await page.click('a[href="#/settings"]');
     await page.waitForTimeout(1000);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '09_owner_settings.png') });
     console.log('Saved 09_owner_settings.png');
@@ -322,7 +373,7 @@ async function runAudit() {
     }, { productId: finishedProduct.id });
 
     // 5. Navigate to Warehouse page in UI & screenshot
-    await page.goto(`${BASE_URL}/#/warehouse`, { waitUntil: 'networkidle' });
+    await page.click('a[href="#/warehouse"]');
     await page.waitForTimeout(1000);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '11_owner_warehouse.png') });
     console.log('Saved 11_owner_warehouse.png');
@@ -453,7 +504,7 @@ async function runAudit() {
 
     // 10. Check Finance Analytics in UI
     console.log('Opening Finance dashboard in UI...');
-    await page.goto(`${BASE_URL}/#/finance`, { waitUntil: 'networkidle' });
+    await page.click('a[href="#/finance"]');
     await page.waitForTimeout(1500);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '12_owner_finance_dashboard.png') });
     console.log('Saved 12_owner_finance_dashboard.png');
@@ -522,7 +573,7 @@ async function runAudit() {
     }
 
     // Check Admin Orders page
-    await page.goto(`${BASE_URL}/#/orders`, { waitUntil: 'networkidle' });
+    await page.click('a[href="#/orders"]');
     await page.waitForTimeout(1000);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '14_admin_orders.png') });
     console.log('Saved 14_admin_orders.png');
@@ -550,7 +601,7 @@ async function runAudit() {
     console.log('Worker earnings view:', workerTasks);
 
     // Worker navigation to tasks
-    await page.goto(`${BASE_URL}/#/production/tasks`, { waitUntil: 'networkidle' });
+    await page.click('a[href="#/production"]');
     await page.waitForTimeout(1000);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '16_worker_tasks.png') });
     console.log('Saved 16_worker_tasks.png');

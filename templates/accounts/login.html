@@ -101,7 +101,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const t = (k) => window.i18n.translate(k);
     const langSelect = document.getElementById('lang-select');
     langSelect.value = window.i18n.currentLang;
-    langSelect.addEventListener('change', (e) => window.i18n.setLanguage(e.target.value));
+    // Язык отправляем на сервер только при осознанном выборе на этой форме:
+    // иначе вход с чужого устройства затирал бы язык профиля языком по
+    // умолчанию, который человек не выбирал.
+    let languageChosen = false;
+    const selectedLanguage = () => (languageChosen ? langSelect.value : undefined);
+    langSelect.addEventListener('change', (e) => {
+        languageChosen = true;
+        window.i18n.setLanguage(e.target.value);
+    });
 
     const errorMsg = document.getElementById('error-message');
     const loginPanel = document.getElementById('login-panel');
@@ -127,10 +135,19 @@ document.addEventListener('DOMContentLoaded', () => {
             await window.api.login(
                 document.getElementById('username').value,
                 document.getElementById('password').value,
+                selectedLanguage(),
             );
             window.location.href = '/';
         } catch (error) {
-            showError(error.data?.detail || t('auth.login_error'));
+            // LoginSerializer кладёт причину в non_field_errors: без этой
+            // ветки экран показывал общее «неверный логин/пароль» вместо
+            // точного отказа (аккаунт/компания заблокированы) на выбранном
+            // языке.
+            showError(
+                error.data?.detail
+                || error.data?.non_field_errors?.[0]
+                || t('auth.login_error'),
+            );
             btn.disabled = false;
         }
     });
@@ -185,7 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const fpr = window.api.getFingerprint();
             const resp = await window.api.request('/accounts/access-key/redeem/', {
                 method: 'POST', noAuth: true,
-                body: JSON.stringify({ access_key: code, new_password: password, fingerprint: fpr }),
+                body: JSON.stringify({
+                    access_key: code, new_password: password, fingerprint: fpr,
+                    language: selectedLanguage(),
+                }),
             });
             window.api.setTokens(resp.tokens.access, resp.tokens.refresh);
             window.location.href = '/';

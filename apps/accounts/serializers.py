@@ -298,6 +298,7 @@ class LoginSerializer(serializers.Serializer):
     Поля:
         username: CharField - имя пользователя
         password: CharField - пароль
+        language: ChoiceField - язык, выбранный на экране входа (необязательно)
 
     Валидация:
         - Проверяет существование пользователя
@@ -312,6 +313,12 @@ class LoginSerializer(serializers.Serializer):
     # Второй фактор. Необязателен: у сотрудников без 2FA формат запроса и
     # ответа не меняется. Проверяется в LoginView после пароля.
     otp_code = serializers.CharField(required=False, allow_blank=True)
+    # Язык, который человек выбрал на экране входа. Публичный эндпоинт
+    # анонимен, поэтому request.user.language здесь не помогает: без этого
+    # поля причины отказа всегда приходили на узбекском.
+    language = serializers.ChoiceField(
+        choices=User.Language.choices, required=False, allow_blank=True,
+    )
 
     def validate(self, data):
         """
@@ -333,20 +340,20 @@ class LoginSerializer(serializers.Serializer):
         # password», и сотрудник не понимал, что его заблокировали. Ищем
         # пользователя сами и проверяем статусы ДО проверки пароля.
         user = User.objects.filter(username=data['username']).first()
+        # Приоритет: выбор на экране входа → язык профиля → узбекский.
+        # Профиль нужен, когда человек не трогал переключатель на этом
+        # устройстве: тогда причина отказа всё равно должна быть на его языке.
+        lang = data.get('language') or getattr(user, 'language', '') or 'uz_cyrl'
         if user is None:
-            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
             raise serializers.ValidationError(translate('errors.auth.invalid_credentials', lang))
         # Сначала компания: при блокировке компании её сотрудники получают
         # is_active=False каскадом, и оба сообщения формально верны, но
         # «Company is deactivated» объясняет причину лучше.
         if user.company_id is not None and not user.company.is_active:
-            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
             raise serializers.ValidationError(translate('errors.auth.company_inactive', lang))
         if not user.is_active:
-            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
             raise serializers.ValidationError(translate('errors.auth.account_inactive', lang))
         if not user.check_password(data['password']):
-            lang = self.context['request'].user.language if self.context.get('request') and hasattr(self.context['request'].user, 'language') else 'uz_cyrl'
             raise serializers.ValidationError(translate('errors.auth.invalid_credentials', lang))
         data['user'] = user
         return data
@@ -551,6 +558,11 @@ class AccessKeyRedeemSerializer(serializers.Serializer):
     """Активация аккаунта по коду: код + новый пароль."""
     access_key = serializers.CharField()
     new_password = serializers.CharField(write_only=True, min_length=8)
+    # Язык, выбранный на экране входа: им же переводим отказы и сохраняем
+    # в профиль при успешной активации.
+    language = serializers.ChoiceField(
+        choices=User.Language.choices, required=False, allow_blank=True,
+    )
 
     def validate_new_password(self, value):
         try:

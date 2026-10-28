@@ -59,7 +59,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const t = (k) => window.i18n.translate(k);
     const langSelect = document.getElementById('lang-select');
     langSelect.value = window.i18n.currentLang;
-    langSelect.addEventListener('change', (e) => window.i18n.setLanguage(e.target.value));
+    // Как и на экране входа: явный выбор языка сохраняем при активации,
+    // чтобы SPA не вернулся к языку по умолчанию после редиректа.
+    let languageChosen = false;
+    const selectedLanguage = () => (languageChosen ? langSelect.value : undefined);
+    langSelect.addEventListener('change', (e) => {
+        languageChosen = true;
+        window.i18n.setLanguage(e.target.value);
+    });
 
     const errorMsg = document.getElementById('error-message');
     const successMsg = document.getElementById('success-message');
@@ -107,7 +114,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const fpr = window.api.getFingerprint();
             const resp = await window.api.request('/accounts/access-key/redeem/', {
                 method: 'POST', noAuth: true,
-                body: JSON.stringify({ access_key: code, new_password: password, fingerprint: fpr }),
+                body: JSON.stringify({
+                    access_key: code, new_password: password, fingerprint: fpr,
+                    language: selectedLanguage(),
+                }),
             });
             window.api.setTokens(resp.tokens.access, resp.tokens.refresh);
             successMsg.style.display = 'flex';

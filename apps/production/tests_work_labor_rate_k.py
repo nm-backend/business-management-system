@@ -98,6 +98,9 @@ class LaborRateReadAccessTests(TestCase):
     выбрал операцию (иначе при нескольких ставках подтверждение падает с
     labor_rate_missing). Раньше LaborRateViewSet был закрыт FinancialDataPermission,
     и рабочий получал 403 — операцию выбрать не мог.
+
+    Сумма ставки при этом финансовые данные: admin и worker получают
+    операцию без rate_per_unit, деньги видит только owner.
     """
 
     def setUp(self):
@@ -121,16 +124,18 @@ class LaborRateReadAccessTests(TestCase):
         api.force_authenticate(user)
         return api
 
-    def test_worker_reads_rates(self):
+    def test_worker_reads_operations_without_money(self):
         resp = self._client(self.worker).get(self.RATES, {'product': self.product.id})
         self.assertEqual(resp.status_code, 200, resp.content[:200])
         rows = resp.json()['results'] if isinstance(resp.json(), dict) else resp.json()
-        self.assertEqual(rows[0]['rate_per_unit'], '50.00')
+        self.assertNotIn('rate_per_unit', rows[0])
         self.assertEqual(rows[0]['operation'], LaborRate.OperationType.CUTTING)
 
-    def test_admin_reads_rates(self):
+    def test_admin_reads_rates_without_money(self):
         resp = self._client(self.admin).get(self.RATES)
         self.assertEqual(resp.status_code, 200, resp.content[:200])
+        rows = resp.json()['results'] if isinstance(resp.json(), dict) else resp.json()
+        self.assertNotIn('rate_per_unit', rows[0])
 
     def test_worker_cannot_change_rates(self):
         api = self._client(self.worker)

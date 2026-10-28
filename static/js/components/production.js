@@ -487,7 +487,11 @@ class ProductionComponent {
             const rate = op
                 ? currentRates.find((r) => r.operation === op)
                 : currentRates.length === 1 ? currentRates[0] : null;
-            if (!rate) {
+            // Сумма ставки приходит только владельцу: admin и worker получают
+            // операцию без rate_per_unit. Денежное превью им не показываем —
+            // иначе получилось бы «NaN» вместо честного скрытия.
+            if (!rate || rate.rate_per_unit === null || rate.rate_per_unit === undefined
+                || rate.rate_per_unit === '') {
                 payInfo.style.display = 'none';
                 return;
             }

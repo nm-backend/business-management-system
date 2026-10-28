@@ -192,7 +192,8 @@ class LoginView(APIView):
     Тело запроса:
         {
             "username": "string",
-            "password": "string"
+            "password": "string",
+            "language": "uz_cyrl|ru|ky"  // необязательно
         }
 
     Возвращает:
@@ -218,7 +219,10 @@ class LoginView(APIView):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
-        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
+        # Публичный эндпоинт: request.user — AnonymousUser, поэтому его язык
+        # здесь бесполезен. Берём выбор с экрана входа, иначе язык профиля.
+        selected_language = serializer.validated_data.get('language') or ''
+        lang = selected_language or user.language or 'uz_cyrl'
 
         # Второй фактор проверяется ПОСЛЕ пароля и ДО выдачи токенов: пока код
         # не подтверждён, ни access, ни refresh не существуют, поэтому украсть
@@ -247,6 +251,14 @@ class LoginView(APIView):
                     actor=user, target=user, request=request,
                     metadata={'codes_left': two_factor.recovery_codes_left(user)},
                 )
+
+        # Выбор с экрана входа сохраняем только после успешного прохождения
+        # обоих факторов: неудачная попытка не должна менять профиль. Без
+        # этого app.js после входа переключал интерфейс на старый язык
+        # профиля, и выбранный на форме русский/кыргызский терялся.
+        if selected_language and user.language != selected_language:
+            user.language = selected_language
+            user.save(update_fields=['language'])
 
         fingerprint = request.data.get('fingerprint', '')
         refresh = FingerprintRefreshToken.for_user(user)
@@ -680,7 +692,8 @@ class AccessKeyRedeemView(APIView):
     Активация аккаунта сотрудника по Access Key.
 
     Endpoint: POST /api/v1/accounts/access-key/redeem/
-    Публичный. Тело: {"access_key": "SKP-....", "new_password": "..."}.
+    Публичный. Тело: {"access_key": "SKP-....", "new_password": "...",
+    "language": "uz_cyrl|ru|ky"} — language необязателен.
     При успехе активирует аккаунт, задаёт пароль, помечает ключ использованным
     и возвращает пользователя + JWT-токены (сразу вход).
     """
@@ -692,7 +705,8 @@ class AccessKeyRedeemView(APIView):
     def post(self, request):
         serializer = AccessKeyRedeemSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        lang = getattr(request.user, 'language', 'uz_cyrl') if request.user and hasattr(request.user, 'language') else 'uz_cyrl'
+        selected_language = serializer.validated_data.get('language') or ''
+        lang = selected_language or 'uz_cyrl'
         user, error = redeem_access_key(
             code=serializer.validated_data['access_key'],
             new_password=serializer.validated_data['new_password'],
@@ -704,6 +718,11 @@ class AccessKeyRedeemView(APIView):
                 {'detail': translate('errors.auth.access_key_invalid', lang)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Активация — это первый вход: сохраняем язык, выбранный на экране,
+        # иначе SPA сразу после редиректа вернётся к языку по умолчанию.
+        if selected_language and user.language != selected_language:
+            user.language = selected_language
+            user.save(update_fields=['language'])
         fingerprint = request.data.get('fingerprint', '')
         refresh = FingerprintRefreshToken.for_user(user)
         if fingerprint:

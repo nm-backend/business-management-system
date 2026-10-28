@@ -216,11 +216,14 @@ class APIClient {
 
     // ── Authentication ─────────────────────────────────────────────
 
-    async login(username, password) {
+    async login(username, password, language) {
         const fingerprint = this.getFingerprint();
+        // language передаётся, только если человек реально переключил язык
+        // на экране входа. JSON.stringify отбрасывает undefined, поэтому при
+        // обычном входе сервер сохранит язык профиля как есть.
         const data = await this.request('/accounts/login/', {
             method: 'POST',
-            body: JSON.stringify({ username, password, fingerprint }),
+            body: JSON.stringify({ username, password, fingerprint, language }),
             noAuth: true
         });
         this.setTokens(data.tokens.access, data.tokens.refresh);

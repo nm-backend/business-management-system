@@ -119,9 +119,11 @@ class LaborRateReadPermission(BasePermission):
 
     Работник в форме «Ишни якунлаш» выбирает операцию по списку ставок
     товара — иначе при нескольких ставках подтверждение падает с
-    labor_rate_missing, а рабочему непонятно почему. Ставка — не «тайна»
-    для работника: он видит свой labor_cost в подтверждённых работах.
-    Изменение ставок — по-прежнему только owner.
+    labor_rate_missing, а рабочему непонятно почему. Поэтому список
+    операций ему нужен, но СУММА ставки — финансовые данные и скрывается
+    сериализатором (LaborRateNoMoneySerializer). Своё начисление работник
+    по-прежнему видит в подтверждённых работах и «Менинг иш ҳақим».
+    Изменение ставок — только owner.
     """
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
@@ -151,14 +153,15 @@ class LaborRateViewSet(CompanyScopedViewSet):
         """
         Сериализатор по действию и роли.
 
-        Администратор получает ставку без суммы: список операций им
-        нужен для оформления работ, а деньги по ТЗ им недоступны.
+        ADMIN и WORKER получают ставку без суммы: список операций им нужен
+        для оформления/сдачи работ, а деньги по ТЗ им недоступны. Сумму
+        видит только owner.
         """
         if self.action == 'create':
             return LaborRateCreateSerializer
         user = getattr(self.request, 'user', None)
         if not getattr(self, 'swagger_fake_view', False) and user is not None:
-            if getattr(user, 'is_admin', False):
+            if not getattr(user, 'is_owner', False):
                 return LaborRateNoMoneySerializer
         return LaborRateSerializer
 
