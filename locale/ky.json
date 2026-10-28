@@ -30,8 +30,6 @@
         "access_key_invalid": "Код туура эмес, мөөнөтү бүткөн же мурун колдонулган",
         "welcome": "Кош келиңиз",
         "access_key_admin_hint": "Кириш кодун администратор же жетекчиңизден алыңыз",
-        "trust_secure": "Маалыматтарыңыз корголгон",
-        "trust_support": "Кирүүдө көйгөй болсо, администраторго кайрылыңыз",
         "login_with_key": "Кирүү ачкычы менен кирүү",
         "show_password": "Сырсөздү көрсөтүү",
         "hide_password": "Сырсөздү жашыруу",
@@ -755,7 +753,13 @@
         "history": "Өзгөрүүлөр тарихи",
         "no_history": "Өзгөрүүлөр али болгон жок",
         "days_left": "күн",
-        "subscription_expired": "Абоненттик мөөнөтү бүттү"
+        "subscription_expired": "Абоненттик мөөнөтү бүттү",
+        "delete_title": "Компанияны өчүрүү",
+        "delete_warning": "«{name}» компаниясы жана анын бардык маалыматтары кайтарылбастан өчүрүлөт. Бул аракетти жокко чыгаруу мүмкүн эмес.",
+        "delete_input_label": "Тастыктоо үчүн компаниянын атын киргизиңиз",
+        "delete_input_placeholder": "Компаниянын аты",
+        "delete_input_hint": "Аталышы регистрди эске алуу менен дал келиши керек",
+        "delete_system_hint": "Системалык компанияны өчүрүү мүмкүн эмес"
     },
     "settings": {
         "title": "Жөндөөлөр",
@@ -1270,7 +1274,12 @@
         },
         "companies": {
             "invalid_language": "Уруксатылган маанилер: {values}",
-            "delete_prohibited": "Company deletion is prohibited. Block it instead.",
+            "delete_name_mismatch": "Аталышы дал келген жок. Компаниянын атын так киргизиңиз.",
+            "delete_own_company": "Өзүңүз тиешелүү компанияны өчүрө албайсыз.",
+            "delete_paid_subscription": "Аракеттеги акы төлөнүүчү жазылуусу бар компанияны өчүрүү мүмкүн эмес.",
+            "delete_system_company": "Системалык компанияны өчүрүү мүмкүн эмес.",
+            "delete_requires_post": "POST /companies/<id>/delete/ колдонуңуз.",
+            "not_found": "Компания табылган жок.",
             "no_company": "Колдонуучунун компаниясы жок",
             "owner_only_settings": "Компания жөндөөлөрүн болгону ээ өзгөртө алат",
             "plan_id_required": "Тариф идентификаторун көрсөтүңүз.",

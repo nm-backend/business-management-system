@@ -30,8 +30,6 @@
         "access_key_invalid": "Код неверный, истёк или уже использован",
         "welcome": "Добро пожаловать",
         "access_key_admin_hint": "Получите код доступа у администратора или руководителя",
-        "trust_secure": "Ваши данные защищены",
-        "trust_support": "Проблемы со входом? Обратитесь к администратору",
         "login_with_key": "Войти по ключу доступа",
         "show_password": "Показать пароль",
         "hide_password": "Скрыть пароль",
@@ -755,7 +753,13 @@
         "history": "История изменений",
         "no_history": "Изменений ещё не было",
         "days_left": "дн.",
-        "subscription_expired": "Подписка истекла"
+        "subscription_expired": "Подписка истекла",
+        "delete_title": "Удалить компанию",
+        "delete_warning": "Компания «{name}» и все её данные будут удалены без возможности восстановления. Это действие нельзя отменить.",
+        "delete_input_label": "Введите название компании для подтверждения",
+        "delete_input_placeholder": "Название компании",
+        "delete_input_hint": "Название должно совпадать с учётом регистра",
+        "delete_system_hint": "Системную компанию удалить нельзя"
     },
     "settings": {
         "title": "Настройки",
@@ -1270,7 +1274,12 @@
         },
         "companies": {
             "invalid_language": "Допустимые значения: {values}",
-            "delete_prohibited": "Company deletion is prohibited. Block it instead.",
+            "delete_name_mismatch": "Название не совпадает. Введите название компании точно.",
+            "delete_own_company": "Нельзя удалить компанию, к которой вы принадлежите.",
+            "delete_paid_subscription": "Нельзя удалить компанию с действующей платной подпиской.",
+            "delete_system_company": "Системную компанию удалить нельзя.",
+            "delete_requires_post": "Используйте POST /companies/<id>/delete/.",
+            "not_found": "Компания не найдена.",
             "no_company": "У пользователя нет компании",
             "owner_only_settings": "Настройки компании меняет только владелец",
             "plan_id_required": "Укажите идентификатор тарифа.",

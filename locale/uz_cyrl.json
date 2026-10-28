@@ -30,8 +30,6 @@
         "access_key_invalid": "Код нотўғри, муддати ўтган ёки аллақачон ишлатилган",
         "welcome": "Хуш келибсиз",
         "access_key_admin_hint": "Кириш кодини администратор ёки раҳбарингиздан олинг",
-        "trust_secure": "Маълумотларингиз ҳимояланган",
-        "trust_support": "Киришда муаммо бўлса, администраторга мурожаат қилинг",
         "login_with_key": "Кириш калити билан кириш",
         "show_password": "Паролни кўрсатиш",
         "hide_password": "Паролни яшириш",
@@ -755,7 +753,13 @@
         "history": "Ўзгаришлар тарихи",
         "no_history": "Ўзгаришлар ҳали бўлмаган",
         "days_left": "кун",
-        "subscription_expired": "Обуна муддати тугади"
+        "subscription_expired": "Обуна муддати тугади",
+        "delete_title": "Компанияни ўчириш",
+        "delete_warning": "«{name}» компанияси ва унинг барча маълумотлари қайтарилмасдан ўчирилади. Бу амални бекор қилиб бўлмайди.",
+        "delete_input_label": "Тасдиқлаш учун компания номини киритинг",
+        "delete_input_placeholder": "Компания номи",
+        "delete_input_hint": "Ном ҳарф регистрига мос келиши керак",
+        "delete_system_hint": "Система компаниясини ўчириб бўлмайди"
     },
     "settings": {
         "title": "Созламалар",
@@ -1270,7 +1274,12 @@
         },
         "companies": {
             "invalid_language": "Рухсат этилган қийматлар: {values}",
-            "delete_prohibited": "Company deletion is prohibited. Block it instead.",
+            "delete_name_mismatch": "Ном мос келмади. Компания номини аниқ киритинг.",
+            "delete_own_company": "Ўз компаниянгизни ўчира олмайсиз.",
+            "delete_paid_subscription": "Фаол тўловли обунаси бор компанияни ўчириб бўлмайди.",
+            "delete_system_company": "Система компаниясини ўчириб бўлмайди.",
+            "delete_requires_post": "Бу амал учун POST /companies/<id>/delete/ дан фойдаланинг.",
+            "not_found": "Компания топилмади.",
             "no_company": "Фойдаланувчининг компанияси йўқ",
             "owner_only_settings": "Компания настройкаларини фақат эга ўзгартира олади",
             "plan_id_required": "Тариф идентификаторини кўрсатинг.",
