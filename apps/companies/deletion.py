@@ -187,7 +187,8 @@ def delete_company(*, company_id, actor, confirm_name, request=None):
             # запрещает FOR UPDATE на nullable стороне outer join. Тариф
             # загружаем отдельным запросом внутри транзакции.
             company = Company.objects.select_for_update().get(pk=company_id)
-        except Company.DoesNotExist as error:
+        except (Company.DoesNotExist, TypeError, ValueError) as error:
+            # ValueError — некорректный pk в URL (например, /companies/abc/).
             raise CompanyDeletionError('not_found', 404) from error
 
         if company.is_system:

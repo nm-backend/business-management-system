@@ -324,6 +324,9 @@ class CompaniesComponent {
                     data-i18n="${c.subscription_status === 'frozen' ? 'companies.unfreeze' : 'companies.freeze'}"></button>
                 <button class="btn ${c.is_active ? 'btn-danger' : 'btn-success'} btn-block" id="toggle-company"
                     data-i18n="${c.is_active ? 'companies.block' : 'companies.unblock'}"></button>
+                ${c.is_system
+                    ? `<p class="text-sm text-muted" data-i18n="companies.delete_system_hint"></p>`
+                    : `<button class="btn btn-danger btn-block" id="delete-company" data-i18n="companies.delete"></button>`}
             </div>
 
             <div class="section-title" data-i18n="companies.history"></div>
@@ -343,6 +346,10 @@ class CompaniesComponent {
                 window.toast.error(window.ui.errorText(error));
             }
         });
+        const deleteButton = modal.querySelector('#delete-company');
+        if (deleteButton) {
+            deleteButton.addEventListener('click', () => this.openDeleteModal(c, modal));
+        }
 
         modal.querySelector('#sub-activate').addEventListener('click', () =>
             this.runAction(`/companies/${c.id}/subscription_activate/`, {}, modal, c));
@@ -366,6 +373,86 @@ class CompaniesComponent {
         }
         this.loadHistory(c.id, modal);
         window.i18n.applyTranslations();
+    }
+
+    /** Сравнение названий: NFC, trim и схлопывание пробелов, регистр важен. */
+    normalizeCompanyName(value) {
+        return String(value ?? '').normalize('NFC').trim().replace(/\s+/g, ' ');
+    }
+
+    /**
+     * Модалка удаления компании.
+     *
+     * Кнопка отправки активна только при точном совпадении названия, но
+     * сервер проверяет confirm_name ещё раз: этот UI — не защита.
+     */
+    openDeleteModal(c, parentModal) {
+        const modal = window.ui.modal('companies.delete_title', `
+            <div class="alert-box alert-box-warning u-mb-3" id="delete-company-warning"></div>
+            <form id="delete-company-form" novalidate>
+                <div class="form-group">
+                    <label for="delete-company-name" data-i18n="companies.delete_input_label"></label>
+                    <input id="delete-company-name" class="form-control" type="text"
+                        autocomplete="off" required
+                        data-i18n-attr="placeholder" data-i18n="companies.delete_input_placeholder">
+                    <div class="text-sm text-muted" data-i18n="companies.delete_input_hint"></div>
+                </div>
+                <div id="delete-company-error" class="alert-box alert-box-warning u-mb-3"
+                    role="alert" aria-live="assertive" hidden></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="delete-company-cancel"
+                        data-i18n="common.cancel"></button>
+                    <button type="submit" class="btn btn-danger" id="delete-company-submit"
+                        data-i18n="common.delete" disabled></button>
+                </div>
+            </form>
+        `);
+        window.i18n.applyTranslations();
+        modal.querySelector('#delete-company-warning').textContent = window.ui.t(
+            'companies.delete_warning', { name: c.name },
+        );
+
+        const input = modal.querySelector('#delete-company-name');
+        const submit = modal.querySelector('#delete-company-submit');
+        const errorBox = modal.querySelector('#delete-company-error');
+        const syncSubmit = () => {
+            submit.disabled = this.normalizeCompanyName(input.value)
+                !== this.normalizeCompanyName(c.name);
+        };
+        input.addEventListener('input', syncSubmit);
+        syncSubmit();
+
+        modal.querySelector('#delete-company-cancel').addEventListener('click', () => {
+            window.ui.closeModal(modal);
+        });
+        modal.querySelector('#delete-company-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (submit.disabled) return;
+            errorBox.hidden = true;
+            errorBox.textContent = '';
+            submit.setAttribute('aria-busy', 'true');
+            await window.ui.submitGuard(submit, async () => {
+                try {
+                    await window.api.request(`/companies/${c.id}/delete/`, {
+                        method: 'POST',
+                        body: JSON.stringify({ confirm_name: input.value }),
+                    });
+                    window.ui.closeModal(modal);
+                    window.ui.closeModal(parentModal);
+                    window.toast.success(window.ui.t('common.success'));
+                    if (this.companies.length === 1 && this.page > 1) {
+                        this.page -= 1;
+                    }
+                    await this.loadCompanies();
+                    this.loadStats();
+                } catch (error) {
+                    errorBox.textContent = window.ui.errorText(error);
+                    errorBox.hidden = false;
+                    input.focus();
+                }
+            });
+            submit.setAttribute('aria-busy', 'false');
+        });
     }
 
     async loadHistory(companyId, modal) {

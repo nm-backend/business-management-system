@@ -131,6 +131,13 @@ class Company(TimestampedModel):
         verbose_name='Минимум фото при сдаче работы',
     )
     is_active = models.BooleanField(default=True, db_index=True, verbose_name='Активен')
+    # Служебная компания платформы. Миграция 0002 создаёт такую компанию
+    # ('SkladPro') для легаси-данных до мультитенантности; удалять её нельзя —
+    # вместе с ней исчезли бы данные, к которым ещё не привязан другой tenant.
+    # Флаг, а не проверка имени: имя компания может изменить в админке.
+    is_system = models.BooleanField(
+        default=False, db_index=True, verbose_name='Системная компания',
+    )
     logo = models.ImageField(
         upload_to='company_logos/', blank=True, default='',
         validators=[validate_file_size], verbose_name='Логотип',

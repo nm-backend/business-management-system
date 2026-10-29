@@ -36,3 +36,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def chat_message(self, event):
         """Обработчик события 'chat.message' из group_send — шлём клиенту."""
         await self.send_json({'type': 'message', 'message': event['message']})
+
+    async def force_disconnect(self, event):
+        """Принудительное закрытие: компанию удалили, сессия больше не валидна."""
+        await self.close(code=4403)

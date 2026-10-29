@@ -130,12 +130,12 @@ class CompanyAccessKeyInline(admin.TabularInline):
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
     form = CompanyAdminForm
-    list_display = ('name', 'active_badge', 'subscription_badge', 'owner_display', 'users_count', 'employees_summary', 'created_at')
+    list_display = ('name', 'active_badge', 'is_system', 'subscription_badge', 'owner_display', 'users_count', 'employees_summary', 'created_at')
     list_filter = ('is_active', 'subscription_status')
     search_fields = ('name',)
     date_hierarchy = 'created_at'
     readonly_fields = (
-        'created_at', 'updated_at', 'stats_panel', 'recent_activity',
+        'created_at', 'updated_at', 'is_system', 'stats_panel', 'recent_activity',
         # Подпиской управляет супер-администратор через API — в админке только просмотр.
         'subscription_status', 'subscription_start', 'subscription_end', 'last_activity',
     )
@@ -146,6 +146,15 @@ class CompanyAdmin(admin.ModelAdmin):
     def get_inlines(self, request, obj):
         # На странице создания инлайнов ещё нет.
         return [CompanyUserInline, CompanyAccessKeyInline] if obj else []
+
+    def has_delete_permission(self, request, obj=None):
+        """Прямое удаление в админке закрыто.
+
+        Django-админка удаляет объект без ввода названия и без платформенного
+        аудита. Единственный путь — POST /api/v1/companies/{id}/delete/,
+        который вызывает apps.companies.deletion.delete_company.
+        """
+        return False
 
     # ── Add Employee: весь онбординг идёт со страницы компании ──
     def get_urls(self):
@@ -219,7 +228,7 @@ class CompanyAdmin(admin.ModelAdmin):
                 }),
             )
         return (
-            (None, {'fields': ('name', 'is_active', 'created_at', 'updated_at')}),
+            (None, {'fields': ('name', 'is_active', 'is_system', 'created_at', 'updated_at')}),
             ('Подписка (SaaS)', {
                 'fields': ('subscription_status', 'subscription_start', 'subscription_end', 'last_activity'),
                 'description': 'Подпиской управляет платформенный супер-администратор '

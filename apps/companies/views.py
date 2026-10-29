@@ -18,17 +18,19 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import MethodNotAllowed, ValidationError
+from rest_framework.exceptions import (
+    MethodNotAllowed, PermissionDenied, ValidationError,
+)
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.accounts.token_utils import blacklist_all_tokens
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
 
 from apps.audit.models import AuditLog
 from apps.audit.services import write_audit_log
 from apps.core.permissions import IsOwnerOrAdmin, IsSuperAdmin
+from .deletion import CompanyDeletionError, delete_company as delete_company_service
 from .models import Company, SubscriptionChange, SubscriptionPlan
 from .serializers import (
     CompanySerializer, CompanyCreateSerializer, CompanySettingsSerializer,
@@ -52,7 +54,14 @@ RECENT_DAYS = 7
 
 
 class CompanyViewSet(viewsets.ModelViewSet):
-    """CRUD компаний для супер-администратора (без удаления - только блокировка)."""
+    """
+    CRUD компаний для супер-администратора.
+
+    Удаление — осознанное исключение из правила «удаление = архивация»:
+    POST /companies/{id}/delete/ принимает confirm_name и вызывает единый
+    сервис apps.companies.deletion.delete_company. DELETE (destroy) оставлен
+    запрещённым: тело DELETE ненадёжно проходит через прокси и клиентов.
+    """
     queryset = Company.objects.all()
     permission_classes = [IsSuperAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -151,8 +160,38 @@ class CompanyViewSet(viewsets.ModelViewSet):
         )
 
     def destroy(self, request, *args, **kwargs):
+        """DELETE не используется: подтверждение передаётся в теле запроса."""
         lang = getattr(request.user, 'language', 'uz_cyrl')
-        raise MethodNotAllowed('DELETE', detail=translate('errors.companies.delete_prohibited', lang))
+        raise MethodNotAllowed(
+            'DELETE',
+            detail=translate('errors.companies.delete_requires_post', lang),
+        )
+
+    @action(detail=True, methods=['post'], url_path='delete')
+    def destroy_company(self, request, pk=None):
+        """
+        POST /api/v1/companies/{id}/delete/ — полное удаление компании.
+
+        confirm_name проверяется сервисом повторно: запрос в обход UI не должен
+        удалять компанию без точного подтверждения.
+        """
+        lang = getattr(request.user, 'language', 'uz_cyrl')
+        try:
+            delete_company_service(
+                company_id=pk,
+                actor=request.user,
+                confirm_name=request.data.get('confirm_name', ''),
+                request=request,
+            )
+        except CompanyDeletionError as error:
+            return Response(
+                {
+                    'detail': translate(f'errors.companies.{error.code}', lang),
+                    'code': error.code,
+                },
+                status=error.status_code,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):

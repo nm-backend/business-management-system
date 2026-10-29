@@ -107,6 +107,15 @@ class CompanyDeleteAPITests(TestCase):
         self.assertIn(response.status_code, (401, 403))
         self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
 
+    def test_unknown_or_malformed_company_id_returns_404(self):
+        for company_id in ('999999', 'not-a-number'):
+            response = self.api.post(
+                f'/api/v1/companies/{company_id}/delete/',
+                {'confirm_name': 'Acme'}, format='json',
+            )
+            self.assertEqual(response.status_code, 404, company_id)
+            self.assertEqual(response.data['code'], 'not_found')
+
     def test_cannot_delete_own_company(self):
         self.superadmin.company = self.company
         self.superadmin.save(update_fields=['company'])
@@ -181,10 +190,17 @@ class CompanyDeleteAPITests(TestCase):
         self.assertEqual(response.status_code, 204)
 
     def test_extension_history_does_not_block_delete(self):
+        # История продления — журнал, а не подтверждение оплаты. Проверяем на
+        # бесплатном тарифе вне триала: если вернуть правило EXTENDED, тест
+        # упадёт, а не будет пропущен из-за is_trial.
         company = make_company(name='ExtendedCo')
-        company.plan = _paid_plan()
-        company.is_trial = True
-        company.save(update_fields=['plan', 'is_trial'])
+        company.plan = None
+        company.is_trial = False
+        company.subscription_status = Company.SubscriptionStatus.ACTIVE
+        company.subscription_end = timezone.now() + datetime.timedelta(days=10)
+        company.save(update_fields=[
+            'plan', 'is_trial', 'subscription_status', 'subscription_end',
+        ])
         SubscriptionChange.objects.create(
             company=company, action=SubscriptionChange.Action.EXTENDED,
             old_status='active', new_status='active',
@@ -529,7 +545,7 @@ class CompanyDeleteAuditAndSocketsTests(TestCase):
 
     def test_i18n_keys_present_in_all_locales(self):
         keys = (
-            'delete_title', 'delete_warning', 'delete_input_label',
+            'delete', 'delete_title', 'delete_warning', 'delete_input_label',
             'delete_input_placeholder', 'delete_input_hint', 'delete_system_hint',
         )
         error_keys = (

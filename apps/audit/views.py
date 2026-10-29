@@ -1,6 +1,8 @@
 from rest_framework import filters, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from apps.core.permissions import IsCompanyMember
+from apps.core.permissions import IsCompanyMember, IsSuperAdmin
 from core.permissions import IsOwner
 from .models import AuditLog
 from .serializers import AuditLogSerializer
@@ -29,3 +31,21 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         return AuditLog.objects.filter(
             company_id=self.request.user.company_id,
         ).select_related('actor')
+
+    @action(detail=False, methods=['get'], url_path='platform',
+            permission_classes=[IsSuperAdmin])
+    def platform_logs(self, request):
+        """
+        GET /api/v1/audit/logs/platform/ — только платформенные записи.
+
+        Суперадмин не должен видеть бизнес-аудит компаний (изоляция), но
+        запись об удалении компании создаётся с company=None и иначе была бы
+        недоступна никому. Отдаём только company__isnull=True.
+        """
+        queryset = AuditLog.objects.filter(company__isnull=True).select_related('actor')
+        queryset = self.filter_queryset(queryset)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        return Response(self.get_serializer(queryset, many=True).data)

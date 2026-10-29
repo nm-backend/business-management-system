@@ -187,6 +187,7 @@ def write_audit_log(
     metadata=None,
     request=None,
     company=None,
+    as_platform=False,
 ):
     """
     Создает запись в audit log.
@@ -207,6 +208,9 @@ def write_audit_log(
         request: HttpRequest - объект запроса для IP и User Agent (опционально)
         company: Company - принудительная привязка к компании для системных
                  действий (Celery), где actor=None (опционально)
+        as_platform: bool - платформенное действие без компании (удаление
+                 компании супер-администратором). Не даёт подставить компанию
+                 актора: такая запись должна пережить удаление тенанта.
 
     Возвращает:
         AuditLog - созданная запись аудита
@@ -226,7 +230,7 @@ def write_audit_log(
         actor and getattr(actor, 'is_authenticated', False)
     )
 
-    if company is None:
+    if company is None and not as_platform:
         company = getattr(actor, 'company', None) if actor_is_authenticated else None
 
     return AuditLog.objects.create(

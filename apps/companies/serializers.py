@@ -54,7 +54,7 @@ class CompanySerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = [
-            'id', 'name', 'logo', 'logo_url', 'is_active',
+            'id', 'name', 'logo', 'logo_url', 'is_active', 'is_system',
             'owner_username', 'owner_full_name',
             'users_count', 'clients_count', 'orders_count',
             'plan_id', 'plan_name', 'is_trial', 'grace_period_days',
@@ -70,7 +70,7 @@ class CompanySerializer(serializers.ModelSerializer):
         # Поля подписки (включая план и флаг триала) — ТОЛЬКО через subscription
         # action'ы (история + аудит).
         read_only_fields = [
-            'is_active', 'logo', 'logo_url', 'created_at', 'updated_at',
+            'is_active', 'is_system', 'logo', 'logo_url', 'created_at', 'updated_at',
             'plan', 'is_trial', 'grace_period_days',
             'subscription_status', 'subscription_start', 'subscription_end',
             'last_activity',
