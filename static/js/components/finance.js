@@ -21,8 +21,7 @@ class FinanceComponent {
         container.innerHTML = `
             <div class="page-hero">
                 <div>
-                    <div class="eyebrow" data-i18n="finance.title"></div>
-                    <h2 data-i18n="nav.analytics"></h2>
+                    <h2>${window.ui.t('finance.title')}</h2>
                 </div>
             </div>
             <div class="tabs" role="tablist" aria-label="Finance sections">
@@ -225,7 +224,7 @@ class FinanceComponent {
                 ${window.ui.customPeriodPanelHtml(this.dateFrom, this.dateTo, period === 'custom')}
                 ${body}
                 <div class="section-title" data-i18n="settings.export"></div>
-                <div class="u-grid-2">
+                <div class="export-actions" style="display:flex;gap:10px;flex-wrap:wrap;">
                     <a class="btn btn-secondary btn-sm" href="#" id="export-xlsx">${window.icon('trending-up', 16)} Excel</a>
                     <a class="btn btn-secondary btn-sm" href="#" id="export-pdf">${window.icon('file-text', 16)} PDF</a>
                 </div>`;

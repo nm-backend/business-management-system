@@ -70,6 +70,7 @@
     },
     "nav": {
         "dashboard": "Бош панел",
+        "notifications": "Билдиришномалар",
         "raw_materials": "Хом ашё омбори",
         "finished_products": "Тайёр маҳсулот",
         "orders": "Буюртмалар",
@@ -877,6 +878,7 @@
         "options_title": "Қўшимча параметрлар"
     },
     "common": {
+        "skip_to_content": "Асосий контентга ўтиш",
         "save": "Сақлаш",
         "cancel": "Бекор қилиш",
         "delete": "Ўчириш",

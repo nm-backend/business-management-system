@@ -20,19 +20,28 @@ class WarehouseComponent {
         container.innerHTML = `
             <div class="page-hero">
                 <div>
-                    <div class="eyebrow" data-i18n="warehouse.title"></div>
                     <h2>${window.ui.t('warehouse.title')}</h2>
                 </div>
+                ${canEdit ? `<div class="page-hero-actions">
+                    <button class="btn btn-primary btn-sm" id="add-material-btn" type="button">
+                        ${window.icon('plus', 16)}<span data-i18n="warehouse.add_material"></span>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="receipt-doc-btn" type="button">
+                        ${window.icon('download', 16)}<span data-i18n="warehouse.receipt_document"></span>
+                    </button>
+                </div>` : ''}
             </div>
-            <div class="tabs" role="tablist" aria-label="Warehouse sections">
-                <button class="tab-btn active" role="tab" aria-selected="true" id="tab-materials" data-i18n="warehouse.title"></button>
-                <button class="tab-btn" role="tab" aria-selected="false" id="tab-products" data-i18n="warehouse.finished_title"></button>
-            </div>
-            <div class="tabs" id="warehouse-subtabs" role="tablist" aria-label="Warehouse filters">
-                <button class="tab-btn active" role="tab" aria-selected="true" data-wtab="active" data-i18n="common.active"></button>
-                <button class="tab-btn" role="tab" aria-selected="false" data-wtab="low" data-i18n="warehouse.min_leftovers"></button>
-                ${user.is_owner ? `<button class="tab-btn" role="tab" aria-selected="false" data-wtab="archive" data-i18n="common.archive"></button>` : ''}
-                ${canEdit ? `<button class="tab-btn" role="tab" aria-selected="false" data-wtab="history" data-i18n="warehouse.stock_movement"></button>` : ''}
+            <div class="warehouse-nav-bar u-mb-4" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+                <div class="tabs" role="tablist" aria-label="Warehouse sections">
+                    <button class="tab-btn active" role="tab" aria-selected="true" id="tab-materials" data-i18n="warehouse.title"></button>
+                    <button class="tab-btn" role="tab" aria-selected="false" id="tab-products" data-i18n="warehouse.finished_title"></button>
+                </div>
+                <div class="tabs" id="warehouse-subtabs" role="tablist" aria-label="Warehouse filters">
+                    <button class="tab-btn active" role="tab" aria-selected="true" data-wtab="active" data-i18n="common.active"></button>
+                    <button class="tab-btn" role="tab" aria-selected="false" data-wtab="low" data-i18n="warehouse.min_leftovers"></button>
+                    ${user.is_owner ? `<button class="tab-btn" role="tab" aria-selected="false" data-wtab="archive" data-i18n="common.archive"></button>` : ''}
+                    ${canEdit ? `<button class="tab-btn" role="tab" aria-selected="false" data-wtab="history" data-i18n="warehouse.stock_movement"></button>` : ''}
+                </div>
             </div>
             <div class="warehouse-summary" id="warehouse-summary" style="display:none;gap:10px;margin-bottom:10px;">
                 <div class="card" style="flex:1;margin:0;">
@@ -55,7 +64,7 @@ class WarehouseComponent {
                 <select id="warehouse-select" class="form-control"></select>
             </div>
             <div id="warehouse-cells" class="u-mb-4"></div>
-            <div id="stone-type-tabs" class="tabs" role="tablist" aria-label="Stone type filters" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
+            <div id="stone-type-tabs" class="tabs" role="tablist" aria-label="Stone type filters" style="display:inline-flex;max-width:100%;gap:6px;margin-bottom:10px;flex-wrap:wrap;"></div>
             <div class="search-box search-box--with-action">
                 <div class="search-field">
                     <span class="search-icon" aria-hidden="true">${window.icon('search', 18)}</span>
@@ -105,8 +114,6 @@ class WarehouseComponent {
                 <button class="btn btn-secondary btn-sm btn-block u-mt-3" id="warehouse-filter-clear"
                         type="button" data-i18n="common.clear_filter"></button>
             </div>
-            ${canEdit ? `<button class="btn btn-primary btn-block" id="add-material-btn" style="margin-bottom:12px;margin-top:10px;" data-i18n="warehouse.add_material"></button>` : ''}
-            ${canEdit ? `<button class="btn btn-success btn-block u-mb-5" id="receipt-doc-btn" data-i18n="warehouse.receipt_document"></button>` : ''}
             <div class="list-group" id="materials-list"></div>
         `;
 
@@ -275,32 +282,37 @@ class WarehouseComponent {
         const stats = data.quick_stats;
         const today = data.today;
         if (!stats && !today) { box.style.display = 'none'; return; }
-        const chip = (labelKey, value, cls = '', severity = '') => `
-            <button type="button" data-severity-filter="${severity}"
-                    style="flex:1 1 100px;text-align:center;border:none;background:none;padding:0;
-                           cursor:${severity ? 'pointer' : 'default'};">
-                <div class="font-bold ${cls}">${window.ui.escape(String(value))}</div>
-                <div class="text-sm text-muted" data-i18n="${labelKey}"></div>
-            </button>`;
+        // Ячейка-показатель: число сверху, подпись снизу. Кликабельные
+        // (минимум/критично) — button, остальные — div, чтобы не добавлять
+        // лишних остановок табуляции.
+        const chip = (labelKey, value, cls = '', severity = '') => {
+            const tag = severity ? 'button' : 'div';
+            const attrs = severity
+                ? `type="button" class="quick-cell is-clickable" data-severity-filter="${severity}"`
+                : 'class="quick-cell"';
+            return `<${tag} ${attrs}>
+                <span class="quick-value ${cls}">${window.ui.escape(String(value))}</span>
+                <span class="quick-label" data-i18n="${labelKey}"></span>
+            </${tag}>`;
+        };
         box.innerHTML = `
-            <div class="card-title u-mb-2"><span data-i18n="warehouse.quick_stats"></span></div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div class="card-title"><span data-i18n="warehouse.quick_stats"></span></div>
+            <div class="quick-grid">
                 ${chip('warehouse.types_count', data.types_count ?? 0)}
                 ${chip('warehouse.materials_count', data.materials_count ?? 0)}
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;">
                 ${chip('warehouse.at_minimum', stats?.low_stock_count ?? 0, 'text-warning', 'low')}
                 ${chip('warehouse.critical_low', stats?.critical_count ?? 0, 'text-danger', 'critical')}
                 ${chip('warehouse.recent_arrivals', stats?.recent_arrivals_count ?? 0)}
                 ${chip('warehouse.in_reserve', stats?.reserved_count ?? 0)}
             </div>
             ${today ? `
-                <div class="text-sm text-muted u-mt-3">
-                    <span data-i18n="warehouse.today_summary"></span>:
-                    <span class="text-success">+${window.ui.qty(today.incoming)}</span>
-                    <span data-i18n="warehouse.today_incoming"></span> ·
-                    <span class="text-danger">−${window.ui.qty(today.outgoing)}</span>
-                    <span data-i18n="warehouse.today_outgoing"></span>
+                <div class="quick-today">
+                    <span class="text-muted" data-i18n="warehouse.today_summary"></span>
+                    <span><span class="text-success">+${window.ui.qty(today.incoming)}</span>
+                    <span class="text-muted" data-i18n="warehouse.today_incoming"></span></span>
+                    <span class="quick-today-sep" aria-hidden="true">·</span>
+                    <span><span class="text-danger">−${window.ui.qty(today.outgoing)}</span>
+                    <span class="text-muted" data-i18n="warehouse.today_outgoing"></span></span>
                 </div>` : ''}`;
         box.style.display = '';
         box.querySelectorAll('[data-severity-filter]').forEach((el) => {
@@ -617,11 +629,8 @@ class WarehouseComponent {
             const materials = response.results || [];
 
             if (!materials.length) {
-                const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
-                const cta = canEdit ? `<button type="button" class="btn btn-primary btn-sm" id="empty-add-material" data-i18n="warehouse.add_material"></button>` : '';
-                window.listStates.empty(listEl, window.ui.t('common.no_data'), cta);
-                const btn = listEl.querySelector('#empty-add-material');
-                if (btn) btn.addEventListener('click', () => this.openForm());
+                // Добавление уже доступно кнопкой в заголовке страницы.
+                window.listStates.empty(listEl, window.ui.t('common.no_data'));
                 window.i18n.applyTranslations();
                 return;
             }

@@ -12,84 +12,109 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
+    <meta name="color-scheme" content="light dark" />
     <title>SkladPro.Nod</title>
     <!-- Favicon: раньше вкладка показывала стандартную иконку браузера. -->
     <link rel="icon" type="image/svg+xml" href="{% static 'img/logo.svg' %}" />
     <link rel="apple-touch-icon" href="{% static 'img/logo.svg' %}" />
     <link rel="manifest" href="{% static 'manifest.json' %}" />
-    <meta name="theme-color" content="#0071e3" />
+    <!-- Chart.js (~200 КБ) грузится только для графика на главной владельца,
+         а не на каждой странице приложения: путь храним в meta, чтобы
+         статический URL оставался одним местом (STATIC_URL). -->
+    <meta name="chart-js-src" content="{% static 'js/vendor/chart.umd.min.js' %}?v={{ ASSET_VERSION }}" />
+    <meta name="theme-color" content="#f5f5f7" />
     <!-- apple-mobile-web-app-capable устарел и ругался в консоли на каждой
          загрузке; стандартный тег — mobile-web-app-capable. Оставляем оба:
          старые версии iOS понимают только apple-вариант. -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!-- Шрифты больше не тянем с fonts.googleapis.com: системный стек SF Pro
+         на Apple-устройствах и Segoe UI на Windows выглядит нативно, не
+         блокирует первую отрисовку и не зависит от доступности чужого CDN. -->
     <link rel="stylesheet" href="{% static 'css/base.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/ux.css' %}?v={{ ASSET_VERSION }}" />
-    <link rel="stylesheet" href="{% static 'css/chat.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/enhance.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/mobile.css' %}?v={{ ASSET_VERSION }}" />
     <link rel="stylesheet" href="{% static 'css/apple.css' %}?v={{ ASSET_VERSION }}" />
     {% block extra_css %}{% endblock %}
     {% block chart_css %}{% endblock %}
   </head>
-  <body>
-    <a class="skip-link" href="#app-content">Skip to main content</a>
+  <body class="{% block body_class %}{% endblock %}">
+    <!-- Тему применяем до первой отрисовки, чтобы не было белой вспышки. -->
+    <script nonce="{{ request.csp_nonce }}">
+      try {
+        if (localStorage.getItem('theme') === 'dark') {
+          document.body.classList.add('theme-dark');
+        }
+      } catch (e) { /* приватный режим может запрещать localStorage */ }
+    </script>
+
+    <a class="skip-link" href="#app-content" data-i18n="common.skip_to_content">Skip to main content</a>
     <div class="app-container">
       <!-- Desktop Sidebar -->
       <aside class="app-sidebar" id="app-sidebar">
         <a href="#/" class="sidebar-brand">
           <img class="sidebar-brand-mark" src="{% static 'img/logo.svg' %}"
                width="28" height="28" alt="" aria-hidden="true">
-          <span>SkladPro</span>
+          <span class="sidebar-brand-name">SkladPro<span class="sidebar-brand-suffix">.Nod</span></span>
         </a>
         <nav class="sidebar-nav" role="navigation" aria-label="Primary navigation">
           <a href="#/" class="sidebar-link" data-nav="dashboard">
-            <span class="nav-icon">🏠</span><span data-i18n="nav.dashboard">Бош панел</span>
+            <span class="nav-icon" data-icon="home" aria-hidden="true"></span>
+            <span data-i18n="nav.dashboard">Бош панел</span>
           </a>
           <a href="#/orders" class="sidebar-link" data-nav="orders">
-            <span class="nav-icon">📋</span><span data-i18n="nav.orders">Буюртмалар</span>
+            <span class="nav-icon" data-icon="clipboard-list" aria-hidden="true"></span>
+            <span data-i18n="nav.orders">Буюртмалар</span>
           </a>
           <!-- Продажи: только владелец (деньги; API тоже IsOwner). -->
           <a href="#/sales" class="sidebar-link" data-nav="sales" data-role="owner">
-            <span class="nav-icon">🛒</span><span data-i18n="nav.sales">Сотувлар</span>
+            <span class="nav-icon" data-icon="banknote" aria-hidden="true"></span>
+            <span data-i18n="nav.sales">Сотувлар</span>
           </a>
           <a href="#/warehouse" class="sidebar-link" data-nav="warehouse">
-            <span class="nav-icon">📦</span><span data-i18n="nav.warehouse">Омбор</span>
+            <span class="nav-icon" data-icon="package" aria-hidden="true"></span>
+            <span data-i18n="nav.warehouse">Омбор</span>
           </a>
           <a href="#/production" class="sidebar-link" data-nav="production" data-role="staff-worker">
-            <span class="nav-icon">🛠️</span><span data-i18n="nav.production">Ишлаб чиқариш</span>
+            <span class="nav-icon" data-icon="wrench" aria-hidden="true"></span>
+            <span data-i18n="nav.production">Ишлаб чиқариш</span>
           </a>
           <a href="#/finance" class="sidebar-link" data-nav="finance" data-role="owner">
-            <span class="nav-icon">💰</span><span data-i18n="nav.analytics">Молия</span>
+            <span class="nav-icon" data-icon="trending-up" aria-hidden="true"></span>
+            <span data-i18n="nav.analytics">Молия</span>
           </a>
           <a href="#/clients" class="sidebar-link" data-nav="clients" data-role="staff">
-            <span class="nav-icon">👥</span><span data-i18n="nav.clients">Мижозлар</span>
+            <span class="nav-icon" data-icon="users" aria-hidden="true"></span>
+            <span data-i18n="nav.clients">Мижозлар</span>
           </a>
           <a href="#/messages" class="sidebar-link" data-nav="messages">
-            <span class="nav-icon">✉️</span><span data-i18n="messages_section.title">Хабарлар</span>
+            <span class="nav-icon" data-icon="message" aria-hidden="true"></span>
+            <span data-i18n="messages_section.title">Хабарлар</span>
           </a>
           <!-- Собственная подписка: владелец и администратор (setupSidebar). -->
           <a href="#/subscription" class="sidebar-link" data-nav="subscription" data-role="owner-admin">
-            <span class="nav-icon">📄</span><span data-i18n="subscription.page_title">Обуна</span>
+            <span class="nav-icon" data-icon="file-text" aria-hidden="true"></span>
+            <span data-i18n="subscription.page_title">Обуна</span>
           </a>
           <!-- Управление бизнесами: виден только супер-админу (setupSidebar). -->
           <a href="#/companies" class="sidebar-link" data-nav="companies" data-role="superadmin">
-            <span class="nav-icon">🏢</span><span data-i18n="companies.title">Компании</span>
+            <span class="nav-icon" data-icon="building" aria-hidden="true"></span>
+            <span data-i18n="companies.title">Компании</span>
           </a>
           <a href="#/settings" class="sidebar-link" data-nav="settings">
-            <span class="nav-icon">⚙️</span><span data-i18n="settings.title">Созламалар</span>
+            <span class="nav-icon" data-icon="settings" aria-hidden="true"></span>
+            <span data-i18n="settings.title">Созламалар</span>
           </a>
         </nav>
         <div class="sidebar-footer">
           <div class="sidebar-user" id="sidebar-user"></div>
-          <button class="btn btn-secondary btn-sm sidebar-logout" id="sidebar-logout" type="button" data-i18n="auth.logout">Чиқиш</button>
+          <button class="btn btn-secondary btn-sm sidebar-logout" id="sidebar-logout" type="button">
+            <span class="nav-icon" data-icon="log-out" data-icon-size="16" aria-hidden="true"></span>
+            <span data-i18n="auth.logout">Чиқиш</span>
+          </button>
         </div>
       </aside>
 
@@ -97,12 +122,13 @@
         <!-- Top App Bar -->
         <header class="top-bar" id="app-top-bar">
           <div class="top-bar-left">
-            <div class="page-badge" data-i18n="app.brand_short">SkladPro</div>
             <h1 id="page-title">SkladPro</h1>
           </div>
           <div class="actions">
-            <button class="icon-btn" id="notifications-btn" type="button" aria-label="Notifications">
-              🔔
+            <button class="icon-btn" id="notifications-btn" type="button"
+                    data-i18n="nav.notifications" data-i18n-attr="aria-label"
+                    aria-label="Notifications">
+              <span data-icon="bell" data-icon-size="20" aria-hidden="true"></span>
               <span class="notif-badge" id="notif-badge" style="display: none"></span>
             </button>
           </div>
@@ -114,52 +140,51 @@
         {% block content %}{% endblock %}
     </div>
 <footer class="app-footer">
-    <div class="footer-top">
-        <strong>SkladPro.Nod</strong>
-        <span>ERP System</span>
-    </div>
-
-    <div class="footer-bottom">
-        <span>© {% now "Y" %}</span>
-        <span>•</span>
-        <span data-i18n="footer.version"></span>
-    </div>
+    <span>SkladPro.Nod</span>
+    <span aria-hidden="true">·</span>
+    <span>© {% now "Y" %}</span>
+    <span aria-hidden="true">·</span>
+    <span data-i18n="footer.version"></span>
 </footer>
 </main>
       <!-- Mobile Bottom Navigation -->
       <nav class="bottom-nav" id="app-bottom-nav" role="navigation" aria-label="Primary navigation">
         <a href="#/" class="nav-item" id="nav-dashboard" data-nav="dashboard">
-          <span class="nav-icon">🏠</span>
+          <span class="nav-icon" data-icon="home" aria-hidden="true"></span>
           <span data-i18n="nav.dashboard">Бош панел</span>
         </a>
         <a href="#/orders" class="nav-item" id="nav-orders" data-nav="orders">
-          <span class="nav-icon">📋</span>
+          <span class="nav-icon" data-icon="clipboard-list" aria-hidden="true"></span>
           <span data-i18n="nav.orders">Буюртмалар</span>
         </a>
         <a href="#/production" class="nav-item" id="nav-production" data-nav="production" data-role="staff-worker">
-          <span class="nav-icon">🛠️</span>
+          <span class="nav-icon" data-icon="wrench" aria-hidden="true"></span>
           <span data-i18n="nav.my_tasks_short">Вазифалар</span>
         </a>
         <a href="#/warehouse" class="nav-item" id="nav-warehouse" data-nav="warehouse">
-          <span class="nav-icon">📦</span>
+          <span class="nav-icon" data-icon="package" aria-hidden="true"></span>
           <span data-i18n="nav.warehouse_short">Омбор</span>
         </a>
         <a href="#/clients" class="nav-item" id="nav-clients" data-nav="clients" data-role="staff">
-          <span class="nav-icon">👥</span>
+          <span class="nav-icon" data-icon="users" aria-hidden="true"></span>
           <span data-i18n="nav.clients">Мижозлар</span>
         </a>
+        <a href="#/companies" class="nav-item" id="nav-companies" data-nav="companies" data-role="superadmin">
+          <span class="nav-icon" data-icon="building" aria-hidden="true"></span>
+          <span data-i18n="companies.title">Компании</span>
+        </a>
         <a href="#/settings" class="nav-item" id="nav-settings" data-nav="settings">
-          <span class="nav-icon">⚙️</span>
+          <span class="nav-icon" data-icon="settings" aria-hidden="true"></span>
           <span data-i18n="nav.more">Кўпроқ</span>
         </a>
       </nav>
     </div>
 
-    <!-- Chart.js CDN -->
+    {% block core_js %}
     <!-- Chart.js хранится в проекте, а не тянется с cdn.jsdelivr.net: в цеху со
          слабым интернетом графики просто не грузились, плюс это снимает
-         зависимость от чужого сервера и ошибку CSP на его sourcemap. -->
-    <script src="{% static 'js/vendor/chart.umd.min.js' %}?v={{ ASSET_VERSION }}" nonce="{{ request.csp_nonce }}"></script>
+         зависимость от чужого сервера и ошибку CSP на его sourcemap.
+         Подключается лениво только на главной владельца — см. dashboard.js. -->
 
     <!-- Core JS -->
     <script src="{% static 'js/api.js' %}?v={{ ASSET_VERSION }}"></script>
@@ -170,6 +195,7 @@
     <script src="{% static 'js/list-states.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/ui.js' %}?v={{ ASSET_VERSION }}"></script>
     <script src="{% static 'js/media.js' %}?v={{ ASSET_VERSION }}"></script>
+    {% endblock %}
 
     {% block extra_js %}
     <script src="{% static 'js/router.js' %}?v={{ ASSET_VERSION }}"></script>

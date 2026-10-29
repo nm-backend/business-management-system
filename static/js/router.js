@@ -78,7 +78,7 @@ class Router {
         if (path.startsWith('/audit')) navKey = 'audit';
         if (path.startsWith('/settings')) navKey = 'settings';
         // На мобильном отдельного пункта нет — часть страниц подсвечивают «Кўпроқ».
-        const bottomKey = ['finance', 'messages', 'companies'].includes(navKey) ? 'settings' : navKey;
+        const bottomKey = ['finance', 'messages'].includes(navKey) ? 'settings' : navKey;
         this.setActiveNav(navKey, bottomKey);
 
         appElement.innerHTML = '<div class="list-state list-state-loading"><span class="spinner"></span><span data-i18n="common.loading">…</span></div>';

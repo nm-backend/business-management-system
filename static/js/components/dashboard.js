@@ -247,6 +247,26 @@ class DashboardComponent {
         ).join('<br>')}</span>`;
     }
 
+    /**
+     * Ленивая загрузка Chart.js: библиотека нужна только для графика выручки
+     * на главной владельца. Раньше 200 КБ скачивались на каждой странице.
+     */
+    async ensureChartLibrary() {
+        if (window.Chart) return true;
+        if (!this._chartLibraryPromise) {
+            this._chartLibraryPromise = new Promise((resolve) => {
+                const src = document.querySelector('meta[name="chart-js-src"]')?.content;
+                if (!src) { resolve(false); return; }
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => resolve(typeof window.Chart !== 'undefined');
+                script.onerror = () => resolve(false);
+                document.head.appendChild(script);
+            });
+        }
+        return this._chartLibraryPromise;
+    }
+
     async renderRevenueChart(container, data) {
         // Пробуем получить данные за 6 месяцев
         let chartData;
@@ -274,9 +294,15 @@ class DashboardComponent {
 
         const canvas = wrap.querySelector('#revenue-chart-canvas');
         if (!canvas) return;
+        if (!(await this.ensureChartLibrary())) return;
 
         try {
             const ctx = canvas.getContext('2d');
+            // Цвета осей/легенды берём из темы: на тёмном фоне чёрная сетка
+            // Chart.js невидима, а подписи сливались с фоном.
+            const muted = getComputedStyle(document.body).getPropertyValue('--text-muted').trim() || '#6e6e73';
+            const gridColor = document.body.classList.contains('theme-dark')
+                ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)';
             if (window._revenueChart) {
                 window._revenueChart.destroy();
             }
@@ -316,7 +342,7 @@ class DashboardComponent {
                         legend: {
                             display: true,
                             position: 'bottom',
-                            labels: { boxWidth: 12, padding: 12, font: { size: 11 } }
+                            labels: { boxWidth: 12, padding: 12, font: { size: 11 }, color: muted }
                         },
                         tooltip: {
                             callbacks: {
@@ -332,12 +358,13 @@ class DashboardComponent {
                             beginAtZero: true,
                             ticks: {
                                 callback: (v) => Number(v).toLocaleString('ru-RU'),
-                                font: { size: 10 }
+                                font: { size: 10 },
+                                color: muted
                             },
-                            grid: { color: 'rgba(0,0,0,0.04)' }
+                            grid: { color: gridColor }
                         },
                         x: {
-                            ticks: { font: { size: 10 } },
+                            ticks: { font: { size: 10 }, color: muted },
                             grid: { display: false }
                         }
                     }
@@ -457,7 +484,7 @@ class DashboardComponent {
                             ${window.ui.workBadge(t.status)}
                         </a>`).join('')}
                 </div>` : `
-                <div class="card list-state" data-i18n="production.no_pending_tasks"></div>`}
+                <div class="card list-state list-state-empty" data-i18n="production.no_pending_tasks"></div>`}
         `;
     }
 }

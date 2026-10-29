@@ -58,7 +58,9 @@ class SubscriptionUI {
 
         const renewBlock = data.renewal_request_pending
             ? '<p class="text-sm" data-i18n="subscription.request_pending"></p>'
-            : '<button class="btn btn-primary btn-block u-mt-14" data-sub-renew data-i18n="subscription.request_renewal"></button>';
+            : `<div class="subscription-actions">
+                <button class="btn btn-primary btn-sm" data-sub-renew data-i18n="subscription.request_renewal"></button>
+            </div>`;
 
         return `
             <div class="list-group" style="box-shadow:none;border:1px solid var(--border-color);margin-bottom:14px;">
@@ -137,7 +139,12 @@ class SubscriptionComponent {
     async render(container) {
         document.getElementById('page-title').setAttribute('data-i18n', 'subscription.page_title');
         container.innerHTML = `
-            <p class="text-sm text-muted" data-i18n="subscription.page_subtitle"></p>
+            <div class="page-hero">
+                <div>
+                    <div class="eyebrow" data-i18n="subscription.page_subtitle"></div>
+                    <h2 data-i18n="subscription.page_title"></h2>
+                </div>
+            </div>
             <div class="card" id="subscription-page-body">
                 <div class="list-state list-state-loading"><span class="spinner"></span></div>
             </div>

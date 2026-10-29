@@ -30,9 +30,19 @@ def dec(v):
 
 BASE = 'http://127.0.0.1:8000/api/v1'
 PASSWORD = 'DemoPass123!'
-CLIENT_ID = 22   # Акбаров Азизбек
-PRODUCT_ID = 46  # Ошхона столешница
-WORKER_ID = 93   # demo_worker
+from apps.companies.models import Company
+from apps.clients.models import Client
+from apps.warehouse.models import FinishedProduct
+from apps.accounts.models import User
+
+_c = Company.objects.filter(name='Granit Demo MChJ').first()
+_cl = Client.objects.filter(company=_c).first() if _c else None
+_pr = FinishedProduct.objects.filter(company=_c, unit='m2').first() if _c else None
+_wr = User.objects.filter(company=_c, role='worker').first() if _c else None
+
+CLIENT_ID = _cl.id if _cl else 22
+PRODUCT_ID = _pr.id if _pr else 46
+WORKER_ID = _wr.id if _wr else 93
 
 
 def login(username):

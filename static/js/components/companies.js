@@ -22,17 +22,27 @@ class CompaniesComponent {
         this.totalCount = 0;
 
         container.innerHTML = `
-            <button class="btn btn-primary btn-block u-mb-5" id="add-company-btn" data-i18n="companies.add"></button>
+            <div class="page-hero">
+                <div>
+                    <h2 data-i18n="companies.title"></h2>
+                </div>
+                <div class="page-hero-actions">
+                    <button class="btn btn-primary btn-sm" id="add-company-btn" type="button">
+                        ${window.icon('plus', 16)}<span data-i18n="companies.add"></span>
+                    </button>
+                </div>
+            </div>
 
-            <div id="companies-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px;"></div>
+            <div id="companies-stats" class="platform-stats"></div>
 
             <div class="form-group u-mb-3">
                 <input type="search" id="companies-search" class="form-control"
                     data-i18n-attr="placeholder" data-i18n="companies.search" autocomplete="off">
             </div>
-            <div id="companies-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+            <div id="companies-filters" class="tabs" role="tablist" aria-label="Company status filter">
                 ${['', 'active', 'trial', 'grace', 'frozen', 'expired', 'expiring_soon'].map((s) => `
-                    <button type="button" class="btn btn-sm ${this.filters.status === s ? 'btn-primary' : 'btn-secondary'}"
+                    <button type="button" role="tab" class="tab-btn ${this.filters.status === s ? 'active' : ''}"
+                        aria-selected="${this.filters.status === s ? 'true' : 'false'}"
                         data-status="${s}" data-i18n="companies.${s ? s : 'all'}"></button>`).join('')}
             </div>
 
@@ -53,47 +63,19 @@ class CompaniesComponent {
                 </table>
             </div>
             <div class="pagination" id="companies-pagination" style="display:none;"></div>
-
-            <div class="section-title" data-i18n="settings.language"></div>
-            <div class="list-group">
-                <div class="list-row lang-option" data-lang="uz_cyrl">
-                    <span>Ўзбекча</span>
-                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'uz_cyrl' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
-                </div>
-                <div class="list-row lang-option" data-lang="ru">
-                    <span>Русский</span>
-                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'ru' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
-                </div>
-                <div class="list-row lang-option" data-lang="ky">
-                    <span>Кыргызча</span>
-                    <span class="text-success font-bold" style="${window.i18n.currentLang === 'ky' ? '' : 'visibility:hidden;'}">${window.icon('check', 16)}</span>
-                </div>
-            </div>
-            <div class="list-group u-mt-6">
-                <div class="list-row" id="logout-row">
-                    <span class="text-danger">${window.icon('log-out', 16)} <span data-i18n="auth.logout"></span></span>
-                </div>
-            </div>
         `;
 
         container.querySelector('#add-company-btn').addEventListener('click', () => this.openForm());
-        container.querySelectorAll('.lang-option').forEach((el) => {
-            el.addEventListener('click', async () => {
-                if (el.dataset.lang === window.i18n.currentLang) return;
-                await window.i18n.setLanguage(el.dataset.lang);
-                window.location.reload();
-            });
-        });
-        container.querySelector('#logout-row').addEventListener('click', async () => {
-            if (await window.confirmation.confirm(window.ui.t('auth.logout_confirm'), window.ui.t('auth.logout'))) {
-                window.api.logout();
-            }
-        });
         container.querySelector('#companies-filters').addEventListener('click', (e) => {
             const btn = e.target.closest('[data-status]');
             if (!btn) return;
             this.filters.status = btn.dataset.status;
             this.page = 1;
+            container.querySelectorAll('#companies-filters [data-status]').forEach((b) => {
+                const active = b === btn;
+                b.classList.toggle('active', active);
+                b.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
             this.loadCompanies();
         });
         container.querySelector('#companies-search').addEventListener('input',
@@ -124,9 +106,9 @@ class CompaniesComponent {
                 { key: 'stat_recent_renewals', value: stats.recent_renewals, cls: 'green' },
             ];
             statsEl.innerHTML = cards.map((c) => `
-                <div class="stat-card" style="padding:10px 12px;">
+                <div class="stat-card">
                     <div class="stat-title" data-i18n="companies.${c.key}"></div>
-                    <div class="stat-value u-fs-20">${c.value}</div>
+                    <div class="stat-value">${c.value}</div>
                 </div>`).join('');
             window.i18n.applyTranslations();
         } catch (e) {

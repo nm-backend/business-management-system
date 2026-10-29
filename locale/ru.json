@@ -70,6 +70,7 @@
     },
     "nav": {
         "dashboard": "Главная панель",
+        "notifications": "Уведомления",
         "raw_materials": "Склад сырья",
         "finished_products": "Готовая продукция",
         "orders": "Заказы",
@@ -877,6 +878,7 @@
         "options_title": "Дополнительные параметры"
     },
     "common": {
+        "skip_to_content": "Перейти к основному содержимому",
         "save": "Сохранить",
         "cancel": "Отмена",
         "delete": "Удалить",

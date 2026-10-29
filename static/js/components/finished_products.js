@@ -13,24 +13,29 @@ class FinishedProductsComponent {
         container.innerHTML = `
             <div class="page-hero">
                 <div>
-                    <div class="eyebrow" data-i18n="warehouse.finished_title"></div>
                     <h2>${window.ui.t('warehouse.finished_title')}</h2>
                 </div>
-            </div>
-            <div class="tabs" role="tablist" aria-label="Warehouse sections">
-                <button class="tab-btn" role="tab" aria-selected="false" id="tab-materials" data-i18n="warehouse.title"></button>
-                <button class="tab-btn active" role="tab" aria-selected="true" data-i18n="warehouse.finished_title"></button>
-            </div>
-            ${user.is_owner ? `
-                <div class="tabs" id="product-subtabs" role="tablist" aria-label="Finished products filters">
-                    <button class="tab-btn active" role="tab" aria-selected="true" data-ptab="active" data-i18n="common.active"></button>
-                    <button class="tab-btn" role="tab" aria-selected="false" data-ptab="archive" data-i18n="common.archive"></button>
+                ${canEdit ? `<div class="page-hero-actions">
+                    <button class="btn btn-primary btn-sm" id="add-product-btn" type="button">
+                        ${window.icon('plus', 16)}<span data-i18n="warehouse.add_product"></span>
+                    </button>
                 </div>` : ''}
+            </div>
+            <div class="warehouse-nav-bar u-mb-4" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+                <div class="tabs" role="tablist" aria-label="Warehouse sections">
+                    <button class="tab-btn" role="tab" aria-selected="false" id="tab-materials" data-i18n="warehouse.title"></button>
+                    <button class="tab-btn active" role="tab" aria-selected="true" data-i18n="warehouse.finished_title"></button>
+                </div>
+                ${user.is_owner ? `
+                    <div class="tabs" id="product-subtabs" role="tablist" aria-label="Finished products filters">
+                        <button class="tab-btn active" role="tab" aria-selected="true" data-ptab="active" data-i18n="common.active"></button>
+                        <button class="tab-btn" role="tab" aria-selected="false" data-ptab="archive" data-i18n="common.archive"></button>
+                    </div>` : ''}
+            </div>
             <div class="search-box">
                 <span class="search-icon">${window.icon('search', 18)}</span>
                 <input type="text" id="product-search" class="form-control" data-i18n="warehouse.search">
             </div>
-            ${canEdit ? `<button class="btn btn-primary btn-block u-mb-5" id="add-product-btn" data-i18n="warehouse.add_product"></button>` : ''}
             <div class="list-group" id="products-list"></div>
         `;
 
@@ -78,11 +83,8 @@ class FinishedProductsComponent {
             const products = response.results || response;
 
             if (!products.length) {
-                const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
-                const cta = canEdit ? `<button type="button" class="btn btn-primary btn-sm" id="empty-add-product" data-i18n="warehouse.add_product"></button>` : '';
-                window.listStates.empty(listEl, window.ui.t('common.no_data'), cta);
-                const btn = listEl.querySelector('#empty-add-product');
-                if (btn) btn.addEventListener('click', () => this.openForm());
+                // Кнопка добавления уже есть в заголовке страницы.
+                window.listStates.empty(listEl, window.ui.t('common.no_data'));
                 window.i18n.applyTranslations();
                 return;
             }

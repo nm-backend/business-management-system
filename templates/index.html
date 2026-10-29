@@ -1,4 +1,9 @@
 {% extends 'base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/chat.css' %}?v={{ ASSET_VERSION }}" />
+{% endblock %}
 
 {% block content %}
 <!-- SPA: страницы рендерит router.js в #app-content -->

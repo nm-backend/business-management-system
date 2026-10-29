@@ -1,56 +1,72 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% block body_class %}auth-body{% endblock %}
+
 {% block content %}
-<div style="display: flex; justify-content: center; align-items: center; min-height: 90vh;">
-    <div class="card" style="width: 100%; max-width: 400px; padding: 32px 28px; text-align: center;">
-        <!-- Brand mark -->
-        <img src="{% static 'img/logo.svg' %}" alt="SkladPro" width="52" height="52"
-             style="margin: 0 auto 12px; display: block;">
-        <h2 style="font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variation-settings: 'SOFT' 60; margin-bottom: 4px;" data-i18n="app.name">SkladPro.Nod</h2>
-        <p class="text-sm text-muted" style="margin-bottom: 24px;">
-            <span data-i18n="auth.access_key_hint"></span>
-        </p>
-
-        <div id="error-message" class="alert-box" style="display: none;"></div>
-        <div id="success-message" class="alert-box alert-success" style="display: none;" data-i18n="auth.activate"></div>
-
-        <!-- Access Key: step 1 -- verify -->
-        <div id="ak-panel">
-            <form id="ak-verify-form">
-                <div class="form-group" style="text-align: left;">
-                    <label data-i18n="auth.access_key"></label>
-                    <input type="text" id="ak-code" class="form-control" placeholder="SKP-XXXX-XXXX-XXXX"
-                           autocomplete="one-time-code" required style="text-transform: uppercase; letter-spacing: 1px;">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.continue"></button>
-            </form>
-
-            <!-- Access Key: step 2 -- set password -->
-            <form id="ak-redeem-form" style="display: none;">
-                <p id="ak-welcome" style="margin-bottom: 12px; font-weight: 600; color: var(--primary);"></p>
-                <div class="form-group" style="text-align: left;">
-                    <label data-i18n="auth.set_password"></label>
-                    <input type="password" id="ak-password" class="form-control" required minlength="8"
-                           autocomplete="new-password">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.activate"></button>
-            </form>
+<div class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-brand">
+            <img class="auth-brand-mark" src="{% static 'img/logo.svg' %}" alt="" aria-hidden="true"
+                 width="42" height="42">
+            <span class="auth-brand-name">SkladPro<span class="auth-brand-suffix">.Nod</span></span>
         </div>
 
-        <p class="text-xs text-muted" style="margin-top: 16px;">
-            <span data-i18n="auth.access_key_admin_hint"></span>
-        </p>
+        <div class="auth-card">
+            <header class="auth-header">
+                <h1 class="auth-title" data-i18n="auth.activate">Активировать и войти</h1>
+                <p class="auth-subtitle" data-i18n="auth.access_key_hint"></p>
+            </header>
 
-        <div style="margin-top: 24px;">
-            <select id="lang-select" class="form-control" style="width: auto;">
-                <option value="uz_cyrl">Ўзбекча</option>
-                <option value="ru">Русский</option>
-                <option value="ky">Кыргызча</option>
-            </select>
+            <div id="error-message" class="auth-error" role="alert" aria-live="assertive"
+                 style="display: none;"></div>
+            <div id="success-message" class="alert-box alert-success auth-success"
+                 style="display: none;" data-i18n="auth.activate"></div>
+
+            <!-- Access Key: step 1 -- verify -->
+            <div id="ak-panel">
+                <form id="ak-verify-form">
+                    <div class="form-group">
+                        <label for="ak-code" data-i18n="auth.access_key"></label>
+                        <input type="text" id="ak-code" class="form-control auth-key-input"
+                               placeholder="SKP-XXXX-XXXX-XXXX" autocomplete="one-time-code"
+                               autocapitalize="characters" spellcheck="false" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block auth-submit"
+                            data-i18n="auth.continue"></button>
+                </form>
+
+                <!-- Access Key: step 2 -- set password -->
+                <form id="ak-redeem-form" style="display: none;">
+                    <p id="ak-welcome" class="auth-welcome"></p>
+                    <div class="form-group">
+                        <label for="ak-password" data-i18n="auth.set_password"></label>
+                        <input type="password" id="ak-password" class="form-control" required minlength="8"
+                               autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block auth-submit"
+                            data-i18n="auth.activate"></button>
+                </form>
+            </div>
+
+            <p class="auth-key-hint u-mt-6" data-i18n="auth.access_key_admin_hint"></p>
+
+            <div class="auth-lang">
+                <label for="lang-select" class="sr-only" data-i18n="auth.language"></label>
+                <select id="lang-select" class="auth-lang-select">
+                    <option value="uz_cyrl">Ўзбекча</option>
+                    <option value="ru">Русский</option>
+                    <option value="ky">Кыргызча</option>
+                </select>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block core_js %}
+<script src="{% static 'js/api.js' %}?v={{ ASSET_VERSION }}"></script>
+<script src="{% static 'js/i18n.js' %}?v={{ ASSET_VERSION }}"></script>
 {% endblock %}
 
 {% block extra_js %}

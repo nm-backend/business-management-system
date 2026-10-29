@@ -28,6 +28,16 @@ class ClientsComponent {
             </div>` : '';
 
         container.innerHTML = `
+            <div class="page-hero">
+                <div>
+                    <h2>${window.ui.t('clients.title')}</h2>
+                </div>
+                ${canEdit ? `<div class="page-hero-actions">
+                    <button class="btn btn-primary btn-sm" id="add-client-btn" type="button">
+                        ${window.icon('plus', 16)}<span data-i18n="clients.add_client"></span>
+                    </button>
+                </div>` : ''}
+            </div>
             ${debtDashboard}
             <!-- Вкладки списка из макета «Мижозлар»: все / активные /
                  с долгом / новые / архив. Фильтрует сервер (?is_active_client=,
@@ -44,7 +54,6 @@ class ClientsComponent {
                 <span class="search-icon" aria-hidden="true">${window.icon('search', 18)}</span>
                 <input type="text" id="client-search" class="form-control" data-i18n-attr="placeholder,aria-label" data-i18n="clients.search_hint">
             </div>
-            ${canEdit ? `<button class="btn btn-primary btn-block u-mb-5" id="add-client-btn" data-i18n="clients.add_client"></button>` : ''}
             <div class="text-sm text-muted u-hint" id="clients-listed-count"></div>
             <div id="clients-list" class="card-grid"></div>
         `;
@@ -163,11 +172,9 @@ class ClientsComponent {
             }
 
             if (!this.clients.length) {
-                const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
-                const cta = canEdit ? `<button type="button" class="btn btn-primary btn-sm" id="empty-add-client" data-i18n="clients.add_client"></button>` : '';
-                window.listStates.empty(listEl, window.ui.t('common.no_data'), cta);
-                const btn = listEl.querySelector('#empty-add-client');
-                if (btn) btn.addEventListener('click', () => this.openForm());
+                // Добавление уже доступно кнопкой в заголовке страницы:
+                // вторая такая же кнопка внутри пустого состояния — лишний шум.
+                window.listStates.empty(listEl, window.ui.t('common.no_data'));
                 window.i18n.applyTranslations();
                 return;
             }

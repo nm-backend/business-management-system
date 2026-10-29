@@ -31,8 +31,9 @@ window.listStates = {
         const contextMsg = element.dataset?.emptyMessage || '';
         const msg = message || contextMsg || fallbackMsg;
         const action = actionHtml || (element.dataset?.emptyAction || '');
+        // Иконку пустого состояния рисует CSS (.list-state-empty::before):
+        // один нейтральный знак вместо эмодзи и без лишнего inline-стиля.
         element.innerHTML = `<div class="list-state list-state-empty" role="status">
-            <span class="list-state-icon" aria-hidden="true" style="font-size:28px;opacity:.5;display:block;margin-bottom:4px;">—</span>
             <span class="u-medium">${msg}</span>
             ${action ? `<div class="u-mt-5">${action}</div>` : ''}
         </div>`;

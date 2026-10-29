@@ -502,7 +502,9 @@ function setupBottomNav(user) {
         let show = true;
         const navKey = link.dataset.nav;
         if (user.is_superadmin) {
-            show = ['dashboard', 'settings'].includes(navKey);
+            show = ['dashboard', 'companies', 'settings'].includes(navKey);
+        } else if (navKey === 'companies') {
+            show = false;  // платформенный раздел, только супер-админ
         } else if (navKey === 'production') {
             show = user.is_worker;
         } else if (navKey === 'clients') {

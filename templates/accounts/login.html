@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% block body_class %}auth-body{% endblock %}
+
 {% block content %}
 {% comment %}
    Экран входа (макет «Кириш»).
@@ -21,67 +23,91 @@
    работает через переводы строк, и Django вываливал весь этот текст
    прямо на страницу входа (воспроизведено на проде).
 {% endcomment %}
-<div style="display: flex; justify-content: center; align-items: center; min-height: 90vh;">
-    <div class="card" style="width: 100%; max-width: 400px; padding: 32px 28px; text-align: center;">
-        <!-- Brand mark -->
-        <img src="{% static 'img/logo.svg' %}" alt="SkladPro" width="52" height="52"
-             style="margin: 0 auto 12px; display: block;">
-        <h2 style="font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variation-settings: 'SOFT' 60; margin-bottom: 4px;" data-i18n="app.name">SkladPro.Nod</h2>
-        <p class="text-sm text-muted" style="margin-bottom: 24px;" data-i18n="app.tagline"></p>
-
-        <div id="error-message" class="alert-box" style="display: none;"></div>
-
-        <!-- Способ 1: логин и пароль -->
-        <div id="login-panel">
-            <form id="login-form">
-                <div class="form-group" style="text-align: left;">
-                    <label for="username" data-i18n="auth.username"></label>
-                    <input type="text" id="username" class="form-control" required autocomplete="username">
-                </div>
-                <div class="form-group" style="text-align: left;">
-                    <label for="password" data-i18n="auth.password"></label>
-                    <input type="password" id="password" class="form-control" required autocomplete="current-password">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
-            </form>
-            <button type="button" id="show-access-key" class="btn btn-block login-secondary-btn" data-i18n="auth.login_with_key"></button>
+<div class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-brand">
+            <img class="auth-brand-mark" src="{% static 'img/logo.svg' %}" alt="" aria-hidden="true"
+                 width="42" height="42">
+            <h2 class="auth-brand-name" data-i18n="app.name" style="margin: 0;">SkladPro<span class="auth-brand-suffix">.Nod</span></h2>
         </div>
 
-        <!-- Способ 2: вход по ключу доступа, выданному владельцем/администратором -->
-        <div id="access-key-panel" style="display: none;">
-            <p class="text-sm text-muted" style="margin-bottom: 16px;" data-i18n="auth.access_key_hint"></p>
+        <div class="auth-card">
+            <header class="auth-header">
+                <h1 class="auth-title" data-i18n="auth.welcome">Добро пожаловать</h1>
+                <p class="auth-subtitle" data-i18n="app.tagline"></p>
+            </header>
 
-            <form id="ak-verify-form">
-                <div class="form-group" style="text-align: left;">
-                    <label data-i18n="auth.access_key"></label>
-                    <input type="text" id="ak-code" class="form-control" placeholder="SKP-XXXX-XXXX-XXXX"
-                           autocomplete="one-time-code" required style="text-transform: uppercase; letter-spacing: 1px;">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.continue"></button>
-            </form>
+            <div id="error-message" class="auth-error" role="alert" aria-live="assertive"
+                 style="display: none;"></div>
 
-            <form id="ak-redeem-form" style="display: none;">
-                <p id="ak-welcome" style="margin-bottom: 12px; font-weight: 600; color: var(--primary);"></p>
-                <div class="form-group" style="text-align: left;">
-                    <label data-i18n="auth.set_password"></label>
-                    <input type="password" id="ak-password" class="form-control" required minlength="8"
-                           autocomplete="new-password">
-                </div>
-                <button type="submit" class="btn btn-primary btn-block" data-i18n="auth.login_button"></button>
-            </form>
+            <!-- Способ 1: логин и пароль -->
+            <div id="login-panel">
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="username" data-i18n="auth.username"></label>
+                        <input type="text" id="username" class="form-control" required
+                               autocomplete="username" autocapitalize="none" spellcheck="false">
+                    </div>
+                    <div class="form-group">
+                        <label for="password" data-i18n="auth.password"></label>
+                        <input type="password" id="password" class="form-control" required
+                               autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block auth-submit"
+                            data-i18n="auth.login_button"></button>
+                </form>
+                <button type="button" id="show-access-key" class="auth-link"
+                        data-i18n="auth.login_with_key"></button>
+            </div>
 
-            <button type="button" id="show-login" class="btn btn-block login-secondary-btn" data-i18n="auth.back_to_login"></button>
-        </div>
+            <!-- Способ 2: вход по ключу доступа, выданному владельцем/администратором -->
+            <div id="access-key-panel" style="display: none;">
+                <p class="auth-key-hint" data-i18n="auth.access_key_hint"></p>
 
-        <div style="margin-top: 24px;">
-            <select id="lang-select" class="form-control" style="width: auto;">
-                <option value="uz_cyrl">Ўзбекча</option>
-                <option value="ru">Русский</option>
-                <option value="ky">Кыргызча</option>
-            </select>
+                <form id="ak-verify-form">
+                    <div class="form-group">
+                        <label for="ak-code" data-i18n="auth.access_key"></label>
+                        <input type="text" id="ak-code" class="form-control auth-key-input"
+                               placeholder="SKP-XXXX-XXXX-XXXX" autocomplete="one-time-code"
+                               autocapitalize="characters" spellcheck="false" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block auth-submit"
+                            data-i18n="auth.continue"></button>
+                </form>
+
+                <form id="ak-redeem-form" style="display: none;">
+                    <p id="ak-welcome" class="auth-welcome"></p>
+                    <div class="form-group">
+                        <label for="ak-password" data-i18n="auth.set_password"></label>
+                        <input type="password" id="ak-password" class="form-control" required minlength="8"
+                               autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block auth-submit"
+                            data-i18n="auth.login_button"></button>
+                </form>
+
+                <button type="button" id="show-login" class="auth-link"
+                        data-i18n="auth.back_to_login"></button>
+            </div>
+
+            <div class="auth-lang">
+                <label for="lang-select" class="sr-only" data-i18n="auth.language"></label>
+                <select id="lang-select" class="auth-lang-select">
+                    <option value="uz_cyrl">Ўзбекча</option>
+                    <option value="ru">Русский</option>
+                    <option value="ky">Кыргызча</option>
+                </select>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block core_js %}
+<!-- Экран входа не использует Chart.js, UI-компоненты и медиа-кэш:
+     грузим только клиент API и словари, чтобы первый экран открывался быстро. -->
+<script src="{% static 'js/api.js' %}?v={{ ASSET_VERSION }}"></script>
+<script src="{% static 'js/i18n.js' %}?v={{ ASSET_VERSION }}"></script>
 {% endblock %}
 
 {% block extra_js %}

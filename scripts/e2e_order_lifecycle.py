@@ -113,6 +113,29 @@ def main():
     owner = login('demo_owner')
     worker = login('demo_worker')
 
+    global CLIENT_ID, PRODUCT_ID, WORKER_ID
+    st, clients = call(owner, 'GET', '/clients/clients/')
+    clist = clients.get('results', clients) if isinstance(clients, dict) else clients
+    if clist:
+        CLIENT_ID = clist[0]['id']
+    else:
+        st, new_c = call(owner, 'POST', '/clients/clients/', {'name': 'Акбаров Азизбек', 'phone': '+998901234567'})
+        CLIENT_ID = new_c['id']
+
+    st, prods = call(owner, 'GET', '/warehouse/finished-products/')
+    plist = prods.get('results', prods) if isinstance(prods, dict) else prods
+    if plist:
+        PRODUCT_ID = plist[0]['id']
+    else:
+        st, new_p = call(owner, 'POST', '/warehouse/finished-products/', {'name': 'Ошхона столешница', 'unit': 'm2', 'price': 900000})
+        PRODUCT_ID = new_p['id']
+
+    st, users = call(owner, 'GET', '/accounts/users/')
+    ulist = users.get('results', users) if isinstance(users, dict) else users
+    wlist = [u for u in ulist if u.get('role') == 'worker']
+    if wlist:
+        WORKER_ID = wlist[0]['id']
+
     base = ledger(owner)
     if base is None:
         step('базовый снимок ledger недоступен', False)

@@ -13,12 +13,21 @@ class ProductionComponent {
         const user = window.currentUser;
 
         container.innerHTML = `
+            <div class="page-hero">
+                <div>
+                    <h2 data-i18n="production.title"></h2>
+                </div>
+                ${!user.is_worker ? `<div class="page-hero-actions">
+                    <button class="btn btn-primary btn-sm" id="add-work-btn" type="button">
+                        ${window.icon('plus', 16)}<span data-i18n="production.add_work"></span>
+                    </button>
+                </div>` : ''}
+            </div>
             <div class="tabs">
                 <button class="tab-btn active" data-tab="tasks" data-i18n="${user.is_worker ? 'nav.my_tasks' : 'production.tasks'}"></button>
                 <button class="tab-btn" data-tab="works" data-i18n="production.works"></button>
                 ${user.is_worker ? `<button class="tab-btn" data-tab="earnings" data-i18n="worker_section.my_earnings"></button>` : ''}
             </div>
-            ${!user.is_worker ? `<button class="btn btn-primary btn-block u-mb-5" id="add-work-btn" data-i18n="production.add_work"></button>` : ''}
             <div id="production-content"></div>
         `;
 
@@ -117,19 +126,24 @@ class ProductionComponent {
             // Переключатель «Бугун / Ҳаммаси» — только у работника: фильтр
             // серверный (scope=today), счётчики считаются по загруженной выборке.
             const scopeToggle = user0.is_worker ? `
-                <div class="tabs u-mb-4">
+                <div class="tabs">
                     <button class="tab-btn ${scope === 'today' ? 'active' : ''}" data-scope="today" data-i18n="periods.today"></button>
                     <button class="tab-btn ${scope === '' ? 'active' : ''}" data-scope="" data-i18n="common.all"></button>
                 </div>` : '';
+            const filterBar = user0.is_worker ? `
+                <div class="tasks-filter-bar u-mb-4" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+                    ${scopeToggle}
+                    ${tabs}
+                </div>` : tabs;
             if (!tasks.length) {
-                contentEl.innerHTML = scopeToggle + tabs + `<div class="card list-state" data-i18n="common.no_data"></div>`;
+                contentEl.innerHTML = filterBar + `<div class="card list-state list-state-empty" data-i18n="common.no_data"></div>`;
                 this.bindStatusTabs(contentEl, 'task');
                 this.bindScopeToggle(contentEl);
                 window.i18n.applyTranslations();
                 return;
             }
             const user = window.currentUser;
-            contentEl.innerHTML = scopeToggle + tabs + tasks.map((t) => `
+            contentEl.innerHTML = filterBar + tasks.map((t) => `
                 <div class="card">
                     <div class="card-title u-mb-1">
                         <span>#${t.id} ${window.ui.escape(t.title || t.order_product || '')}</span>

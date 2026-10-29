@@ -38,7 +38,6 @@ class OrdersComponent {
         container.innerHTML = `
             <div class="page-hero">
                 <div>
-                    <div class="eyebrow" data-i18n="orders.title"></div>
                     <h2>${window.ui.t('orders.title')}</h2>
                 </div>
                 ${canEdit ? `<button class="btn btn-primary btn-sm" id="add-order-btn" data-i18n="orders.new_order"></button>` : ''}
@@ -123,11 +122,8 @@ class OrdersComponent {
             this.orders = response.results || response;
 
             if (!this.orders.length) {
-                const canEdit = window.currentUser?.is_owner || window.currentUser?.is_admin;
-                const cta = canEdit ? `<a class="btn btn-primary btn-sm" href="#/orders" id="empty-create-order" data-i18n="orders.new_order"></a>` : '';
-                window.listStates.empty(listEl, window.ui.t('common.no_data'), cta);
-                const btn = listEl.querySelector('#empty-create-order');
-                if (btn) btn.addEventListener('click', (e) => { e.preventDefault(); this.openForm(); });
+                // Кнопка создания уже есть в заголовке страницы.
+                window.listStates.empty(listEl, window.ui.t('common.no_data'));
                 window.i18n.applyTranslations();
                 return;
             }
